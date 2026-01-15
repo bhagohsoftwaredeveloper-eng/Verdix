@@ -1,0 +1,228 @@
+
+{
+  "entities": {
+    "Product": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Product",
+      "type": "object",
+      "description": "Represents a product in the inventory. Can be a parent product or a child variant (unit).",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the product." },
+        "name": { "type": "string", "description": "Name of the product (e.g., 'Coca-Cola 12oz Can' or 'Coca-Cola - 12-pack')." },
+        "brandId": { "type": "string", "description": "Reference to Brand." },
+        "description": { "type": "string", "description": "Detailed description of the product." },
+        "additionalDescription": { "type": "string", "description": "Optional additional details or specifications about the product." },
+        "categoryId": { "type": "string", "description": "Reference to Category." },
+        "subcategoryId": { "type": "string", "description": "Reference to Subcategory." },
+        "isSerialized": { "type": "boolean", "description": "Whether the product's base units require individual serial number tracking." },
+        "unitOfMeasure": { "type": "string", "description": "The unit for this specific product variant (e.g., 'piece', 'pack')." },
+        "stock": { "type": "number", "description": "Current total quantity of this product variant in stock." },
+        "price": { "type": "number", "description": "The selling price for this product variant." },
+        "cost": { "type": "number", "description": "The cost for this product variant." },
+        "sku": { "type": "string", "description": "The SKU for this specific product variant." },
+        "barcode": { "type": "string", "description": "The barcode (UPC) for this specific product variant." },
+        "parentId": { "type": "string", "description": "If this is a child product, this is the ID of the parent product." },
+        "conversionFactor": { "type": "number", "description": "If a child, how many base units it contains. For a parent, this is 1." }
+      },
+      "required": ["id", "name", "description", "brandId", "categoryId", "unitOfMeasure", "stock", "price", "sku", "conversionFactor"]
+    },
+    "SerialNumber": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SerialNumber",
+      "type": "object",
+      "description": "Represents a unique serial number for a specific product unit.",
+      "properties": {
+        "id": { "type": "string", "description": "The unique serial number itself." },
+        "productId": { "type": "string", "description": "The ID of the product this serial number belongs to." },
+        "status": { "type": "string", "enum": ["In Stock", "Sold", "Returned"], "description": "The current status of the serialized item." },
+        "dateAdded": { "type": "string", "format": "date-time", "description": "When the serial number was added to the inventory." },
+        "saleId": { "type": "string", "description": "The ID of the sales transaction when the item was sold." }
+      },
+      "required": ["id", "productId", "status", "dateAdded"]
+    },
+    "SalesTransaction": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SalesTransaction",
+      "type": "object",
+      "description": "Represents a sales transaction.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the sales transaction." },
+        "invoiceDate": { "type": "string", "description": "Date and time of the invoice.", "format": "date-time" },
+        "dueDate": { "type": "string", "description": "Date and time the payment is due.", "format": "date-time" },
+        "totalAmount": { "type": "number", "description": "Total amount of the transaction." },
+        "paymentMethod": { "type": "string", "description": "Payment method used for the transaction (e.g., credit card, cash)." },
+        "productIds": { "type": "array", "description": "References to Products. (Relationship: SalesTransaction N:N Product)", "items": { "type": "string" } }
+      },
+      "required": ["id", "invoiceDate", "dueDate", "totalAmount", "paymentMethod", "productIds"]
+    },
+    "InventoryAlert": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "InventoryAlert",
+      "type": "object",
+      "description": "Represents an alert for low inventory levels.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the inventory alert." },
+        "productId": { "type": "string", "description": "Reference to Product. (Relationship: Product 1:N InventoryAlert)" },
+        "alertDate": { "type": "string", "description": "Date when the alert was triggered.", "format": "date-time" },
+        "alertLevel": { "type": "number", "description": "Quantity of stock remaining at the time the alert was triggered." }
+      },
+      "required": ["id", "productId", "alertDate", "alertLevel"]
+    },
+    "RestockSuggestion": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "RestockSuggestion",
+      "type": "object",
+      "description": "Represents a restock suggestion generated by AI.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the restock suggestion." },
+        "productId": { "type": "string", "description": "Reference to Product. (Relationship: Product 1:N RestockSuggestion)" },
+        "suggestionDate": { "type": "string", "description": "Date when the restock suggestion was generated.", "format": "date-time" },
+        "suggestedQuantity": { "type": "number", "description": "Suggested quantity to restock." },
+        "reason": { "type": "string", "description": "Reasoning behind the restock suggestion, based on sales trends." }
+      },
+      "required": ["id", "productId", "suggestionDate", "suggestedQuantity", "reason"]
+    },
+    "Category": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Category",
+      "type": "object",
+      "description": "Represents a product category.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the category." },
+        "name": { "type": "string", "description": "Name of the category." }
+      },
+      "required": ["id", "name"]
+    },
+    "Subcategory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Subcategory",
+      "type": "object",
+      "description": "Represents a product subcategory.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the subcategory." },
+        "name": { "type": "string", "description": "Name of the subcategory." }
+      },
+      "required": ["id", "name"]
+    },
+    "Brand": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Brand",
+      "type": "object",
+      "description": "Represents a product brand.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the brand." },
+        "name": { "type": "string", "description": "Name of the brand." }
+      },
+      "required": ["id", "name"]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents a customer order.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the order." },
+        "customerId": { "type": "string", "description": "Reference to the customer who placed the order." },
+        "orderDate": { "type": "string", "format": "date-time", "description": "The date and time when the order was placed." },
+        "status": { "type": "string", "enum": ["Pending", "Shipped", "Delivered", "Canceled"], "description": "The current status of the order." },
+        "total": { "type": "number", "description": "The total amount of the order." },
+        "items": { "type": "array", "description": "The items included in the order.", "items": { "type": "object", "properties": { "productId": { "type": "string" }, "productName": { "type": "string" }, "quantity": { "type": "number" }, "price": { "type": "number" } }, "required": ["productId", "productName", "quantity", "price"] } }
+      },
+      "required": ["id", "customerId", "orderDate", "status", "total", "items"]
+    },
+    "StockAdjustment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StockAdjustment",
+      "type": "object",
+      "description": "Represents a manual adjustment to a product's stock level.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the stock adjustment." },
+        "productId": { "type": "string", "description": "The ID of the product being adjusted." },
+        "product": { "$ref": "#/entities/Product" },
+        "quantity": { "type": "number", "description": "The amount the stock was adjusted by (can be positive or negative)." },
+        "reason": { "type": "string", "description": "The reason for the adjustment (e.g., 'New shipment', 'Damaged goods')." },
+        "date": { "type": "string", "format": "date-time", "description": "The date and time of the adjustment." },
+        "newStock": { "type": "number", "description": "The resulting stock level after the adjustment." }
+      },
+      "required": ["id", "productId", "quantity", "reason", "date", "newStock"]
+    },
+    "Customer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Customer",
+      "type": "object",
+      "description": "Represents a customer.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the customer." },
+        "name": { "type": "string", "description": "Name of the customer." },
+        "contactNumber": { "type": "string", "description": "Contact number of the customer." },
+        "paymentTerms": { "type": "string", "description": "Payment terms for the customer (e.g., Net 30, Due on receipt)." }
+      },
+      "required": ["id", "name", "contactNumber"]
+    },
+    "PaymentMethod": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PaymentMethod",
+      "type": "object",
+      "description": "Represents a payment method.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the payment method." },
+        "name": { "type": "string", "description": "Name of the payment method." }
+      },
+      "required": ["id", "name"]
+    },
+    "UnitOfMeasure": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UnitOfMeasure",
+      "type": "object",
+      "description": "Represents a unit of measure for a product.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the unit of measure." },
+        "name": { "type": "string", "description": "Name of the unit of measure (e.g., piece, box)." },
+        "abbreviation": { "type": "string", "description": "Abbreviation for the unit of measure (e.g., pc, bx)." }
+      },
+      "required": ["id", "name", "abbreviation"]
+    }
+  },
+  "auth": {
+    "providers": ["password"],
+    "claims": {
+      "permissions": {
+        "type": "array",
+        "description": "A list of permissions granted to the user.",
+        "items": {
+          "type": "string",
+          "enum": [
+            "access_pos",
+            "view_dashboard",
+            "manage_products",
+            "manage_inventory",
+            "view_sales",
+            "manage_purchases",
+            "view_reports",
+            "use_ai_features",
+            "manage_users",
+            "super_admin"
+          ]
+        }
+      }
+    }
+  },
+  "firestore": {
+    "structure": [
+      { "path": "/brands/{brandId}", "definition": { "entityName": "Brand", "schema": { "$ref": "#/backend/entities/Brand" }, "description": "Stores product brands. All authenticated users can list brands.", "params": [{ "name": "brandId", "description": "Unique identifier for the brand." }] } },
+      { "path": "/categories/{categoryId}", "definition": { "entityName": "Category", "schema": { "$ref": "#/backend/entities/Category" }, "description": "Stores product categories.  All authenticated users can list categories.", "params": [{ "name": "categoryId", "description": "Unique identifier for the category." }] } },
+      { "path": "/subcategories/{subcategoryId}", "definition": { "entityName": "Subcategory", "schema": { "$ref": "#/backend/entities/Subcategory" }, "description": "Stores product subcategories. All authenticated users can list subcategories.", "params": [{ "name": "subcategoryId", "description": "Unique identifier for the subcategory." }] } },
+      { "path": "/products/{productId}", "definition": { "entityName": "Product", "schema": { "$ref": "#/backend/entities/Product" }, "description": "Stores all product variants, both parent and child units.", "params": [{ "name": "productId", "description": "Unique identifier for the product." }] } },
+      { "path": "/products/{productId}/serialNumbers/{serialNumberId}", "definition": { "entityName": "SerialNumber", "schema": { "$ref": "#/entities/SerialNumber" }, "description": "Stores unique serial numbers for each unit of a serialized product.", "params": [{ "name": "productId", "description": "The ID of the product." }, { "name": "serialNumberId", "description": "The unique serial number." }] } },
+      { "path": "/products/{productId}/stockAdjustments/{adjustmentId}", "definition": { "entityName": "StockAdjustment", "schema": { "$ref": "#/backend/entities/StockAdjustment" }, "description": "Stores a log of all manual stock adjustments for a product. Any authenticated user can list adjustments across all products.", "params": [{ "name": "productId", "description": "The ID of the product being adjusted." }, { "name": "adjustmentId", "description": "Unique identifier for the stock adjustment record." }] } },
+      { "path": "/salesTransactions/{salesTransactionId}", "definition": { "entityName": "SalesTransaction", "schema": { "$ref": "#/backend/entities/SalesTransaction" }, "description": "Stores sales transaction data.", "params": [{ "name": "salesTransactionId", "description": "Unique identifier for the sales transaction." }] } },
+      { "path": "/inventoryAlerts/{inventoryAlertId}", "definition": { "entityName": "InventoryAlert", "schema": { "$ref": "#/backend/entities/InventoryAlert" }, "description": "Stores inventory alert information.", "params": [{ "name": "inventoryAlertId", "description": "Unique identifier for the inventory alert." }] } },
+      { "path": "/restockSuggestions/{restockSuggestionId}", "definition": { "entityName": "RestockSuggestion", "schema": { "$ref": "#/backend/entities/RestockSuggestion" }, "description": "Stores restock suggestions generated by AI.", "params": [{ "name": "restockSuggestionId", "description": "Unique identifier for the restock suggestion." }] } },
+      { "path": "/orders/{orderId}", "definition": { "entityName": "Order", "schema": { "$ref": "#/backend/entities/Order" }, "description": "Stores customer orders.", "params": [{ "name": "orderId", "description": "Unique identifier for the order." }] } },
+      { "path": "/customers/{customerId}", "definition": { "entityName": "Customer", "schema": { "$ref": "#/backend/entities/Customer" }, "description": "Stores customer information. All authenticated users can list customers.", "params": [{ "name": "customerId", "description": "Unique identifier for the customer." }] } },
+      { "path": "/paymentMethods/{paymentMethodId}", "definition": { "entityName": "PaymentMethod", "schema": { "$ref": "#/backend/entities/PaymentMethod" }, "description": "Stores available payment methods. All authenticated users can list payment methods.", "params": [{ "name": "paymentMethodId", "description": "Unique identifier for the payment method." }] } },
+      { "path": "/unitOfMeasures/{unitOfMeasureId}", "definition": { "entityName": "UnitOfMeasure", "schema": { "$ref": "#/backend/entities/UnitOfMeasure" }, "description": "Stores available units of measure. All authenticated users can list units of measure.", "params": [{ "name": "unitOfMeasureId", "description": "Unique identifier for the unit of measure." }] } }
+    ],
+    "reasoning": "Reverted to a classic parent-child model within a single 'products' collection. Each document is a product variant. Child products have a 'parentId' and a 'conversionFactor' to relate them to their base product, simplifying the data structure and removing the need for a separate 'productUnits' collection."
+  }
+}

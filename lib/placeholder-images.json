@@ -1,0 +1,52 @@
+{
+  "placeholderImages": [
+    {
+      "id": "prod_1",
+      "description": "A sleek, modern wireless keyboard.",
+      "imageUrl": "https://picsum.photos/seed/keyboard/400/300",
+      "imageHint": "wireless keyboard"
+    },
+    {
+      "id": "prod_2",
+      "description": "An ergonomic wireless mouse.",
+      "imageUrl": "https://picsum.photos/seed/mouse/400/300",
+      "imageHint": "ergonomic mouse"
+    },
+    {
+      "id": "prod_3",
+      "description": "A 27-inch 4K UHD monitor.",
+      "imageUrl": "https://picsum.photos/seed/monitor/400/300",
+      "imageHint": "computer monitor"
+    },
+    {
+      "id": "prod_4",
+      "description": "High-fidelity over-ear headphones.",
+      "imageUrl": "https://picsum.photos/seed/headphones/400/300",
+      "imageHint": "over-ear headphones"
+    },
+    {
+      "id": "prod_5",
+      "description": "A lightweight and powerful laptop.",
+      "imageUrl": "https://picsum.photos/seed/laptop/400/300",
+      "imageHint": "modern laptop"
+    },
+    {
+      "id": "prod_6",
+      "description": "A portable and durable external SSD.",
+      "imageUrl": "https://picsum.photos/seed/ssd/400/300",
+      "imageHint": "external ssd"
+    },
+    {
+      "id": "prod_7",
+      "description": "A mechanical gaming keyboard with RGB.",
+      "imageUrl": "https://picsum.photos/seed/gamingkeyboard/400/300",
+      "imageHint": "gaming keyboard"
+    },
+    {
+      "id": "prod_8",
+      "description": "A 1080p webcam with built-in microphone.",
+      "imageUrl": "https://picsum.photos/seed/webcam/400/300",
+      "imageHint": "webcam"
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+
+'use client';
+
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Product } from '@/lib/types';
+import Image from 'next/image';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Eye, PlusCircle } from 'lucide-react';
+import { EditProductDialog } from './edit-product-dialog';
+import { QuickAddChildDialog } from './quick-add-child-dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+function DetailItem({ label, value }: { label: string, value: React.ReactNode }) {
+    return (
+        <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium text-muted-foreground">{label}</p>
+            <p className="text-lg font-semibold">{value}</p>
+        </div>
+    )
+}
+
+
+export function ViewProductDialog({ product, onProductUpdated, products, onChildAdded }: { product: Product; onProductUpdated?: () => void; products?: Product[]; onChildAdded?: () => void }) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="icon">
+                    <Eye className="h-4 w-4" />
+                    <span className="sr-only">View product</span>
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-4xl">
+                 <DialogHeader>
+                    <DialogTitle>{product.name}</DialogTitle>
+                    <DialogDescription>
+                        {product.description}
+                    </DialogDescription>
+                    {product.additionalDescription && (
+                        <p className="text-sm text-muted-foreground pt-2">{product.additionalDescription}</p>
+                    )}
+                </DialogHeader>
+
+                <div className="grid md:grid-cols-2 gap-8 py-4">
+                    <Image
+                        src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
+                        alt={product.name}
+                        width={600}
+                        height={600}
+                        className="rounded-lg object-cover w-full aspect-square"
+                    />
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-2 gap-6">
+                            <DetailItem label="Brand" value={product.brand} />
+                            <DetailItem label="Category" value={product.category} />
+                            {product.subcategory && <DetailItem label="Subcategory" value={product.subcategory} />}
+                            {product.supplierName && <DetailItem label="Supplier" value={product.supplierName} />}
+                            <DetailItem label="SKU" value={<Badge variant="outline">{product.sku}</Badge>} />
+                            {product.barcode && <DetailItem label="Barcode" value={<Badge variant="outline">{product.barcode}</Badge>} />}
+                        </div>
+                        <Separator />
+                        <div className="grid grid-cols-2 gap-6">
+                            <DetailItem label="Price" value={typeof product.price === 'number' ? `₱${product.price.toFixed(2)}` : 'N/A'} />
+                            <DetailItem label="Cost" value={product.cost && typeof product.cost === 'number' ? `₱${product.cost.toFixed(2)}` : 'N/A'} />
+                        </div>
+                        <Separator />
+                        <div className="grid grid-cols-2 gap-6">
+                            <DetailItem label="Current Stock" value={product.stock} />
+                            <DetailItem label="Reorder Point" value={product.reorderPoint} />
+                            <DetailItem label="Unit of Measure" value={product.unitOfMeasure} />
+                            {product.parentId && <DetailItem label="Parent Product" value="Child Unit" />}
+                            {product.createdAt && <DetailItem label="Created" value={new Date(product.createdAt).toLocaleDateString()} />}
+                            {product.updatedAt && <DetailItem label="Last Updated" value={new Date(product.updatedAt).toLocaleDateString()} />}
+                        </div>
+
+                        {(() => {
+                          const hasConversionFactors = product.conversionFactors && product.conversionFactors.length > 0;
+                          const isChildProduct = product.parentId && products;
+                          const parentProduct = isChildProduct ? products?.find(p => p.id === product.parentId) : null;
+                          const childConversion = parentProduct?.conversionFactors?.find(cf => cf.unit === product.unitOfMeasure);
+
+                          if (hasConversionFactors || childConversion) {
+                            return (
+                              <>
+                                <Separator />
+                                <div className="space-y-4">
+                                  <h3 className="text-lg font-medium">Conversion Factors</h3>
+                                  <div className="grid gap-2">
+                                    {hasConversionFactors && product.conversionFactors?.map((cf, index) => (
+                                      <div key={index} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                                        <span className="font-medium">{cf.unit}</span>
+                                        <Badge variant="outline">{cf.factor}x</Badge>
+                                      </div>
+                                    ))}
+                                    {childConversion && parentProduct && (
+                                      <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                                        <span className="font-medium">{parentProduct.unitOfMeasure} to {product.unitOfMeasure}</span>
+                                        <Badge variant="outline">1 = {childConversion.factor}</Badge>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          }
+                          return null;
+                        })()}
+                    </div>
+                </div>
+
+                <DialogFooter className="sm:justify-between">
+                     <p className="text-xs text-muted-foreground">Product ID: {product.id}</p>
+                     <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
+                        {!product.parentId && product.conversionFactors && product.conversionFactors.length > 0 && products && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <QuickAddChildDialog
+                                  parentProduct={product}
+                                  baseStock={undefined}
+                                  onChildAdded={() => {
+                                    onChildAdded?.();
+                                    onProductUpdated?.();
+                                  }}
+                                  products={products}
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Add child unit</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        <EditProductDialog product={product} onProductUpdated={onProductUpdated} />
+                     </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}

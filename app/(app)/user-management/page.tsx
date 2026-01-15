@@ -1,0 +1,285 @@
+
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { format } from 'date-fns';
+import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { AddUserDialog } from './add-user-dialog';
+import { EditUserDialog } from './edit-user-dialog';
+
+type User = {
+  uid: string;
+  username: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  disabled: boolean;
+  userType?: string;
+  creationTime: string;
+  permissions: string[];
+};
+
+const mockUsers: User[] = [
+  {
+    uid: 'mock-admin-01',
+    username: 'admin',
+    displayName: 'Super Admin',
+    photoURL: '',
+    disabled: false,
+    creationTime: new Date('2023-01-15T10:00:00Z').toISOString(),
+    permissions: ['super_admin'],
+  },
+  {
+    uid: 'mock-cashier-01',
+    username: 'cashier',
+    displayName: 'John Cashier',
+    photoURL: '',
+    disabled: false,
+    creationTime: new Date('2023-02-20T11:30:00Z').toISOString(),
+    permissions: ['access_pos', 'view_dashboard'],
+  },
+  {
+    uid: 'mock-inventory-01',
+    username: 'inventory',
+    displayName: 'Jane Stocker',
+    photoURL: '',
+    disabled: true,
+    creationTime: new Date('2023-03-10T09:00:00Z').toISOString(),
+    permissions: ['manage_inventory', 'manage_products'],
+  },
+];
+
+
+function UserRow({ 
+  user, 
+  onUserUpdated,
+  onEdit
+}: { 
+  user: User, 
+  onUserUpdated: () => void,
+  onEdit: (user: User) => void
+}) {
+  const getInitials = (name?: string | null, username?: string | null) => {
+    if (name) {
+      const names = name.split(' ');
+      return names.map(n => n[0]).join('').toUpperCase();
+    }
+    if (username) {
+      return username.substring(0, 2).toUpperCase();
+    }
+    return '??';
+  };
+
+  return (
+    <TableRow>
+      <TableCell>
+        <div className="flex items-center gap-4">
+          <Avatar>
+            <AvatarImage src={user.photoURL || undefined} alt={user.displayName || undefined} />
+            <AvatarFallback>{getInitials(user.displayName, user.username)}</AvatarFallback>
+          </Avatar>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{user.displayName || 'No Name'}</span>
+              {user.userType && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                  {user.userType}
+                </Badge>
+              )}
+            </div>
+            <div className="text-sm text-muted-foreground">{user.username}</div>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell className="hidden md:table-cell">
+        <div className="flex flex-wrap gap-1">
+          {user.permissions?.map(permission => (
+            <Badge key={permission} variant="secondary" className="font-normal">
+              {permission.replace(/_/g, ' ')}
+            </Badge>
+          ))}
+        </div>
+      </TableCell>
+      <TableCell className="hidden sm:table-cell">
+        {format(new Date(user.creationTime), 'PP')}
+      </TableCell>
+      <TableCell>
+        <Badge variant={user.disabled ? 'destructive' : 'outline'}>
+          {user.disabled ? 'Disabled' : 'Active'}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right">
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">User Actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => onEdit(user)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit User
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive focus:bg-destructive/10"
+            // Add onClick handler for deletion here
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete User
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function UserSkeleton() {
+  return (
+    <TableRow>
+      <TableCell>
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+        </div>
+      </TableCell>
+      <TableCell className="hidden md:table-cell"><Skeleton className="h-6 w-48 rounded-full" /></TableCell>
+      <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
+      <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
+      <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+    </TableRow>
+  );
+}
+
+export default function UserManagementPage() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  const fetchUsers = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/users');
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+      const data = await response.json();
+      setUsers(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setError('Failed to load users');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const handleEdit = (user: User) => {
+    setEditingUser(user);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsEditDialogOpen(open);
+    if (!open) {
+      // Small delay to allow exit animation before clearing the user
+      setTimeout(() => setEditingUser(null), 300);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle>User Management</CardTitle>
+              <CardDescription>
+                A list of all users in your application.
+              </CardDescription>
+            </div>
+            <AddUserDialog onUserAdded={fetchUsers} />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead className="hidden md:table-cell">Permissions</TableHead>
+                <TableHead className="hidden sm:table-cell">Created On</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading && Array.from({ length: 5 }).map((_, i) => <UserSkeleton key={i} />)}
+              {!isLoading && users.map((user: User) => (
+                <UserRow 
+                  key={user.uid} 
+                  user={user} 
+                  onUserUpdated={fetchUsers}
+                  onEdit={handleEdit}
+                />
+              ))}
+              {!isLoading && users.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    {error || 'No users found.'}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {editingUser && (
+        <EditUserDialog
+          user={editingUser}
+          open={isEditDialogOpen}
+          onOpenChange={handleOpenChange}
+          onUserUpdated={fetchUsers}
+        />
+      )}
+    </div>
+  );
+}

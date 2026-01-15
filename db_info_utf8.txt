@@ -1,0 +1,199 @@
+Tables:
+[
+  {
+    "Tables_in_stock_pilot": "accounts"
+  },
+  {
+    "Tables_in_stock_pilot": "brands"
+  },
+  {
+    "Tables_in_stock_pilot": "categories"
+  },
+  {
+    "Tables_in_stock_pilot": "conversion_factors"
+  },
+  {
+    "Tables_in_stock_pilot": "customer_loyalty"
+  },
+  {
+    "Tables_in_stock_pilot": "customer_payments"
+  },
+  {
+    "Tables_in_stock_pilot": "customers"
+  },
+  {
+    "Tables_in_stock_pilot": "loyalty_points_settings"
+  },
+  {
+    "Tables_in_stock_pilot": "migrations"
+  },
+  {
+    "Tables_in_stock_pilot": "payment_methods"
+  },
+  {
+    "Tables_in_stock_pilot": "point_history"
+  },
+  {
+    "Tables_in_stock_pilot": "pos_terminals"
+  },
+  {
+    "Tables_in_stock_pilot": "pos_transaction_items"
+  },
+  {
+    "Tables_in_stock_pilot": "pos_transactions"
+  },
+  {
+    "Tables_in_stock_pilot": "products"
+  },
+  {
+    "Tables_in_stock_pilot": "purchase_order_items"
+  },
+  {
+    "Tables_in_stock_pilot": "purchase_orders"
+  },
+  {
+    "Tables_in_stock_pilot": "sale_items"
+  },
+  {
+    "Tables_in_stock_pilot": "sales_invoice_items"
+  },
+  {
+    "Tables_in_stock_pilot": "sales_invoices"
+  },
+  {
+    "Tables_in_stock_pilot": "sales_order_items"
+  },
+  {
+    "Tables_in_stock_pilot": "sales_orders"
+  },
+  {
+    "Tables_in_stock_pilot": "sales_persons"
+  },
+  {
+    "Tables_in_stock_pilot": "sales_transactions"
+  },
+  {
+    "Tables_in_stock_pilot": "shifts"
+  },
+  {
+    "Tables_in_stock_pilot": "stock_adjustments"
+  },
+  {
+    "Tables_in_stock_pilot": "stock_movements"
+  },
+  {
+    "Tables_in_stock_pilot": "subcategories"
+  },
+  {
+    "Tables_in_stock_pilot": "suppliers"
+  },
+  {
+    "Tables_in_stock_pilot": "units_of_measure"
+  },
+  {
+    "Tables_in_stock_pilot": "users"
+  },
+  {
+    "Tables_in_stock_pilot": "warehouses"
+  }
+]
+
+stock_movements columns:
+[
+  {
+    "Field": "id",
+    "Type": "varchar(50)",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "product_id",
+    "Type": "varchar(50)",
+    "Null": "NO",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "product_name",
+    "Type": "varchar(255)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "movement_type",
+    "Type": "enum('sale','purchase','adjustment','return','transfer')",
+    "Null": "NO",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "quantity_change",
+    "Type": "int",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "previous_stock",
+    "Type": "int",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "new_stock",
+    "Type": "int",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "reference_id",
+    "Type": "varchar(50)",
+    "Null": "YES",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "reference_type",
+    "Type": "enum('sale','purchase','adjustment','return','transfer')",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "notes",
+    "Type": "text",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "created_at",
+    "Type": "timestamp",
+    "Null": "YES",
+    "Key": "MUL",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  },
+  {
+    "Field": "updated_at",
+    "Type": "timestamp",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+  }
+]

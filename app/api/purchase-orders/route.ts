@@ -1,0 +1,202 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { query } from '../../../lib/mysql';
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const search = searchParams.get('search');
+    const status = searchParams.get('status');
+    const supplierId = searchParams.get('supplierId');
+
+    let sql = `
+      SELECT
+        po.id,
+        po.supplier_id,
+        po.supplier_name,
+        po.date,
+        po.total,
+        po.payment_method,
+        po.status,
+        po.created_at,
+        po.updated_at
+      FROM purchase_orders po
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (status) {
+      sql += ' AND po.status = ?';
+      params.push(status);
+    }
+
+    if (supplierId) {
+      sql += ' AND po.supplier_id = ?';
+      params.push(supplierId);
+    }
+
+    if (search) {
+      sql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    sql += ' ORDER BY po.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const purchaseOrders = await query(sql, params);
+
+    // Fetch items for each order
+    const ordersWithItems = await Promise.all(
+      purchaseOrders.map(async (row: any) => {
+        const itemsQuery = `
+          SELECT
+            poi.id,
+            poi.product_id,
+            poi.product_name,
+            poi.quantity,
+            poi.cost,
+            poi.expiration_date,
+            (poi.quantity * poi.cost) as subtotal
+          FROM purchase_order_items poi
+          WHERE poi.purchase_order_id = ?
+          ORDER BY poi.created_at ASC
+        `;
+
+        const items = await query(itemsQuery, [row.id]);
+
+        return {
+          id: row.id,
+          supplierId: row.supplier_id,
+          supplierName: row.supplier_name,
+          date: row.date,
+          total: parseFloat(row.total),
+          paymentMethod: row.payment_method || '',
+          status: row.status,
+          items: items.map((item: any) => ({
+            productId: item.product_id,
+            productName: item.product_name,
+            quantity: parseInt(item.quantity),
+            cost: parseFloat(item.cost),
+            expirationDate: item.expiration_date,
+          })),
+        };
+      })
+    );
+
+    // Get total count for pagination
+    let countSql = 'SELECT COUNT(*) as total FROM purchase_orders po WHERE 1=1';
+    const countParams: any[] = [];
+
+    if (status) {
+      countSql += ' AND po.status = ?';
+      countParams.push(status);
+    }
+
+    if (supplierId) {
+      countSql += ' AND po.supplier_id = ?';
+      countParams.push(supplierId);
+    }
+
+    if (search) {
+      countSql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`);
+    }
+
+    const countResult = await query(countSql, countParams);
+    const total = countResult[0]?.total || 0;
+
+    return NextResponse.json({
+      success: true,
+      data: ordersWithItems,
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + limit < total
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error fetching purchase orders:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch purchase orders' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      supplierId,
+      supplierName,
+      date,
+      items,
+      total,
+      paymentMethod,
+      status
+    } = body;
+
+    if (!supplierId || !supplierName || !items || items.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Generate order ID
+    const orderId = `po_${Date.now()}`;
+
+    // Insert purchase order
+    const insertOrderQuery = `
+      INSERT INTO purchase_orders (
+        id, supplier_id, supplier_name, date, total, payment_method, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    await query(insertOrderQuery, [
+      orderId,
+      supplierId,
+      supplierName,
+      date || new Date().toISOString(),
+      total || 0,
+      paymentMethod || '',
+      status || 'Pending'
+    ]);
+
+    // Insert order items
+    const insertItemQuery = `
+      INSERT INTO purchase_order_items (
+        id, purchase_order_id, product_id, product_name, quantity, cost, expiration_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    for (const item of items) {
+      const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await query(insertItemQuery, [
+        itemId,
+        orderId,
+        item.productId,
+        item.productName,
+        item.quantity,
+        item.cost,
+        item.expirationDate || null
+      ]);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { id: orderId },
+      message: 'Purchase order created successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error creating purchase order:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to create purchase order' },
+      { status: 500 }
+    );
+  }
+}
