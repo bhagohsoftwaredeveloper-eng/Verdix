@@ -48,6 +48,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
 import { updateProduct, getBrands, getCategories, getSubcategories, getUnitsOfMeasure, getSuppliers, getAccounts, getWarehouses } from './actions';
+import { ProductSuppliers } from './product-suppliers';
 import { Wand2 } from 'lucide-react'; // Added Wand2 for consistency if needed, though mostly for generation
 
 const productSchema = z.object({
@@ -227,10 +228,11 @@ export function EditProductDialog({ product, onProductUpdated }: { product: Prod
               <form id="edit-product-form" onSubmit={form.handleSubmit(saveChanges, (errors) => console.log('Form validation errors:', errors))}>
                 <div className="h-[520px]">
                   <Tabs defaultValue="basic" className="w-full h-full">
-                    <TabsList className="grid w-fit grid-cols-4 mx-auto">
+                    <TabsList className="grid w-fit grid-cols-5 mx-auto">
                       <TabsTrigger value="basic">Basic Info</TabsTrigger>
                       <TabsTrigger value="inventory">Inventory</TabsTrigger>
                       <TabsTrigger value="accounts">Accounts</TabsTrigger>
+                      <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
                       <TabsTrigger value="conversion">Conversion</TabsTrigger>
                     </TabsList>
                     <TabsContent value="basic" className="space-y-4 p-6 h-[450px] overflow-y-auto">
@@ -522,7 +524,7 @@ export function EditProductDialog({ product, onProductUpdated }: { product: Prod
                                 <SelectContent>
                                   {accounts?.filter(account => account.type === 'income').map((account: Account) => (
                                     <SelectItem key={account.id} value={account.id}>
-                                      {account.name} {account.code ? `(${account.code})` : ''}
+                                      {account.name} {account.code ? `( {account.code})` : ''}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -552,7 +554,7 @@ export function EditProductDialog({ product, onProductUpdated }: { product: Prod
                                 <SelectContent>
                                   {accounts?.filter(account => account.type === 'expense').map((account: Account) => (
                                     <SelectItem key={account.id} value={account.id}>
-                                      {account.name} {account.code ? `(${account.code})` : ''}
+                                      {account.name} {account.code ? `( {account.code})` : ''}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -562,6 +564,9 @@ export function EditProductDialog({ product, onProductUpdated }: { product: Prod
                           )}
                         />
                       </div>
+                    </TabsContent>
+                    <TabsContent value="suppliers" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                      <ProductSuppliers productId={product.id} onUpdate={onProductUpdated} />
                     </TabsContent>
                     <TabsContent value="conversion" className="space-y-4 p-6 h-[450px] overflow-y-auto">
                       {/* Conversion Factors List */}

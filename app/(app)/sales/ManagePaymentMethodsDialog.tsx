@@ -287,14 +287,14 @@ function PaymentMethodRow({ paymentMethod, onUpdate, onDelete, paymentMethods }:
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <PaymentMethodDialog paymentMethod={paymentMethod} onSave={handleUpdate}>
-            <Button variant="outline" size="sm">
-              <Pencil className="mr-2 h-4 w-4" /> Edit
+            <Button variant="outline" size="icon" className="h-8 w-8">
+              <Pencil className="h-4 w-4" />
             </Button>
           </PaymentMethodDialog>
           <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              <Button variant="destructive" size="icon" className="h-8 w-8">
+                <Trash2 className="h-4 w-4" />
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">

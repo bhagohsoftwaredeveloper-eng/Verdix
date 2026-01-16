@@ -1,9 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../lib/mysql';
 
+// Helper function to ensure payment_terms table exists with new schema
+async function ensurePaymentTermsTable() {
+  try {
+    // First ensure payment_term_types table exists
+    const createTypesTableSQL = `
+      CREATE TABLE IF NOT EXISTS payment_term_types (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_is_active (is_active)
+      )
+    `;
+    await query(createTypesTableSQL);
+
+    // Insert default types if table is empty
+    const checkTypes = await query('SELECT COUNT(*) as count FROM payment_term_types');
+    if (checkTypes[0].count === 0) {
+      const defaultTypes = ['Cash', 'Credit', 'Net 30', 'Net 60', 'COD'];
+      for (const type of defaultTypes) {
+        const id = `ptt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await query('INSERT INTO payment_term_types (id, name) VALUES (?, ?)', [id, type]);
+      }
+    }
+
+    // Create payment_terms table with foreign key
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS payment_terms (
+        id VARCHAR(50) PRIMARY KEY,
+        description VARCHAR(255),
+        type_id VARCHAR(50),
+        type VARCHAR(50),
+        number_of_days_month VARCHAR(50),
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_description (description),
+        INDEX idx_type (type),
+        INDEX idx_type_id (type_id),
+        INDEX idx_is_active (is_active),
+        FOREIGN KEY (type_id) REFERENCES payment_term_types(id) ON DELETE SET NULL
+      )
+    `;
+    
+    await query(createTableSQL);
+  } catch (error) {
+    console.error('Error ensuring payment_terms table:', error);
+    throw error;
+  }
+}
+
 // GET endpoint to fetch payment terms
 export async function GET(request: NextRequest) {
   try {
+    await ensurePaymentTermsTable();
+
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -13,8 +68,9 @@ export async function GET(request: NextRequest) {
     let sql = `
       SELECT
         id,
-        name,
-        days,
+        description,
+        type,
+        number_of_days_month AS numberOfDaysMonth,
         is_active AS isActive,
         created_at AS createdAt
       FROM payment_terms
@@ -28,11 +84,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      sql += ' AND name LIKE ?';
-      params.push(`%${search}%`);
+      sql += ' AND (description LIKE ? OR type LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
     }
 
-    sql += ' ORDER BY name ASC LIMIT ? OFFSET ?';
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const paymentTerms = await query(sql, params);
@@ -47,8 +103,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      countSql += ' AND name LIKE ?';
-      countParams.push(`%${search}%`);
+      countSql += ' AND (description LIKE ? OR type LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`);
     }
 
     const countResult = await query(countSql, countParams);
@@ -77,12 +133,21 @@ export async function GET(request: NextRequest) {
 // POST endpoint to create a new payment term
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { name, days = 0, isActive = true } = body;
+    await ensurePaymentTermsTable();
 
-    if (!name || !name.trim()) {
+    const body = await request.json();
+    const { description, type, numberOfDaysMonth, isActive = true } = body;
+
+    if (!description || !description.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Payment term name is required' },
+        { success: false, error: 'Description is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!type || !type.trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Type is required' },
         { status: 400 }
       );
     }
@@ -91,31 +156,83 @@ export async function POST(request: NextRequest) {
     const id = `pt_${Date.now()}`;
 
     const sql = `
-      INSERT INTO payment_terms (id, name, days, is_active)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO payment_terms (id, description, type, number_of_days_month, is_active)
+      VALUES (?, ?, ?, ?, ?)
     `;
 
-    await query(sql, [id, name.trim(), days, isActive]);
+    await query(sql, [
+      id,
+      description.trim(),
+      type.trim(),
+      numberOfDaysMonth?.trim() || null,
+      isActive
+    ]);
 
     return NextResponse.json({
       success: true,
       message: 'Payment term created successfully',
-      data: { id, name: name.trim(), days, isActive },
+      data: {
+        id,
+        description: description.trim(),
+        type: type.trim(),
+        numberOfDaysMonth: numberOfDaysMonth?.trim() || null,
+        isActive
+      },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
     console.error('Error creating payment term:', error);
 
-    // Handle duplicate name error
-    if (error.code === 'ER_DUP_ENTRY') {
+    return NextResponse.json(
+      { success: false, error: 'Failed to create payment term' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT endpoint to update a payment term
+export async function PUT(request: NextRequest) {
+  try {
+    await ensurePaymentTermsTable();
+
+    const body = await request.json();
+    const { id, description, type, numberOfDaysMonth, isActive } = body;
+
+    if (!id) {
       return NextResponse.json(
-        { success: false, error: 'Payment term name already exists' },
-        { status: 409 }
+        { success: false, error: 'Payment term ID is required' },
+        { status: 400 }
       );
     }
 
+    const sql = `
+      UPDATE payment_terms
+      SET
+        description = ?,
+        type = ?,
+        number_of_days_month = ?,
+        is_active = ?
+      WHERE id = ?
+    `;
+
+    await query(sql, [
+      description?.trim() || null,
+      type?.trim() || null,
+      numberOfDaysMonth?.trim() || null,
+      isActive !== undefined ? isActive : true,
+      id
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Payment term updated successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Error updating payment term:', error);
+
     return NextResponse.json(
-      { success: false, error: 'Failed to create payment term' },
+      { success: false, error: 'Failed to update payment term' },
       { status: 500 }
     );
   }

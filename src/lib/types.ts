@@ -40,6 +40,10 @@ export interface Product {
 
   // Price Levels
   priceLevels?: { levelId: string; price: number }[];
+
+  // Supplier Mapping
+  primarySupplierRop?: number;
+  mappings?: SupplierProductMapping[];
 }
 
 export interface PriceLevel {
@@ -287,4 +291,18 @@ export interface PosTransactionItem {
   discountAmount: number;
   lineTotal: number;
   createdAt?: string;
+}
+
+export interface SupplierProductMapping {
+  id: string;
+  productId: string;
+  supplierId: string;
+  supplierName?: string;
+  supplierSku?: string;
+  supplierLeadTime: number;
+  supplierSpecificRop: number;
+  supplierCost?: number;
+  isPrimary: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }

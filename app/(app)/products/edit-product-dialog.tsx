@@ -66,6 +66,7 @@ function CurrencyIcon({ className }: { className?: string }) {
 }
 import { updateProduct, getBrands, getCategories, getSubcategories, getUnitsOfMeasure, getSuppliers, getAccounts, getWarehouses } from './actions';
 import { Wand2 } from 'lucide-react'; // Added Wand2 for consistency if needed, though mostly for generation
+import { ProductSuppliers } from './product-suppliers';
 
 const productSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
@@ -353,6 +354,12 @@ export function EditProductDialog({
                       >
                         Price Levels
                       </TabsTrigger>
+                      <TabsTrigger 
+                        value="suppliers"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
+                      >
+                        Suppliers
+                      </TabsTrigger>
                     </TabsList>
                     <TabsContent value="basic" className="space-y-4 p-6 h-[450px] overflow-y-auto">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -500,32 +507,7 @@ export function EditProductDialog({
                       </div>
                     </TabsContent>
                     <TabsContent value="inventory" className="space-y-4 p-6 h-[450px] overflow-y-auto">
-                      <FormField
-                        control={form.control}
-                        name="supplier"
-                        render={({ field }) => (
-                          <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Supplier (Optional)</FormLabel>
-                              <ManageSuppliersDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onSupplierAdded={onOptionsRefresh} />
-                            </div>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a supplier" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {suppliers?.map((supplier: Supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                            <FormDescription className="text-xs text-muted-foreground">
-                              Current ID: {field.value || 'None'}
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+
 
                       <FormField
                         control={form.control}
@@ -712,6 +694,12 @@ export function EditProductDialog({
                           )}
                         />
                       </div>
+                    </TabsContent>
+                    <TabsContent value="suppliers" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                      <ProductSuppliers productId={product.id} onUpdate={() => {
+                          // Optionally refresh parent or show success
+                          if (onProductUpdated) onProductUpdated();
+                      }} />
                     </TabsContent>
                     <TabsContent value="conversion" className="space-y-4 p-6 h-[450px] overflow-y-auto">
                       {/* Conversion Factors List */}

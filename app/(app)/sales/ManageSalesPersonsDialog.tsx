@@ -188,12 +188,12 @@ function SalesPersonRow({ salesPerson, onUpdate, onDelete }: { salesPerson: Sale
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <SalesPersonDialog salesPerson={salesPerson} onSave={handleUpdate}>
-            <Button variant="outline" size="sm">
-              <Pencil className="mr-2 h-4 w-4" /> Edit
+            <Button variant="outline" size="icon" className="h-8 w-8">
+              <Pencil className="h-4 w-4" />
             </Button>
           </SalesPersonDialog>
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          <Button variant="destructive" size="icon" className="h-8 w-8" onClick={handleDelete}>
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </TableCell>
@@ -223,6 +223,9 @@ function SalesPersonSkeleton() {
 export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: React.ReactNode, onChange?: () => void }) {
   const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [newName, setNewName] = useState('');
+  const [newContact, setNewContact] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
   const { toast } = useToast();
 
   const fetchSalesPersons = async () => {
@@ -252,14 +255,24 @@ export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: Reac
     fetchSalesPersons();
   }, []);
 
-  const handleAddSalesPerson = async (name: string, contactNumber?: string) => {
+  const handleAddSalesPerson = async () => {
+    if (!newName.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Sales person name cannot be empty.',
+      });
+      return;
+    }
+
+    setIsAdding(true);
     try {
       const response = await fetch('/api/sales-persons', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, contactNumber }),
+        body: JSON.stringify({ name: newName, contactNumber: newContact }),
       });
 
       const result = await response.json();
@@ -268,11 +281,24 @@ export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: Reac
         throw new Error(result.error || 'Failed to add sales person');
       }
 
+      toast({
+        title: 'Sales Person Added',
+        description: `Sales person "${newName}" has been successfully saved.`,
+      });
+
+      setNewName('');
+      setNewContact('');
       await fetchSalesPersons(); // Refresh the list
       onChange?.(); // Notify parent component
     } catch (error: any) {
       console.error('Error adding sales person:', error);
-      throw error; // Re-throw to let the dialog handle the error
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to add sales person.',
+      });
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -306,13 +332,29 @@ export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: Reac
           </DialogDescription>
         </DialogHeader>
         <div className="mt-4">
-            <div className="flex justify-end mb-4">
-                <SalesPersonDialog onSave={handleAddSalesPerson}>
-                    <Button size="sm">
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Sales Person
-                    </Button>
-                </SalesPersonDialog>
+            <div className="grid grid-cols-3 gap-4 mb-4 items-end">
+                <div className="grid gap-2">
+                    <Label htmlFor="new-name">Name</Label>
+                    <Input 
+                        id="new-name"
+                        placeholder="e.g., John Doe" 
+                        value={newName} 
+                        onChange={(e) => setNewName(e.target.value)} 
+                    />
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="new-contact">Contact Number</Label>
+                    <Input 
+                        id="new-contact"
+                        placeholder="e.g., +1-555-0101" 
+                        value={newContact} 
+                        onChange={(e) => setNewContact(e.target.value)} 
+                    />
+                </div>
+                <Button onClick={handleAddSalesPerson} disabled={isAdding || !newName.trim()}>
+                    {isAdding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                    {isAdding ? 'Adding...' : 'Add Sales Person'}
+                </Button>
             </div>
             <Card>
                 <CardContent className='p-0'>
@@ -321,9 +363,7 @@ export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: Reac
                         <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Contact Number</TableHead>
-                        <TableHead>
-                            <span className="sr-only">Actions</span>
-                        </TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>

@@ -28,7 +28,7 @@ import type { ChartConfig } from '@/components/ui/chart';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { Product, Sale } from '@/lib/types';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 const chartConfig = {
   sales: {
@@ -44,11 +44,23 @@ function CurrencyIcon() {
 export default function DashboardPage() {
   const firestore = useFirestore();
   
+  /* REMOVED FIREBASE PRODUCTS FETCHING
   const productsCollection = useMemoFirebase(
     () => (firestore ? collection(firestore, 'products') : null),
     [firestore]
   );
-  const { data: products } = useCollection<Product>(productsCollection);
+  const { data: productsFirebase } = useCollection<Product>(productsCollection);
+  */
+  
+  // Use MySQL getProducts instead
+  const [products, setProducts] = useState<Product[]>([]);
+  useEffect(() => {
+    async function load() {
+       const res = await import('../products/actions').then(mod => mod.getProducts());
+       setProducts(res);
+    }
+    load();
+  }, []);
 
   const salesCollection = useMemoFirebase(
     () => (firestore ? collection(firestore, 'sales') : null),
@@ -64,7 +76,13 @@ export default function DashboardPage() {
     const totalRevenue = sales.reduce((acc, sale) => acc + sale.total, 0);
     const totalSales = sales.length;
     const productsSold = sales.reduce((acc, sale) => acc + (sale.items?.length || 0), 0);
-    const lowStockItems = products.filter((p) => p.stock < p.reorderPoint).length;
+    
+    // Updated Low Stock Logic to use primarySupplierRop
+    const lowStockItems = products.filter((p) => {
+        const rop = p.primarySupplierRop ?? p.reorderPoint ?? 0;
+        return p.stock < rop;
+    }).length;
+    
     const totalItems = products.length;
 
 

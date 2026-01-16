@@ -30,10 +30,17 @@ export type ProductFormData = {
 export async function getProducts(limit?: number, offset?: number) {
   try {
     let sql = `
-      SELECT p.*, s.name as supplier_name, w.name as warehouse_name
+      SELECT p.*, 
+             s_legacy.name as legacy_supplier_name, 
+             w.name as warehouse_name,
+             spm.supplier_id as primary_supplier_id,
+             spm.supplier_specific_rop as primary_supplier_rop,
+             s_primary.name as primary_supplier_name
       FROM products p
-      LEFT JOIN suppliers s ON p.supplier_id = s.id
+      LEFT JOIN suppliers s_legacy ON p.supplier_id = s_legacy.id
       LEFT JOIN warehouses w ON p.warehouse_id = w.id
+      LEFT JOIN supplier_product_mapping spm ON p.id = spm.product_id AND spm.is_primary = 1
+      LEFT JOIN suppliers s_primary ON spm.supplier_id = s_primary.id
       ORDER BY p.created_at DESC
     `;
 
@@ -67,6 +74,7 @@ export async function getProducts(limit?: number, offset?: number) {
       ...product,
       additionalDescription: product.additional_description,
       reorderPoint: product.reorder_point,
+      primarySupplierRop: product.primary_supplier_rop, // Included new field
       avgDailySales: product.avg_daily_sales,
       price: parseFloat(product.price) || 0,
       cost: product.cost ? parseFloat(product.cost) : undefined,
@@ -78,7 +86,8 @@ export async function getProducts(limit?: number, offset?: number) {
       conversionFactors: cfMap.get(product.id) || [],
       incomeAccount: product.income_account,
       expenseAccount: product.expense_account,
-      supplier: product.supplier_name,
+      supplier: product.primary_supplier_id || product.supplier_id, // Use primary mapped supplier if available
+      supplierName: product.primary_supplier_name || product.legacy_supplier_name,
       warehouse: product.warehouse_id, // Return ID for form binding, or name if needed? Usually ID for edit forms.
       createdAt: product.created_at,
       updatedAt: product.updated_at,
@@ -742,5 +751,117 @@ export async function deleteWarehouse(id: string) {
   } catch (error) {
     console.error('Error deleting warehouse:', error);
     return { success: false, message: 'Error deleting warehouse.' };
+  }
+}
+// Supplier Product Mappings
+export async function getSupplierMappings(productId: string) {
+  try {
+    const sql = `
+      SELECT spm.*, s.name as supplier_name, s.contact_number
+      FROM supplier_product_mapping spm
+      JOIN suppliers s ON spm.supplier_id = s.id
+      WHERE spm.product_id = ?
+      ORDER BY spm.is_primary DESC, s.name ASC
+    `;
+    const mappings = await query(sql, [productId]);
+    
+    return mappings.map((m: any) => ({
+      id: m.id,
+      productId: m.product_id,
+      supplierId: m.supplier_id,
+      supplierName: m.supplier_name,
+      supplierSku: m.supplier_sku,
+      supplierLeadTime: m.supplier_lead_time,
+      supplierSpecificRop: m.supplier_specific_rop,
+      supplierCost: m.supplier_cost ? parseFloat(m.supplier_cost) : undefined,
+      isPrimary: m.is_primary === 1 || m.is_primary === true,
+      createdAt: m.created_at,
+      updatedAt: m.updated_at
+    }));
+  } catch (error) {
+    console.error('Error fetching supplier mappings:', error);
+    return [];
+  }
+}
+
+export async function addSupplierMapping(productId: string, supplierId: string, leadTime: number, rop: number, cost?: number, supplierSku?: string, isPrimary: boolean = false) {
+  try {
+    // If making this primary, unset other primaries for this product first
+    if (isPrimary) {
+      await query('UPDATE supplier_product_mapping SET is_primary = FALSE WHERE product_id = ?', [productId]);
+    }
+    
+    // Check if mapping already exists
+    const checkSql = `SELECT id FROM supplier_product_mapping WHERE product_id = ? AND supplier_id = ?`;
+    const existing = await query(checkSql, [productId, supplierId]);
+    
+    if (existing.length > 0) {
+      return { success: false, message: 'This supplier is already mapped to this product.' };
+    }
+
+    const id = `spm_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const sql = `
+      INSERT INTO supplier_product_mapping 
+      (id, product_id, supplier_id, supplier_sku, supplier_lead_time, supplier_specific_rop, supplier_cost, is_primary)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    await query(sql, [id, productId, supplierId, supplierSku || null, leadTime, rop, cost || null, isPrimary]);
+    
+    return { success: true, message: 'Supplier mapping added successfully.', id };
+  } catch (error) {
+    console.error('Error adding supplier mapping:', error);
+    return { success: false, message: 'Error adding supplier mapping.' };
+  }
+}
+
+export async function updateSupplierMapping(id: string, leadTime: number, rop: number, cost?: number, supplierSku?: string, isPrimary: boolean = false) {
+  try {
+    // Get productId for this mapping to handle primary logic
+    const [mapping] = await query('SELECT product_id FROM supplier_product_mapping WHERE id = ?', [id]);
+    
+    if (!mapping) {
+      return { success: false, message: 'Mapping not found.' };
+    }
+    
+    const productId = mapping.product_id;
+
+    if (isPrimary) {
+      await query('UPDATE supplier_product_mapping SET is_primary = FALSE WHERE product_id = ?', [productId]);
+    }
+
+    const sql = `
+      UPDATE supplier_product_mapping
+      SET supplier_lead_time = ?, supplier_specific_rop = ?, supplier_cost = ?, supplier_sku = ?, is_primary = ?
+      WHERE id = ?
+    `;
+    
+    await query(sql, [leadTime, rop, cost || null, supplierSku || null, isPrimary, id]);
+    
+    return { success: true, message: 'Supplier mapping updated successfully.' };
+  } catch (error) {
+    console.error('Error updating supplier mapping:', error);
+    return { success: false, message: 'Error updating supplier mapping.' };
+  }
+}
+
+export async function deleteSupplierMapping(id: string) {
+  try {
+    await query('DELETE FROM supplier_product_mapping WHERE id = ?', [id]);
+    return { success: true, message: 'Supplier mapping removed.' };
+  } catch (error) {
+    console.error('Error deleting supplier mapping:', error);
+    return { success: false, message: 'Error deleting supplier mapping.' };
+  }
+}
+
+export async function setPrimarySupplier(productId: string, mappingId: string) {
+  try {
+    await query('UPDATE supplier_product_mapping SET is_primary = FALSE WHERE product_id = ?', [productId]);
+    await query('UPDATE supplier_product_mapping SET is_primary = TRUE WHERE id = ?', [mappingId]);
+    return { success: true, message: 'Primary supplier updated.' };
+  } catch (error) {
+    console.error('Error setting primary supplier:', error);
+    return { success: false, message: 'Error setting primary supplier.' };
   }
 }

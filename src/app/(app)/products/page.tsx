@@ -109,7 +109,7 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, dep
             src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
             data-ai-hint={product.imageHint}
             width="40"
-          />
+            />
         </TableCell>
         <TableCell className="font-medium">
           {product.name}
@@ -164,7 +164,7 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, dep
                     <QuickAddChildDialog
                       parentProduct={parentProduct}
                       baseStock={product.parentId ? product.stock : undefined}
-                      onChildAdded={onProductDeleted || (() => { })}
+                      onChildAdded={onProductDeleted || (() => {})}
                       products={[]}
                     />
                   </TooltipTrigger>
@@ -438,7 +438,3 @@ export default function ProductsPage() {
     </Card>
   );
 }
-/ /  
- F o r c e  
- r e c o m p i l e  
- 

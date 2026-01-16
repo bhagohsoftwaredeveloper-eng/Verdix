@@ -9,8 +9,8 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Upload, Building2, Settings, FileText, Monitor, MapPin, Users, CreditCard, DollarSign } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { ManageTransactionReferenceDialog } from './manage-transaction-reference-dialog';
-import { ManagePosTerminalsDialog } from './manage-pos-terminals-dialog';
 import { AddSalesAreaDialog } from '../../customer/list/add-sales-area-dialog';
 import { AddSalesGroupDialog } from '../../customer/list/add-sales-group-dialog';
 import { ManageSalesPersonsDialog } from './manage-sales-persons-dialog';
@@ -276,10 +276,7 @@ export default function PosSetupPage() {
             <CardDescription className="mb-4">
               Configure transaction number format and prefix
             </CardDescription>
-            <ManageTransactionReferenceDialog
-              currentPrefix={settings.transactionPrefix}
-              onPrefixUpdated={(prefix) => setSettings(prev => ({ ...prev, transactionPrefix: prefix }))}
-            />
+            <ManageTransactionReferenceDialog />
           </CardContent>
         </Card>
 
@@ -292,7 +289,11 @@ export default function PosSetupPage() {
             <CardDescription className="mb-4">
               Manage POS terminal devices and locations
             </CardDescription>
-            <ManagePosTerminalsDialog />
+            <Link href="/settings/pos-terminals">
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
+                <span className="text-xs font-medium">Manage</span>
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 

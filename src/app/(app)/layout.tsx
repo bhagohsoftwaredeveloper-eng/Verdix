@@ -49,6 +49,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { NotificationsBell } from '@/components/notifications-bell';
 
 
 const navItems = [
@@ -341,10 +342,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-30 flex items-center h-16 gap-4 px-4 border-b bg-background/80 backdrop-blur-sm sm:px-6 non-printable">
           <SidebarTrigger className="md:hidden" />
           <div className="flex-1" />
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <Bell className="h-5 w-5" />
-            <span className="sr-only">Toggle notifications</span>
-          </Button>
+          <NotificationsBell />
         </header>
         <main className="flex-1 p-4 overflow-auto sm:p-6">
           {children}

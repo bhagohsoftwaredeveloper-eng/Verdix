@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, memo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -44,7 +44,7 @@ const coinDenominations = [
   { value: 0.01, label: '₱0.01 Coin' },
 ];
 
-const DenominationInput = ({ 
+const DenominationInput = memo(({ 
   denom, 
   color, 
   count, 
@@ -89,7 +89,9 @@ const DenominationInput = ({
       </div>
     </div>
   );
-};
+});
+
+DenominationInput.displayName = 'DenominationInput';
 
 export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash, cashSales }: EndShiftDialogProps) {
   const [counts, setCounts] = useState<Record<number, number>>({});

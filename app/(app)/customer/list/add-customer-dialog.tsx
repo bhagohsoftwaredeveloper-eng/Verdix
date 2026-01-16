@@ -39,6 +39,7 @@ import { SalesPerson } from '@/lib/types';
 
 import { AddSalesAreaDialog } from './add-sales-area-dialog';
 import { AddSalesGroupDialog } from './add-sales-group-dialog';
+import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms-dialog';
 
 interface LoyaltySetting {
   id: string;
@@ -153,6 +154,10 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
   const [isLoadingSalesAreas, setIsLoadingSalesAreas] = useState(false);
   const [salesGroups, setSalesGroups] = useState<any[]>([]);
   const [isLoadingSalesGroups, setIsLoadingSalesGroups] = useState(false);
+  const [paymentTermsList, setPaymentTermsList] = useState<any[]>([]);
+
+  const [isLoadingPaymentTerms, setIsLoadingPaymentTerms] = useState(false);
+  const [isManagePaymentTermsOpen, setIsManagePaymentTermsOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -160,7 +165,9 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
       fetchPriceLevels();
       fetchSalesAreas();
       fetchSalesGroups();
+
       fetchLoyaltySettings();
+      fetchPaymentTerms();
     }
   }, [isOpen]);
 
@@ -178,6 +185,21 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
       console.error('Error fetching sales groups:', error);
     } finally {
       setIsLoadingSalesGroups(false);
+    }
+  };
+
+  const fetchPaymentTerms = async () => {
+    try {
+      setIsLoadingPaymentTerms(true);
+      const response = await fetch('/api/payment-terms');
+      const result = await response.json();
+      if (result.success) {
+        setPaymentTermsList(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching payment terms:', error);
+    } finally {
+      setIsLoadingPaymentTerms(false);
     }
   };
 
@@ -293,6 +315,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
   }
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-3xl h-[600px] flex flex-col overflow-hidden" style={{ height: '550px' }}>
@@ -546,19 +569,49 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
                 </div>
               </TabsContent>
               <TabsContent value="financial" className="space-y-4 p-6 h-[450px] overflow-y-auto">
-                <FormField
-                  control={form.control}
-                  name="paymentTerms"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Payment Terms</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., Net 30" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="paymentTerms"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Terms</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Payment Terms" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {isLoadingPaymentTerms ? (
+                              <SelectItem value="loading" disabled>Loading...</SelectItem>
+                            ) : (
+                              paymentTermsList?.map(term => (
+                                <SelectItem key={term.id} value={term.description}>
+                                  {term.description}
+                                </SelectItem>
+                              ))
+                            )}
+                            <div className="border-t mt-1 pt-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="w-full justify-start h-8 px-2 text-sm"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setIsManagePaymentTermsOpen(true);
+                                  }}
+                                >
+                                  <PlusCircle className="mr-2 h-4 w-4" />
+                                  Add Payment Terms
+                                </Button>
+                            </div>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -638,5 +691,12 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ManagePaymentTermsDialog 
+      open={isManagePaymentTermsOpen}
+      onOpenChange={setIsManagePaymentTermsOpen}
+      onPaymentTermsUpdated={fetchPaymentTerms}
+      trigger={null}
+    />
+    </>
   );
 }

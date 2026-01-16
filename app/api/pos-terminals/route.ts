@@ -7,13 +7,18 @@ async function ensurePosTerminalsTable() {
     const createTableSQL = `
       CREATE TABLE IF NOT EXISTS pos_terminals (
         id VARCHAR(50) PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        location VARCHAR(255),
         ip_address VARCHAR(45),
+        terminal_description VARCHAR(255),
+        serial_number VARCHAR(100),
+        min VARCHAR(100),
+        permit_no VARCHAR(100),
+        print_official_receipt VARCHAR(10),
+        or_next_reference VARCHAR(100),
+        inventory_location VARCHAR(100),
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_name (name),
+        INDEX idx_terminal_description (terminal_description),
         INDEX idx_is_active (is_active)
       )
     `;
@@ -39,9 +44,14 @@ export async function GET(request: NextRequest) {
     let sql = `
       SELECT
         id,
-        name,
-        location,
         ip_address AS ipAddress,
+        terminal_description AS terminalDescription,
+        serial_number AS serialNumber,
+        min,
+        permit_no AS permitNo,
+        print_official_receipt AS printOfficialReceipt,
+        or_next_reference AS orNextReference,
+        inventory_location AS inventoryLocation,
         is_active AS isActive,
         created_at AS createdAt
       FROM pos_terminals
@@ -55,11 +65,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      sql += ' AND (name LIKE ? OR location LIKE ? OR ip_address LIKE ?)';
+      sql += ' AND (terminal_description LIKE ? OR ip_address LIKE ? OR serial_number LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    sql += ' ORDER BY name ASC LIMIT ? OFFSET ?';
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const terminals = await query(sql, params);
@@ -74,7 +84,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      countSql += ' AND (name LIKE ? OR location LIKE ? OR ip_address LIKE ?)';
+      countSql += ' AND (terminal_description LIKE ? OR ip_address LIKE ? OR serial_number LIKE ?)';
       countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
@@ -107,29 +117,58 @@ export async function POST(request: NextRequest) {
     await ensurePosTerminalsTable();
 
     const body = await request.json();
-    const { name, location, ipAddress, isActive = true } = body;
-
-    if (!name || !name.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Terminal name is required' },
-        { status: 400 }
-      );
-    }
+    const {
+      ipAddress,
+      terminalDescription,
+      serialNumber,
+      min,
+      permitNo,
+      printOfficialReceipt,
+      orNextReference,
+      inventoryLocation,
+      isActive = true
+    } = body;
 
     // Generate ID
     const id = `terminal_${Date.now()}`;
 
     const sql = `
-      INSERT INTO pos_terminals (id, name, location, ip_address, is_active)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO pos_terminals (
+        id, ip_address, terminal_description, serial_number, min,
+        permit_no, print_official_receipt, or_next_reference,
+        inventory_location, is_active
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    await query(sql, [id, name.trim(), location?.trim() || null, ipAddress?.trim() || null, isActive]);
+    await query(sql, [
+      id,
+      ipAddress?.trim() || null,
+      terminalDescription?.trim() || null,
+      serialNumber?.trim() || null,
+      min?.trim() || null,
+      permitNo?.trim() || null,
+      printOfficialReceipt || 'No',
+      orNextReference?.trim() || null,
+      inventoryLocation || 'Store',
+      isActive
+    ]);
 
     return NextResponse.json({
       success: true,
       message: 'POS terminal created successfully',
-      data: { id, name: name.trim(), location: location?.trim() || null, ipAddress: ipAddress?.trim() || null, isActive },
+      data: {
+        id,
+        ipAddress: ipAddress?.trim() || null,
+        terminalDescription: terminalDescription?.trim() || null,
+        serialNumber: serialNumber?.trim() || null,
+        min: min?.trim() || null,
+        permitNo: permitNo?.trim() || null,
+        printOfficialReceipt: printOfficialReceipt || 'No',
+        orNextReference: orNextReference?.trim() || null,
+        inventoryLocation: inventoryLocation || 'Store',
+        isActive
+      },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
@@ -137,6 +176,75 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { success: false, error: 'Failed to create POS terminal' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT endpoint to update a POS terminal
+export async function PUT(request: NextRequest) {
+  try {
+    await ensurePosTerminalsTable();
+
+    const body = await request.json();
+    const {
+      id,
+      ipAddress,
+      terminalDescription,
+      serialNumber,
+      min,
+      permitNo,
+      printOfficialReceipt,
+      orNextReference,
+      inventoryLocation,
+      isActive
+    } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Terminal ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const sql = `
+      UPDATE pos_terminals
+      SET
+        ip_address = ?,
+        terminal_description = ?,
+        serial_number = ?,
+        min = ?,
+        permit_no = ?,
+        print_official_receipt = ?,
+        or_next_reference = ?,
+        inventory_location = ?,
+        is_active = ?
+      WHERE id = ?
+    `;
+
+    await query(sql, [
+      ipAddress?.trim() || null,
+      terminalDescription?.trim() || null,
+      serialNumber?.trim() || null,
+      min?.trim() || null,
+      permitNo?.trim() || null,
+      printOfficialReceipt || 'No',
+      orNextReference?.trim() || null,
+      inventoryLocation || 'Store',
+      isActive !== undefined ? isActive : true,
+      id
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      message: 'POS terminal updated successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Error updating POS terminal:', error);
+
+    return NextResponse.json(
+      { success: false, error: 'Failed to update POS terminal' },
       { status: 500 }
     );
   }
