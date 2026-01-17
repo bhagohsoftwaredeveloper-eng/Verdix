@@ -43,9 +43,15 @@ import { ManageCategoriesDialog } from './ManageCategoriesDialog';
 import { ManageBrandsDialog } from './ManageBrandsDialog';
 import { ManageSubcategoriesDialog } from './ManageSubcategoriesDialog';
 import { ManageUnitOfMeasureDialog } from './ManageUnitOfMeasureDialog';
-import { ManageSuppliersDialog } from './ManageSuppliersDialog';
+
 import { ManageAccountsDialog } from './ManageAccountsDialog';
+
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
+import { AddSupplierMappingDialog } from './AddSupplierMappingDialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Trash2, Star, Plus } from 'lucide-react';
+import { SupplierProductMapping } from '@/lib/types';
 
 
 function CurrencyIcon({ className }: { className?: string }) {
@@ -130,7 +136,39 @@ export function AddProductDialog({
   const [warehouses, setWarehouses] = useState<any[]>([]); // Using any for now to avoid cross-file type issues
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
+
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
+
+  // Supplier Mappings State
+  const [supplierMappings, setSupplierMappings] = useState<any[]>([]);
+  const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false);
+  const [editingMapping, setEditingMapping] = useState<any | null>(null);
+
+  const handleAddSupplierMapping = (mapping: any) => {
+    // If setting as primary, remove primary flag from others
+    const newMappings = [...supplierMappings];
+    if (mapping.isPrimary) {
+        newMappings.forEach(m => m.isPrimary = false);
+    }
+    
+    // Check if supplier already exists
+    const existingIndex = newMappings.findIndex(m => m.supplierId === mapping.supplierId);
+    if (existingIndex >= 0) {
+        newMappings[existingIndex] = mapping;
+    } else {
+        newMappings.push(mapping);
+    }
+    setSupplierMappings(newMappings);
+  };
+
+  const handleRemoveSupplierMapping = (supplierId: string) => {
+    setSupplierMappings(prev => prev.filter(m => m.supplierId !== supplierId));
+  };
+ 
+  const openSupplierDialog = (mapping?: any) => {
+      setEditingMapping(mapping || null);
+      setIsSupplierDialogOpen(true);
+  };
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -179,6 +217,18 @@ export function AddProductDialog({
       setWarehouses(externalProductOptions.warehouses || []);
       setPriceLevels(externalProductOptions.priceLevels || []);
 
+      // Initialize default price level if form is empty
+      const systemPriceLevels = externalProductOptions.priceLevels || [];
+      const currentPriceLevels = form.getValues('priceLevels');
+      
+      if (currentPriceLevels.length === 0 && systemPriceLevels.length > 0) {
+          // Find default level or take first
+          const defaultLevel = systemPriceLevels.find((l:any) => l.isDefault) || systemPriceLevels[0];
+          if (defaultLevel) {
+              appendPriceLevel({ levelId: defaultLevel.id, price: 0 });
+          }
+      }
+
       // Handle accounts
       const accountsData = externalProductOptions.accounts || [];
       setAccounts(accountsData);
@@ -192,13 +242,15 @@ export function AddProductDialog({
       const defaultExpense = accountsData.find((a: Account) => a.name === 'General Products Purchased' && a.type === 'expense');
       if (defaultExpense) form.setValue('expenseAccount', defaultExpense.id);
     }
-  }, [externalProductOptions, form]);
+  }, [externalProductOptions, form, appendPriceLevel]); // Added appendPriceLevel dep
 
   useEffect(() => {
     if (isOpen) {
       form.reset();
+
       setProductType('parent');
       setAutoCreateChild(true);
+      setSupplierMappings([]);
     }
   }, [isOpen, form]);
 
@@ -243,28 +295,36 @@ export function AddProductDialog({
     const markup = supplier.markupPercentage / 100;
     const basePrice = cost * (1 + markup);
     
-    // Update main price
-    form.setValue('price', basePrice);
-
-    // Apply to price levels if any exist
-    if (priceLevelFields.length > 0) {
-      priceLevels.forEach((level, index) => {
-        // Example logic:
-        // Retail (Default) gets full markup
-        // Wholesale gets 70% of the supplier markup
-        // VIP gets 85% of the supplier markup
+    // Apply to price levels
+    // We expect price levels to be available from external options or initialized
+    let firstLevelPrice = basePrice;
+    
+    if (priceLevels.length > 0) {
+      // Clear existing fields to rebuild them properly or update them?
+      // Better to update existing or append if missing.
+      
+      // We will iterate through ALL available price level definitions (from settings)
+      // and populate the form fields.
+      
+      priceLevels.forEach((level) => {
         let levelMarkup = markup;
-        if (level.name.toLowerCase().includes('wholesale')) {
+        const name = level.name.toLowerCase();
+        
+        if (name.includes('wholesale')) {
           levelMarkup = markup * 0.7;
-        } else if (level.name.toLowerCase().includes('vip')) {
+        } else if (name.includes('vip')) {
           levelMarkup = markup * 0.85;
         } else if (!level.isDefault) {
-          levelMarkup = markup * 0.9; // Other non-default levels get 90%
+          levelMarkup = markup * 0.9;
         }
 
-        const levelPrice = cost * (1 + levelMarkup);
+        const levelPrice = parseFloat((cost * (1 + levelMarkup)).toFixed(2));
         
-        // Find if this level is already in priceLevelFields
+        // If this is the default level (usually Retail), it sets the base price
+        if (level.isDefault) {
+            firstLevelPrice = levelPrice;
+        }
+
         const fieldIndex = priceLevelFields.findIndex(f => (f as any).levelId === level.id);
         if (fieldIndex > -1) {
           form.setValue(`priceLevels.${fieldIndex}.price`, levelPrice);
@@ -272,7 +332,13 @@ export function AddProductDialog({
           appendPriceLevel({ levelId: level.id, price: levelPrice });
         }
       });
+    } else {
+        // Fallback if no price levels defined in system
+        form.setValue('price', parseFloat(basePrice.toFixed(2)));
     }
+
+    // Always sync the main price to the default level's price (or the calculated one)
+    form.setValue('price', firstLevelPrice);
 
     toast({
       title: 'Markup Applied',
@@ -286,7 +352,9 @@ export function AddProductDialog({
     try {
       const result = await addProduct({
         ...values,
+        ...values,
         image: `https://picsum.photos/seed/${values.sku}/400/300`,
+        supplierMappings: supplierMappings,
       });
 
       if (result.success) {
@@ -396,6 +464,18 @@ export function AddProductDialog({
                       Inventory
                     </TabsTrigger>
                     <TabsTrigger 
+                      value="suppliers"
+                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
+                    >
+                      Suppliers
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="price-levels"
+                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
+                    >
+                      Price Levels
+                    </TabsTrigger>
+                    <TabsTrigger 
                       value="accounts"
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                     >
@@ -406,12 +486,6 @@ export function AddProductDialog({
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                     >
                       Conversion
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="price-levels"
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
-                    >
-                      Price Levels
                     </TabsTrigger>
                   </TabsList>
                   <TabsContent value="basic" className="space-y-4 p-6 h-[450px] overflow-y-auto">
@@ -436,27 +510,32 @@ export function AddProductDialog({
                         control={form.control}
                         name="brand"
                         render={({ field }) => (
-                          <FormItem>
-                            <div className="flex items-center justify-between">
+                            <FormItem>
                               <FormLabel>Brand</FormLabel>
-                              <ManageBrandsDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} />
-                            </div>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a brand" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingBrands ? (
-                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                ) : (
-                                  brands?.map((brand: Brand) => <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>)
-                                )}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a brand" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingBrands ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    brands?.map((brand: Brand) => <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>)
+                                  )}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageBrandsDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage Brands
+                                          </Button>
+                                      } />
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
                         )}
                       />
 
@@ -598,48 +677,14 @@ export function AddProductDialog({
                     </div>
                   </TabsContent>
                   <TabsContent value="inventory" className="space-y-4 p-6 h-[450px] overflow-y-auto">
-                    <FormField
-                      control={form.control}
-                      name="supplier"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex items-center justify-between">
-                            <FormLabel>Supplier (Optional)</FormLabel>
-                            <ManageSuppliersDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onSupplierAdded={() => {
-                              // Reload suppliers when a new supplier is added
-                              getSuppliers().then(setSuppliers);
-                            }} />
-                          </div>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a supplier" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {isLoadingSuppliers ? (
-                                <SelectItem value="loading" disabled>Loading...</SelectItem>
-                              ) : (
-                                suppliers?.map((supplier: Supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+
 
                     <FormField
                       control={form.control}
                       name="warehouse"
                       render={({ field }) => (
                         <FormItem>
-                          <div className="flex items-center justify-between">
-                            <FormLabel>Warehouse (Optional)</FormLabel>
-                            <ManageWarehousesDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onChange={() => {
-                              getWarehouses().then(setWarehouses);
-                            }} />
-                          </div>
+                          <FormLabel>Warehouse (Optional)</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
@@ -652,6 +697,16 @@ export function AddProductDialog({
                               ) : (
                                 warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)
                               )}
+                              <div className="p-1 w-full border-t mt-1">
+                                  <ManageWarehousesDialog trigger={
+                                      <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                          <Plus className="mr-2 h-4 w-4" />
+                                          Manage Warehouses
+                                      </Button>
+                                  } onChange={() => {
+                                    getWarehouses().then(setWarehouses);
+                                  }} />
+                              </div>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -665,13 +720,7 @@ export function AddProductDialog({
                         name="unitOfMeasure"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>{productType === 'parent' ? 'Base Unit of Measure' : 'Unit of Measure'}</FormLabel>
-                              <ManageUnitOfMeasureDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onUnitAdded={() => {
-                                // Reload units of measure when a new unit is added
-                                getUnitsOfMeasure().then(setUnitsOfMeasure);
-                              }} />
-                            </div>
+                            <FormLabel>{productType === 'parent' ? 'Base Unit of Measure' : 'Unit of Measure'}</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
@@ -688,6 +737,16 @@ export function AddProductDialog({
                                     </SelectItem>
                                   ))
                                 )}
+                                <div className="p-1 w-full border-t mt-1">
+                                    <ManageUnitOfMeasureDialog trigger={
+                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Manage UOM
+                                        </Button>
+                                    } onUnitAdded={() => {
+                                      getUnitsOfMeasure().then(setUnitsOfMeasure);
+                                    }} />
+                                </div>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -743,7 +802,9 @@ export function AddProductDialog({
                         name="cost"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Cost (₱)</FormLabel>
+                            <div className="flex items-center justify-between h-6">
+                              <FormLabel>Cost (₱)</FormLabel>
+                            </div>
                             <FormControl>
                               <Input type="number" step="0.01" placeholder="e.g., 50.00" value={field.value || ''} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
                             </FormControl>
@@ -751,33 +812,84 @@ export function AddProductDialog({
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={form.control}
-                        name="price"
-                        render={({ field }) => (
-                          <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Price (₱)</FormLabel>
-                              <Button 
-                                type="button" 
-                                variant="link" 
-                                size="sm" 
-                                className="h-auto p-0 text-xs"
-                                onClick={applySupplierMarkup}
-                              >
-                                <Wand2 className="mr-1 h-3 w-3" />
-                                Apply Supplier Markup
-                              </Button>
-                            </div>
-                            <FormControl>
-                              <Input type="number" step="0.01" placeholder="e.g., 99.99" value={field.value} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+
                     </div>
+
                   </TabsContent>
+                  
+                  <TabsContent value="suppliers" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="space-y-1">
+                            <h4 className="text-sm font-medium">Supplier Mappings</h4>
+                            <p className="text-xs text-muted-foreground">Manage multiple suppliers for this product.</p>
+                        </div>
+                        <Button type="button" size="sm" onClick={() => openSupplierDialog()}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Supplier
+                        </Button>
+                    </div>
+
+                    <div className="border rounded-md">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[50px]"></TableHead>
+                                    <TableHead>Supplier</TableHead>
+                                    <TableHead>Lead Time</TableHead>
+                                    <TableHead>ROP</TableHead>
+                                    <TableHead className="text-right">Cost</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {supplierMappings.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                                            No suppliers mapped yet.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    supplierMappings.map((mapping, index) => {
+                                        const supplier = suppliers.find(s => s.id === mapping.supplierId);
+                                        return (
+                                            <TableRow key={index}>
+                                                <TableCell>
+                                                    {mapping.isPrimary && <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {supplier?.name || 'Unknown'}
+                                                    {mapping.isPrimary && <Badge variant="secondary" className="ml-2 text-xs">Primary</Badge>}
+                                                </TableCell>
+                                                <TableCell>{mapping.leadTime} days</TableCell>
+                                                <TableCell>{mapping.rop}</TableCell>
+                                                <TableCell className="text-right">₱{mapping.cost?.toFixed(2) || '-'}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="ghost" size="sm" type="button" onClick={() => openSupplierDialog(mapping)}>
+                                                        Edit
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" type="button" className="text-destructive" onClick={() => handleRemoveSupplierMapping(mapping.supplierId)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    <AddSupplierMappingDialog
+                        productId="new" // Special flag for local mode
+                        isOpen={isSupplierDialogOpen}
+                        onOpenChange={setIsSupplierDialogOpen}
+                        onSuccess={(data: any) => handleAddSupplierMapping(data)}
+                        editingMapping={editingMapping}
+                        suppliers={suppliers}
+                        onRefreshSuppliers={() => getSuppliers().then(setSuppliers)}
+                    />
+                  </TabsContent>
+
                   <TabsContent value="accounts" className="space-y-4 p-6 h-[450px] overflow-y-auto">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
@@ -785,20 +897,7 @@ export function AddProductDialog({
                         name="incomeAccount"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Income Account (Optional)</FormLabel>
-                              <ManageAccountsDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>}
-                                onAccountAdded={(newAccount) => {
-                                  if (newAccount.type === 'income') {
-                                    getAccountsByType('income').then(setIncomeAccounts);
-                                    form.setValue('incomeAccount', newAccount.id);
-                                  }
-                                }}
-                                onAccountUpdated={() => {
-                                  getAccountsByType('income').then(setIncomeAccounts);
-                                }}
-                              />
-                            </div>
+                            <FormLabel>Income Account (Optional)</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
@@ -815,6 +914,24 @@ export function AddProductDialog({
                                     </SelectItem>
                                   ))
                                 )}
+                                <div className="p-1 w-full border-t mt-1">
+                                    <ManageAccountsDialog trigger={
+                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Manage Accounts
+                                        </Button>
+                                    }
+                                      onAccountAdded={(newAccount) => {
+                                        if (newAccount.type === 'income') {
+                                          getAccountsByType('income').then(setIncomeAccounts);
+                                          form.setValue('incomeAccount', newAccount.id);
+                                        }
+                                      }}
+                                      onAccountUpdated={() => {
+                                        getAccountsByType('income').then(setIncomeAccounts);
+                                      }}
+                                    />
+                                </div>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -826,20 +943,7 @@ export function AddProductDialog({
                         name="expenseAccount"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Expense Account (Optional)</FormLabel>
-                              <ManageAccountsDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>}
-                                onAccountAdded={(newAccount) => {
-                                  if (newAccount.type === 'expense') {
-                                    getAccountsByType('expense').then(setExpenseAccounts);
-                                    form.setValue('expenseAccount', newAccount.id);
-                                  }
-                                }}
-                                onAccountUpdated={() => {
-                                  getAccountsByType('expense').then(setExpenseAccounts);
-                                }}
-                              />
-                            </div>
+                            <FormLabel>Expense Account (Optional)</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
@@ -856,6 +960,24 @@ export function AddProductDialog({
                                     </SelectItem>
                                   ))
                                 )}
+                                <div className="p-1 w-full border-t mt-1">
+                                    <ManageAccountsDialog trigger={
+                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Manage Accounts
+                                        </Button>
+                                    }
+                                      onAccountAdded={(newAccount) => {
+                                        if (newAccount.type === 'expense') {
+                                          getAccountsByType('expense').then(setExpenseAccounts);
+                                          form.setValue('expenseAccount', newAccount.id);
+                                        }
+                                      }}
+                                      onAccountUpdated={() => {
+                                        getAccountsByType('expense').then(setExpenseAccounts);
+                                      }}
+                                    />
+                                </div>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1061,21 +1183,53 @@ export function AddProductDialog({
                                     )}
                                   />
                                 </div>
-                                <div className="flex-1">
-                                  <FormField
-                                    control={form.control}
-                                    name={`priceLevels.${index}.price`}
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel className="text-xs">Price (₱)</FormLabel>
-                                        <FormControl>
-                                          <Input type="number" step="0.01" placeholder="0.00" value={field.value} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
-                                        </FormControl>
-                                        <FormMessage />
-                                      </FormItem>
-                                    )}
-                                  />
-                                </div>
+                                  <div className="flex-1">
+                                    <FormField
+                                      control={form.control}
+                                      name={`priceLevels.${index}.price`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel className="text-xs">Price (₱)</FormLabel>
+                                          <div className="flex gap-2 items-center">
+                                            <FormControl>
+                                              <Input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="0.00"
+                                                value={field.value}
+                                                onChange={(e) => {
+                                                  const newVal = parseFloat(e.target.value) || 0;
+                                                  field.onChange(newVal);
+
+                                                  // Sync with main price if this is the default level
+                                                  // We need to check if the FULL level object corresponds to a default level
+                                                  const currentLevelId = form.getValues(`priceLevels.${index}.levelId`);
+                                                  const levelDef = priceLevels.find(l => l.id === currentLevelId);
+
+                                                  // If it's the default level OR if there's only one level text and it matches
+                                                  if (levelDef?.isDefault || priceLevels.length === 1) {
+                                                      form.setValue('price', newVal);
+                                                  }
+                                                }}
+                                              />
+                                            </FormControl>
+                                            {/* Show apply markup button ONLY on the Price Levels tab now */}
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-primary"
+                                                title="Apply Supplier Markup"
+                                                onClick={applySupplierMarkup}
+                                            >
+                                                <Wand2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  </div>
                                 <Button
                                   type="button"
                                   variant="ghost"

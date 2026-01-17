@@ -47,7 +47,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ManagePaymentMethodsDialog } from '../sales/ManagePaymentMethodsDialog';
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
 import { useProducts, usePaymentMethods } from '@/hooks/use-api';
-import { ManageSuppliersDialog } from './ManageSuppliersDialog';
+import { SupplierFormDialog } from '../products/ManageSuppliersDialog';
+import { addSupplier } from '../products/actions';
 
 const purchaseOrderItemSchema = z.object({
   productId: z.string().min(1),
@@ -177,6 +178,14 @@ export function AddPurchaseOrderDialog({
   
   const { toast } = useToast();
   const { paymentMethods } = usePaymentMethods();
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch suppliers dynamically on mount
+    import('../products/actions').then(mod => {
+        mod.getSuppliers().then(data => setSuppliers(data));
+    });
+  }, []);
 
   // Generate auto reference number
   const generateReference = () => {
@@ -266,7 +275,7 @@ export function AddPurchaseOrderDialog({
            if(prefillProduct.supplier) {
                // Verify it exists in mockSuppliers? Or just set it. 
                // For now let's set it if it matches an ID format or we find it.
-               const sup = mockSuppliers.find(s => s.id === prefillProduct.supplier || s.name === prefillProduct.supplier);
+               const sup = suppliers.find(s => s.id === prefillProduct.supplier || s.name === prefillProduct.supplier);
                if(sup) form.setValue('supplierId', sup.id);
            }
 
@@ -301,7 +310,7 @@ export function AddPurchaseOrderDialog({
     setIsSubmitting(true);
 
     try {
-      const supplier = mockSuppliers.find(s => s.id === values.supplierId);
+      const supplier = suppliers.find(s => s.id === values.supplierId);
 
       if (!supplier) {
         throw new Error('Supplier not found');
@@ -408,13 +417,22 @@ export function AddPurchaseOrderDialog({
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    {mockSuppliers.map(sup => <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>)}
+                                    {suppliers.map(sup => <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>)}
                                 </SelectContent>
                                 </Select>
-                                {ManageSuppliersDialog && (
-                                    // @ts-ignore
-                                    <ManageSuppliersDialog trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>} />
-                                )}
+                                <SupplierFormDialog 
+                                  onSave={async (data) => {
+                                      const result = await addSupplier(data);
+                                      if (result.success) {
+                                          const newSuppliers = await import('../products/actions').then(mod => mod.getSuppliers());
+                                          setSuppliers(newSuppliers);
+                                      } else {
+                                          throw new Error(result.message);
+                                      }
+                                  }}
+                                >
+                                    <Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>
+                                </SupplierFormDialog>
                             </div>
                             <FormMessage />
                           </FormItem>

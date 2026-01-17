@@ -25,6 +25,7 @@ import { ManageBrandsDialog } from './ManageBrandsDialog';
 import { ManageCategoriesDialog } from './ManageCategoriesDialog';
 import { EditProductDialog } from './edit-product-dialog';
 import { ManagePriceLevelsDialog } from './ManagePriceLevelsDialog';
+import { ManageSuppliersDialog } from './ManageSuppliersDialog';
 
 import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart } from 'lucide-react';
 import { useState, useMemo, Fragment, useEffect, useCallback, Suspense } from 'react';
@@ -293,6 +294,7 @@ function ProductsContent() {
   const [isBrandsOpen, setIsBrandsOpen] = useState(false);
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const [isPriceLevelsOpen, setIsPriceLevelsOpen] = useState(false);
+  const [isSuppliersOpen, setIsSuppliersOpen] = useState(false);
 
   const loadProducts = useCallback(async (page = currentPage, size = pageSize) => {
     setIsLoadingProducts(true);
@@ -423,6 +425,9 @@ function ProductsContent() {
                 <DropdownMenuItem onSelect={() => setTimeout(() => setIsPriceLevelsOpen(true), 0)}>
                   Manage Price Levels
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTimeout(() => setIsSuppliersOpen(true), 0)}>
+                  Manage Suppliers
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <ManageBrandsDialog 
@@ -443,6 +448,12 @@ function ProductsContent() {
                 onOpenChange={setIsPriceLevelsOpen}
                 onLevelAdded={() => loadProducts(currentPage, pageSize)}
                 trigger={<span className="sr-only">Open Price Levels</span>}
+            />
+             <ManageSuppliersDialog 
+                open={isSuppliersOpen}
+                onOpenChange={setIsSuppliersOpen}
+                onSupplierAdded={() => loadProducts(currentPage, pageSize)}
+                trigger={<span className="sr-only">Open Suppliers</span>}
             />
             <AddProductDialog 
               onProductAdded={() => loadProducts(currentPage, pageSize)} 

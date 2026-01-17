@@ -94,10 +94,17 @@ const customerNavItems = [
   { href: '/customer/loyalty', label: 'Customer Loyalty Points' },
 ];
 
+const suppliersNavItems = [
+  { href: '/suppliers/list', label: 'Supplier List' },
+  { href: '/suppliers/balance', label: 'Balance to Supplier' },
+  { href: '/suppliers/payment', label: 'Payment Suppliers' },
+];
+
 const otherNavItems = [
   { href: '/purchases', icon: ShoppingCart, label: 'Purchases', permission: 'manage_purchases' },
   { href: '/reports', icon: BarChart3, label: 'Reports', permission: 'view_reports' },
   { href: '/restock', icon: Lightbulb, label: 'Restock AI', permission: 'use_ai_features' },
+  // Suppliers moved to own section
   { href: '/user-management', icon: Users, label: 'User Management', permission: 'manage_users' },
   { href: '/settings', icon: Settings, label: 'Settings', permission: 'manage_settings' },
 ];
@@ -282,6 +289,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       {customerNavItems.map((item) => (
+                        <SidebarMenuItem key={item.href}>
+                          <SidebarMenuSubButton asChild isActive={pathname === item.href}>
+                            <Link href={item.href}>{item.label}</Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarMenuItem>
+            )}
+
+            {hasPermission('manage_purchases') && (
+              <SidebarMenuItem>
+                <Collapsible defaultOpen={true}>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      tooltip={{ children: "Suppliers" }}
+                      className="justify-between group group-data-[collapsible=icon]:[&>span:last-child]:block"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Users className="size-4" />
+                        <span>Suppliers</span>
+                      </div>
+                      <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180 group-data-[state=closed]:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {suppliersNavItems.map((item) => (
                         <SidebarMenuItem key={item.href}>
                           <SidebarMenuSubButton asChild isActive={pathname === item.href}>
                             <Link href={item.href}>{item.label}</Link>

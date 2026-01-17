@@ -81,10 +81,51 @@ export function AddSupplierMappingDialog({
       return;
     }
 
+    // If we are in local mode (no productId provided or explicitly handled by parent), 
+    // we validation and construct the object, then pass it back.
+    // However, the current component requires productId.
+    // Let's modify the component to support an "onSave" that receives data instead of calling server action directly
+    // if productId is missing or a specific prop is set.
+    
+    // Actually, let's just use the props.
+    // If productId is empty string, we treat it as local mode? 
+    // Or better, let's look at how we called it.
+    
+    // For now, let's assume if we are passed an onSaveLocal prop, use that.
+    
+  };
+
+  const onSubmit = async () => {
+      if (!selectedSupplier || !leadTime || !rop) {
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'Supplier, Lead Time, and ROP are required.',
+        });
+        return;
+      }
+      
+      const mappingData = {
+          supplierId: selectedSupplier,
+          leadTime: parseInt(leadTime),
+          rop: parseInt(rop),
+          cost: cost ? parseFloat(cost) : undefined,
+          supplierSku,
+          isPrimary: isPrimary
+      };
+
+      if (productId === 'new' && onSuccess) {
+          // Local mode
+          // @ts-ignore - we are passing data back to parent
+          onSuccess(mappingData);
+          onOpenChange(false);
+          return;
+      }
+
     setIsSubmitting(true);
     try {
       let result;
-      if (editingMapping) {
+      if (editingMapping && editingMapping.id && productId !== 'new') {
         result = await updateSupplierMapping(
           editingMapping.id,
           parseInt(leadTime),
@@ -190,7 +231,7 @@ export function AddSupplierMappingDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={isSubmitting}>
+          <Button onClick={onSubmit} disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Save
           </Button>

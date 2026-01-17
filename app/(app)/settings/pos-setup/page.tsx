@@ -22,6 +22,10 @@ interface PosSettings {
   logoPath: string | null;
   enableAdvancedInventory: boolean;
   transactionPrefix: string;
+  address: string | null;
+  contactNumber: string | null;
+  tin: string | null;
+  email: string | null;
 }
 
 export default function PosSetupPage() {
@@ -29,7 +33,11 @@ export default function PosSetupPage() {
     businessName: '',
     logoPath: null,
     enableAdvancedInventory: false,
-    transactionPrefix: 'TXN'
+    transactionPrefix: 'TXN',
+    address: '',
+    contactNumber: '',
+    tin: '',
+    email: ''
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -205,6 +213,46 @@ export default function PosSetupPage() {
               onChange={(e) => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
               placeholder="Enter your business name"
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                value={settings.address || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, address: e.target.value }))}
+                placeholder="Enter business address"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contactNumber">Contact Number</Label>
+              <Input
+                id="contactNumber"
+                value={settings.contactNumber || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, contactNumber: e.target.value }))}
+                placeholder="Enter contact number"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tin">TIN#</Label>
+              <Input
+                id="tin"
+                value={settings.tin || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, tin: e.target.value }))}
+                placeholder="Enter TIN number"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={settings.email || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="Enter email address"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

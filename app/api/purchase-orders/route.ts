@@ -186,6 +186,26 @@ export async function POST(request: NextRequest) {
       ]);
     }
 
+    // Auto-record payment if status is 'Paid'
+    if (status === 'Paid' && total > 0) {
+      const paymentId = `sp_${Date.now()}_auto`;
+      const insertPaymentQuery = `
+        INSERT INTO supplier_payments (
+          id, supplier_id, amount, date, payment_method, reference, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      await query(insertPaymentQuery, [
+        paymentId,
+        supplierId,
+        total,
+        date || new Date().toISOString(),
+        paymentMethod || 'Cash',
+        `PO-${orderId}`,
+        `Auto-payment for PO ${orderId}`
+      ]);
+    }
+
     return NextResponse.json({
       success: true,
       data: { id: orderId },

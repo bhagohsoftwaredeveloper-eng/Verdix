@@ -128,7 +128,7 @@ export default function ProductDetailPage() {
                      <div className="grid grid-cols-3 gap-6">
                          <DetailItem label="Total Stock" value={`${product.stock} ${product.unitOfMeasure}(s)`} />
                          <DetailItem label="Reorder Point" value={'N/A'} />
-                          <DetailItem label="Serialized" value={product.isSerialized ? 'Yes' : 'No'} />
+                          
                      </div>
                      <Separator />
                      <div>

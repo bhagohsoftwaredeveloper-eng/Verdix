@@ -66,6 +66,7 @@ import { CancelSaleDialog } from './cancel-sale-dialog';
 import { DiscountDialog } from './discount-dialog';
 import { ShutdownConfirmationDialog } from './shutdown-confirmation-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { InsufficientStockDialog } from './insufficient-stock-dialog';
 
 
 const MOCK_PRODUCTS: Product[] = [
@@ -199,6 +200,10 @@ export default function POSPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
   const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
+  
+  const [enableAdvancedInventory, setEnableAdvancedInventory] = useState(false);
+  const [isInsufficientStockOpen, setIsInsufficientStockOpen] = useState(false);
+  const [insufficientItems, setInsufficientItems] = useState<SaleItem[]>([]);
 
 
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
@@ -234,6 +239,20 @@ export default function POSPage() {
       }
     };
     fetchPriceLevels();
+    
+    // Fetch POS settings
+    const fetchSettings = async () => {
+        try {
+            const response = await fetch('/api/pos-settings');
+            const result = await response.json();
+            if (result.success) {
+                setEnableAdvancedInventory(result.data.enableAdvancedInventory);
+            }
+        } catch (error) {
+            console.error('Error fetching settings:', error);
+        }
+    };
+    fetchSettings();
   }, []);
 
   useEffect(() => {
@@ -405,6 +424,15 @@ export default function POSPage() {
 
   const handleOpenTender = (method: string) => {
     if (items.length > 0) {
+      if (!enableAdvancedInventory) {
+        const lowStockItems = items.filter(item => item.quantity > item.stock);
+        if (lowStockItems.length > 0) {
+            setInsufficientItems(lowStockItems);
+            setIsInsufficientStockOpen(true);
+            return;
+        }
+      }
+      
       setTenderMethod(method);
       setIsTenderDialogOpen(true);
     }
@@ -940,6 +968,12 @@ export default function POSPage() {
         open={isShutdownConfirmOpen} 
         onOpenChange={setIsShutdownConfirmOpen}
         onConfirm={handleLogout}
+      />
+      
+      <InsufficientStockDialog 
+        open={isInsufficientStockOpen} 
+        onOpenChange={setIsInsufficientStockOpen}
+        items={insufficientItems}
       />
 
     </>

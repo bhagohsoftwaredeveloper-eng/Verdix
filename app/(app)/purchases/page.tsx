@@ -24,7 +24,7 @@ import { usePurchaseOrders } from '../../../hooks/use-api';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddPurchaseOrderDialog } from './add-purchase-order-dialog';
-import { ManageSuppliersDialog } from './ManageSuppliersDialog';
+
 import { Button } from '@/components/ui/button';
 import { Check, Truck, ChevronRight, Search, CalendarIcon, X, Printer, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -384,7 +384,6 @@ export default function PurchasesPage() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <ManageSuppliersDialog />
             <AddPurchaseOrderDialog onAddOrder={addPurchaseOrder} />
           </div>
         </div>

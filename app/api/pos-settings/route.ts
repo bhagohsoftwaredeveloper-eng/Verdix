@@ -11,6 +11,10 @@ export async function GET(request: NextRequest) {
         logo_path AS logoPath,
         enable_advanced_inventory AS enableAdvancedInventory,
         transaction_prefix AS transactionPrefix,
+        address,
+        contact_number AS contactNumber,
+        tin,
+        email,
         created_at AS createdAt,
         updated_at AS updatedAt
       FROM pos_settings
@@ -54,7 +58,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { businessName, logoPath, enableAdvancedInventory, transactionPrefix } = body;
+    const { businessName, logoPath, enableAdvancedInventory, transactionPrefix, address, contactNumber, tin, email } = body;
 
     // Check if settings exist
     const checkSQL = 'SELECT id FROM pos_settings LIMIT 1';
@@ -63,14 +67,18 @@ export async function POST(request: NextRequest) {
     if (existing.length === 0) {
       // Insert new settings
       const insertSQL = `
-        INSERT INTO pos_settings (id, business_name, logo_path, enable_advanced_inventory, transaction_prefix)
-        VALUES ('pos_settings_1', ?, ?, ?, ?)
+        INSERT INTO pos_settings (id, business_name, logo_path, enable_advanced_inventory, transaction_prefix, address, contact_number, tin, email)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
         logoPath || null,
         enableAdvancedInventory ?? false,
-        transactionPrefix || 'TXN'
+        transactionPrefix || 'TXN',
+        address || null,
+        contactNumber || null,
+        tin || null,
+        email || null
       ]);
     } else {
       // Update existing settings
@@ -79,7 +87,11 @@ export async function POST(request: NextRequest) {
         SET business_name = ?,
             logo_path = ?,
             enable_advanced_inventory = ?,
-            transaction_prefix = ?
+            transaction_prefix = ?,
+            address = ?,
+            contact_number = ?,
+            tin = ?,
+            email = ?
         WHERE id = ?
       `;
       await query(updateSQL, [
@@ -87,6 +99,10 @@ export async function POST(request: NextRequest) {
         logoPath,
         enableAdvancedInventory,
         transactionPrefix,
+        address,
+        contactNumber,
+        tin,
+        email,
         existing[0].id
       ]);
     }

@@ -35,6 +35,9 @@ import './033_alter_loyalty_base_column.ts';
 import './034_create_payment_details_tables.ts';
 import './035_create_pos_settings_table.ts';
 import './036_create_supplier_product_mapping.ts';
+import './037_alter_pos_settings_add_contact_fields.ts';
+import './038_create_supplier_payments_table.ts';
+import './039_alter_suppliers_add_details.ts';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

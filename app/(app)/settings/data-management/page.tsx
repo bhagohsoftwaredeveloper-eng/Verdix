@@ -11,9 +11,19 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Database, AlertCircle, CheckCircle2, Save, RefreshCw, Upload, Download, HardDrive, Clock, FileText, Globe, Key, Lock, Link as LinkIcon } from 'lucide-react';
+import { Database, AlertCircle, CheckCircle2, Save, RefreshCw, Upload, Download, HardDrive, Clock, FileText, Globe, Key, Lock, Link as LinkIcon, Trash2, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type BackupFile = {
   name: string;
@@ -68,6 +78,12 @@ export default function DataManagementPage() {
     secret: ''
   });
   const [savingApiConfig, setSavingApiConfig] = useState(false);
+
+  // Reset Data states
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetAction, setResetAction] = useState<'clear_sales' | 'reset_references' | 'clear_inventory' | null>(null);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleExport = async () => {
     setExporting(true);
@@ -404,6 +420,46 @@ export default function DataManagementPage() {
     }
   };
 
+  const openResetDialog = (action: 'clear_sales' | 'reset_references' | 'clear_inventory') => {
+    setResetAction(action);
+    setResetConfirmText('');
+    setResetDialogOpen(true);
+  };
+
+  const handleResetData = async () => {
+    if (!resetAction) return;
+    
+    setResetLoading(true);
+    try {
+      const res = await fetch('/api/data-management/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: resetAction })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast({
+          title: "Reset Successful",
+          description: data.message,
+        });
+      } else {
+         throw new Error(data.error || "Reset failed");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Reset Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setResetLoading(false);
+      setResetDialogOpen(false);
+      setResetAction(null);
+    }
+  };
+
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
@@ -420,6 +476,7 @@ export default function DataManagementPage() {
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="import-export">Import & Export</TabsTrigger>
           <TabsTrigger value="api-connection">API Integration</TabsTrigger>
+          <TabsTrigger value="reset">Reset Data</TabsTrigger>
         </TabsList>
 
         <TabsContent value="connection" className="space-y-4">
@@ -819,7 +876,99 @@ export default function DataManagementPage() {
             </CardFooter>
           </Card>
         </TabsContent>
+
+        <TabsContent value="reset" className="space-y-4">
+          <Card>
+             <CardHeader>
+               <CardTitle>Danger Zone</CardTitle>
+               <CardDescription>
+                 Destructive actions to reset system data. These actions cannot be undone.
+               </CardDescription>
+             </CardHeader>
+             <CardContent className="space-y-4">
+               
+               <div className="border border-red-200 rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
+                 <div className="flex items-center justify-between">
+                    <div>
+                       <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Clear Sales Data</h3>
+                       <p className="text-sm text-red-700 dark:text-red-300">
+                          Deletes all sales transactions, sales items, shifts, and Z-readings.
+                       </p>
+                    </div>
+                    <Button variant="destructive" onClick={() => openResetDialog('clear_sales')}>
+                       <Trash2 className="mr-2 h-4 w-4" /> Clear Sales
+                    </Button>
+                 </div>
+               </div>
+
+               <div className="border border-orange-200 rounded-lg p-4 bg-orange-50 dark:bg-orange-950/20">
+                 <div className="flex items-center justify-between">
+                    <div>
+                       <h3 className="text-lg font-medium text-orange-900 dark:text-orange-200">Reset Transaction References</h3>
+                       <p className="text-sm text-orange-700 dark:text-orange-300">
+                          Resets all transaction reference numbers (Invoices, POs, etc.) to their default starting values.
+                       </p>
+                    </div>
+                    <Button variant="outline" className="border-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900 text-orange-700 dark:text-orange-300" onClick={() => openResetDialog('reset_references')}>
+                       <RotateCcw className="mr-2 h-4 w-4" /> Reset References
+                    </Button>
+                 </div>
+               </div>
+
+               <div className="border border-red-200 rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
+                 <div className="flex items-center justify-between">
+                    <div>
+                       <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Delete Inventory</h3>
+                       <p className="text-sm text-red-700 dark:text-red-300">
+                          Deletes ALL products and stock history.
+                       </p>
+                    </div>
+                    <Button variant="destructive" onClick={() => openResetDialog('clear_inventory')}>
+                       <Trash2 className="mr-2 h-4 w-4" /> Delete Inventory
+                    </Button>
+                 </div>
+               </div>
+
+             </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. 
+              {resetAction === 'clear_sales' && " This will permanently delete all sales history, shift records, and transaction logs."}
+              {resetAction === 'reset_references' && " This will reset all transaction counters to their default start values. This may cause collision if you have existing records."}
+              {resetAction === 'clear_inventory' && " This will permanently delete ALL products and their stock history."}
+            </AlertDialogDescription>
+            <div className="py-2">
+                <Label htmlFor="confirm-text" className="text-xs text-muted-foreground mb-1 block">
+                   Type <span className="font-bold text-destructive">CONFIRM</span> to proceed
+                </Label>
+                <Input 
+                   id="confirm-text"
+                   value={resetConfirmText}
+                   onChange={(e) => setResetConfirmText(e.target.value)}
+                   placeholder="Type CONFIRM"
+                   autoComplete="off"
+                />
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+               onClick={handleResetData}
+               disabled={resetConfirmText !== 'CONFIRM' || resetLoading}
+            >
+              {resetLoading ? "Resetting..." : "Confirm Reset"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

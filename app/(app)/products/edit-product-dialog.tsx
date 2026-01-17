@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { PlusCircle, Pencil, Loader2, X } from 'lucide-react';
+import { PlusCircle, Pencil, Loader2, X, Plus, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Category, Product, Brand, UnitOfMeasure, Supplier, Account } from '@/lib/types';
 import { ManageCategoriesDialog } from './ManageCategoriesDialog';
@@ -65,7 +65,7 @@ function CurrencyIcon({ className }: { className?: string }) {
   );
 }
 import { updateProduct, getBrands, getCategories, getSubcategories, getUnitsOfMeasure, getSuppliers, getAccounts, getWarehouses } from './actions';
-import { Wand2 } from 'lucide-react'; // Added Wand2 for consistency if needed, though mostly for generation
+
 import { ProductSuppliers } from './product-suppliers';
 
 const productSchema = z.object({
@@ -219,10 +219,9 @@ export function EditProductDialog({
     const markup = supplier.markupPercentage / 100;
     const basePrice = cost * (1 + markup);
     
-    // Update main price
-    form.setValue('price', parseFloat(basePrice.toFixed(2)));
-
     // Apply to price levels
+    let firstLevelPrice = basePrice;
+
     if (priceLevels.length > 0) {
       priceLevels.forEach((level) => {
         let levelMarkup = markup;
@@ -236,17 +235,26 @@ export function EditProductDialog({
           levelMarkup = markup * 0.9;
         }
 
-        const levelPrice = cost * (1 + levelMarkup);
+        const levelPrice = parseFloat((cost * (1 + levelMarkup)).toFixed(2));
         
+        if (level.isDefault) {
+            firstLevelPrice = levelPrice;
+        }
+
         // Find if this level is already in priceLevelFields
         const fieldIndex = priceLevelFields.findIndex(f => (f as any).levelId === level.id);
         if (fieldIndex > -1) {
-          form.setValue(`priceLevels.${fieldIndex}.price`, parseFloat(levelPrice.toFixed(2)));
+          form.setValue(`priceLevels.${fieldIndex}.price`, levelPrice);
         } else {
-          appendPriceLevel({ levelId: level.id, price: parseFloat(levelPrice.toFixed(2)) });
+          appendPriceLevel({ levelId: level.id, price: levelPrice });
         }
       });
+    } else {
+       form.setValue('price', parseFloat(basePrice.toFixed(2)));
     }
+    
+    // Always sync the main price to the default level's price
+    form.setValue('price', firstLevelPrice);
 
     toast({
       title: 'Markup Applied',
@@ -321,7 +329,7 @@ export function EditProductDialog({
           <div className="flex-1 overflow-y-auto px-4 py-1">
             <Form {...form}>
               <form id="edit-product-form" onSubmit={form.handleSubmit(saveChanges, (errors) => console.log('Form validation errors:', errors))}>
-                <div className="h-[520px]">
+                <div className="min-h-[520px]">
                   <Tabs defaultValue="basic" className="w-full h-full">
                     <TabsList className="w-full h-auto justify-start rounded-none border-b bg-transparent p-0">
                       <TabsTrigger 
@@ -337,6 +345,18 @@ export function EditProductDialog({
                         Inventory
                       </TabsTrigger>
                       <TabsTrigger 
+                        value="suppliers"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
+                      >
+                        Suppliers
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="price-levels"
+                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
+                      >
+                        Price Levels
+                      </TabsTrigger>
+                      <TabsTrigger 
                         value="accounts"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                       >
@@ -348,20 +368,8 @@ export function EditProductDialog({
                       >
                         Conversion
                       </TabsTrigger>
-                      <TabsTrigger 
-                        value="price-levels"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
-                      >
-                        Price Levels
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="suppliers"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
-                      >
-                        Suppliers
-                      </TabsTrigger>
                     </TabsList>
-                    <TabsContent value="basic" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                    <TabsContent value="basic" className="space-y-4 p-6">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
@@ -381,10 +389,7 @@ export function EditProductDialog({
                           name="brand"
                           render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel>Brand</FormLabel>
-                                <ManageBrandsDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onBrandAdded={onOptionsRefresh} />
-                              </div>
+                              <FormLabel>Brand</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
@@ -393,6 +398,14 @@ export function EditProductDialog({
                                 </FormControl>
                                 <SelectContent>
                                   {brands?.map((brand: Brand) => <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>)}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageBrandsDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage Brands
+                                          </Button>
+                                      } onBrandAdded={onOptionsRefresh} />
+                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -463,10 +476,7 @@ export function EditProductDialog({
                           name="category"
                           render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel>Category</FormLabel>
-                                <ManageCategoriesDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onCategoryAdded={onOptionsRefresh} />
-                              </div>
+                              <FormLabel>Category</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
@@ -475,6 +485,14 @@ export function EditProductDialog({
                                 </FormControl>
                                 <SelectContent>
                                   {categories?.map((cat: Category) => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageCategoriesDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage Categories
+                                          </Button>
+                                      } onCategoryAdded={onOptionsRefresh} />
+                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -486,10 +504,7 @@ export function EditProductDialog({
                           name="subcategory"
                           render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel>Subcategory (Optional)</FormLabel>
-                                <ManageSubcategoriesDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onSubcategoryAdded={onOptionsRefresh} />
-                              </div>
+                              <FormLabel>Subcategory (Optional)</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
@@ -498,6 +513,14 @@ export function EditProductDialog({
                                 </FormControl>
                                 <SelectContent>
                                   {subcategories?.map((sub: Category) => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageSubcategoriesDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage Subcategories
+                                          </Button>
+                                      } onSubcategoryAdded={onOptionsRefresh} />
+                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -506,7 +529,7 @@ export function EditProductDialog({
                         />
                       </div>
                     </TabsContent>
-                    <TabsContent value="inventory" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                    <TabsContent value="inventory" className="space-y-4 p-6">
 
 
                       <FormField
@@ -514,10 +537,7 @@ export function EditProductDialog({
                         name="warehouse"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Warehouse (Optional)</FormLabel>
-                              <ManageWarehousesDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onChange={onOptionsRefresh} />
-                            </div>
+                            <FormLabel>Warehouse (Optional)</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
@@ -526,6 +546,14 @@ export function EditProductDialog({
                               </FormControl>
                               <SelectContent>
                                 {warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)}
+                                <div className="p-1 w-full border-t mt-1">
+                                    <ManageWarehousesDialog trigger={
+                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Manage Warehouses
+                                        </Button>
+                                    } onChange={onOptionsRefresh} />
+                                </div>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -539,10 +567,7 @@ export function EditProductDialog({
                           name="unitOfMeasure"
                           render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel>Unit of Measure</FormLabel>
-                                <ManageUnitOfMeasureDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>} onUnitAdded={onOptionsRefresh} />
-                              </div>
+                              <FormLabel>Unit of Measure</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
@@ -555,6 +580,14 @@ export function EditProductDialog({
                                       {uom.name} ({uom.abbreviation})
                                     </SelectItem>
                                   ))}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageUnitOfMeasureDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage UOM
+                                          </Button>
+                                      } onUnitAdded={onOptionsRefresh} />
+                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -582,7 +615,9 @@ export function EditProductDialog({
                           name="cost"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Cost (₱)</FormLabel>
+                              <div className="flex items-center justify-between h-6">
+                                <FormLabel>Cost (₱)</FormLabel>
+                              </div>
                               <FormControl>
                                 <Input type="number" step="0.01" placeholder="e.g., 50.00" value={field.value || ''} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
                               </FormControl>
@@ -590,54 +625,17 @@ export function EditProductDialog({
                             </FormItem>
                           )}
                         />
-                        <FormField
-                          control={form.control}
-                          name="price"
-                          render={({ field }) => (
-                            <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel>Price (₱)</FormLabel>
-                                <Button 
-                                  type="button" 
-                                  variant="link" 
-                                  size="sm" 
-                                  className="h-auto p-0 text-xs"
-                                  onClick={applySupplierMarkup}
-                                >
-                                  <Wand2 className="mr-1 h-3 w-3" />
-                                  Apply Supplier Markup
-                                </Button>
-                              </div>
-                              <FormControl>
-                                <Input type="number" step="0.01" placeholder="e.g., 99.99" value={field.value} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+
                       </div>
                     </TabsContent>
-                    <TabsContent value="accounts" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                    <TabsContent value="accounts" className="space-y-4 p-6">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
                           name="incomeAccount"
                           render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel>Income Account (Optional)</FormLabel>
-                                <ManageAccountsDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>}
-                                  onAccountAdded={(newAccount) => {
-                                    onOptionsRefresh?.();
-                                    if (newAccount.type === 'income') {
-                                      form.setValue('incomeAccount', newAccount.id);
-                                    }
-                                  }}
-                                  onAccountUpdated={() => {
-                                    onOptionsRefresh?.();
-                                  }}
-                                />
-                              </div>
+                              <FormLabel>Income Account (Optional)</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
@@ -650,6 +648,24 @@ export function EditProductDialog({
                                       {account.name} {account.code ? `(${account.code})` : ''}
                                     </SelectItem>
                                   ))}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageAccountsDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage Accounts
+                                          </Button>
+                                      }
+                                        onAccountAdded={(newAccount) => {
+                                          onOptionsRefresh?.();
+                                          if (newAccount.type === 'income') {
+                                            form.setValue('incomeAccount', newAccount.id);
+                                          }
+                                        }}
+                                        onAccountUpdated={() => {
+                                          onOptionsRefresh?.();
+                                        }}
+                                      />
+                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -661,20 +677,7 @@ export function EditProductDialog({
                           name="expenseAccount"
                           render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel>Expense Account (Optional)</FormLabel>
-                                <ManageAccountsDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0">Manage</Button>}
-                                  onAccountAdded={(newAccount) => {
-                                    onOptionsRefresh?.();
-                                    if (newAccount.type === 'expense') {
-                                      form.setValue('expenseAccount', newAccount.id);
-                                    }
-                                  }}
-                                  onAccountUpdated={() => {
-                                    onOptionsRefresh?.();
-                                  }}
-                                />
-                              </div>
+                              <FormLabel>Expense Account (Optional)</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
@@ -687,6 +690,24 @@ export function EditProductDialog({
                                       {account.name} {account.code ? `(${account.code})` : ''}
                                     </SelectItem>
                                   ))}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageAccountsDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage Accounts
+                                          </Button>
+                                      }
+                                        onAccountAdded={(newAccount) => {
+                                          onOptionsRefresh?.();
+                                          if (newAccount.type === 'expense') {
+                                            form.setValue('expenseAccount', newAccount.id);
+                                          }
+                                        }}
+                                        onAccountUpdated={() => {
+                                          onOptionsRefresh?.();
+                                        }}
+                                      />
+                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -695,13 +716,13 @@ export function EditProductDialog({
                         />
                       </div>
                     </TabsContent>
-                    <TabsContent value="suppliers" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                    <TabsContent value="suppliers" className="space-y-4 p-6">
                       <ProductSuppliers productId={product.id} onUpdate={() => {
                           // Optionally refresh parent or show success
                           if (onProductUpdated) onProductUpdated();
                       }} />
                     </TabsContent>
-                    <TabsContent value="conversion" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                    <TabsContent value="conversion" className="space-y-4 p-6">
                       {/* Conversion Factors List */}
                       <div className="rounded-md border p-4">
                         <div className="flex items-center justify-between mb-4">
@@ -819,7 +840,7 @@ export function EditProductDialog({
                         )}
                       </div>
                     </TabsContent>
-                    <TabsContent value="price-levels" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                    <TabsContent value="price-levels" className="space-y-4 p-6">
                     <div className="space-y-4">
                       <div className="rounded-md border p-4">
                         <div className="flex items-center justify-between mb-4">
@@ -879,21 +900,51 @@ export function EditProductDialog({
                                     )}
                                   />
                                 </div>
-                                <div className="flex-1">
-                                  <FormField
-                                    control={form.control}
-                                    name={`priceLevels.${index}.price`}
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel className="text-xs">Price (₱)</FormLabel>
-                                        <FormControl>
-                                          <Input type="number" step="0.01" placeholder="0.00" value={field.value} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
-                                        </FormControl>
-                                        <FormMessage />
-                                      </FormItem>
-                                    )}
-                                  />
-                                </div>
+                                  <div className="flex-1">
+                                    <FormField
+                                      control={form.control}
+                                      name={`priceLevels.${index}.price`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel className="text-xs">Price (₱)</FormLabel>
+                                           <div className="flex gap-2 items-center">
+                                            <FormControl>
+                                              <Input 
+                                                type="number" 
+                                                step="0.01" 
+                                                placeholder="0.00" 
+                                                value={field.value} 
+                                                onChange={(e) => {
+                                                  const newVal = parseFloat(e.target.value) || 0;
+                                                  field.onChange(newVal);
+                                                  
+                                                  // Sync with main price if this is the default level
+                                                  const currentLevelId = form.getValues(`priceLevels.${index}.levelId`);
+                                                  const levelDef = priceLevels.find(l => l.id === currentLevelId);
+                                                  
+                                                  if (levelDef?.isDefault || priceLevels.length === 1) {
+                                                      form.setValue('price', newVal);
+                                                  }
+                                                }} 
+                                              />
+                                            </FormControl>
+                                            {/* Show apply markup button ONLY on the Price Levels tab now */}
+                                            <Button 
+                                                type="button" 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-8 w-8 text-primary"
+                                                title="Apply Supplier Markup"
+                                                onClick={applySupplierMarkup}
+                                            >
+                                                <Wand2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  </div>
                                 <Button
                                   type="button"
                                   variant="ghost"

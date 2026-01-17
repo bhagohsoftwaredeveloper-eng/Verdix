@@ -26,6 +26,14 @@ export type ProductFormData = {
   conversionFactor?: number;
   conversionFactors?: { unit: string; factor: number }[];
   priceLevels?: { levelId: string; price: number }[];
+  supplierMappings?: {
+    supplierId: string;
+    leadTime: number;
+    rop: number;
+    cost?: number;
+    supplierSku?: string;
+    isPrimary: boolean;
+  }[];
 };
 
 export async function getProducts(limit?: number, offset?: number) {
@@ -219,6 +227,24 @@ export async function addProduct(formData: ProductFormData) {
         `;
         await query(plSql, [productId, pl.levelId, pl.price]);
       }
+    }
+
+    // Insert supplier mappings if provided
+    if (formData.supplierMappings && formData.supplierMappings.length > 0) {
+        for (const mapping of formData.supplierMappings) {
+            const mappingId = `${productId}-sm-${mapping.supplierId}-${Date.now()}`;
+            const smSql = `
+                INSERT INTO supplier_product_mapping (
+                    id, product_id, supplier_id, supplier_sku, 
+                    supplier_lead_time, supplier_specific_rop, 
+                    supplier_cost, is_primary
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            await query(smSql, [
+                mappingId, productId, mapping.supplierId, mapping.supplierSku || null,
+                mapping.leadTime, mapping.rop, mapping.cost || null, mapping.isPrimary ? 1 : 0
+            ]);
+        }
     }
 
     return { success: true, message: `${formData.name} has been added to the inventory.`, productId };
@@ -479,6 +505,11 @@ export async function getSuppliers() {
     return suppliers.map((s: any) => ({
       ...s,
       contactNumber: s.contact_number,
+      telephone: s.telephone,
+      mobilePhone: s.mobile_phone,
+      email: s.email,
+      company: s.company,
+      tin: s.tin,
       markupPercentage: s.markup_percentage ? parseFloat(s.markup_percentage) : undefined,
       created_at: s.created_at,
       updated_at: s.updated_at
@@ -488,23 +519,76 @@ export async function getSuppliers() {
   }
 }
 
-export async function addSupplier(name: string, contactNumber: string, address?: string, paymentTerms?: string, markupPercentage?: number) {
+export async function addSupplier(data: { name: string, contactNumber?: string, address?: string, paymentTerms?: string, markupPercentage?: number, telephone?: string, mobilePhone?: string, email?: string, company?: string, tin?: string }) {
   try {
     const supplierId = `supplier_${Date.now()}`;
-    const sql = `INSERT INTO suppliers (id, name, contact_number, address, payment_terms, markup_percentage) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), contact_number = VALUES(contact_number), address = VALUES(address), payment_terms = VALUES(payment_terms), markup_percentage = VALUES(markup_percentage)`;
-    await query(sql, [supplierId, name, contactNumber, address || null, paymentTerms || null, markupPercentage || null]);
-    return { success: true, message: `Supplier "${name}" has been added.` };
+    const sql = `
+      INSERT INTO suppliers (
+        id, name, contact_number, address, payment_terms, markup_percentage,
+        telephone, mobile_phone, email, company, tin
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        name = VALUES(name), 
+        contact_number = VALUES(contact_number), 
+        address = VALUES(address), 
+        payment_terms = VALUES(payment_terms), 
+        markup_percentage = VALUES(markup_percentage),
+        telephone = VALUES(telephone),
+        mobile_phone = VALUES(mobile_phone),
+        email = VALUES(email),
+        company = VALUES(company),
+        tin = VALUES(tin)
+    `;
+    await query(sql, [
+      supplierId, 
+      data.name, 
+      data.contactNumber || null, 
+      data.address || null, 
+      data.paymentTerms || null, 
+      data.markupPercentage || null,
+      data.telephone || null,
+      data.mobilePhone || null,
+      data.email || null,
+      data.company || null,
+      data.tin || null
+    ]);
+    return { success: true, message: `Supplier "${data.name}" has been added.` };
   } catch (error) {
     console.error('Error adding supplier:', error);
     return { success: false, message: 'Error adding supplier.' };
   }
 }
 
-export async function updateSupplier(id: string, name: string, contactNumber: string, address?: string, paymentTerms?: string, markupPercentage?: number) {
+export async function updateSupplier(id: string, data: { name: string, contactNumber?: string, address?: string, paymentTerms?: string, markupPercentage?: number, telephone?: string, mobilePhone?: string, email?: string, company?: string, tin?: string }) {
   try {
-    const sql = `UPDATE suppliers SET name = ?, contact_number = ?, address = ?, payment_terms = ?, markup_percentage = ? WHERE id = ?`;
-    await query(sql, [name, contactNumber, address || null, paymentTerms || null, markupPercentage || null, id]);
-    return { success: true, message: `Supplier updated to "${name}".` };
+    const sql = `
+      UPDATE suppliers SET 
+        name = ?, 
+        contact_number = ?, 
+        address = ?, 
+        payment_terms = ?, 
+        markup_percentage = ?,
+        telephone = ?,
+        mobile_phone = ?,
+        email = ?,
+        company = ?,
+        tin = ?
+      WHERE id = ?
+    `;
+    await query(sql, [
+      data.name, 
+      data.contactNumber || null, 
+      data.address || null, 
+      data.paymentTerms || null, 
+      data.markupPercentage || null,
+      data.telephone || null,
+      data.mobilePhone || null,
+      data.email || null,
+      data.company || null,
+      data.tin || null,
+      id
+    ]);
+    return { success: true, message: `Supplier updated to "${data.name}".` };
   } catch (error) {
     console.error('Error updating supplier:', error);
     return { success: false, message: 'Error updating supplier.' };
@@ -519,6 +603,29 @@ export async function deleteSupplier(id: string) {
   } catch (error) {
     console.error('Error deleting supplier:', error);
     return { success: false, message: 'Error deleting supplier.' };
+  }
+}
+
+export async function getPaymentTerms() {
+  try {
+    // Try to fetch with description first (API route schema)
+    try {
+      const sql = `SELECT * FROM payment_terms WHERE is_active = TRUE ORDER BY created_at DESC`;
+      const terms = await query(sql);
+      return terms.map((t: any) => ({
+        id: t.id,
+        name: t.description || t.name, // Fallback to name if description is missing
+        days: t.days || t.number_of_days_month // Fallback for days column
+      }));
+    } catch (e) {
+      // Fallback if table or columns don't match, though query select * should be fine.
+      // This is just a safety net if the query fails completely.
+       console.error('Error in getPaymentTerms query:', e);
+       return [];
+    }
+  } catch (error) {
+    console.error('Error fetching payment terms:', error);
+    return [];
   }
 }
 

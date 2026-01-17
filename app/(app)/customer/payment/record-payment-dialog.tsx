@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -15,6 +14,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -35,12 +44,14 @@ import { Loader2, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Sale, PaymentMethod } from '@/lib/types';
 import { format } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 const MOCK_PAYMENT_METHODS: PaymentMethod[] = [
     { id: 'pm_1', name: 'Cash' },
     { id: 'pm_2', name: 'Credit Card' },
     { id: 'pm_3', name: 'Bank Transfer' },
     { id: 'pm_4', name: 'GCash' },
+    { id: 'pm_5', name: 'Check' },
 ];
 
 const paymentSchema = z.object({
@@ -53,16 +64,98 @@ const paymentSchema = z.object({
 
 type PaymentFormValues = z.infer<typeof paymentSchema>;
 
-export function RecordPaymentDialog({ sale }: { sale: Sale }) {
+interface RecordPaymentDialogProps {
+  sale: Sale;
+  children?: React.ReactNode;
+  onSuccess?: () => void;
+}
+
+export default function RecordPaymentDialog({ sale, children, onSuccess }: RecordPaymentDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(true);
   const [depositAccounts, setDepositAccounts] = useState<{ id: string; name: string }[]>([]);
   const [isLoadingDepositAccounts, setIsLoadingDepositAccounts] = useState(true);
+  const [showPrintConfirm, setShowPrintConfirm] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
+
+  const handlePrintReceipt = (paymentDate: Date, amount: number, paymentMethod: string, reference?: string) => {
+      const printWindow = window.open('', '', 'height=800,width=800');
+      if (!printWindow) return;
+
+      printWindow.document.write('<html><head><title>Payment Receipt ' + sale.id + '</title>');
+      printWindow.document.write('<style>');
+      printWindow.document.write(`
+        body { font-family: sans-serif; padding: 40px; }
+        .header { text-align: center; margin-bottom: 40px; border-bottom: 1px solid #ddd; padding-bottom: 20px; }
+        .title { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+        .subtitle { color: #666; font-size: 14px; }
+        .content { margin-bottom: 30px; font-size: 16px; line-height: 1.6; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .label { font-weight: bold; color: #555; }
+        .value { text-align: right; }
+        .amount { font-size: 24px; font-weight: bold; text-align: center; margin: 20px 0; border: 2px solid #000; padding: 10px; border-radius: 8px; }
+        .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #888; }
+      `);
+      printWindow.document.write('</style></head><body>');
+
+      printWindow.document.write(`
+        <div class="header">
+          <div class="title">OFFICIAL RECEIPT</div>
+          <div class="subtitle">Stock Pilot POS System</div>
+        </div>
+
+        <div class="content">
+          <div class="row">
+            <span class="label">Invoice Ref:</span>
+            <span class="value">${sale.id}</span>
+          </div>
+          <div class="row">
+            <span class="label">Received From:</span>
+            <span class="value">${sale.customer.name}</span>
+          </div>
+           <div class="row">
+            <span class="label">Date:</span>
+            <span class="value">${format(paymentDate, 'PP p')}</span>
+          </div>
+          <div class="row">
+            <span class="label">Payment Method:</span>
+            <span class="value">${paymentMethod}</span>
+          </div>
+          ${reference ? `
+          <div class="row">
+            <span class="label">Reference No:</span>
+            <span class="value">${reference}</span>
+          </div>` : ''}
+          
+          <div class="amount">
+            <div style="font-size: 14px; color: #666; font-weight: normal; text-transform: uppercase; margin-bottom: 5px;">Amount Paid</div>
+            ₱${amount.toFixed(2)}
+          </div>
+        </div>
+
+        <div class="footer">
+          This is a system generated receipt.
+        </div>
+      `);
+
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.print();
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setShowPrintConfirm(false);
+    form.reset();
+    if (onSuccess) onSuccess();
+    window.location.reload(); 
+  };
 
   useEffect(() => {
     // Simulate fetching payment methods
+    // TODO: Fetch from real API when available
     setIsLoadingPaymentMethods(true);
     setTimeout(() => {
         setPaymentMethods(MOCK_PAYMENT_METHODS);
@@ -70,13 +163,14 @@ export function RecordPaymentDialog({ sale }: { sale: Sale }) {
     }, 300);
 
     // Simulate fetching deposit accounts
+    // TODO: Fetch from real API when available
     setIsLoadingDepositAccounts(true);
     setTimeout(() => {
         setDepositAccounts([
-            { id: 'da_1', name: 'Cash Account' },
-            { id: 'da_2', name: 'Bank Account - BDO' },
-            { id: 'da_3', name: 'Bank Account - BPI' },
-            { id: 'da_4', name: 'Petty Cash' },
+            { id: 'da_1', name: 'Cash On Hand' },
+            { id: 'da_2', name: 'BDO Savings' },
+            { id: 'da_3', name: 'BPI Checking' },
+            { id: 'da_4', name: 'Petty Cash Fund' },
         ]);
         setIsLoadingDepositAccounts(false);
     }, 300);
@@ -100,35 +194,54 @@ export function RecordPaymentDialog({ sale }: { sale: Sale }) {
         toast({
             variant: 'destructive',
             title: 'Incorrect Amount',
-            description: `Payment amount must be exactly ₱${sale.total.toFixed(2)}. Partial payments are not yet supported.`,
+            description: `Payment amount must be exactly ₱${Number(sale.total).toFixed(2)}. Partial payments will be supported in a future update.`,
         });
         return;
     }
 
-    console.log('Mock payment submitted:', {
-      saleId: sale.id,
-      ...values,
-    });
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+        const response = await fetch(`/api/customers/invoices/${sale.id}/payment`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(values),
+        });
 
-    toast({
-      title: 'Payment Recorded (Mock)',
-      description: `Payment of ₱${values.amount.toFixed(2)} for invoice ${sale.id} has been recorded.`,
-    });
-    
-    setIsOpen(false);
-    form.reset();
+        const result = await response.json();
+
+        if (result.success) {
+            toast({
+                title: 'Payment Recorded',
+                description: `Payment of ₱${values.amount.toFixed(2)} for invoice ${sale.id} has been successfully recorded.`,
+            });
+            setShowPrintConfirm(true); // Trigger confirmation dialog
+        } else {
+             toast({
+                variant: 'destructive',
+                title: 'Payment Failed',
+                description: result.error || 'Failed to record payment.',
+            });
+        }
+    } catch (error) {
+        console.error('Payment submission error:', error);
+         toast({
+            variant: 'destructive',
+            title: 'Payment Error',
+            description: 'An unexpected error occurred while recording the payment.',
+        });
+    }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
-            <ArrowRight className="mr-2 h-4 w-4" />
-            Record Payment
-        </Button>
+        {children ? children : (
+            <Button size="sm">
+                <ArrowRight className="mr-2 h-4 w-4" />
+                Record Payment
+            </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
@@ -138,7 +251,7 @@ export function RecordPaymentDialog({ sale }: { sale: Sale }) {
           </DialogDescription>
         </DialogHeader>
         <div className="py-2">
-            <div className="text-4xl font-bold text-center">₱{sale.total.toFixed(2)}</div>
+            <div className="text-4xl font-bold text-center">₱{Number(sale.total).toFixed(2)}</div>
             <div className="text-sm text-muted-foreground text-center">Total Amount Due</div>
         </div>
         <Form {...form}>
@@ -235,6 +348,24 @@ export function RecordPaymentDialog({ sale }: { sale: Sale }) {
           </form>
         </Form>
       </DialogContent>
+
+      <AlertDialog open={showPrintConfirm} onOpenChange={setShowPrintConfirm}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Payment Successful</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Would you like to print a receipt for this payment?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={handleClose}>No, Close</AlertDialogCancel>
+                <AlertDialogAction onClick={() => {
+                    handlePrintReceipt(form.getValues().paymentDate, form.getValues().amount, form.getValues().paymentMethod, form.getValues().reference);
+                    handleClose();
+                }}>Yes, Print Receipt</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

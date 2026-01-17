@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -21,72 +20,14 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search } from 'lucide-react';
-import type { Customer, Sale } from '@/lib/types';
-import { subDays, addDays } from 'date-fns';
+import type { Customer } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
-
-const MOCK_CUSTOMERS: Customer[] = [
-    { id: 'cust_1', name: 'Alice Johnson', contactNumber: '09171112233', paymentTerms: 'Net 30' },
-    { id: 'cust_2', name: 'Bob Smith', contactNumber: '09182223344', paymentTerms: 'Due on receipt' },
-    { id: 'cust_3', name: 'Charlie Brown', contactNumber: '09193334455', paymentTerms: 'Net 15' },
-    { id: 'cust_4', name: 'Diana Prince', contactNumber: '09204445566', paymentTerms: 'Net 30' },
-    { id: 'cust_5', name: 'Ethan Hunt', contactNumber: '09215556677', paymentTerms: 'Net 60' },
-];
-
-const MOCK_SALES: Sale[] = [
-    { 
-        id: 'sale_1', 
-        customer: MOCK_CUSTOMERS[0], 
-        invoiceDate: subDays(new Date(), 40).toISOString(),
-        dueDate: subDays(new Date(), 10).toISOString(),
-        items: [], 
-        total: 1250.00, 
-        paymentMethod: '', 
-        status: 'Pending'
-    },
-    { 
-        id: 'sale_2', 
-        customer: MOCK_CUSTOMERS[0], 
-        invoiceDate: subDays(new Date(), 10).toISOString(),
-        dueDate: addDays(new Date(), 20).toISOString(),
-        items: [], 
-        total: 800.50, 
-        paymentMethod: '', 
-        status: 'Pending' 
-    },
-    { 
-        id: 'sale_3', 
-        customer: MOCK_CUSTOMERS[1], 
-        invoiceDate: subDays(new Date(), 5).toISOString(),
-        dueDate: subDays(new Date(), 5).toISOString(),
-        items: [], 
-        total: 3500.00, 
-        paymentMethod: '', 
-        status: 'Pending' 
-    },
-     { 
-        id: 'sale_5', 
-        customer: MOCK_CUSTOMERS[3], 
-        invoiceDate: subDays(new Date(), 2).toISOString(),
-        dueDate: addDays(new Date(), 28).toISOString(),
-        items: [], 
-        total: 450.75, 
-        paymentMethod: '', 
-        status: 'Pending' 
-    },
-    { 
-        id: 'sale_4', 
-        customer: MOCK_CUSTOMERS[0], 
-        invoiceDate: subDays(new Date(), 60).toISOString(),
-        dueDate: subDays(new Date(), 30).toISOString(),
-        items: [], 
-        total: 200.00, 
-        paymentMethod: 'Cash', 
-        status: 'Paid' // This should not appear
-    },
-];
-
-interface CustomerWithBalance extends Customer {
+interface CustomerWithBalance {
+  id: string;
+  name: string;
+  contactNumber: string;
+  paymentTerms?: string;
   balance: number;
   invoiceCount: number;
 }
@@ -113,7 +54,7 @@ function CustomerRow({ customer }: { customer: CustomerWithBalance }) {
       </TableCell>
       <TableCell className="text-center">{customer.invoiceCount}</TableCell>
       <TableCell className="text-right font-semibold">
-        {customer.balance > 0 ? `₱${customer.balance.toFixed(2)}` : '-'}
+        {customer.balance > 0 ? `₱${Number(customer.balance).toFixed(2)}` : '-'}
       </TableCell>
     </TableRow>
   );
@@ -139,44 +80,40 @@ function CustomerSkeleton() {
 
 export default function CustomerBalancesPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [customersWithBalances, setCustomersWithBalances] = useState<CustomerWithBalance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchCustomerBalances = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/customers/balances');
+      const result = await response.json();
+      
+      if (result.success) {
+        setCustomersWithBalances(result.data);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to load customer balances',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching customer balances:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load customer balances',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setIsLoading(true);
-    setTimeout(() => {
-        setCustomers(MOCK_CUSTOMERS);
-        setSales(MOCK_SALES);
-        setIsLoading(false);
-    }, 500);
+    fetchCustomerBalances();
   }, []);
-
-  const customersWithBalances = useMemo(() => {
-    if (!customers || !sales) return [];
-
-    const balancesMap = new Map<string, { balance: number; invoiceCount: number }>();
-
-    sales.forEach(sale => {
-      if (sale.status === 'Pending') {
-        const customerId = sale.customer.id;
-        const current = balancesMap.get(customerId) || { balance: 0, invoiceCount: 0 };
-        current.balance += sale.total;
-        current.invoiceCount += 1;
-        balancesMap.set(customerId, current);
-      }
-    });
-
-    return customers
-      .map(customer => ({
-        ...customer,
-        balance: balancesMap.get(customer.id)?.balance || 0,
-        invoiceCount: balancesMap.get(customer.id)?.invoiceCount || 0,
-      }))
-      .filter(c => c.balance > 0)
-      .sort((a,b) => b.balance - a.balance);
-      
-  }, [customers, sales]);
   
   const filteredCustomers = useMemo(() => {
     if (!searchTerm) return customersWithBalances;

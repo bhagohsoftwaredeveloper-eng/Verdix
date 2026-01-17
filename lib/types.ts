@@ -77,7 +77,12 @@ export interface Supplier {
   id: string;
   name: string;
   contactNumber: string;
+  telephone?: string;
+  mobilePhone?: string;
+  email?: string;
   address?: string;
+  company?: string;
+  tin?: string;
   paymentTerms?: string;
   markupPercentage?: number;
 }
