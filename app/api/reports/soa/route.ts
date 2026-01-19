@@ -22,12 +22,10 @@ export async function GET(request: NextRequest) {
     const prevInvoicesSql = `
         SELECT SUM(total) as total
         FROM sales_invoices
-        WHERE customer_id = ? AND (invoice_date < ? OR date < ?) AND status != 'Void'
+        WHERE customer_id = ? AND invoice_date < ? AND status != 'Void'
     `;
-    // Note: checking both invoice_date and date columns as schema might use either. 
-    // Based on previous files, 'invoice_date' seems standard but fallback to 'date' is safe.
     
-    const [prevInvResult]: any = await query(prevInvoicesSql, [customerId, fromDate, fromDate]);
+    const [prevInvResult]: any = await query(prevInvoicesSql, [customerId, fromDate]);
     const prevInvoicesTotal = parseFloat(prevInvResult?.total || 0);
 
     // Sum of previous payments
@@ -54,9 +52,9 @@ export async function GET(request: NextRequest) {
             status,
             notes as description
         FROM sales_invoices
-        WHERE customer_id = ? AND (invoice_date BETWEEN ? AND ? OR date BETWEEN ? AND ?) AND status != 'Void'
+        WHERE customer_id = ? AND invoice_date BETWEEN ? AND ? AND status != 'Void'
     `;
-    const invoices: any[] = await query(invoicesSql, [customerId, fromDate, toDate, fromDate, toDate]);
+    const invoices: any[] = await query(invoicesSql, [customerId, fromDate, toDate]);
 
     // Payments
     const paymentsSql = `

@@ -22,51 +22,15 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Printer, ArrowLeft } from 'lucide-react';
 import type { Sale } from '@/lib/types';
-import { format, subMinutes } from 'date-fns';
+import { format } from 'date-fns';
 import { Logo } from '@/components/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+
 
 interface RecentSalesDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
-
-const MOCK_RECENT_SALES: Sale[] = [
-    {
-        id: 'sale_rc_1',
-        customer: { id: 'cust_1', name: 'Alice Johnson', contactNumber: '09171112233', paymentTerms: 'Net 30' },
-        date: subMinutes(new Date(), 5).toISOString(),
-        items: [
-            { product: { id: 'prod_1', name: 'Wireless Keyboard', price: 75.0, stock: 100, category: 'Elec', brand: 'Logi', reorderPoint: 10, avgDailySales: 5, sku: 'WK-P', imageUrl: '', imageHint: '', unitOfMeasure: 'pc' }, quantity: 1, price: 75.0 },
-            { product: { id: 'prod_2', name: 'Ergonomic Mouse', price: 45.0, stock: 100, category: 'Elec', brand: 'MS', reorderPoint: 10, avgDailySales: 5, sku: 'EM-P', imageUrl: '', imageHint: '', unitOfMeasure: 'pc' }, quantity: 1, price: 45.0 },
-        ],
-        total: 120.00,
-        paymentMethod: 'Cash',
-        status: 'Paid'
-    },
-    {
-        id: 'sale_rc_2',
-        customer: { id: 'cust_2', name: 'Bob Smith', contactNumber: '09182223344', paymentTerms: 'COD' },
-        date: subMinutes(new Date(), 15).toISOString(),
-        items: [
-            { product: { id: 'prod_3', name: '4K UHD Monitor', price: 350.0, stock: 100, category: 'Elec', brand: 'Dell', reorderPoint: 10, avgDailySales: 5, sku: '4KM-U', imageUrl: '', imageHint: '', unitOfMeasure: 'pc' }, quantity: 2, price: 350.0 },
-        ],
-        total: 700.00,
-        paymentMethod: 'Credit Card',
-        status: 'Paid'
-    },
-     {
-        id: 'sale_rc_3',
-        customer: { id: 'cust_3', name: 'Charlie Brown', contactNumber: '09193334455', paymentTerms: 'Net 15' },
-        date: subMinutes(new Date(), 32).toISOString(),
-        items: [
-             { product: { id: 'prod_1', name: 'Wireless Keyboard', price: 75.0, stock: 100, category: 'Elec', brand: 'Logi', reorderPoint: 10, avgDailySales: 5, sku: 'WK-P', imageUrl: '', imageHint: '', unitOfMeasure: 'pc' }, quantity: 5, price: 75.0 },
-        ],
-        total: 375.00,
-        paymentMethod: 'GCash',
-        status: 'Paid'
-    }
-];
 
 
 function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) {
@@ -146,16 +110,36 @@ export function RecentSalesDialog({
   const [saleToPrint, setSaleToPrint] = useState<Sale | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [terminalId, setTerminalId] = useState<string>('all');
   
   useEffect(() => {
-    if (isOpen) {
-        setIsLoading(true);
-        setTimeout(() => {
-            setRecentSales(MOCK_RECENT_SALES);
-            setIsLoading(false);
-        }, 500);
-    }
-  }, [isOpen]);
+    const fetchRecentSales = async () => {
+      if (!isOpen) return;
+      
+      setIsLoading(true);
+      try {
+        const queryParams = new URLSearchParams();
+        if (terminalId && terminalId !== 'all') {
+            queryParams.append('terminalId', terminalId);
+        }
+        
+        const response = await fetch(`/api/pos/recent-sales?${queryParams.toString()}`);
+        const result = await response.json();
+        
+        if (result.success) {
+          setRecentSales(result.data);
+        } else {
+          console.error('Failed to fetch recent sales:', result.error);
+        }
+      } catch (error) {
+        console.error('Error fetching recent sales:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchRecentSales();
+  }, [isOpen, terminalId]);
   
   const handlePrintReceipt = (sale: Sale) => {
     setSaleToPrint(sale);
@@ -180,10 +164,14 @@ export function RecentSalesDialog({
         ) : (
         <>
             <DialogHeader>
-            <DialogTitle>Recent Transactions</DialogTitle>
-            <DialogDescription>
-                A list of the 10 most recent sales.
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+                <div>
+                    <DialogTitle>Recent Transactions</DialogTitle>
+                    <DialogDescription>
+                        A list of the 20 most recent sales.
+                    </DialogDescription>
+                </div>
+            </div>
             </DialogHeader>
             <ScrollArea className="h-96">
             <Table>

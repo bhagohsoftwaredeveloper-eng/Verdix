@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -20,72 +20,90 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
-import { Sale } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
-import { CalendarIcon, Search, X } from 'lucide-react';
+import { CalendarIcon, Search, X, Loader2 } from 'lucide-react';
+import { TerminalSelector } from '@/components/TerminalSelector';
 
 export default function SalesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const firestore = useFirestore();
-  const salesCollection = useMemoFirebase(
-    () => (firestore ? collection(firestore, 'sales') : null),
-    [firestore]
-  );
-  const { data: sales, isLoading } = useCollection<Sale>(salesCollection);
+  const [terminalId, setTerminalId] = useState<string>('all');
+  const [sales, setSales] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const getStatusInfo = (sale: Sale): { text: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } => {
-    switch (sale.status) {
+  const fetchSales = async () => {
+    setIsLoading(true);
+    try {
+        const params = new URLSearchParams();
+        if (dateRange?.from) {
+            params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+        }
+        if (dateRange?.to) {
+            params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+        }
+        if (terminalId && terminalId !== 'all') {
+            params.append('terminalId', terminalId);
+        }
+        
+        const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            // Transform data if necessary, or use as is if API returns what we expect
+            setSales(result.data);
+        } else {
+            console.error("Failed to fetch sales:", result.error);
+        }
+    } catch (error) {
+        console.error("Error fetching sales:", error);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Debounce/effect logic could be added here, but for now direct fetch on filter change
+    fetchSales();
+  }, [dateRange, terminalId]);
+
+  const getStatusInfo = (status: string): { text: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } => {
+    switch (status) {
       case 'Paid':
         return { text: 'Paid', variant: 'default' };
       case 'Failed':
       case 'Returned':
-        return { text: sale.status, variant: 'destructive' };
+      case 'Void':
+      case 'Voided':
+        return { text: status, variant: 'destructive' };
       case 'Shipped':
       case 'Delivered':
-        return { text: sale.status, variant: 'outline' };
+        return { text: status, variant: 'outline' };
       case 'Pending':
       default:
         return { text: 'Due', variant: 'secondary' };
     }
   };
 
-  const filteredSales = useMemo(() => {
-    if (!sales) return [];
-
-    return sales.filter(sale => {
-        // Date filter
-        const saleDate = new Date(sale.invoiceDate || sale.date || new Date());
-        if (dateRange?.from && saleDate < dateRange.from) return false;
-        if (dateRange?.to) {
-            const toDate = new Date(dateRange.to);
-            toDate.setHours(23, 59, 59, 999);
-            if (saleDate > toDate) return false;
-        }
-
-        // Search term filter
-        const term = searchTerm.toLowerCase();
-        if (!term) return true;
-        
-        const idMatch = sale.id.toLowerCase().includes(term);
-        const customerMatch = sale.customer.name.toLowerCase().includes(term);
-
-        return idMatch || customerMatch;
-    }).sort((a,b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-  }, [sales, searchTerm, dateRange]);
+  const filteredSales = sales.filter(sale => {
+      if (!searchTerm) return true;
+      const term = searchTerm.toLowerCase();
+      // Adjust property access based on API response structure
+      const idMatch = String(sale.id || sale.posTransactionId).toLowerCase().includes(term);
+      const customerMatch = sale.customer?.name?.toLowerCase().includes(term);
+      return idMatch || customerMatch;
+  });
 
   const resetFilters = () => {
     setSearchTerm('');
     setDateRange(undefined);
+    setTerminalId('all');
   };
 
-  const hasActiveFilters = searchTerm || dateRange;
+  const hasActiveFilters = searchTerm || dateRange || terminalId !== 'all';
 
   return (
     <div className="flex flex-col gap-4">
@@ -111,6 +129,12 @@ export default function SalesPage() {
                 />
               </div>
               <div className="flex items-center gap-2">
+                <TerminalSelector 
+                    terminalId={terminalId}
+                    onTerminalChange={setTerminalId}
+                    showAllOption={true}
+                />
+                <div className='w-2'></div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -171,19 +195,25 @@ export default function SalesPage() {
                 {isLoading ? (
                     <TableRow>
                         <TableCell colSpan={6} className="h-24 text-center">
-                            Loading transactions...
+                             <div className="flex justify-center items-center">
+                                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                                Loading transactions...
+                            </div>
                         </TableCell>
                     </TableRow>
                 ) : filteredSales.length > 0 ? (
                   filteredSales.map((sale) => {
-                    const displayDate = sale.invoiceDate || sale.date;
-                    const statusInfo = getStatusInfo(sale);
+                    const displayDate = sale.date || sale.invoiceDate; // API returns 'date'
+                    // API returns 'status' or 'sale_status', check route.ts
+                    // In route.ts: status: row.sale_status
+                    const statusInfo = getStatusInfo(sale.status || sale.sale_status || 'Paid'); 
+                    
                     return (
-                      <TableRow key={sale.id}>
-                        <TableCell className="font-medium">{sale.id.substring(0,7)}...</TableCell>
+                      <TableRow key={sale.posTransactionId || sale.id}>
+                        <TableCell className="font-medium">{(sale.id || sale.posTransactionId).substring(0,8)}...</TableCell>
                         <TableCell>
-                          <div className="font-medium">{sale.customer.name}</div>
-                          <div className="text-sm text-muted-foreground hidden md:block">{sale.customer.contactNumber}</div>
+                          <div className="font-medium">{sale.customer?.name || 'Walk-in'}</div>
+                          <div className="text-sm text-muted-foreground hidden md:block">{sale.customer?.contactNumber}</div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">{displayDate ? format(new Date(displayDate), 'PP') : 'N/A'}</TableCell>
                         <TableCell className="hidden sm:table-cell">{sale.paymentMethod}</TableCell>
@@ -192,7 +222,7 @@ export default function SalesPage() {
                             {statusInfo.text}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">₱{sale.total.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">₱{Number(sale.total).toFixed(2)}</TableCell>
                       </TableRow>
                     );
                   })

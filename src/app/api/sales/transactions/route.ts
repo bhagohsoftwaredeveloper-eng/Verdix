@@ -3,12 +3,9 @@ import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
-    // 1. Fetch recent sales transactions
     const { searchParams } = new URL(request.url);
     const terminalId = searchParams.get('terminalId');
 
-    // 1. Fetch recent sales transactions
-    // We join with pos_transactions to get terminal info and strictly filter POS sales
     let salesQuery = `
       SELECT
         st.id,
@@ -36,14 +33,11 @@ export async function GET(request: NextRequest) {
         params.push(terminalId);
     }
 
-    salesQuery += `
-      ORDER BY st.created_at DESC
-      LIMIT 20
-    `;
+    salesQuery += ` ORDER BY st.created_at DESC`;
 
     const sales = await query(salesQuery, params);
 
-    // 2. Fetch items for each sale
+    // Fetch items for each sale
     const salesWithItems = await Promise.all(
       sales.map(async (sale: any) => {
         const itemsQuery = `
@@ -69,7 +63,7 @@ export async function GET(request: NextRequest) {
             contactNumber: sale.customer_contact || '',
             paymentTerms: sale.customer_payment_terms || '',
           },
-          date: sale.created_at, // Use created_at as it has time
+          date: sale.created_at,
           total: parseFloat(sale.total),
           paymentMethod: sale.payment_method,
           status: sale.status,
@@ -94,9 +88,9 @@ export async function GET(request: NextRequest) {
       data: salesWithItems,
     });
   } catch (error: any) {
-    console.error('Error fetching recent sales:', error);
+    console.error('Error fetching sales transactions:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch recent sales' },
+      { success: false, error: 'Failed to fetch sales transactions' },
       { status: 500 }
     );
   }

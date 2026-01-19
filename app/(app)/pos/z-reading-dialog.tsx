@@ -11,7 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, ArrowLeft } from 'lucide-react';
+import { Printer, ArrowLeft, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { AdminAuthDialog } from './admin-auth-dialog';
@@ -22,37 +22,91 @@ interface ZReadingDialogProps {
   onOpenChange: (isOpen: boolean) => void;
 }
 
-// Mock data for the report
-const MOCK_Z_READING_DATA = {
-    reportDate: new Date(),
-    grossSales: 8540.50,
-    returns: -120.00,
-    discounts: -55.25,
-    netSales: 8365.25,
-    vatAmount: 896.28,
-    paymentMethods: [
-        { name: 'Cash', amount: 4500.00 },
-        { name: 'Credit Card', amount: 2540.50 },
-        { name: 'GCash', amount: 1500.00 },
-    ],
-    transactionCount: 42,
-    startingCash: 5000.00,
-    cashSales: 4500.00,
-    cashInDrawer: 9500.00,
-};
+type ZReadingData = {
+    id: string;
+    date: string;
+    reportDate: Date;
+    grossSales: number;
+    returns: number;
+    discounts: number;
+    netSales: number;
+    vatAmount: number;
+    paymentMethods: Array<{ name: string; amount: number }>;
+    transactionCount: number;
+    startingCash: number;
+    cashSales: number;
+    cashInDrawer: number;
+    cashierName?: string;
+    terminalId?: string;
+  };
 
 function ZReadingReportView({ onBack }: { onBack: () => void }) {
-    const data = MOCK_Z_READING_DATA;
+    const [data, setData] = useState<ZReadingData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setIsLoading(true);
+            try {
+                const now = new Date();
+                const dateStr = format(now, 'yyyy-MM-dd');
+                const response = await fetch(`/api/sales/z-reading?startDate=${dateStr}&endDate=${dateStr}`);
+                const result = await response.json();
+
+                if (result.success && result.data.length > 0) {
+                    setData({
+                        ...result.data[0],
+                        reportDate: new Date(result.data[0].reportDate)
+                    });
+                } else {
+                    toast({
+                        title: "Error",
+                        description: "Failed to load Z-Reading data.",
+                        variant: "destructive"
+                    });
+                }
+            } catch (error) {
+                console.error("Error loading Z-Reading:", error);
+                toast({
+                    title: "Error",
+                    description: "An unexpected error occurred.",
+                    variant: "destructive"
+                });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [toast]);
 
     const handlePrintAndFinalize = () => {
         // In a real app, this would also send a signal to the backend to reset totals.
         window.print();
         toast({
-            title: "Z-Reading Finalized (Mock)",
-            description: "The daily totals have been reset."
+            title: "Z-Reading Printed",
+            description: "The report has been sent to the printer."
         });
         onBack();
+    }
+
+    if (isLoading) {
+        return (
+            <div className="h-[400px] flex flex-col items-center justify-center space-y-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-muted-foreground">Generating Z-Reading Report...</p>
+            </div>
+        );
+    }
+
+    if (!data) {
+        return (
+             <div className="h-[300px] flex flex-col items-center justify-center space-y-4">
+                <p className="text-muted-foreground">No data available for today.</p>
+                <Button onClick={onBack}>Go Back</Button>
+            </div>
+        )
     }
 
     return (
@@ -70,7 +124,7 @@ function ZReadingReportView({ onBack }: { onBack: () => void }) {
                     </div>
                 </div>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
                 <div className="p-4 border rounded-lg space-y-2">
                     <h3 className="font-semibold text-lg">Sales Summary</h3>
                     <div className="flex justify-between text-sm"><span>Gross Sales:</span> <span>₱{data.grossSales.toFixed(2)}</span></div>
@@ -86,6 +140,7 @@ function ZReadingReportView({ onBack }: { onBack: () => void }) {
                     {data.paymentMethods.map(method => (
                         <div key={method.name} className="flex justify-between text-sm"><span>{method.name}:</span> <span>₱{method.amount.toFixed(2)}</span></div>
                     ))}
+                    {data.paymentMethods.length === 0 && <p className="text-sm text-muted-foreground">No payments recorded.</p>}
                 </div>
                 
                  <div className="p-4 border rounded-lg space-y-2">

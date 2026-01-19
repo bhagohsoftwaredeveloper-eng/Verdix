@@ -44,6 +44,15 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer, Truck, ChevronDown, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 const ALL_STATUSES: Sale['status'][] = ['Pending', 'Paid', 'Shipped', 'Delivered', 'Returned', 'Failed'];
 
@@ -252,32 +261,134 @@ function SalesOrderPrintView({ order, onBack }: { order: Sale, onBack: () => voi
   );
 }
 
+
+
 export default function SalesOrdersPage() {
   const [orderToPrint, setOrderToPrint] = useState<Sale | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const { toast } = useToast();
 
-  const fetchSalesOrders = async () => {
+  const fetchSalesOrders = async (page = 1) => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/sales/orders');
+      const response = await fetch(`/api/sales/orders?page=${page}&limit=10`);
       const data = await response.json();
       if (data.success) {
         setSales(data.data);
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages);
+          setCurrentPage(data.pagination.page);
+        }
       } else {
         console.error('Failed to fetch sales orders:', data.error);
+        toast({
+            title: 'Error',
+            description: 'Failed to fetch sales orders',
+            variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Error fetching sales orders:', error);
+      toast({
+          title: 'Error',
+          description: 'Error connecting to server',
+          variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSalesOrders();
-  }, []);
+    fetchSalesOrders(currentPage);
+  }, [currentPage]);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  // Render pagination items logic
+  const renderPaginationItems = () => {
+      const items = [];
+      const maxVisiblePages = 5;
+
+      if (totalPages <= maxVisiblePages) {
+          for (let i = 1; i <= totalPages; i++) {
+              items.push(
+                  <PaginationItem key={i}>
+                      <PaginationLink
+                          isActive={currentPage === i}
+                          onClick={() => handlePageChange(i)}
+                      >
+                          {i}
+                      </PaginationLink>
+                  </PaginationItem>
+              );
+          }
+      } else {
+          // Always show first page
+          items.push(
+              <PaginationItem key={1}>
+                  <PaginationLink
+                      isActive={currentPage === 1}
+                      onClick={() => handlePageChange(1)}
+                  >
+                      1
+                  </PaginationLink>
+              </PaginationItem>
+          );
+
+          if (currentPage > 3) {
+              items.push(
+                  <PaginationItem key="ellipsis-start">
+                      <PaginationEllipsis />
+                  </PaginationItem>
+              );
+          }
+
+          const start = Math.max(2, currentPage - 1);
+          const end = Math.min(totalPages - 1, currentPage + 1);
+
+          for (let i = start; i <= end; i++) {
+              items.push(
+                  <PaginationItem key={i}>
+                      <PaginationLink
+                          isActive={currentPage === i}
+                          onClick={() => handlePageChange(i)}
+                      >
+                          {i}
+                      </PaginationLink>
+                  </PaginationItem>
+              );
+          }
+
+          if (currentPage < totalPages - 2) {
+              items.push(
+                  <PaginationItem key="ellipsis-end">
+                      <PaginationEllipsis />
+                  </PaginationItem>
+              );
+          }
+
+          // Always show last page
+          items.push(
+              <PaginationItem key={totalPages}>
+                  <PaginationLink
+                      isActive={currentPage === totalPages}
+                      onClick={() => handlePageChange(totalPages)}
+                  >
+                      {totalPages}
+                  </PaginationLink>
+              </PaginationItem>
+          );
+      }
+      return items;
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -290,7 +401,7 @@ export default function SalesOrdersPage() {
           title: 'Order Deleted',
           description: 'The sales order has been deleted and stock returned to inventory.',
         });
-        fetchSalesOrders();
+        fetchSalesOrders(currentPage);
       } else {
         toast({
           title: 'Error',
@@ -366,7 +477,33 @@ export default function SalesOrdersPage() {
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination Controls */}
+        {!isLoading && sales.length > 0 && (
+            <div className="mt-4">
+                <Pagination>
+                    <PaginationContent>
+                        <PaginationItem>
+                            <PaginationPrevious
+                                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                aria-disabled={currentPage === 1}
+                                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                        </PaginationItem>
+                        {renderPaginationItems()}
+                        <PaginationItem>
+                            <PaginationNext
+                                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                aria-disabled={currentPage === totalPages}
+                                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                        </PaginationItem>
+                    </PaginationContent>
+                </Pagination>
+            </div>
+        )}
       </CardContent>
     </Card>
   );
 }
+

@@ -30,6 +30,8 @@ interface TenderDialogProps {
     customer: Customer | null;
     currentUser: any;
     onSuccess: (paymentMethod: string, amount: number) => void;
+    shiftId: string | null;
+    terminalId: string;
 }
 
 function ReceiptView({
@@ -121,6 +123,8 @@ export function TenderDialog({
     customer,
     currentUser,
     onSuccess,
+    shiftId,
+    terminalId,
 }: TenderDialogProps) {
     const [amountTendered, setAmountTendered] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
@@ -163,6 +167,8 @@ export function TenderDialog({
                     userId: currentUser?.uid || currentUser?.id,
                     amountTendered: finalAmountTendered,
                     change: finalAmountTendered - totalDue,
+                    shiftId: shiftId, // Use prop
+                    terminalId: terminalId
                 }),
             });
 

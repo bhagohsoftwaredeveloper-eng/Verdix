@@ -16,6 +16,7 @@ import { AddSalesGroupDialog } from '../../customer/list/add-sales-group-dialog'
 import { ManageSalesPersonsDialog } from './manage-sales-persons-dialog';
 import { ManagePaymentTermsDialog } from './manage-payment-terms-dialog';
 import { ManagePaymentMethodsDialog } from '../../sales/ManagePaymentMethodsDialog';
+import { TerminalSettingsDialog } from './terminal-settings-dialog';
 
 interface PosSettings {
   businessName: string;
@@ -26,6 +27,8 @@ interface PosSettings {
   contactNumber: string | null;
   tin: string | null;
   email: string | null;
+  currentTerminalId?: string | null;
+  currentTerminalName?: string | null;
 }
 
 export default function PosSetupPage() {
@@ -37,7 +40,9 @@ export default function PosSetupPage() {
     address: '',
     contactNumber: '',
     tin: '',
-    email: ''
+    email: '',
+    currentTerminalId: null,
+    currentTerminalName: null
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -57,7 +62,20 @@ export default function PosSetupPage() {
       const result = await response.json();
       
       if (result.success) {
-        setSettings(result.data);
+        // Get local terminal
+        const termId = localStorage.getItem('pos_terminal_id');
+        let termName = null;
+        
+        if (termId) {
+             const termRes = await fetch(`/api/pos-terminals?activeOnly=true`);
+             const termData = await termRes.json();
+             if (termData.success) {
+                 const found = termData.data.find((t:any) => t.id === termId);
+                 if (found) termName = found.terminalDescription;
+             }
+        }
+
+        setSettings({ ...result.data, currentTerminalId: termId, currentTerminalName: termName });
         setLogoPreview(result.data.logoPath);
       }
     } catch (error) {
@@ -335,13 +353,37 @@ export default function PosSetupPage() {
           </CardHeader>
           <CardContent>
             <CardDescription className="mb-4">
-              Manage POS terminal devices and locations
+              Configure which terminal this computer represents.
             </CardDescription>
-            <Link href="/settings/pos-terminals">
-              <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
-                <span className="text-xs font-medium">Manage</span>
-              </Button>
-            </Link>
+            <div className="flex flex-col gap-2">
+                <div className="text-sm font-medium text-slate-700">
+                    {settings.currentTerminalId ? (
+                         <span className="flex items-center gap-2 text-green-600">
+                             <Monitor className="h-4 w-4" />
+                             {settings.currentTerminalName || 'Linked (Loading...)'}
+                         </span>
+                    ) : (
+                        <span className="text-slate-500 italic">Not Linked to any Terminal</span>
+                    )}
+                </div>
+                {!settings.currentTerminalId && (
+                    <TerminalSettingsDialog 
+                        currentTerminalId={settings.currentTerminalId || null} 
+                        onTerminalChanged={(id) => {
+                            setSettings(prev => ({ ...prev, currentTerminalId: id, currentTerminalName: id ? 'Updated' : null })); 
+                            if(id) window.location.reload(); 
+                        }}
+                    />
+                )}
+                
+                <div className="pt-2 border-t border-slate-100 flex justify-end">
+                    <Link href="/settings/pos-terminals">
+                        <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
+                            <span className="text-xs font-medium">Manage All Terminals</span>
+                        </Button>
+                    </Link>
+                </div>
+            </div>
           </CardContent>
         </Card>
 

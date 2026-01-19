@@ -39,9 +39,26 @@ export default function XReadingPage() {
   const [selectedReading, setSelectedReading] = useState<XReadingData | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [printerFormat, setPrinterFormat] = useState<PrinterFormat>('80mm');
+  const [businessSettings, setBusinessSettings] = useState<any | null>(null);
   
   const { toast } = useToast();
   const previewRef = useRef<HTMLDivElement>(null);
+
+  // Fetch business settings on mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+        try {
+            const response = await fetch('/api/pos-settings');
+            const result = await response.json();
+            if (result.success) {
+                setBusinessSettings(result.data);
+            }
+        } catch (error) {
+            console.error('Error fetching POS settings:', error);
+        }
+    };
+    fetchSettings();
+  }, []);
 
   // Load shifts whenever the date changes
   useEffect(() => {
@@ -81,14 +98,19 @@ export default function XReadingPage() {
 
   const handleShowReport = () => {
     if (!selectedShiftId || selectedShiftId === 'all') {
-        // If no specific shift selected, maybe just show all in table? 
-        // Or warn user? The screenshot implies they select a specific shift.
-        // If "all" is active in dropdown or empty, we just show the table which is already populated.
-        // But if they picked one, we should probably open the preview immediately?
-        // Let's assume the button filters the table or opens preview if 1 selected.
+        if (shiftsForDate.length === 0) {
+           toast({
+                title: "No Shifts",
+                description: "No shifts found for this date.",
+                variant: "destructive",
+           });
+           return;
+        }
+        
         toast({
-            title: "Info",
-            description: "Showing all reports for the selected date.",
+            title: "Select Shift",
+            description: "Please select a specific shift from the dropdown to view its report.",
+            variant: "default", // Changed from Info/destructive to just default or maybe warning if available
         });
         setFilteredReadings(shiftsForDate);
         return;
@@ -98,7 +120,7 @@ export default function XReadingPage() {
     if (reading) {
         setFilteredReadings([reading]); // Filter table to just this one
         setSelectedReading(reading);
-        setIsPreviewOpen(true); // Auto-open preview? "Show Report" implies viewing it.
+        setIsPreviewOpen(true); 
     }
   };
   
@@ -109,7 +131,12 @@ export default function XReadingPage() {
   };
 
   const handlePrint = () => {
-    window.print();
+    if (!selectedReading) return;
+    
+    // Allow a small delay for render then print
+    setTimeout(() => {
+        window.print();
+    }, 100);
   };
 
   const handleExportPDF = async (reading: XReadingData) => {
@@ -236,8 +263,12 @@ export default function XReadingPage() {
 
              {/* Modal Body - Scrollable */}
              <div className="flex-1 overflow-auto bg-gray-50 p-4 flex justify-center">
-                <div ref={previewRef} className="bg-white shadow-sm h-fit">
-                    <XReadingPreview data={selectedReading} printerFormat={printerFormat} />
+                <div ref={previewRef} className="bg-white shadow-sm h-fit printable-area">
+                    <XReadingPreview 
+                        data={selectedReading} 
+                        printerFormat={printerFormat} 
+                        businessSettings={businessSettings}
+                    />
                 </div>
              </div>
              

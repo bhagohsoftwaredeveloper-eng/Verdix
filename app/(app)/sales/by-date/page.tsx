@@ -32,8 +32,13 @@ type DailySalesData = {
   totalRevenue: number;
 };
 
+import { TerminalSelector } from '@/components/TerminalSelector';
+
+// ...
+
 export default function SalesByDatePage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [terminal, setTerminal] = useState<string>('all');
   const [dailySales, setDailySales] = useState<DailySalesData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -46,6 +51,9 @@ export default function SalesByDatePage() {
       }
       if (dateRange?.to) {
         params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+      }
+      if (terminal && terminal !== 'all') {
+          params.append('terminalId', terminal);
       }
 
       const response = await fetch(`/api/sales/by-date?${params.toString()}`);
@@ -67,10 +75,11 @@ export default function SalesByDatePage() {
 
   useEffect(() => {
     fetchSalesByDate();
-  }, [dateRange]);
+  }, [dateRange, terminal]);
 
   const resetFilters = () => {
     setDateRange(undefined);
+    setTerminal('all');
   };
 
   return (
@@ -84,6 +93,12 @@ export default function SalesByDatePage() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            <TerminalSelector 
+                terminalId={terminal} 
+                onTerminalChange={setTerminal} 
+                showAllOption={true} 
+            />
+            <div className='w-2'></div>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -119,7 +134,7 @@ export default function SalesByDatePage() {
                 />
               </PopoverContent>
             </Popover>
-            {dateRange && (
+            {(dateRange || terminal !== 'all') && (
                 <Button variant="ghost" onClick={resetFilters} size="icon">
                     <X className="h-4 w-4" />
                     <span className="sr-only">Reset filters</span>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -52,6 +52,7 @@ interface AddPosTerminalDialogProps {
 export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const { toast } = useToast();
 
   const form = useForm<TerminalFormValues>({
@@ -67,6 +68,24 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
       inventoryLocation: 'Store',
     },
   });
+
+  useEffect(() => {
+    if (open) {
+      fetchWarehouses();
+    }
+  }, [open]);
+
+  const fetchWarehouses = async () => {
+    try {
+      const response = await fetch('/api/warehouses?activeOnly=true');
+      const result = await response.json();
+      if (result.success) {
+        setWarehouses(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching warehouses:', error);
+    }
+  };
 
   async function onSubmit(values: TerminalFormValues) {
     setIsSaving(true);
@@ -234,8 +253,13 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Store">Store</SelectItem>
-                        <SelectItem value="Warehouse">Warehouse</SelectItem>
+                        {warehouses.length === 0 ? (
+                            <SelectItem value="Store">Store</SelectItem>
+                        ) : (
+                            warehouses.map((w) => (
+                                <SelectItem key={w.id} value={w.name}>{w.name}</SelectItem>
+                            ))
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />

@@ -119,7 +119,22 @@ export default function PosTerminalsPage() {
             Manage your POS terminal devices and configurations
           </p>
         </div>
-        <AddPosTerminalDialog onTerminalAdded={fetchTerminals} />
+        <div className="flex gap-2">
+            <Button 
+                variant="outline" 
+                onClick={() => {
+                    if (confirm('Are you sure you want to disconnect this computer from its current terminal?')) {
+                        localStorage.removeItem('pos_terminal_id');
+                        toast({ title: 'Terminal Disconnected', description: 'You can now select a new terminal in POS Setup.' });
+                        // Optionally redirect or refresh
+                        window.location.href = '/settings/pos-setup';
+                    }
+                }}
+            >
+                Reset My Terminal Connection
+            </Button>
+            <AddPosTerminalDialog onTerminalAdded={fetchTerminals} />
+        </div>
       </div>
 
       <Card>

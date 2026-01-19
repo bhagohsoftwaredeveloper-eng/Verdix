@@ -31,16 +31,25 @@ export type XReadingData = {
   cashPickup?: number;
   cashCountTotal?: number;
   overShort?: number;
+  readingNumber?: string;
 };
 
 type PrinterFormat = '58mm' | '80mm';
 
+export type BusinessSettings = {
+  businessName: string;
+  address: string;
+  contactNumber: string;
+  tin: string;
+};
+
 interface XReadingPreviewProps {
   data: XReadingData;
   printerFormat?: PrinterFormat;
+  businessSettings?: BusinessSettings | null;
 }
 
-export function XReadingPreview({ data, printerFormat = '80mm' }: XReadingPreviewProps) {
+export function XReadingPreview({ data, printerFormat = '80mm', businessSettings }: XReadingPreviewProps) {
   const is58mm = printerFormat === '58mm';
   
   // Tailwind doesn't support mm widths by default, but we can use style or closest px. 
@@ -60,6 +69,20 @@ export function XReadingPreview({ data, printerFormat = '80mm' }: XReadingPrevie
   return (
     <div className={`${widthClass} mx-auto bg-white text-black font-mono leading-tight p-2`} style={{ fontFamily: '"Courier New", Courier, monospace' }}>
       
+      {/* Business Header */}
+      <div className="text-center mb-2">
+        <div className="font-bold text-sm">{businessSettings?.businessName || 'MY BUSINESS'}</div>
+        <div className={fontSize}>{businessSettings?.address}</div>
+        <div className={fontSize}>{businessSettings?.contactNumber}</div>
+        <div className={fontSize}>VAT REG TIN: {businessSettings?.tin}</div>
+      </div>
+
+      <div className={`text-center ${headerSize} py-1 uppercase font-bold`}>
+        X-READING REPORT
+      </div>
+
+      <DashedLine />
+      
       {/* Header Info */}
       <div className={`${fontSize} uppercase mb-1`}>
         <div className="flex">
@@ -71,8 +94,8 @@ export function XReadingPreview({ data, printerFormat = '80mm' }: XReadingPrevie
           <span>{data.terminalId}</span>
         </div>
         <div className="flex">
-          <span className="w-24">Cash count #:</span>
-          <span>{data.cashCountId || data.id}</span>
+          <span className="w-24">Reading #:</span>
+          <span>{data.readingNumber || data.id.substring(0, 8).toUpperCase()}</span>
         </div>
         <div className="flex justify-between mt-1">
           <span>Start shift</span>
@@ -86,30 +109,78 @@ export function XReadingPreview({ data, printerFormat = '80mm' }: XReadingPrevie
 
       <DashedLine />
 
-      {/* Cash Denominations Table */}
+      {/* Sales Summary */}
+      <div className={`${fontSize} uppercase space-y-1`}>
+         <div className="flex justify-between font-bold">
+            <span>Gross Sales</span>
+            <span>{formatCurrency(data.grossSales)}</span>
+         </div>
+         <div className="flex justify-between">
+            <span>Less: Returns</span>
+            <span>{formatCurrency(data.returns)}</span>
+         </div>
+         <div className="flex justify-between">
+            <span>Less: Discounts</span>
+            <span>{formatCurrency(data.discounts)}</span>
+         </div>
+         <div className="flex justify-between font-bold border-t border-dashed border-black pt-1">
+             <span>Net Sales</span>
+             <span>{formatCurrency(data.netSales)}</span>
+         </div>
+      </div>
+
+      <DashedLine />
+      
+      {/* VAT Analysis (Simplified) */}
+      <div className={`${fontSize} uppercase space-y-1`}>
+         <div className="flex justify-between">
+            <span>VAT Amount</span>
+            <span>{formatCurrency(data.vatAmount)}</span>
+         </div>
+      </div>
+
+       <DashedLine />
+
+      {/* Payments */}
+      <div className={`${fontSize} uppercase space-y-1`}>
+         <div className="font-bold mb-1">Payments</div>
+         {data.paymentMethods.map((pm, idx) => (
+             <div key={idx} className="flex justify-between">
+                 <span>{pm.name}</span>
+                 <span>{formatCurrency(pm.amount)}</span>
+             </div>
+         ))}
+         <div className="flex justify-between font-bold border-t border-dashed border-black pt-1">
+             <span>Total Tendered</span>
+             <span>{formatCurrency(data.paymentMethods.reduce((a, b) => a + b.amount, 0))}</span>
+         </div>
+      </div>
+
+      <DashedLine />
+
+      {/* Cash Breakdown (Denominations) */}
       <div className={`${fontSize} uppercase`}>
-        <div className="flex justify-between mb-1">
-          <div className="w-1/3 text-left">Cash</div>
+        <div className="font-bold text-center mb-1">CASH COUNT DETAILS</div>
+        <div className="flex justify-between mb-1 text-[9px]">
+          <div className="w-1/3 text-left">Denom</div>
           <div className="w-1/3 text-center">Qty</div>
           <div className="w-1/3 text-right">Total</div>
         </div>
         
-        <DashedLine />
-
         {data.cashDenominations && data.cashDenominations.length > 0 ? (
            data.cashDenominations.map((denom, index) => (
             <div key={index} className="flex justify-between">
               <div className="w-1/3 text-left">{denom.amount === 0.25 || denom.amount === 0.1 || denom.amount === 0.05 ? denom.amount.toFixed(2) : denom.amount.toString()}</div>
-              <div className="w-1/3 text-center">{denom.qty.toFixed(2)}</div>
+              <div className="w-1/3 text-center">{denom.qty}</div>
               <div className="w-1/3 text-right">{formatCurrency(denom.total)}</div>
             </div>
            ))
         ) : (
-            // Default Denominations if none provided (placeholder logic)
-            [1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.25, 0.10, 0.05].map((val) => (
-                <div key={val} className="flex justify-between">
-                    <div className="w-1/3 text-left">{val >= 1 ? val.toFixed(2) : val.toString()}</div>
-                    <div className="w-1/3 text-center">0.00</div>
+            // Default Denominations as empty template
+            [1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.25].map((val) => (
+                <div key={val} className="flex justify-between text-gray-400">
+                    <div className="w-1/3 text-left">{val >= 1 ? val.toFixed(0) : val.toFixed(2)}</div>
+                    <div className="w-1/3 text-center">-</div>
                     <div className="w-1/3 text-right">0.00</div>
                 </div>
             ))
@@ -118,61 +189,62 @@ export function XReadingPreview({ data, printerFormat = '80mm' }: XReadingPrevie
 
       <DashedLine />
 
-      {/* Grand Total */}
-      <div className={`${fontSize} uppercase flex justify-between font-bold`}>
-        <span>Grand total</span>
-        <span>{formatCurrency(data.cashCountTotal || 0)}</span>
-      </div>
-
-      <DashedLine />
-
-      {/* Cash Summary Header */}
-      <div className={`text-center ${headerSize} py-1 uppercase`}>
+      {/* Cash Summary */}
+      <div className={`text-center ${headerSize} py-1 uppercase font-bold`}>
         CASH SUMMARY
       </div>
       
       <div className={`${fontSize} uppercase space-y-1`}>
         <div className="flex justify-between">
-            <span>Opening amount</span>
+            <span>Opening Fund</span>
             <span>{formatCurrency(data.startingCash)}</span>
         </div>
-
-        <DashedLine />
-
         <div className="flex justify-between">
-            <span>Cash Deposit</span>
+            <span>+ Cash Sales</span>
+            <span>{formatCurrency(data.cashSales)}</span>
+        </div>
+        <div className="flex justify-between">
+            <span>+ Cash Deposit</span>
             <span>{formatCurrency(data.cashDeposit || 0)}</span>
         </div>
         <div className="flex justify-between">
-            <span>Cash Pick Up</span>
+            <span>- Cash Pick Up</span>
             <span>{formatCurrency(data.cashPickup || 0)}</span>
         </div>
-        <div className="flex justify-between">
-            <span>Cash Count</span>
+        
+        <div className="flex justify-between font-bold border-t border-dashed border-black pt-1">
+             <span>Expected Cash</span>
+             <span>{formatCurrency(data.startingCash + data.cashSales + (data.cashDeposit || 0) - (data.cashPickup || 0))}</span>
+         </div>
+
+        <div className="flex justify-between font-bold">
+            <span>Actual Count</span>
             <span>{formatCurrency(data.cashCountTotal || 0)}</span>
-        </div>
-         <div className="flex justify-between">
-            <span>Cash Sales</span>
-            <span>{formatCurrency(data.cashSales)}</span>
         </div>
         
         <DashedLine />
 
-        <div className="flex justify-between font-bold">
-            <span>Grand Total Count</span>
-            <span>{formatCurrency(data.cashCountTotal || 0)}</span>
-        </div>
-        <div className="flex justify-between font-bold">
-            <span>Over</span>
-            <span>{formatCurrency(data.overShort || 0)}</span>
+        <div className="flex justify-between font-bold text-xs">
+            <span>{data.overShort && data.overShort >= 0 ? 'OVERAGE' : 'SHORTAGE'}</span>
+            <span>{formatCurrency(Math.abs(data.overShort || 0))}</span>
         </div>
       </div>
 
       <DashedLine />
       
-      {/* Footer Title */}
-      <div className={`text-center ${headerSize} py-1 uppercase`}>
-        SHIFT REPORT
+      {/* Footer */}
+      <div className="text-center mt-4 space-y-4">
+        <div className={`${fontSize}`}>
+             _______________________<br/>
+             Cashier Signature
+        </div>
+        <div className={`${fontSize}`}>
+             _______________________<br/>
+             Manager Signature
+        </div>
+        <div className={`${fontSize} mt-2`}>
+             Printed: {format(new Date(), 'MM/dd/yyyy hh:mm a')}
+        </div>
       </div>
 
     </div>

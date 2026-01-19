@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -20,89 +19,198 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Sale } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
-import { CalendarIcon, Search, X } from 'lucide-react';
+import { CalendarIcon, Search, X, Loader2 } from 'lucide-react';
+import { TerminalSelector } from '@/components/TerminalSelector';
+
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 export default function SalesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [terminalId, setTerminalId] = useState<string>('all');
+  const [sales, setSales] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const limit = 10; // Number of items per page
+
+  const fetchSales = async (page = 1) => {
+    setIsLoading(true);
+    try {
+        const params = new URLSearchParams();
+        if (dateRange?.from) {
+            params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+        }
+        if (dateRange?.to) {
+            params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+        }
+        if (terminalId && terminalId !== 'all') {
+            params.append('terminalId', terminalId);
+        }
+        
+        // Add pagination params
+        params.append('page', page.toString());
+        params.append('limit', limit.toString());
+        
+        const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            setSales(result.data);
+            if (result.pagination) {
+                setTotalPages(result.pagination.totalPages);
+                setCurrentPage(result.pagination.page);
+            }
+        } else {
+            console.error("Failed to fetch sales:", result.error);
+        }
+    } catch (error) {
+        console.error("Error fetching sales:", error);
+    } finally {
+        setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchSales = async () => {
-      try {
-        const response = await fetch('/api/sales');
-        if (!response.ok) {
-          throw new Error('Failed to fetch sales data');
-        }
-        const result = await response.json();
-        if (result.success) {
-          setSales(result.data);
-        } else {
-          console.error('Failed to fetch sales:', result.error);
-        }
-      } catch (error) {
-        console.error('Error fetching sales:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    fetchSales(currentPage);
+  }, [dateRange, terminalId, currentPage]);
 
-    fetchSales();
-  }, []);
+  // Reset to page 1 when filters change
+  useEffect(() => {
+      setCurrentPage(1);
+  }, [dateRange, terminalId]);
 
-  const getStatusInfo = (sale: Sale): { text: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } => {
-    switch (sale.status) {
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+        setCurrentPage(page);
+    }
+  };
+
+  const getStatusInfo = (status: string): { text: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } => {
+    switch (status) {
       case 'Paid':
         return { text: 'Paid', variant: 'default' };
       case 'Failed':
       case 'Returned':
-        return { text: sale.status, variant: 'destructive' };
+      case 'Void':
+      case 'Voided':
+        return { text: status, variant: 'destructive' };
       case 'Shipped':
       case 'Delivered':
-        return { text: sale.status, variant: 'outline' };
+        return { text: status, variant: 'outline' };
       case 'Pending':
       default:
         return { text: 'Due', variant: 'secondary' };
     }
   };
 
-  const filteredSales = useMemo(() => {
-    if (!sales) return [];
-
-    return sales.filter(sale => {
-        // Date filter
-        const saleDate = new Date(sale.invoiceDate || sale.date || new Date());
-        if (dateRange?.from && saleDate < dateRange.from) return false;
-        if (dateRange?.to) {
-            const toDate = new Date(dateRange.to);
-            toDate.setHours(23, 59, 59, 999);
-            if (saleDate > toDate) return false;
-        }
-
-        // Search term filter
-        const term = searchTerm.toLowerCase();
-        if (!term) return true;
-        
-        const idMatch = sale.id.toLowerCase().includes(term);
-        const customerMatch = sale.customer.name.toLowerCase().includes(term);
-
-        return idMatch || customerMatch;
-    }).sort((a,b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-  }, [sales, searchTerm, dateRange]);
+  const filteredSales = sales.filter(sale => {
+      if (!searchTerm) return true;
+      const term = searchTerm.toLowerCase();
+      const idMatch = String(sale.id || sale.posTransactionId).toLowerCase().includes(term);
+      const customerMatch = sale.customer?.name?.toLowerCase().includes(term);
+      return idMatch || customerMatch;
+  });
 
   const resetFilters = () => {
     setSearchTerm('');
     setDateRange(undefined);
+    setTerminalId('all');
+    setCurrentPage(1);
   };
 
-  const hasActiveFilters = searchTerm || dateRange;
+  const hasActiveFilters = searchTerm || dateRange || terminalId !== 'all';
+
+  // Render pagination items logic
+  const renderPaginationItems = () => {
+      const items = [];
+      const maxVisiblePages = 5;
+
+      if (totalPages <= maxVisiblePages) {
+          for (let i = 1; i <= totalPages; i++) {
+              items.push(
+                  <PaginationItem key={i}>
+                      <PaginationLink
+                          isActive={currentPage === i}
+                          onClick={() => handlePageChange(i)}
+                      >
+                          {i}
+                      </PaginationLink>
+                  </PaginationItem>
+              );
+          }
+      } else {
+          // Always show first page
+          items.push(
+              <PaginationItem key={1}>
+                  <PaginationLink
+                      isActive={currentPage === 1}
+                      onClick={() => handlePageChange(1)}
+                  >
+                      1
+                  </PaginationLink>
+              </PaginationItem>
+          );
+
+          if (currentPage > 3) {
+              items.push(
+                  <PaginationItem key="ellipsis-start">
+                      <PaginationEllipsis />
+                  </PaginationItem>
+              );
+          }
+
+          const start = Math.max(2, currentPage - 1);
+          const end = Math.min(totalPages - 1, currentPage + 1);
+
+          for (let i = start; i <= end; i++) {
+              items.push(
+                  <PaginationItem key={i}>
+                      <PaginationLink
+                          isActive={currentPage === i}
+                          onClick={() => handlePageChange(i)}
+                      >
+                          {i}
+                      </PaginationLink>
+                  </PaginationItem>
+              );
+          }
+
+          if (currentPage < totalPages - 2) {
+              items.push(
+                  <PaginationItem key="ellipsis-end">
+                      <PaginationEllipsis />
+                  </PaginationItem>
+              );
+          }
+
+          // Always show last page
+          items.push(
+              <PaginationItem key={totalPages}>
+                  <PaginationLink
+                      isActive={currentPage === totalPages}
+                      onClick={() => handlePageChange(totalPages)}
+                  >
+                      {totalPages}
+                  </PaginationLink>
+              </PaginationItem>
+          );
+      }
+      return items;
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -128,6 +236,12 @@ export default function SalesPage() {
                 />
               </div>
               <div className="flex items-center gap-2">
+                <TerminalSelector 
+                    terminalId={terminalId}
+                    onTerminalChange={setTerminalId}
+                    showAllOption={true}
+                />
+                <div className='w-2'></div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -188,19 +302,23 @@ export default function SalesPage() {
                 {isLoading ? (
                     <TableRow>
                         <TableCell colSpan={6} className="h-24 text-center">
-                            Loading transactions...
+                             <div className="flex justify-center items-center">
+                                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                                Loading transactions...
+                            </div>
                         </TableCell>
                     </TableRow>
                 ) : filteredSales.length > 0 ? (
                   filteredSales.map((sale) => {
-                    const displayDate = sale.invoiceDate || sale.date;
-                    const statusInfo = getStatusInfo(sale);
+                    const displayDate = sale.date || sale.invoiceDate;
+                    const statusInfo = getStatusInfo(sale.status || sale.sale_status || 'Paid'); 
+                    
                     return (
-                      <TableRow key={sale.id}>
-                        <TableCell className="font-medium">{sale.id.substring(0,7)}...</TableCell>
+                      <TableRow key={sale.posTransactionId || sale.id}>
+                        <TableCell className="font-medium">{(sale.id || sale.posTransactionId).substring(0,8)}...</TableCell>
                         <TableCell>
-                          <div className="font-medium">{sale.customer.name}</div>
-                          <div className="text-sm text-muted-foreground hidden md:block">{sale.customer.contactNumber}</div>
+                          <div className="font-medium">{sale.customer?.name || 'Walk-in'}</div>
+                          <div className="text-sm text-muted-foreground hidden md:block">{sale.customer?.contactNumber}</div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">{displayDate ? format(new Date(displayDate), 'PP') : 'N/A'}</TableCell>
                         <TableCell className="hidden sm:table-cell">{sale.paymentMethod}</TableCell>
@@ -209,7 +327,7 @@ export default function SalesPage() {
                             {statusInfo.text}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">₱{sale.total.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">₱{Number(sale.total).toFixed(2)}</TableCell>
                       </TableRow>
                     );
                   })
@@ -222,6 +340,31 @@ export default function SalesPage() {
                 )}
               </TableBody>
             </Table>
+
+            {/* Pagination Controls */}
+            {!isLoading && sales.length > 0 && (
+                <div className="mt-4">
+                    <Pagination>
+                        <PaginationContent>
+                            <PaginationItem>
+                                <PaginationPrevious
+                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                    aria-disabled={currentPage === 1}
+                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                            {renderPaginationItems()}
+                            <PaginationItem>
+                                <PaginationNext
+                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                    aria-disabled={currentPage === totalPages}
+                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                </div>
+            )}
           </CardContent>
         </Card>
     </div>

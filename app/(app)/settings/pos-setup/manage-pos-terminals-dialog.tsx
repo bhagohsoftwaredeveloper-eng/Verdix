@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -49,6 +49,7 @@ type TerminalFormValues = z.infer<typeof terminalSchema>;
 export function ManagePosTerminalsDialog() {
   const [open, setOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const { toast } = useToast();
 
   const form = useForm<TerminalFormValues>({
@@ -105,6 +106,24 @@ export function ManagePosTerminalsDialog() {
   }
 
 
+
+  useEffect(() => {
+    if (open) {
+      fetchWarehouses();
+    }
+  }, [open]);
+
+  const fetchWarehouses = async () => {
+    try {
+      const response = await fetch('/api/warehouses?activeOnly=true');
+      const result = await response.json();
+      if (result.success) {
+        setWarehouses(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching warehouses:', error);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -234,8 +253,15 @@ export function ManagePosTerminalsDialog() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Store">Store</SelectItem>
-                          <SelectItem value="Warehouse">Warehouse</SelectItem>
+                          {warehouses.length === 0 ? (
+                            <SelectItem value="Store">Store (Default)</SelectItem>
+                          ) : (
+                            warehouses.map((w) => (
+                              <SelectItem key={w.id} value={w.name}>
+                                {w.name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />

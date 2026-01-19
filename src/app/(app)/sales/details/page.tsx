@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -25,13 +25,16 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Search } from 'lucide-react';
+import { ChevronRight, Search, Loader2 } from 'lucide-react';
 import type { Sale } from '@/lib/types';
 import { Input } from '@/components/ui/input';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { TerminalSelector } from '@/components/TerminalSelector';
 
-function SaleRow({ sale }: { sale: Sale }) {
+interface SaleRowProps {
+    sale: Sale;
+}
+
+function SaleRow({ sale }: SaleRowProps) {
   const statusVariant = (status: string) => {
     switch (status) {
       case 'Paid':
@@ -40,12 +43,16 @@ function SaleRow({ sale }: { sale: Sale }) {
         return 'secondary';
       case 'Failed':
         return 'destructive';
+      case 'Voided':
+        return 'destructive'; // Assuming Voided maps to destructive
+      case 'Returned':
+        return 'outline';   // Distinct style for returns
       default:
         return 'secondary';
     }
   };
   
-  const displayDate = sale.invoiceDate || sale.date;
+  const displayDate = sale.invoiceDate || sale.date || new Date().toISOString();
 
   return (
     <Collapsible asChild>
@@ -91,10 +98,10 @@ function SaleRow({ sale }: { sale: Sale }) {
                                 </TableRow>
                             </TableHeader>
                              <TableBody>
-                                {sale.items.map(item => (
-                                    <TableRow key={item.product.id}>
+                                {sale.items.map((item, index) => (
+                                    <TableRow key={index}>
                                         <TableCell>{item.product.name}</TableCell>
-                                        <TableCell>{item.product.sku}</TableCell>
+                                        <TableCell>{(item.product as any).sku || '-'}</TableCell>
                                         <TableCell className="text-right">₱{item.price.toFixed(2)}</TableCell>
                                         <TableCell className="text-right">{item.quantity}</TableCell>
                                         <TableCell className="text-right">₱{(item.price * item.quantity).toFixed(2)}</TableCell>
@@ -113,21 +120,45 @@ function SaleRow({ sale }: { sale: Sale }) {
 
 export default function SalesDetailsPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const firestore = useFirestore();
-  const salesCollection = useMemoFirebase(
-    () => (firestore ? collection(firestore, 'sales') : null),
-    [firestore]
-  );
-  const { data: sales } = useCollection<Sale>(salesCollection);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [terminalId, setTerminalId] = useState<string>('all');
 
-  const filteredSales = sales?.filter(sale => {
+  useEffect(() => {
+    const fetchSales = async () => {
+        setIsLoading(true);
+        try {
+            const params = new URLSearchParams();
+            if (terminalId && terminalId !== 'all') {
+                params.append('terminalId', terminalId);
+            }
+            // Fetch logic
+            const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+            const result = await response.json();
+            if (result.success) {
+                setSales(result.data);
+            } else {
+                console.error("Failed to fetch sales:", result.error);
+            }
+        } catch (error) {
+            console.error("Error fetching sales:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    fetchSales();
+  }, [terminalId]);
+
+  const filteredSales = sales.filter(sale => {
+    if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
       sale.id.toLowerCase().includes(term) ||
       sale.customer.name.toLowerCase().includes(term) ||
-      sale.customer.contactNumber.toLowerCase().includes(term)
+      (sale.customer.contactNumber && sale.customer.contactNumber.toLowerCase().includes(term))
     );
-  }) || [];
+  });
 
   return (
     <Card>
@@ -139,14 +170,21 @@ export default function SalesDetailsPage() {
               A detailed breakdown of all POS sales transactions.
             </CardDescription>
           </div>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search by ID, customer..."
-              className="pl-8 sm:w-[300px]"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+          <div className="flex gap-2">
+            <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                type="search"
+                placeholder="Search by ID, customer..."
+                className="pl-8 sm:w-[300px]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+            <TerminalSelector 
+                terminalId={terminalId}
+                onTerminalChange={setTerminalId}
+                showAllOption={true}
             />
           </div>
         </div>
@@ -164,7 +202,18 @@ export default function SalesDetailsPage() {
             </TableRow>
           </TableHeader>
           
-            {filteredSales.length > 0 ? (
+            {isLoading ? (
+                <TableBody>
+                    <TableRow>
+                        <TableCell colSpan={6} className="text-center h-24">
+                            <div className="flex justify-center items-center">
+                                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                                Loading sales data...
+                            </div>
+                        </TableCell>
+                    </TableRow>
+                </TableBody>
+            ) : filteredSales.length > 0 ? (
               filteredSales.map((sale) => (
                 <SaleRow key={sale.id} sale={sale} />
               ))
@@ -182,5 +231,3 @@ export default function SalesDetailsPage() {
     </Card>
   );
 }
-
-    

@@ -7,8 +7,12 @@ export async function GET(request: NextRequest) {
     const warehouseId = searchParams.get('warehouseId');
     const countOnly = searchParams.get('countOnly') === 'true';
 
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = (page - 1) * limit;
+
     // Query to fetch all sales orders with customer information
-    let ordersQuery = `
+    let baseQuery = `
       SELECT
         so.id,
         so.customer_id,
@@ -36,12 +40,12 @@ export async function GET(request: NextRequest) {
     const params: any[] = [];
 
     if (warehouseId) {
-      ordersQuery += ' AND so.warehouse_id = ?';
+      baseQuery += ' AND so.warehouse_id = ?';
       params.push(warehouseId);
     }
 
     if (countOnly) {
-      const countQuery = `SELECT COUNT(*) as total FROM (${ordersQuery}) as subquery`;
+      const countQuery = `SELECT COUNT(*) as total FROM (${baseQuery}) as subquery`;
       const countResult = await query(countQuery, params);
       return NextResponse.json({
         success: true,
@@ -50,7 +54,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    ordersQuery += ' ORDER BY so.created_at DESC';
+    // Get total count for pagination
+    const countQuery = `SELECT COUNT(*) as total FROM (${baseQuery}) as subquery`;
+    const countResult = await query(countQuery, params);
+    const totalRecords = countResult[0]?.total || 0;
+    const totalPages = Math.ceil(totalRecords / limit);
+
+    // Append standard ordering and pagination
+    let ordersQuery = baseQuery + ' ORDER BY so.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     const salesOrders = await query(ordersQuery, params);
 
@@ -115,6 +127,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: ordersWithItems,
+      pagination: {
+        page,
+        limit,
+        totalRecords,
+        totalPages
+      },
       count: ordersWithItems.length
     });
   } catch (error) {

@@ -8,17 +8,12 @@ async function ensurePosTerminalsTable() {
       CREATE TABLE IF NOT EXISTS pos_terminals (
         id VARCHAR(50) PRIMARY KEY,
         ip_address VARCHAR(45),
-        terminal_description VARCHAR(255),
-        serial_number VARCHAR(100),
-        min VARCHAR(100),
-        permit_no VARCHAR(100),
-        print_official_receipt VARCHAR(10),
-        or_next_reference VARCHAR(100),
-        inventory_location VARCHAR(100),
+        name VARCHAR(100),
+        location VARCHAR(100),
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_terminal_description (terminal_description),
+        INDEX idx_name (name),
         INDEX idx_is_active (is_active)
       )
     `;
@@ -45,13 +40,8 @@ export async function GET(request: NextRequest) {
       SELECT
         id,
         ip_address AS ipAddress,
-        terminal_description AS terminalDescription,
-        serial_number AS serialNumber,
-        min,
-        permit_no AS permitNo,
-        print_official_receipt AS printOfficialReceipt,
-        or_next_reference AS orNextReference,
-        inventory_location AS inventoryLocation,
+        name AS terminalDescription,
+        location AS inventoryLocation,
         is_active AS isActive,
         created_at AS createdAt
       FROM pos_terminals
@@ -65,8 +55,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      sql += ' AND (terminal_description LIKE ? OR ip_address LIKE ? OR serial_number LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      sql += ' AND (name LIKE ? OR ip_address LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
     }
 
     sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
@@ -84,8 +74,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      countSql += ' AND (terminal_description LIKE ? OR ip_address LIKE ? OR serial_number LIKE ?)';
-      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      countSql += ' AND (name LIKE ? OR ip_address LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`);
     }
 
     const countResult = await query(countSql, countParams);
@@ -134,22 +124,16 @@ export async function POST(request: NextRequest) {
 
     const sql = `
       INSERT INTO pos_terminals (
-        id, ip_address, terminal_description, serial_number, min,
-        permit_no, print_official_receipt, or_next_reference,
-        inventory_location, is_active
+        id, ip_address, name,
+        location, is_active
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?)
     `;
 
     await query(sql, [
       id,
       ipAddress?.trim() || null,
       terminalDescription?.trim() || null,
-      serialNumber?.trim() || null,
-      min?.trim() || null,
-      permitNo?.trim() || null,
-      printOfficialReceipt || 'No',
-      orNextReference?.trim() || null,
       inventoryLocation || 'Store',
       isActive
     ]);
@@ -211,13 +195,8 @@ export async function PUT(request: NextRequest) {
       UPDATE pos_terminals
       SET
         ip_address = ?,
-        terminal_description = ?,
-        serial_number = ?,
-        min = ?,
-        permit_no = ?,
-        print_official_receipt = ?,
-        or_next_reference = ?,
-        inventory_location = ?,
+        name = ?,
+        location = ?,
         is_active = ?
       WHERE id = ?
     `;
@@ -225,11 +204,6 @@ export async function PUT(request: NextRequest) {
     await query(sql, [
       ipAddress?.trim() || null,
       terminalDescription?.trim() || null,
-      serialNumber?.trim() || null,
-      min?.trim() || null,
-      permitNo?.trim() || null,
-      printOfficialReceipt || 'No',
-      orNextReference?.trim() || null,
       inventoryLocation || 'Store',
       isActive !== undefined ? isActive : true,
       id

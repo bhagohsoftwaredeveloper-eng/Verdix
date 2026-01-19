@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -29,54 +29,75 @@ import { DateRange } from 'react-day-picker';
 import { mockSales } from '@/lib/data';
 import { useSalesInvoices } from '@/hooks/use-api';
 
+import { TerminalSelector } from '@/components/TerminalSelector';
+
+// ... 
+
 export default function VoidedSalesPage() {
-  const { salesInvoices: sales, loading } = useSalesInvoices();
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [terminal, setTerminal] = useState<string>('all');
+  const [sales, setSales] = useState<Sale[]>([]); // Using Sale type for UI consistency
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Use the new Transactions API
+  useEffect(() => {
+    const fetchVoidedSales = async () => {
+      setIsLoading(true);
+      try {
+         const params = new URLSearchParams();
+         params.append('status', 'Voided');
+         if (dateRange?.from) {
+             params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+         }
+         if (dateRange?.to) {
+             params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+         }
+         if (terminal && terminal !== 'all') {
+             params.append('terminalId', terminal);
+         }
+
+         const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+         const result = await response.json();
+         if (result.success) {
+             // Convert transaction data to Sale type compatibility
+             const mappedSales = result.data.map((tx: any) => ({
+                 id: tx.id, // Sale ID
+                 posTransactionId: tx.posTransactionId,
+                 customer: tx.customer,
+                 invoiceDate: tx.date,
+                 status: 'Voided',
+                 total: tx.total,
+                 paymentMethod: tx.paymentMethod,
+                 items: [] 
+             }));
+             // Also filter for 'Failed' if desired or handled by API
+             setSales(mappedSales);
+         }
+      } catch (error) {
+         console.error("Error fetching voided sales:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchVoidedSales();
+  }, [dateRange, terminal]);
 
   const voidedSales = useMemo(() => {
-    if (!sales) return [];
-
-    // First, filter for only voided sales.
-    const voids = sales.filter((sale: Sale) => sale.status === 'Voided' || sale.status === 'Failed');
-
-    // Then, filter by the selected date range.
-    const salesByDate = voids.filter((sale: Sale) => {
-      if (!dateRange || (!dateRange.from && !dateRange.to)) {
-        return true;
-      }
-      const saleDate = new Date((sale.invoiceDate || sale.date) as string);
-      if (dateRange.from && saleDate < dateRange.from) {
-        return false;
-      }
-      if (dateRange.to) {
-        const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        if (saleDate > toDate) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    // Finally, filter by the search term.
-    if (!searchTerm) {
-      return salesByDate;
-    }
-
-    return salesByDate.filter((sale: Sale) => {
-      const term = searchTerm.toLowerCase();
+    if (!searchTerm) return sales;
+    const term = searchTerm.toLowerCase();
+    return sales.filter((sale: Sale) => {
       const idMatch = sale.id.toLowerCase().includes(term);
       const customerMatch = sale.customer.name.toLowerCase().includes(term);
       return idMatch || customerMatch;
     });
-  }, [sales, dateRange, searchTerm]);
+  }, [sales, searchTerm]);
 
   const resetFilters = () => {
     setSearchTerm('');
     setDateRange(undefined);
+    setTerminal('all');
   };
-
 
   return (
     <Card>
@@ -97,6 +118,12 @@ export default function VoidedSalesPage() {
             />
           </div>
           <div className="flex items-center gap-2">
+            <TerminalSelector 
+                terminalId={terminal} 
+                onTerminalChange={setTerminal} 
+                showAllOption={true} 
+            />
+            <div className='w-2'></div>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -132,7 +159,7 @@ export default function VoidedSalesPage() {
                 />
               </PopoverContent>
             </Popover>
-            {(searchTerm || dateRange) && (
+            {(searchTerm || dateRange || terminal !== 'all') && (
               <Button variant="ghost" onClick={resetFilters} size="icon">
                 <X className="h-4 w-4" />
                 <span className="sr-only">Reset filters</span>

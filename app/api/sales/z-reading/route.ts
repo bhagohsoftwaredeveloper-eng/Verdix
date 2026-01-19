@@ -1,131 +1,145 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../../lib/mysql';
+import { query } from '@/lib/mysql';
 import { format } from 'date-fns';
+
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate'); // Format: yyyy-MM-dd
     const endDate = searchParams.get('endDate');     // Format: yyyy-MM-dd
-    const terminalId = searchParams.get('terminalId') || 'Counter 1';
+    const terminalId = searchParams.get('terminalId') || 'Counter 1'; // Default or filter
 
     // Base query conditions
     let dateCondition = '';
     const dateParams: any[] = [];
     
     if (startDate) {
-      dateCondition += ' AND DATE(order_date) >= ?';
+      dateCondition += ' AND DATE(st.invoice_date) >= ?';
       dateParams.push(startDate);
     }
     if (endDate) {
-      dateCondition += ' AND DATE(order_date) <= ?';
+      dateCondition += ' AND DATE(st.invoice_date) <= ?';
       dateParams.push(endDate);
     }
 
+    // Terminal Condition (applied via JOIN with pos_transactions)
+    let terminalCondition = '';
+    if (terminalId && terminalId !== 'all') {
+        terminalCondition = ' AND pt.terminal_id = ?';
+        dateParams.push(terminalId);
+    }
+
     // 1. Fetch Sales Aggregates
-    // Note: In a real multi-terminal setup, we would filter by terminal_id if it existed in sales_orders.
-    // For now, we assume all sales are relevant or belong to the default terminal.
+    // We strictly look at POS sales (linked in pos_transactions) or all sales if terminalId is 'all' but we still want to respect the terminal constraint if chosen.
+    // If we want Z-Reading to ONLY reflect POS Sales, we should INNER JOIN pos_transactions.
+    // If we want it to reflect "Terminal Sales", which implies POS Sales.
     
-    // Gross Sales: Sum of all valid sales (excluding returns for now, or handling them separately)
-    // We assume 'Returned' status means a full return. 
-    // If 'Void' exists, we exclude.
+    const salesBaseSql = `
+       FROM sales_transactions st
+       JOIN pos_transactions pt ON st.id = pt.sale_id
+       WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+       ${dateCondition}
+       ${terminalCondition}
+    `;
+
     const salesSql = `
       SELECT 
-        SUM(total) as gross_sales,
+        SUM(st.total) as gross_sales,
         COUNT(*) as transaction_count
-      FROM sales_orders
-      WHERE status NOT IN ('Void', 'Cancelled', 'Returned')
-      ${dateCondition}
+      ${salesBaseSql}
     `;
     const [salesResult] = await query(salesSql, dateParams) as any[];
 
     // Returns
     const returnsSql = `
-      SELECT SUM(total) as total_returns
-      FROM sales_orders
-      WHERE status = 'Returned'
+      SELECT SUM(st.total) as total_returns
+      FROM sales_transactions st
+      JOIN pos_transactions pt ON st.id = pt.sale_id
+      WHERE st.status = 'Returned'
       ${dateCondition}
+      ${terminalCondition}
     `;
+    // Re-use params as the structure is identical
     const [returnsResult] = await query(returnsSql, dateParams) as any[];
 
     // Payment Methods
     const paymentSql = `
       SELECT 
-        payment_method, 
-        SUM(total) as amount
-      FROM sales_orders
-      WHERE status NOT IN ('Void', 'Cancelled', 'Returned')
+        st.payment_method, 
+        SUM(st.total) as amount
+      FROM sales_transactions st
+      JOIN pos_transactions pt ON st.id = pt.sale_id
+      WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
       ${dateCondition}
-      GROUP BY payment_method
+      ${terminalCondition}
+      GROUP BY st.payment_method
     `;
     const paymentResults = await query(paymentSql, dateParams) as any[];
 
+    // 2. Fetch Shift Data for Starting Cash
+    let shiftDateCondition = '';
+    const shiftParams: any[] = [];
+    if (startDate) {
+        shiftDateCondition += ' AND DATE(start_time) >= ?';
+        shiftParams.push(startDate);
+    }
+    if (endDate) {
+        shiftDateCondition += ' AND DATE(start_time) <= ?';
+        shiftParams.push(endDate);
+    }
+    if (terminalId && terminalId !== 'all') {
+        shiftDateCondition += ' AND terminal_id = ?';
+        shiftParams.push(terminalId);
+    }
+
+    const shiftSql = `
+        SELECT SUM(starting_cash) as total_starting_cash
+        FROM shifts
+        WHERE 1=1
+        ${shiftDateCondition}
+    `;
+    const [shiftResult] = await query(shiftSql, shiftParams) as any[];
+
     // Calculations
-    const grossSales = parseFloat(salesResult?.gross_sales || 0);
+    
+    // Let's get TOTAL volume including returns for Gross. (Sales + Returns roughly)
+    // Actually, "Gross Sales" usually means Total sales BEFORE returns/discounts.
+    // "Net Sales" = Gross - Returns - Discounts.
+    // Our 'salesResult' query above excludes Returns. So it is essentially (Gross - Returns) if no discounts.
+    // Let's fetch pure Gross (everything, paid + returned + etc, excluding voids).
+    const grossVolumeSql = `
+        SELECT SUM(st.total) as total_volume
+        FROM sales_transactions st
+        JOIN pos_transactions pt ON st.id = pt.sale_id
+        WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled')
+        ${dateCondition}
+        ${terminalCondition}
+    `;
+    const [grossVolumeResult] = await query(grossVolumeSql, dateParams) as any[];
+    
+    const grossSales = parseFloat(grossVolumeResult?.total_volume || 0);
     const transactionCount = parseInt(salesResult?.transaction_count || 0);
     const returns = parseFloat(returnsResult?.total_returns || 0);
     
-    // Discounts - Currently 0 as per schema limitation (no explicit discount column visible yet)
-    // If discounts are embedded in line items, we'd need a complex join. Assuming 0 for MVP.
+    // Discounts - Currently 0 as per schema limitations
     const discounts = 0; 
-
-    const netSales = grossSales - discounts; // Returns are usually deducted from Gross to get Net, or handled as separate line. 
-    // Standard Z-Reading: Gross (Total Sales) - Returns - Discounts = Net Sales.
-    // However, if Gross Sales query filtered OUT returns, then Net = Gross. 
-    // But typically Gross includes everything, then Returns are deducted.
-    // Let's adjust: "Gross Sales" usually means Total Sales recorded.
-    // Our first query filtered OUT returns. Let's fix that semantic.
     
-    // RE-CALCULATION STRATEGY:
-    // 1. Get Sum of everything that isn't Void/Cancelled.
-    const allSalesSql = `
-        SELECT SUM(total) as total_volume
-        FROM sales_orders
-        WHERE status NOT IN ('Void', 'Cancelled')
-        ${dateCondition}
-    `;
-    const [allSalesResult] = await query(allSalesSql, dateParams) as any[];
-    const totalVolume = parseFloat(allSalesResult?.total_volume || 0);
-    
-    // If we consider "Gross Sales" as the volume of Sales (excluding returns), it's the first query.
-    // If we consider "Gross Sales" as Sales + Returns (before deduction), it's totalVolume.
-    // Let's stick to: Gross Sales = Sales excluding returns. Returns = Returns. 
-    // Actually, usually:
-    // Gross = Sales 
-    // Net = Gross - Discount - Returns
-    
-    const finalGrossSales = grossSales; // From the query excluding returns
-    const finalNetSales = finalGrossSales - discounts; // Returns already excluded from 'grossSales' sum? 
-    // Wait, if I returned an item, I likely have a record with status 'Returned'.
-    // If I exclude it from Gross, then Gross is "Sales without Returns".
-    // Then I verify if Returns should be subtracted. 
-    // Usually: Gross Sales (100) - Return (10) = Net (90).
-    // My first query `salesSql` EXCLUDES 'Returned', so it is already (100-10) = 90 (if 10 was a separate record).
-    // Let's assume `salesSql` gives us the "Sales" part. 
-    // And `returnsSql` gives us the "Returns" part.
-    // We will present:
-    // Gross: (Sales + Returns)
-    // Returns: (Returns)
-    // Net: Sales
-    
-    const displayGross = finalGrossSales + returns;
-    const displayNet = finalGrossSales - discounts;
+    const netSales = grossSales - returns - discounts;
     
     // VAT (Philippines: 12% Inclusive)
-    // Vatable Sales = Net / 1.12
-    // VAT Amount = Net - Vatable
-    const vatAmount = displayNet - (displayNet / 1.12);
+    const vatAmount = netSales - (netSales / 1.12);
 
-    // Starting Cash (Mocked or DB?)
-    // For now, Mock or fetch last Z-reading's 'cashInDrawer'?
-    // Let's assume 0 or 2000 default fund.
-    const startingCash = 2000; 
+    // Starting Cash
+    const startingCash = parseFloat(shiftResult?.total_starting_cash || 0);
     
     // Cash Sales
-    const cashSalesObj = paymentResults.find((p: any) => p.payment_method === 'Cash');
+    const cashSalesObj = paymentResults.find((p: any) => p.payment_method === 'Cash' || p.payment_method === 'CASH');
     const cashSales = parseFloat(cashSalesObj?.amount || 0);
     
-    const cashInDrawer = startingCash + cashSales; // - Cash Drops + Cash Adds (not implemented yet)
+    // Cash in Drawer = Starting Cash + Cash Sales - Cash Returns (if paid via cash?)
+    // Assuming worst case: simple addition for now.
+    const cashInDrawer = startingCash + cashSales; 
 
     const paymentMethods = paymentResults.map((p: any) => ({
         name: p.payment_method || 'Unknown',
@@ -133,17 +147,16 @@ export async function GET(request: NextRequest) {
     }));
 
     // Construct the Z-Reading Object
-    // If we have data, we return it as a generated report.
     const reportDate = startDate ? new Date(startDate) : new Date();
     
     const generatedReading = {
         id: `Z-${format(reportDate, 'yyyyMMdd')}-${terminalId.replace(/\s+/g, '')}`,
         date: format(reportDate, 'yyyy-MM-dd HH:mm:ss'),
         reportDate: reportDate,
-        grossSales: displayGross,
+        grossSales: grossSales,
         returns: returns,
         discounts: discounts,
-        netSales: displayNet,
+        netSales: netSales,
         vatAmount: vatAmount,
         paymentMethods: paymentMethods,
         transactionCount: transactionCount,
@@ -153,13 +166,10 @@ export async function GET(request: NextRequest) {
         cashierName: 'Admin', // Default or fetch from session if available
         terminalId: terminalId
     };
-
-    // If there is no data at all (count 0), should we return empty?
-    // The user wants to see "real data". If 0, it's 0.
     
     return NextResponse.json({
       success: true,
-      data: [generatedReading] // Return as an array to match frontend expectation
+      data: [generatedReading]
     });
 
   } catch (error) {

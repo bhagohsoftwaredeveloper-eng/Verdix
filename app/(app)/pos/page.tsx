@@ -61,6 +61,7 @@ import { VoidSalesDialog } from './void-sales-dialog';
 import { ReturnSalesDialog } from './return-sales-dialog';
 import { PriceInquiryDialog } from './price-inquiry-dialog';
 import { ZReadingDialog } from './z-reading-dialog';
+import { XReadingDialog } from './x-reading-dialog';
 
 import { CancelSaleDialog } from './cancel-sale-dialog';
 import { DiscountDialog } from './discount-dialog';
@@ -214,7 +215,28 @@ export default function POSPage() {
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  
+  // Shift Management State
+  const [currentShiftId, setCurrentShiftId] = useState<string | null>(null);
+  // Show X-Reading report after shift end
+  const [showEndShiftReport, setShowEndShiftReport] = useState(false);
+  const [lastEndedShiftId, setLastEndedShiftId] = useState<string | null>(null);
+
+  // Terminal State
+  const [terminals, setTerminals] = useState<any[]>([]);
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string>('');
+
   const { toast } = useToast();
+  
+  // Persist shift ID
+  useEffect(() => {
+      const storedShiftId = localStorage.getItem('pos_current_shift_id');
+      if (storedShiftId) {
+          setCurrentShiftId(storedShiftId);
+          setShiftActive(true);
+          // Ideally fetch shift details here to verify active status
+      }
+  }, []);
 
   const selectedItem = useMemo(() => {
     return items.find(item => item.id === selectedItemId) || null;
@@ -253,7 +275,39 @@ export default function POSPage() {
         }
     };
     fetchSettings();
+
+    // Fetch Terminals
+    const fetchTerminals = async () => {
+      try {
+        const response = await fetch('/api/pos-terminals?activeOnly=true');
+        const result = await response.json();
+        if (result.success && result.data.length > 0) {
+          setTerminals(result.data);
+          
+          // Try to get stored terminal ID
+          const storedTerminalId = localStorage.getItem('pos_terminal_id');
+          const isValidStored = result.data.some((t: any) => t.id === storedTerminalId);
+          
+          if (storedTerminalId && isValidStored) {
+            setSelectedTerminalId(storedTerminalId);
+          } else {
+            // Default to first terminal
+            const defaultTerminalId = result.data[0].id;
+            setSelectedTerminalId(defaultTerminalId);
+            localStorage.setItem('pos_terminal_id', defaultTerminalId);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching terminals:', error);
+      }
+    };
+    fetchTerminals();
   }, []);
+
+  const currentTerminalName = useMemo(() => {
+    const t = terminals.find(t => t.id === selectedTerminalId);
+    return t ? t.terminalDescription : '';
+  }, [terminals, selectedTerminalId]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -527,24 +581,108 @@ export default function POSPage() {
     setHeldTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleStartShift = (cash: number) => {
-    setStartingCash(cash);
-    setCashSales(0);
-    setShiftActive(true);
+  const handleStartShift = async (cash: number) => {
+    if (!currentUser) { // Should check currentUser, setIsPosLoggedIn handles UI
+        toast({ title: "Error", description: "User not logged in", variant: "destructive" });
+        return;
+    }
+
+     try {
+         if (!selectedTerminalId) {
+             toast({ title: "Error", description: "No POS Terminal selected. Please configure a terminal.", variant: "destructive" });
+             return;
+         }
+
+         const response = await fetch('/api/pos/shifts', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+                 userId: currentUser.uid || currentUser.id,
+                 terminalId: selectedTerminalId,
+                 startingCash: cash
+             })
+         });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            setStartingCash(cash);
+            setCashSales(0);
+            setShiftActive(true);
+            setCurrentShiftId(result.data.shiftId);
+            localStorage.setItem('pos_current_shift_id', result.data.shiftId);
+            toast({ title: "Shift Started", description: "You are now ready to make sales." });
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error: any) {
+        console.error("Start shift error:", error);
+        toast({ title: "Error", description: "Failed to start shift: " + error.message, variant: "destructive" });
+    }
   };
 
-  const handleEndShift = () => {
-    setIsEndShiftOpen(false);
-    setShiftActive(false);
-    setIsPosLoggedIn(false); // Log out cashier
-    setItems([]);
-    setHeldTransactions([]);
-    setSelectedCustomer(WALK_IN_CUSTOMER);
+  const handleEndShift = async () => {
+    // This is called by EndShiftDialog AFTER user confirms and calculations are done
+    // However, EndShiftDialog doesn't pass the calculated values back via onShiftEnd prop (it's void).
+    // We need to modify EndShiftDialog to pass back the data, OR handle the API call inside EndShiftDialog.
+    // Given the current structure, EndShiftDialog (lines 116-126) calculates variance but doesn't pass it up.
+    // I will refactor EndShiftDialog to pass the data, then handle API call here.
+    // CAUTION: The current replaced code assumes EndShiftDialog signature change.
+    // See next step for EndShiftDialog update.
   }
+  
+  // Redefining handleEndShift with expected signature, I'll update the Dialog next.
+  const handleConfirmEndShift = async (data: { actualCash: number; cashDifference: number; notes: string; cashDenominations: any[] }) => {
+      if (!currentShiftId) {
+          toast({ title: "Error", description: "No active shift found", variant: "destructive" });
+          return;
+      }
+
+      try {
+          const response = await fetch('/api/pos/shifts', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  shiftId: currentShiftId,
+                  actualCash: data.actualCash,
+                  cashDifference: data.cashDifference,
+                  cashDenominations: data.cashDenominations, // Add this line
+                  notes: data.notes
+              })
+          });
+
+          const result = await response.json();
+          
+          if (result.success) {
+              setLastEndedShiftId(currentShiftId);
+              localStorage.removeItem('pos_current_shift_id');
+              setCurrentShiftId(null);
+              
+              setIsEndShiftOpen(false);
+              setShiftActive(false);
+              setIsPosLoggedIn(false); 
+              setItems([]);
+              setHeldTransactions([]);
+              setSelectedCustomer(WALK_IN_CUSTOMER);
+              
+              // Trigger X-Reading Report
+              setShowEndShiftReport(true);
+              
+              toast({ title: "Shift Ended", description: "Shift closed successfully." });
+          } else {
+              throw new Error(result.error);
+          }
+      } catch (error: any) {
+           console.error("End shift error:", error);
+           toast({ title: "Error", description: "Failed to end shift: " + error.message, variant: "destructive" });
+      }
+  };
 
   const handlePosLoginSuccess = (user: any) => {
     setIsPosLoggedIn(true);
     setCurrentUser(user);
+    // Determine if shift is already active based on localStorage? 
+    // Usually we would fetch "active shift for user" from backend here.
   }
 
   const handleLogout = () => {
@@ -841,6 +979,7 @@ export default function POSPage() {
               </div>
             </div>
             <div className="text-sm text-slate-500 mt-1">{currentTime}</div>
+            <div className="text-xs text-slate-400 mt-1 font-mono uppercase tracking-wider">{currentTerminalName || 'No Terminal'}</div>
           </div>
           <div className="p-4 rounded-lg bg-blue-50">
             <div className="flex justify-end text-5xl font-bold text-cyan-600">
@@ -898,6 +1037,8 @@ export default function POSPage() {
         customer={selectedCustomer}
         currentUser={currentUser}
         onSuccess={handleSuccessfulSale}
+        shiftId={currentShiftId}
+        terminalId={selectedTerminalId}
       />
       <EditItemDialog
         isOpen={isEditItemOpen}
@@ -943,7 +1084,7 @@ export default function POSPage() {
         onOpenChange={setIsEndShiftOpen}
         startingCash={startingCash}
         cashSales={cashSales}
-        onShiftEnd={handleEndShift}
+        onShiftEnd={handleConfirmEndShift}
       />
       <CashTransferDialog
         isOpen={isCashTransferOpen}
@@ -964,6 +1105,14 @@ export default function POSPage() {
       <ReturnSalesDialog isOpen={isReturnSalesOpen} onOpenChange={setIsReturnSalesOpen} />
       <PriceInquiryDialog isOpen={isPriceInquiryOpen} onOpenChange={setIsPriceInquiryOpen} />
       <ZReadingDialog isOpen={isZReadingOpen} onOpenChange={setIsZReadingOpen} />
+      
+      {/* End Shift Report Dialog */}
+      <XReadingDialog 
+        isOpen={showEndShiftReport} 
+        onOpenChange={setShowEndShiftReport}
+        shiftId={lastEndedShiftId}
+        autoShow={true}
+      />
       <ShutdownConfirmationDialog 
         open={isShutdownConfirmOpen} 
         onOpenChange={setIsShutdownConfirmOpen}

@@ -28,7 +28,10 @@ interface TenderDialogProps {
     totalDue: number;
     items: SaleItem[];
     customer: Customer | null;
+    currentUser?: any;
     onSuccess: (paymentMethod: string, amount: number) => void;
+    shiftId?: string | null;
+    terminalId?: string;
 }
 
 function ReceiptView({
@@ -118,7 +121,10 @@ export function TenderDialog({
     totalDue,
     items,
     customer,
+    currentUser,
     onSuccess,
+    shiftId,
+    terminalId,
 }: TenderDialogProps) {
     const [amountTendered, setAmountTendered] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
@@ -144,16 +150,6 @@ export function TenderDialog({
         }
 
         setIsProcessing(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        console.log('Mock payment submitted:', {
-            totalDue,
-            amountTendered: finalAmountTendered,
-            change: finalAmountTendered - totalDue,
-            paymentMethod,
-        });
-
         setCompletedSale({
             items,
             customer,

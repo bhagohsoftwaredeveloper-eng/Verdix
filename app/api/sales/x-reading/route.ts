@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const cashierId = searchParams.get('cashierId');
     const shiftStatus = searchParams.get('shiftStatus');
     const limit = searchParams.get('limit');
+    const shiftId = searchParams.get('shiftId');
     
     // Base query to fetch shifts
     let query = `
@@ -35,7 +36,9 @@ export async function GET(request: NextRequest) {
         s.actual_cash,
         s.expected_cash,
         s.cash_difference,
+        s.cash_difference,
         s.status as shift_status,
+        s.cash_denominations,
         -- Aggregate Sales
         COALESCE(sales.gross_sales, 0) as gross_sales,
         COALESCE(sales.net_sales, 0) as net_sales,
@@ -82,6 +85,11 @@ export async function GET(request: NextRequest) {
     if (shiftStatus && shiftStatus !== 'all') {
       query += ' AND s.status = ?';
       params.push(shiftStatus);
+    }
+
+    if (shiftId) {
+        query += ' AND s.id = ?';
+        params.push(shiftId);
     }
 
     query += ' ORDER BY s.start_time DESC';
@@ -137,6 +145,9 @@ export async function GET(request: NextRequest) {
         cashDeposit: 0,
         cashPickup: 0,
         overShort: overShort,
+        cashDenominations: typeof shift.cash_denominations === 'string' 
+            ? JSON.parse(shift.cash_denominations) 
+            : shift.cash_denominations || [],
       };
     }));
 

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -29,56 +29,73 @@ import { CalendarIcon, Search, X } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { mockSales } from '@/lib/data';
 
+import { TerminalSelector } from '@/components/TerminalSelector';
+
+// ...
+
 export default function ReturnedSalesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const sales = mockSales;
+  const [terminal, setTerminal] = useState<string>('all');
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Use the new Transactions API
+  useEffect(() => {
+    const fetchReturnedSales = async () => {
+      setIsLoading(true);
+      try {
+         const params = new URLSearchParams();
+         params.append('status', 'Returned');
+         if (dateRange?.from) {
+             params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+         }
+         if (dateRange?.to) {
+             params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+         }
+         if (terminal && terminal !== 'all') {
+             params.append('terminalId', terminal);
+         }
+
+         const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+         const result = await response.json();
+         if (result.success) {
+             // Convert transaction data to Sale type compatibility
+             const mappedSales = result.data.map((tx: any) => ({
+                 id: tx.id, // Sale ID
+                 posTransactionId: tx.posTransactionId,
+                 customer: tx.customer,
+                 invoiceDate: tx.date,
+                 status: 'Returned',
+                 total: tx.total,
+                 paymentMethod: tx.paymentMethod,
+                 items: [] // Items not fetched in list view yet, might need update if we show items in table
+             }));
+             setSales(mappedSales);
+         }
+      } catch (error) {
+         console.error("Error fetching returned sales:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchReturnedSales();
+  }, [dateRange, terminal]);
 
   const returnedSales = useMemo(() => {
-    if (!sales) return [];
-
-    // First, filter for only returned sales.
-    const returns = sales.filter(sale => sale.status === 'Returned');
-
-    // Then, filter by the selected date range.
-    const salesByDate = returns.filter(sale => {
-        if (!dateRange || (!dateRange.from && !dateRange.to)) {
-            return true;
-        }
-        const saleDate = new Date(sale.invoiceDate || sale.date);
-        if (dateRange.from && saleDate < dateRange.from) {
-            return false;
-        }
-        if (dateRange.to) {
-            const toDate = new Date(dateRange.to);
-            toDate.setHours(23, 59, 59, 999);
-            if (saleDate > toDate) {
-            return false;
-            }
-        }
-        return true;
-    });
-
-    // Finally, filter by the search term.
-    if (!searchTerm) {
-      return salesByDate;
-    }
-
-    return salesByDate.filter(sale => {
-      const term = searchTerm.toLowerCase();
-      const customerMatch = sale.customer.name.toLowerCase().includes(term);
-      const itemMatch = sale.items.some(item =>
-        item.product.name.toLowerCase().includes(term)
-      );
-      return customerMatch || itemMatch;
-    });
-  }, [sales, dateRange, searchTerm]);
+    if (!searchTerm) return sales;
+    const term = searchTerm.toLowerCase();
+    return sales.filter(sale => 
+        sale.id.toLowerCase().includes(term) || 
+        sale.customer.name.toLowerCase().includes(term)
+    );
+  }, [sales, searchTerm]);
 
   const resetFilters = () => {
     setSearchTerm('');
     setDateRange(undefined);
+    setTerminal('all');
   };
-
 
   return (
     <Card>
@@ -92,13 +109,19 @@ export default function ReturnedSalesPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search by customer or item..."
+              placeholder="Search by customer or ID..."
               className="pl-8 sm:w-[300px]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <div className="flex items-center gap-2">
+             <TerminalSelector 
+                terminalId={terminal} 
+                onTerminalChange={setTerminal} 
+                showAllOption={true} 
+            />
+             <div className='w-2'></div>
              <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -134,7 +157,7 @@ export default function ReturnedSalesPage() {
                 />
               </PopoverContent>
             </Popover>
-            <Button variant="ghost" onClick={resetFilters} size="icon" className={(searchTerm || dateRange) ? 'visible' : 'invisible'}>
+            <Button variant="ghost" onClick={resetFilters} size="icon" className={(searchTerm || dateRange || terminal !== 'all') ? 'visible' : 'invisible'}>
               <X className="h-4 w-4" />
               <span className="sr-only">Reset filters</span>
             </Button>
@@ -161,7 +184,7 @@ export default function ReturnedSalesPage() {
                     <div className="font-medium">{sale.customer.name}</div>
                     <div className="text-sm text-muted-foreground">{sale.customer.contactNumber}</div>
                   </TableCell>
-                  <TableCell>{format(new Date(sale.invoiceDate || sale.date), 'PP')}</TableCell>
+                  <TableCell>{format(new Date(sale.invoiceDate || sale.date || new Date()), 'PP')}</TableCell>
                    <TableCell>
                     {sale.items.map(item => (
                       <div key={item.product.id}>

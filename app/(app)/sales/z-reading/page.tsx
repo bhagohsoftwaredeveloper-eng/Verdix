@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { ZReadingPreview } from './z-reading-preview';
+import { TerminalSelector } from '@/components/TerminalSelector';
 
 type ZReadingData = {
   id: string;
@@ -49,17 +50,40 @@ type ZReadingData = {
 
 type PrinterFormat = '58mm' | '80mm';
 
+type BusinessSettings = {
+    businessName: string;
+    address: string;
+    contactNumber: string;
+    tin: string;
+};
+
 export default function ZReadingPage() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [terminal, setTerminal] = useState<string>('Counter 1');
+  const [terminal, setTerminal] = useState<string>('all');
   const [zReadings, setZReadings] = useState<ZReadingData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [printerFormat, setPrinterFormat] = useState<PrinterFormat>('80mm');
   const [selectedReading, setSelectedReading] = useState<ZReadingData | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
   const { toast } = useToast();
   const previewRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+        try {
+            const response = await fetch('/api/pos-settings');
+            const result = await response.json();
+            if (result.success) {
+                setBusinessSettings(result.data);
+            }
+        } catch (error) {
+            console.error('Error fetching POS settings:', error);
+        }
+    };
+    fetchSettings();
+  }, []);
 
   const fetchZReadings = async () => {
     if (!date) {
@@ -246,16 +270,11 @@ export default function ZReadingPage() {
             <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 Terminal
             </label>
-            <Select value={terminal} onValueChange={setTerminal}>
-                <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select terminal" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="Counter 1">Counter 1</SelectItem>
-                    <SelectItem value="Counter 2">Counter 2</SelectItem>
-                    <SelectItem value="all">All Terminals</SelectItem>
-                </SelectContent>
-            </Select>
+            <TerminalSelector 
+                terminalId={terminal} 
+                onTerminalChange={setTerminal} 
+                showAllOption={true}
+            />
         </div>
 
         <Button onClick={fetchZReadings} className="bg-white hover:bg-gray-100 text-black border border-gray-200 shadow-sm">
@@ -373,7 +392,11 @@ export default function ZReadingPage() {
              {/* Modal Body - Scrollable */}
              <div className="flex-1 overflow-auto bg-gray-50 p-4 flex justify-center">
                 <div ref={previewRef} className="bg-white shadow-sm h-fit">
-                    <ZReadingPreview data={selectedReading} printerFormat={printerFormat} />
+                    <ZReadingPreview 
+                        data={selectedReading} 
+                        printerFormat={printerFormat} 
+                        businessSettings={businessSettings}
+                    />
                 </div>
              </div>
              

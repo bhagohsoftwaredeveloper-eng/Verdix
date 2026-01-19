@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, memo } from 'react';
@@ -21,7 +20,7 @@ import { Banknote, Coins, CheckCircle2, AlertTriangle, Calculator, FileText, Arr
 interface EndShiftDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onShiftEnd: () => void;
+  onShiftEnd: (data: { actualCash: number; cashDifference: number; notes: string; cashDenominations: any[] }) => void;
   startingCash: number;
   cashSales: number;
 }
@@ -115,14 +114,16 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
 
   const handleEndShift = () => {
     // In a real app, you would save the end-of-shift report here.
-    console.log({
-        startingCash,
-        cashSales,
-        expectedCash,
-        countedCash,
-        variance,
+    onShiftEnd({
+        actualCash: countedCash,
+        cashDifference: variance,
+        notes: `End shift variance: ${variance}`,
+        cashDenominations: Object.entries(counts).map(([value, qty]) => ({
+             amount: parseFloat(value),
+             qty,
+             total: parseFloat(value) * qty
+        })).filter(d => d.qty > 0)
     });
-    onShiftEnd();
   };
   
   useEffect(() => {

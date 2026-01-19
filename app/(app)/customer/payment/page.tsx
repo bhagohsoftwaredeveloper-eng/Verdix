@@ -47,10 +47,18 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye } from 'lucide-react';
+import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { DateRange } from "react-day-picker";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 // --- Shared Types & Helpers ---
 
@@ -378,12 +386,21 @@ function PaymentHistory() {
 function StatementOfAccount() {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [selectedCustomer, setSelectedCustomer] = useState<string>('');
-    const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: undefined, to: undefined }); // Changed plain object to DateRange | undefined
     const [soaData, setSoaData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [openCustomer, setOpenCustomer] = useState(false); // State for Combobox
     const { toast } = useToast();
-    const printRef = useRef<HTMLDivElement>(null);
 
+    // Import components locally if possible, but since this is inside a function, we need to ensure imports are at top level.
+    // However, I will use the imports added at the top of the file in the next step or assume they are available if I edit the whole file. 
+    // Since this is a partial replace, I'll rely on the top-level imports being present (I need to add them).
+    // Actually, I should probably update the imports FIRST or do it in one go.
+    // Let's do the imports first in a separate replace call if needed, or simply assume I will add them.
+    // Wait, replace_file_content replaces a block. I should probably use multi_replace to handle imports and this component.
+
+    // Let's stick to replacing this component and then I'll add imports.
+    
     useEffect(() => {
         fetch('/api/customers').then(res => res.json()).then(res => {
             if(res.success) setCustomers(res.data);
@@ -391,7 +408,7 @@ function StatementOfAccount() {
     }, []);
 
     const generateSOA = async () => {
-        if (!selectedCustomer || !dateRange.from || !dateRange.to) {
+        if (!selectedCustomer || !dateRange?.from || !dateRange?.to) {
             toast({ variant: 'destructive', title: 'Missing Fields', description: 'Please select a customer and date range.' });
             return;
         }
@@ -445,27 +462,104 @@ function StatementOfAccount() {
     return (
         <div className="space-y-6">
             <Card>
-                <CardHeader><CardTitle>Generate Statement of Account</CardTitle></CardHeader>
+                <CardHeader>
+                    <CardTitle>Generate Statement of Account</CardTitle>
+                    <CardDescription>Select a customer and date range to view their statement.</CardDescription>
+                </CardHeader>
                 <CardContent>
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                        <div className="grid gap-2 flex-1">
-                            <label className="text-sm font-medium">Customer</label>
-                            <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                                <SelectTrigger><SelectValue placeholder="Select Customer" /></SelectTrigger>
-                                <SelectContent>
-                                    {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                    <div className="flex flex-col gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium">Customer</label>
+                                <Popover open={openCustomer} onOpenChange={setOpenCustomer}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCustomer}
+                                            className="w-full justify-between"
+                                        >
+                                            {selectedCustomer
+                                                ? customers.find((customer) => customer.id === selectedCustomer)?.name
+                                                : "Select customer..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[400px] p-0">
+                                        <Command>
+                                            <CommandInput placeholder="Search customer..." />
+                                            <CommandList>
+                                                <CommandEmpty>No customer found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {customers.map((customer) => (
+                                                        <CommandItem
+                                                            key={customer.id}
+                                                            value={customer.name}
+                                                            onSelect={() => {
+                                                                setSelectedCustomer(customer.id === selectedCustomer ? "" : customer.id);
+                                                                setOpenCustomer(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    selectedCustomer === customer.id ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {customer.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <div className="grid gap-2">
+                                 <label className="text-sm font-medium">Date Range</label>
+                                 <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            id="date"
+                                            variant={"outline"}
+                                            className={cn(
+                                            "w-full justify-start text-left font-normal",
+                                            !dateRange && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dateRange?.from ? (
+                                            dateRange.to ? (
+                                                <>
+                                                {format(dateRange.from, "LLL dd, y")} -{" "}
+                                                {format(dateRange.to, "LLL dd, y")}
+                                                </>
+                                            ) : (
+                                                format(dateRange.from, "LLL dd, y")
+                                            )
+                                            ) : (
+                                            <span>Pick a date</span>
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={dateRange?.from}
+                                            selected={dateRange}
+                                            onSelect={setDateRange}
+                                            numberOfMonths={2}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
                         </div>
-                        <div className="grid gap-2">
-                            <label className="text-sm font-medium">From Date</label>
-                             <Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-[240px] pl-3 text-left font-normal", !dateRange.from && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{dateRange.from ? format(dateRange.from, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dateRange.from} onSelect={(d) => setDateRange(prev => ({...prev, from: d}))} initialFocus /></PopoverContent></Popover>
+                        <div className="flex justify-end">
+                            <Button onClick={generateSOA} disabled={isLoading} className="w-full md:w-auto">
+                                {isLoading ? 'Generating...' : 'Generate Statement'}
+                            </Button>
                         </div>
-                        <div className="grid gap-2">
-                             <label className="text-sm font-medium">To Date</label>
-                             <Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-[240px] pl-3 text-left font-normal", !dateRange.to && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{dateRange.to ? format(dateRange.to, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dateRange.to} onSelect={(d) => setDateRange(prev => ({...prev, to: d}))} initialFocus /></PopoverContent></Popover>
-                        </div>
-                        <Button onClick={generateSOA} disabled={isLoading}>{isLoading ? 'Generating...' : 'Generate'}</Button>
                     </div>
                 </CardContent>
             </Card>
@@ -477,57 +571,59 @@ function StatementOfAccount() {
                         <Button variant="outline" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> Print SOA</Button>
                     </CardHeader>
                     <CardContent>
-                        <div id="soa-print-section" className="border p-8 rounded-md bg-white text-black">
-                            <div className="header">
-                                <h1 className="text-2xl font-bold">Statement of Account</h1>
-                                <p className="text-sm text-gray-500">Stock Pilot Inc.</p>
-                            </div>
-                            <div className="meta">
-                                <div>
-                                    <p><strong>Customer:</strong> {customers.find(c => c.id === selectedCustomer)?.name}</p>
-                                    <p><strong>Period:</strong> {format(new Date(soaData.period.from), 'PP')} - {format(new Date(soaData.period.to), 'PP')}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p><strong>Date Generated:</strong> {format(new Date(), 'PP')}</p>
+                        <div id="soa-print-section" className="border p-8 rounded-md bg-white text-black text-sm">
+                            <div className="header border-b pb-4 mb-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                         <h1 className="text-2xl font-bold uppercase tracking-wide">Statement of Account</h1>
+                                         <p className="text-muted-foreground mt-1">Stock Pilot Inc.</p>
+                                    </div>
+                                    <div className="text-right">
+                                         <h3 className="font-semibold text-lg">{customers.find(c => c.id === selectedCustomer)?.name}</h3>
+                                         <p className="text-sm text-gray-500">Statement Period: <br/>{format(new Date(soaData.period.from), 'MMM dd, yyyy')} - {format(new Date(soaData.period.to), 'MMM dd, yyyy')}</p>
+                                    </div>
                                 </div>
                             </div>
 
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Description</th>
-                                        <th>Ref</th>
-                                        <th className="text-right">Debit</th>
-                                        <th className="text-right">Credit</th>
-                                        <th className="text-right">Balance</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr className="bg-gray-50">
-                                        <td>-</td>
-                                        <td><strong>Beginning Balance</strong></td>
-                                        <td>-</td>
-                                        <td className="text-right">-</td>
-                                        <td className="text-right">-</td>
-                                        <td className="text-right font-bold">₱{Number(soaData.startingBalance).toFixed(2)}</td>
-                                    </tr>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted hover:bg-muted">
+                                        <TableHead className="w-[120px] font-bold text-black">Date</TableHead>
+                                        <TableHead className="font-bold text-black">Description</TableHead>
+                                        <TableHead className="w-[100px] font-bold text-black">Reference</TableHead>
+                                        <TableHead className="text-right font-bold text-black">Debit</TableHead>
+                                        <TableHead className="text-right font-bold text-black">Credit</TableHead>
+                                        <TableHead className="text-right font-bold text-black">Balance</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                                        <TableCell>-</TableCell>
+                                        <TableCell className="font-medium">Beginning Balance</TableCell>
+                                        <TableCell>-</TableCell>
+                                        <TableCell className="text-right">-</TableCell>
+                                        <TableCell className="text-right">-</TableCell>
+                                        <TableCell className="text-right font-bold">₱{Number(soaData.startingBalance).toFixed(2)}</TableCell>
+                                    </TableRow>
                                     {soaData.transactions.map((t: any, i: number) => (
-                                        <tr key={i}>
-                                            <td>{format(new Date(t.date), 'PP')}</td>
-                                            <td>{t.type}</td>
-                                            <td>{t.reference || t.id.substr(0,8)}</td>
-                                            <td className="text-right">{t.debit > 0 ? `₱${Number(t.debit).toFixed(2)}` : '-'}</td>
-                                            <td className="text-right">{t.credit > 0 ? `₱${Number(t.credit).toFixed(2)}` : '-'}</td>
-                                            <td className="text-right">₱{Number(t.runningBalance).toFixed(2)}</td>
-                                        </tr>
+                                        <TableRow key={i}>
+                                            <TableCell>{format(new Date(t.date), 'MMM dd, yyyy')}</TableCell>
+                                            <TableCell>{t.type}</TableCell>
+                                            <TableCell className="font-mono text-xs">{t.reference || t.id.substr(0,8)}</TableCell>
+                                            <TableCell className="text-right">{t.debit > 0 ? `₱${Number(t.debit).toFixed(2)}` : '-'}</TableCell>
+                                            <TableCell className="text-right">{t.credit > 0 ? `₱${Number(t.credit).toFixed(2)}` : '-'}</TableCell>
+                                            <TableCell className="text-right font-medium">₱{Number(t.runningBalance).toFixed(2)}</TableCell>
+                                        </TableRow>
                                     ))}
-                                    <tr className="total-row">
-                                        <td colSpan={5} className="text-right">Ending Balance</td>
-                                        <td className="text-right">₱{Number(soaData.endingBalance).toFixed(2)}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                                    <TableRow className="bg-muted/50 font-bold border-t-2 border-black/10 hover:bg-muted/50">
+                                        <TableCell colSpan={5} className="text-right text-base">Ending Balance</TableCell>
+                                        <TableCell className="text-right text-base text-primary">₱{Number(soaData.endingBalance).toFixed(2)}</TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                             <div className="mt-8 text-xs text-gray-400 text-center">
+                                Generated on {format(new Date(), 'PPpp')}
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

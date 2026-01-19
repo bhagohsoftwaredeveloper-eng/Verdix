@@ -25,6 +25,7 @@ import type { Sale } from '@/lib/types';
 import { format } from 'date-fns';
 import { Logo } from '@/components/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { TerminalSelector } from '@/components/TerminalSelector';
 
 interface RecentSalesDialogProps {
   isOpen: boolean;
@@ -102,6 +103,10 @@ function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) 
 }
 
 
+
+
+// ... (existing imports)
+
 export function RecentSalesDialog({
   isOpen,
   onOpenChange,
@@ -109,6 +114,7 @@ export function RecentSalesDialog({
   const [saleToPrint, setSaleToPrint] = useState<Sale | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [terminalId, setTerminalId] = useState<string>('all');
   
   useEffect(() => {
     const fetchRecentSales = async () => {
@@ -116,7 +122,12 @@ export function RecentSalesDialog({
       
       setIsLoading(true);
       try {
-        const response = await fetch('/api/pos/recent-sales');
+        const queryParams = new URLSearchParams();
+        if (terminalId && terminalId !== 'all') {
+            queryParams.append('terminalId', terminalId);
+        }
+        
+        const response = await fetch(`/api/pos/recent-sales?${queryParams.toString()}`);
         const result = await response.json();
         
         if (result.success) {
@@ -132,7 +143,7 @@ export function RecentSalesDialog({
     };
 
     fetchRecentSales();
-  }, [isOpen]);
+  }, [isOpen, terminalId]);
   
   const handlePrintReceipt = (sale: Sale) => {
     setSaleToPrint(sale);
@@ -157,10 +168,19 @@ export function RecentSalesDialog({
         ) : (
         <>
             <DialogHeader>
-            <DialogTitle>Recent Transactions</DialogTitle>
-            <DialogDescription>
-                A list of the 10 most recent sales.
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+                <div>
+                    <DialogTitle>Recent Transactions</DialogTitle>
+                    <DialogDescription>
+                        A list of the 20 most recent sales.
+                    </DialogDescription>
+                </div>
+                <TerminalSelector 
+                    terminalId={terminalId} 
+                    onTerminalChange={setTerminalId} 
+                    showAllOption={true} 
+                />
+            </div>
             </DialogHeader>
             <ScrollArea className="h-96">
             <Table>

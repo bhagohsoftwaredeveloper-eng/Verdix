@@ -3,7 +3,6 @@ import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
-    // 1. Fetch recent sales transactions
     const { searchParams } = new URL(request.url);
     const terminalId = searchParams.get('terminalId');
 

@@ -22,12 +22,20 @@ type ZReadingData = {
 
 type PrinterFormat = '58mm' | '80mm';
 
+type BusinessSettings = {
+  businessName: string;
+  address: string;
+  contactNumber: string;
+  tin: string;
+};
+
 interface ZReadingPreviewProps {
   data: ZReadingData;
   printerFormat: PrinterFormat;
+  businessSettings: BusinessSettings | null;
 }
 
-export function ZReadingPreview({ data, printerFormat }: ZReadingPreviewProps) {
+export function ZReadingPreview({ data, printerFormat, businessSettings }: ZReadingPreviewProps) {
   const is58mm = printerFormat === '58mm';
   
   // Tailwind doesn't support mm widths by default, but we can use style or closest px. 
@@ -48,8 +56,10 @@ export function ZReadingPreview({ data, printerFormat }: ZReadingPreviewProps) {
     <div className={`${widthClass} mx-auto bg-white text-black font-mono leading-tight p-2`} style={{ fontFamily: '"Courier New", Courier, monospace' }}>
       {/* Business Header */}
       <div className="text-center mb-4 uppercase">
-        <h1 className={`${headerSize} font-bold`}>BUSINESS NAME</h1>
-        <p className={fontSize}>Purok sto. Nino, Bunao Quezon City</p>
+        <h1 className={`${headerSize} font-bold`}>{businessSettings?.businessName || 'BUSINESS NAME'}</h1>
+        <p className={fontSize}>{businessSettings?.address || 'Address not set'}</p>
+        {businessSettings?.contactNumber && <p className={fontSize}>Tel: {businessSettings.contactNumber}</p>}
+        {businessSettings?.tin && <p className={fontSize}>TIN: {businessSettings.tin}</p>}
       </div>
 
       {/* Info Line */}
@@ -150,8 +160,8 @@ export function ZReadingPreview({ data, printerFormat }: ZReadingPreviewProps) {
       </div>
       
       <div className="mt-8 mb-4 text-center">
-        <div className={fontSize}>NenApps Business Software Provider</div>
-        <div className={fontSize}>Cebu City</div>
+        <div className={fontSize}>Bhagoh Business Software Provider</div>
+        <div className={fontSize}>Tagum City</div>
       </div>
       
       <DashedLine />

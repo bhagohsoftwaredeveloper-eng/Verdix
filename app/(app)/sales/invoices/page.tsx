@@ -203,7 +203,7 @@ function SalesInvoicePrintView({ order, onBack }: { order: Sale; onBack: () => v
   const displayDueDate = order.dueDate || order.date;
 
   return (
-    <Card>
+    <Card className="printable-area w-full">
       <CardHeader>
         <div className="flex justify-between items-start">
           <div>
