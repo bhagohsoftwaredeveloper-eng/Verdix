@@ -209,37 +209,37 @@ export default function SalesDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        {/* ... (existing CardHeader) */}
-        <CardHeader>
-          <CardTitle>Sales Log</CardTitle>
-          <CardDescription>
-            Detailed log of all point of sale transactions.
-          </CardDescription>
-          <div className="flex items-center justify-between gap-4 pt-4">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+        <div>
+           <h1 className="text-3xl font-bold tracking-tight text-foreground">Sales History</h1>
+           <p className="text-muted-foreground mt-1">
+             Detailed log of all point of sale transactions.
+           </p>
+        </div>
+      </div>
+
+       <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-3 top-[0.65rem] h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <Input
                 type="search"
-                placeholder="Search ID, customer, cashier..."
-                className="pl-8 sm:w-[300px]"
+                placeholder="Search ID, customer..."
+                className="pl-9 w-full sm:w-[280px] bg-background/50 border-input/50 focus:bg-background transition-all shadow-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2">
-              <TerminalSelector 
+             <TerminalSelector 
                 terminalId={terminal} 
                 onTerminalChange={setTerminal} 
                 showAllOption={true} 
-               />
-              <div className='w-2'></div>
-              <Popover>
+             />
+             <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant={"outline"}
                     className={cn(
-                      "w-[280px] justify-start text-left font-normal",
+                      "w-[240px] justify-start text-left font-normal bg-background/50 border-input/50 hover:bg-background transition-all",
                       !dateRange && "text-muted-foreground"
                     )}
                   >
@@ -258,7 +258,7 @@ export default function SalesDetailsPage() {
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
+                <PopoverContent className="w-auto p-0 glass-card" align="center">
                   <Calendar
                     initialFocus
                     mode="range"
@@ -269,65 +269,66 @@ export default function SalesDetailsPage() {
                   />
                 </PopoverContent>
               </Popover>
-              <Button variant="ghost" onClick={resetFilters} size="icon" className={(searchTerm || dateRange || terminal !== 'all') ? 'visible' : 'invisible'}>
+               <Button variant="ghost" onClick={resetFilters} size="icon" className={(searchTerm || dateRange || terminal !== 'all') ? 'visible text-muted-foreground hover:text-destructive' : 'invisible'}>
                 <X className="h-4 w-4" />
                 <span className="sr-only">Reset filters</span>
               </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+      </div>
+
+      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden">
+        <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Transaction ID</TableHead>
+            <TableHeader className="bg-muted/50">
+              <TableRow className="hover:bg-transparent border-b border-white/10">
+                <TableHead className="w-[120px]">Transaction ID</TableHead>
                 <TableHead>Date & Time</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Cashier</TableHead>
                 <TableHead>Terminal</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right w-[80px]">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredSales.length > 0 ? (
                 filteredSales.map((sale) => (
-                  <TableRow key={sale.posTransactionId}>
-                    <TableCell className="font-medium font-mono">
+                  <TableRow key={sale.posTransactionId} className="group hover:bg-muted/50 transition-colors">
+                    <TableCell className="font-medium font-mono text-primary">
                       {sale.posTransactionId}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-muted-foreground">
                       {format(new Date(sale.date), 'MMM d, yyyy h:mm a')}
                     </TableCell>
-                    <TableCell>{sale.customer?.name || 'Walk-in'}</TableCell>
-                    <TableCell>{sale.cashier || 'N/A'}</TableCell>
-                    <TableCell>{sale.terminal || 'N/A'}</TableCell>
+                    <TableCell className="font-medium">{sale.customer?.name || 'Walk-in'}</TableCell>
+                    <TableCell className="text-muted-foreground">{sale.cashier || 'N/A'}</TableCell>
+                    <TableCell className="text-muted-foreground">{sale.terminal || 'N/A'}</TableCell>
                     <TableCell>
                       <Badge 
-                        variant={
-                            sale.transactionType === 'void' ? 'destructive' : 
-                            sale.transactionType === 'return' ? 'secondary' : 'default' // Changed 'warning' to 'secondary' as warning might not exist in standard badge
-                        }
+                        variant="secondary"
+                        className={cn(
+                            "capitalize font-normal border",
+                            sale.transactionType === 'void' ? 'bg-destructive/10 text-destructive border-destructive/20' : 
+                            sale.transactionType === 'return' ? 'bg-orange-500/10 text-orange-600 border-orange-500/20' : 
+                            'bg-green-500/10 text-green-600 border-green-500/20'
+                        )}
                       >
-                        {sale.transactionType === 'sale' ? 'Paid' : 
-                         sale.transactionType === 'void' ? 'Voided' : 
-                         sale.transactionType === 'return' ? 'Returned' : sale.transactionType}
+                        {sale.transactionType === 'sale' ? 'Paid' : sale.transactionType}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="text-right font-mono font-medium">
                       ₱{sale.total.toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right">
-                         <Button variant="ghost" size="icon" onClick={() => handleViewDetail(sale)}>
-                            <Eye className="h-4 w-4" />
+                         <Button variant="ghost" size="icon" onClick={() => handleViewDetail(sale)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Eye className="h-4 w-4 text-muted-foreground hover:text-primary" />
                          </Button>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center h-24 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center h-32 text-muted-foreground">
                     No transactions found.
                   </TableCell>
                 </TableRow>
@@ -337,7 +338,7 @@ export default function SalesDetailsPage() {
 
           {/* Pagination Controls */}
           {!isLoading && sales.length > 0 && (
-              <div className="mt-4">
+              <div className="p-4 border-t border-border/50 bg-muted/20">
                   <Pagination>
                       <PaginationContent>
                           <PaginationItem>
@@ -363,35 +364,57 @@ export default function SalesDetailsPage() {
       </Card>
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-md">
-            <DialogHeader>
-                <DialogTitle>Transaction Details</DialogTitle>
-                <DialogDescription>ID: {selectedTx?.posTransactionId}</DialogDescription>
+        <DialogContent className="max-w-md glass-card border-none shadow-2xl">
+            <DialogHeader className="border-b border-border/50 pb-4">
+                <DialogTitle className="text-xl">Transaction Details</DialogTitle>
+                <DialogDescription className="font-mono text-primary">{selectedTx?.posTransactionId}</DialogDescription>
             </DialogHeader>
              {selectedTx && (
-                 <div className="space-y-4">
-                     <div className="grid grid-cols-2 gap-2 text-sm">
-                         <span className="text-muted-foreground">Date:</span>
-                         <span className="font-medium">{format(new Date(selectedTx.date), 'PPpp')}</span>
+                 <div className="space-y-6 pt-2">
+                     <div className="grid grid-cols-2 gap-y-4 text-sm">
+                         <div className="flex flex-col gap-1">
+                             <span className="text-xs text-muted-foreground uppercase tracking-wider">Date</span>
+                             <span className="font-medium">{format(new Date(selectedTx.date), 'PPpp')}</span>
+                         </div>
                          
-                         <span className="text-muted-foreground">Customer:</span>
-                         <span className="font-medium">{selectedTx.customer?.name || 'Walk-in'}</span>
+                         <div className="flex flex-col gap-1">
+                             <span className="text-xs text-muted-foreground uppercase tracking-wider">Customer</span>
+                             <span className="font-medium">{selectedTx.customer?.name || 'Walk-in'}</span>
+                         </div>
                          
-                         <span className="text-muted-foreground">Cashier:</span>
-                         <span className="font-medium">{selectedTx.cashier || 'N/A'}</span>
+                         <div className="flex flex-col gap-1">
+                             <span className="text-xs text-muted-foreground uppercase tracking-wider">Cashier</span>
+                             <span className="font-medium">{selectedTx.cashier || 'N/A'}</span>
+                         </div>
                          
-                         <span className="text-muted-foreground">Terminal:</span>
-                         <span className="font-medium">{selectedTx.terminal || 'N/A'}</span>
+                         <div className="flex flex-col gap-1">
+                             <span className="text-xs text-muted-foreground uppercase tracking-wider">Terminal</span>
+                             <span className="font-medium">{selectedTx.terminal || 'N/A'}</span>
+                         </div>
                          
-                         <span className="text-muted-foreground">Payment Method:</span>
-                         <span className="font-medium">{selectedTx.paymentMethod || 'N/A'}</span>
+                         <div className="flex flex-col gap-1">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wider">Payment</span>
+                            <span className="font-medium">{selectedTx.paymentMethod || 'N/A'}</span>
+                         </div>
                          
-                         <span className="text-muted-foreground">Status:</span>
-                         <span className="font-medium capitalize">{selectedTx.transactionType}</span>
+                         <div className="flex flex-col gap-1">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wider">Status</span>
+                             <Badge 
+                                variant="outline"
+                                className={cn(
+                                    "capitalize w-fit",
+                                    selectedTx.transactionType === 'void' ? 'border-destructive text-destructive' : 
+                                    selectedTx.transactionType === 'return' ? 'border-orange-500 text-orange-600' : 
+                                    'border-green-500 text-green-600'
+                                )}
+                              >
+                                {selectedTx.transactionType}
+                              </Badge>
+                         </div>
                      </div>
-                     <div className="border-t pt-4 flex justify-between items-center">
-                         <span className="font-semibold">Total Amount</span>
-                         <span className="font-bold text-lg">₱{selectedTx.total.toFixed(2)}</span>
+                     <div className="border-t border-border/50 pt-4 flex justify-between items-center bg-muted/30 -mx-6 px-6 -mb-2 py-4 rounded-b-lg">
+                         <span className="font-semibold text-muted-foreground">Total Amount</span>
+                         <span className="font-bold text-2xl text-primary">₱{selectedTx.total.toFixed(2)}</span>
                      </div>
                  </div>
              )}

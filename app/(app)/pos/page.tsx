@@ -40,6 +40,7 @@ import {
   ChevronRight,
   Trash2,
   Search,
+  ShoppingCart,
 } from 'lucide-react';
 import type { Product, Customer } from '@/lib/types';
 import Link from 'next/link';
@@ -786,242 +787,306 @@ export default function POSPage() {
 
   return (
     <>
-      <div className="flex h-screen w-screen bg-slate-50 text-slate-800 font-sans">
-        <div className="flex-1 flex flex-col relative">
+      <div className="flex h-screen w-screen bg-muted/30 font-sans overflow-hidden">
+        {/* Left Section: Main Transaction Area */}
+        <div className="flex-1 flex flex-col relative min-w-0">
           {showOverlay && (
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10" />
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-20 flex items-center justify-center p-8">
+                <div className="max-w-md text-center space-y-4 animate-fade-in">
+                    <h1 className="text-4xl font-bold tracking-tight text-foreground">POS Locked</h1>
+                    <p className="text-muted-foreground">Please log in and start a shift to continue.</p>
+                </div>
+            </div>
           )}
-          <div className="flex flex-col flex-1 p-4 gap-4">
-            {/* Header */}
-            <header className="flex justify-between items-start">
-              <div className="flex-1 flex justify-center items-center gap-2">
+          
+          {/* Header Bar */}
+          <header className="h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center px-4 gap-4 justify-between shrink-0 z-10">
+             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mask-gradient-x flex-1">
                 {headerActions.map(({ icon: Icon, label, fKey, action }) => (
-                  <Button key={label} variant="ghost" className="relative flex flex-col items-center h-auto gap-1 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-all duration-200 hover:scale-105" onClick={action}>
-                    <div className="p-2 bg-white border border-slate-200 rounded-md">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs">{label}</span>
-                    <span className="text-xs text-slate-400">{fKey}</span>
+                  <Button 
+                    key={label} 
+                    variant="ghost" 
+                    size="sm"
+                    className="flex flex-col gap-0.5 h-12 min-w-[4.5rem] px-2 hover:bg-muted/80 transition-all font-normal" 
+                    onClick={action}
+                  >
+                    <Icon className="w-4 h-4 mb-0.5" />
+                    <span className="text-[10px] leading-none font-medium">{label}</span>
+                    <span className="text-[9px] text-muted-foreground leading-none font-mono opacity-70">{fKey}</span>
                     {label === 'Hold Trans' && heldTransactions.length > 0 && (
-                      <span className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-xs text-white">
+                      <span className="absolute top-1 right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
                         {heldTransactions.length}
                       </span>
                     )}
                   </Button>
                 ))}
               </div>
-            </header>
+              
+              <div className="flex items-center gap-2 border-l pl-4 ml-2 shrink-0">
+                 <div className="text-right hidden sm:block">
+                    <div className="text-xs text-muted-foreground font-medium">{currentTerminalName || 'No Terminal'}</div>
+                    <div className="text-[10px] text-muted-foreground/70">{currentTime}</div>
+                 </div>
+                 <div className={`h-2 w-2 rounded-full ${shiftActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`} />
+              </div>
+          </header>
 
-            {/* Main Content */}
-            <div className="flex-1 bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col">
-              <div className="flex items-center p-2 border-b border-slate-200 gap-2">
-                <div className="relative flex-1">
+          {/* Product Entry & List */}
+          <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
+             
+             {/* Customer & Search Bar */}
+             <div className="flex gap-3 shrink-0 z-0">
+                <div className="relative flex-1 group">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
+                     <Search className="w-4 h-4" />
+                  </div>
                   <Input
                     type="text"
-                    placeholder="Scan Barcode or Enter Product SKU"
-                    className="bg-slate-50 border-slate-200 pr-10"
+                    placeholder="Scan Barcode or Enter Product SKU (Enter)"
+                    className="pl-9 h-12 text-lg bg-background shadow-sm border-muted-foreground/20 focus-visible:ring-primary/20"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAddItemBySKU(inputValue)}
+                    autoFocus
                   />
                   <ProductSearchDialog onSelectProduct={handleAddItem}>
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground"
+                      size="sm"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-2 text-muted-foreground hover:text-foreground"
                     >
-                      <Search className="h-4 w-4" />
-                      <span className="sr-only">Search Products</span>
+                      <span className="text-xs mr-1">Search</span>
+                      <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">F3</kbd>
                     </Button>
                   </ProductSearchDialog>
                 </div>
-                <Button variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200">QTY</Button>
-              </div>
-              {selectedCustomer && (
-                <div className="p-2 border-b bg-blue-50 text-blue-800 flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    <span className="font-medium">Customer: {selectedCustomer.name}</span>
-                  </div>
-                  {selectedCustomer.id !== 'walk-in' && (
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedCustomer(WALK_IN_CUSTOMER)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+
+                <div className="flex items-center gap-2 bg-background border border-muted-foreground/20 rounded-md px-3 h-12 shadow-sm min-w-[200px]">
+                    <User className="h-4 w-4 text-primary" />
+                    <div className="flex-1 overflow-hidden">
+                        <div className="text-xs text-muted-foreground">Customer</div>
+                        <div className="text-sm font-medium truncate">{selectedCustomer?.name || 'Walk-in'}</div>
+                    </div>
+                    {selectedCustomer?.id !== 'walk-in' && (
+                        <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1" onClick={() => setSelectedCustomer(WALK_IN_CUSTOMER)}>
+                            <X className="h-3 w-3" />
+                        </Button>
+                    )}
                 </div>
-              )}
-              <div className="flex-1 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-200">
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead className="text-slate-500">Description</TableHead>
-                      <TableHead className="text-right text-slate-500">Product price</TableHead>
-                      <TableHead className="text-center text-slate-500 w-32">Quantity</TableHead>
-                      <TableHead className="text-right text-slate-500">Total</TableHead>
-                      <TableHead className="text-right text-slate-500">Discount</TableHead>
-                      <TableHead className="text-right text-slate-500">Total Due</TableHead>
-                      <TableHead className="w-12"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((item) => (
-                      <TableRow key={item.id} className="border-slate-100" data-state={selectedItemId === item.id ? 'selected' : ''}>
-                        <TableCell>
-                          <input type="radio" name="selected-item" className="form-radio h-4 w-4 bg-slate-100 border-slate-300 text-blue-500 focus:ring-blue-500"
-                            checked={selectedItemId === item.id}
-                            onChange={() => setSelectedItemId(item.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium text-slate-700">{item.name}</TableCell>
-                        <TableCell className="text-right font-mono text-slate-700">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(item.price)}</TableCell>
-                        <TableCell className="text-center font-mono text-slate-700">
-                          <div className="flex items-center justify-center gap-2">
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity - 1)}><Minus className="h-4 w-4" /></Button>
-                            <span>{item.quantity}</span>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id, item.quantity + 1)}><Plus className="h-4 w-4" /></Button>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-slate-700">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(item.price * item.quantity)}</TableCell>
-                        <TableCell className="text-right font-mono text-slate-700">{item.discount.toFixed(2)}%</TableCell>
-                        <TableCell className="text-right font-mono text-slate-700">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(item.price * item.quantity * (1 - item.discount / 100))}</TableCell>
-                        <TableCell>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive/70 hover:text-destructive" onClick={() => removeItem(item.id)}><Trash2 className="h-4 w-4" /></Button>
-                        </TableCell>
+             </div>
+
+             {/* Items Table */}
+             <div className="flex-1 bg-background rounded-xl border shadow-sm flex flex-col overflow-hidden">
+                <div className="overflow-y-auto flex-1">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-muted/50 backdrop-blur z-10 shadow-sm">
+                      <TableRow className="hover:bg-transparent border-b-border/50">
+                        <TableHead className="w-10 pl-4"></TableHead>
+                        <TableHead className="w-[40%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</TableHead>
+                        <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Price</TableHead>
+                        <TableHead className="text-center w-32 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qty</TableHead>
+                        <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total</TableHead>
+                        <TableHead className="w-12"></TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {/* Summary Footer */}
-              <div className="p-4 border-t border-slate-200 bg-slate-50/50">
-                <div className="grid grid-cols-3 gap-x-8 gap-y-1 text-sm">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Sub total:</span>
-                    <span className="font-mono">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(subTotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Vat Sales:</span>
-                    <span className="font-mono">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(vatSales)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Vat-Exempt sales:</span>
-                    <span className="font-mono">₱0.00</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Sub discount:</span>
-                    <span className="font-mono">-₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(totalDiscount)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Vat amount:</span>
-                    <span className="font-mono">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(vatAmount)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Zero-Rated Sales:</span>
-                    <span className="font-mono">₱0.00</span>
-                  </div>
-                  <div className="font-bold flex justify-between text-slate-800">
-                    <span>Amount Due:</span>
-                    <span className="font-mono">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(totalDue)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Non-vat sales:</span>
-                    <span className="font-mono">₱0.00</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>No of Items:</span>
-                    <span className="font-mono">{numberOfItems}</span>
-                  </div>
+                    </TableHeader>
+                    <TableBody>
+                        {items.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={6} className="h-64 text-center">
+                                    <div className="flex flex-col items-center justify-center text-muted-foreground/40">
+                                        <ShoppingCart className="w-12 h-12 mb-2" />
+                                        <p className="text-lg font-medium">Cart is empty</p>
+                                        <p className="text-sm">Scan items or search to start sale</p>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            items.map((item) => (
+                                <TableRow 
+                                    key={item.id} 
+                                    className={`
+                                        cursor-pointer transition-colors border-b-border/40 last:border-0
+                                        ${selectedItemId === item.id ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/30'}
+                                    `}
+                                    onClick={() => setSelectedItemId(item.id)}
+                                >
+                                    <TableCell className="pl-4">
+                                        <div className={`w-2 h-2 rounded-full ${selectedItemId === item.id ? 'bg-primary' : 'bg-transparent border border-muted-foreground/30'}`} />
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-sm">{item.name}</span>
+                                            {item.discount > 0 && <span className="text-[10px] text-green-600 font-medium">Discount: {item.discount}%</span>}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono text-sm">
+                                        ₱{item.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell className="p-0">
+                                        <div className="flex items-center justify-center gap-1 h-full">
+                                            <Button 
+                                                size="icon" 
+                                                variant="ghost" 
+                                                className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted" 
+                                                onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, item.quantity - 1); }}
+                                            >
+                                                <Minus className="h-3 w-3" />
+                                            </Button>
+                                            <span className="w-8 text-center font-mono text-sm font-medium">{item.quantity}</span>
+                                            <Button 
+                                                size="icon" 
+                                                variant="ghost" 
+                                                className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted" 
+                                                onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, item.quantity + 1); }}
+                                            >
+                                                <Plus className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono font-medium">
+                                         ₱{(item.price * item.quantity * (1 - item.discount / 100)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Button 
+                                            size="icon" 
+                                            variant="ghost" 
+                                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors" 
+                                            onClick={(e) => { e.stopPropagation(); removeItem(item.id); }}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                  </Table>
                 </div>
-              </div>
+                
+                {/* Summary Strip */}
+                <div className="border-t bg-muted/20 p-3 grid grid-cols-4 gap-4 text-xs text-muted-foreground">
+                    <div>
+                        <span className="block opacity-70">Total Items</span>
+                        <span className="font-mono font-medium text-foreground">{numberOfItems}</span>
+                    </div>
+                    <div>
+                        <span className="block opacity-70">Subtotal</span>
+                         <span className="font-mono font-medium text-foreground">₱{subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div>
+                         <span className="block opacity-70">VAT Sales</span>
+                         <span className="font-mono font-medium text-foreground">₱{vatSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div>
+                        <span className="block opacity-70">VAT Amount</span>
+                        <span className="font-mono font-medium text-foreground">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                </div>
+             </div>
+             
+             {/* Footer Actions */}
+             <div className="grid grid-cols-8 gap-2 shrink-0 h-16">
+                {footerActions.map(({ icon: Icon, label, action }) => (
+                    <Button
+                        key={label}
+                        variant="secondary"
+                        onClick={action}
+                        className={`
+                            flex flex-col items-center justify-center gap-1 h-full text-xs font-medium border transition-all hover:-translate-y-0.5
+                            ${matteGreenButtons.includes(label) ? 'bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200' : ''}
+                            ${matteBlueButtons.includes(label) ? 'bg-sky-100 text-sky-800 border-sky-200 hover:bg-sky-200' : ''}
+                            ${matteYellowButtons.includes(label) ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200' : ''}
+                            ${mattePurpleButtons.includes(label) ? 'bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200' : ''}
+                            ${!matteGreenButtons.includes(label) && !matteBlueButtons.includes(label) && !matteYellowButtons.includes(label) && !mattePurpleButtons.includes(label) ? 'bg-background hover:bg-muted' : ''}
+                        `}
+                    >
+                        <Icon className="w-5 h-5 opacity-80" />
+                        <span className="leading-tight text-center px-1">{label}</span>
+                    </Button>
+                ))}
             </div>
 
-
-            {/* Footer actions */}
-            <footer className="grid grid-cols-9 gap-2">
-              {footerActions.map(({ icon: Icon, label, action }) => (
-                <Button
-                  key={label}
-                  variant="secondary"
-                  onClick={action}
-                  className={`flex flex-col h-auto gap-1 text-sm transition-colors duration-200 ${matteGreenButtons.includes(label)
-                    ? 'bg-green-600 text-green-50 hover:bg-green-700 border-green-700'
-                    : matteBlueButtons.includes(label)
-                      ? 'bg-blue-600 text-blue-50 hover:bg-blue-700 border-blue-700'
-                      : matteYellowButtons.includes(label)
-                        ? 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-yellow-600'
-                        : mattePurpleButtons.includes(label)
-                          ? 'bg-purple-600 text-purple-50 hover:bg-purple-700 border-purple-700'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200'
-                    }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  {label}
-                </Button>
-              ))}
-            </footer>
           </div>
         </div>
-        <div className="relative w-96 bg-white p-4 flex flex-col gap-4 border-l border-slate-200">
-          {showOverlay && (
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10" />
-          )}
-          <div className="text-center mb-2">
-            <div className="flex items-baseline justify-center gap-4">
-              <Link href="/dashboard" className="flex items-center gap-2">
-                <Logo className="size-7 text-primary" />
-                <span className="text-xl font-bold text-slate-800">BHAGOH</span>
-              </Link>
-              <div className="flex items-center gap-2 text-slate-500 text-lg">
-                <User className="w-5 h-5" />
-                <span>{currentUser?.displayName || 'Cashier'}</span>
-              </div>
+
+        {/* Right Section: Totals & Payments */}
+        <div className="w-96 bg-background border-l shadow-2xl z-20 flex flex-col h-full">
+            {/* Cashier Profile */}
+            <div className="p-6 border-b flex flex-col items-center gap-2 bg-muted/10">
+                 <Logo className="size-10 text-primary mb-2" />
+                 <div className="text-center">
+                    <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>
+                    <p className="text-xs text-muted-foreground mt-1 font-mono">{currentTerminalName}</p>
+                 </div>
             </div>
-            <div className="text-sm text-slate-500 mt-1">{currentTime}</div>
-            <div className="text-xs text-slate-400 mt-1 font-mono uppercase tracking-wider">{currentTerminalName || 'No Terminal'}</div>
-          </div>
-          <div className="p-4 rounded-lg bg-blue-50">
-            <div className="flex justify-end text-5xl font-bold text-cyan-600">
-              <span className="font-mono">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(totalDue)}</span>
+
+            {/* Big Total */}
+            <div className="flex-1 flex flex-col p-6 gap-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+                
+                <div className="space-y-2 text-center z-10">
+                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Total Amount Due</span>
+                    <div className="flex items-start justify-center text-7xl font-bold tracking-tighter text-primary">
+                        <span className="text-2xl mt-2 mr-1">₱</span>
+                        {totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </div>
+                </div>
+
+                <div className="flex-1 flex flex-col justify-center gap-3">
+                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest pl-1">Payment Method</p>
+                     <div className="grid grid-cols-2 gap-3">
+                        {paymentOptions.slice(0, 4).map((option) => (
+                            <Button
+                                key={option.value}
+                                variant="outline"
+                                onClick={() => handleOpenTender(option.label)}
+                                disabled={items.length === 0}
+                                className="h-16 flex flex-col items-center justify-center gap-1 border-muted-foreground/20 hover:border-primary hover:bg-primary/5 transition-all text-muted-foreground hover:text-primary"
+                            >
+                                <span className="font-semibold">{option.label}</span>
+                            </Button>
+                        ))}
+                     </div>
+                      <Button
+                        variant="outline"
+                         onClick={() => handleOpenTender('POINTS')}
+                         disabled={items.length === 0}
+                         className="h-12 border-muted-foreground/20 text-muted-foreground hover:text-primary"
+                      >
+                         Points / Other
+                      </Button>
+                </div>
             </div>
-          </div>
-          <div className="flex-1 flex flex-col gap-2">
-            <h3 className="text-lg font-semibold text-center mb-2 text-slate-700">Payment Method</h3>
-            <div className="bg-slate-50 rounded-lg p-4 flex-1 flex flex-col gap-2">
-              {paymentOptions.map((option) => (
-                <Button
-                  key={option.value}
-                  variant="outline"
-                  className="w-full justify-start text-base bg-white border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors duration-200"
-                  onClick={() => handleOpenTender(option.label)}
-                  disabled={items.length === 0}
+
+            {/* Tender Button */}
+            <div className="p-6 bg-muted/10 border-t">
+                <Button 
+                    size="lg" 
+                    className="w-full h-20 text-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-1 transition-all rounded-xl"
+                    onClick={() => handleOpenTender('CASH')}
+                    disabled={items.length === 0}
                 >
-                  {option.label}
+                    <span className="flex-1 text-left pl-4">TENDER</span>
+                    <div className="bg-white/20 rounded-lg p-2 mr-2">
+                        <ChevronRight className="w-8 h-8" />
+                    </div>
                 </Button>
-              ))}
             </div>
-          </div>
-          <div className="mt-auto">
-            <Button
-              className="w-full h-24 text-2xl font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200"
-              disabled={items.length === 0}
-              onClick={() => handleOpenTender('CASH')}
-            >
-              Tender
-              <ChevronRight className="ml-2 w-8 h-8" />
-            </Button>
-          </div>
         </div>
       </div>
 
       {!isPosLoggedIn && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center">
-          <PosLoginForm onLoginSuccess={handlePosLoginSuccess} />
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
+          <Card className="w-full max-w-md shadow-2xl border-none">
+             <CardContent className="p-0">
+                <PosLoginForm onLoginSuccess={handlePosLoginSuccess} />
+             </CardContent>
+          </Card>
         </div>
       )}
 
-      {isPosLoggedIn && !shiftActive && (
+       {isPosLoggedIn && !shiftActive && (
         <StartShiftDialog
           isOpen={isPosLoggedIn && !shiftActive}
           onShiftStart={handleStartShift}
@@ -1106,7 +1171,6 @@ export default function POSPage() {
       <PriceInquiryDialog isOpen={isPriceInquiryOpen} onOpenChange={setIsPriceInquiryOpen} />
       <ZReadingDialog isOpen={isZReadingOpen} onOpenChange={setIsZReadingOpen} />
       
-      {/* End Shift Report Dialog */}
       <XReadingDialog 
         isOpen={showEndShiftReport} 
         onOpenChange={setShowEndShiftReport}
@@ -1118,13 +1182,11 @@ export default function POSPage() {
         onOpenChange={setIsShutdownConfirmOpen}
         onConfirm={handleLogout}
       />
-      
-      <InsufficientStockDialog 
+       <InsufficientStockDialog 
         open={isInsufficientStockOpen} 
         onOpenChange={setIsInsufficientStockOpen}
         items={insufficientItems}
       />
-
     </>
   );
 }

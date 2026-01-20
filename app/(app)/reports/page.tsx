@@ -15,10 +15,7 @@ import {
 } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, XAxis, Pie, PieChart, Line, LineChart } from 'recharts';
 import type { ChartConfig } from '@/components/ui/chart';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
-import { Sale } from '@/lib/types';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 const salesChartConfig = {
   sales: {
@@ -62,45 +59,41 @@ const categoryChartConfig = {
 
 
 export default function ReportsPage() {
-  const firestore = useFirestore();
-  const salesCollection = useMemoFirebase(
-    () => (firestore ? collection(firestore, 'sales') : null),
-    [firestore]
-  );
-  const { data: sales } = useCollection<Sale>(salesCollection);
+  const [data, setData] = useState<{
+    salesByDay: any[];
+    topProducts: any[];
+    salesByCategory: any[];
+  }>({ salesByDay: [], topProducts: [], salesByCategory: [] });
+  const [loading, setLoading] = useState(true);
 
-  const { salesByDay, topProducts, salesByCategory } = useMemo(() => {
-    if (!sales) {
-        return { salesByDay: [], topProducts: [], salesByCategory: [] };
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/reports/stats');
+        const result = await res.json();
+        if (result.salesByDay) {
+           // Apply colors for category chart
+           const salesByCategoryWithColors = result.salesByCategory.map((item: any) => ({
+              ...item,
+              fill: `hsl(var(--chart-${Object.keys(categoryChartConfig).indexOf(item.name.toLowerCase()) + 1}))`
+           }));
+           
+           setData({
+               ...result,
+               salesByCategory: salesByCategoryWithColors
+           });
+        }
+      } catch (error) {
+        console.error("Failed to fetch reports data:", error);
+      } finally {
+        setLoading(false);
+      }
     }
-    
-    const salesByDayMap = sales.reduce((acc, sale) => {
-        const date = new Date(sale.invoiceDate || sale.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        acc.set(date, (acc.get(date) || 0) + sale.total);
-        return acc;
-    }, new Map<string, number>());
-    const salesByDay = Array.from(salesByDayMap.entries()).map(([date, sales]) => ({ date, sales })).slice(-7);
+    fetchData();
+  }, []);
 
-    const productSalesMap = sales.reduce((acc, sale) => {
-        sale.items.forEach(item => {
-            acc.set(item.product.name, (acc.get(item.product.name) || 0) + item.price * item.quantity);
-        });
-        return acc;
-    }, new Map<string, number>());
-    const topProducts = Array.from(productSalesMap.entries()).map(([name, sales]) => ({ name, sales })).sort((a,b) => b.sales - a.sales).slice(0, 5);
+  const { salesByDay, topProducts, salesByCategory } = data;
 
-
-    const categorySalesMap = sales.reduce((acc, sale) => {
-        sale.items.forEach(item => {
-            const category = item.product.category || 'Uncategorized';
-             acc.set(category, (acc.get(category) || 0) + item.price * item.quantity);
-        });
-        return acc;
-    }, new Map<string, number>());
-    const salesByCategory = Array.from(categorySalesMap.entries()).map(([name, value]) => ({ name, value, fill: `hsl(var(--chart-${Object.keys(categoryChartConfig).indexOf(name.toLowerCase()) + 1}))` }));
-
-    return { salesByDay, topProducts, salesByCategory };
-  }, [sales]);
 
 
   return (

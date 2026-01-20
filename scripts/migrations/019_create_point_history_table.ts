@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../src/lib/mysql';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '019_create_point_history_table',

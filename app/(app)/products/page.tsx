@@ -395,25 +395,35 @@ function ProductsContent() {
   }, [productTree, searchTerm, showLowStockOnly]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle>Products</CardTitle>
-            <CardDescription>
-              Manage your products and view their inventory status.
-              {showLowStockOnly && <Badge variant="destructive" className="ml-2">Low Stock Filter Active</Badge>}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+        <div>
+           <h1 className="text-3xl font-bold tracking-tight text-foreground">Products</h1>
+           <p className="text-muted-foreground mt-1">
+             Manage your inventory, pricing, and suppliers.
+             {showLowStockOnly && <Badge variant="destructive" className="ml-2 animate-pulse">Low Stock Filter Active</Badge>}
+           </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+            <div className="relative group">
+              <Search className="absolute left-3 top-[0.65rem] h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <Input
+                type="search"
+                placeholder="Search products..."
+                className="pl-9 w-full sm:w-[250px] bg-background/50 border-input/50 focus:bg-background transition-all shadow-sm"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="bg-background/50 backdrop-blur-sm">
                   <Settings className="mr-2 h-4 w-4" />
                   Manage
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-56 glass-card">
                 <DropdownMenuLabel>Product Settings</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => setTimeout(() => setIsBrandsOpen(true), 0)}>
@@ -430,6 +440,7 @@ function ProductsContent() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            
             <ManageBrandsDialog 
                 open={isBrandsOpen}
                 onOpenChange={setIsBrandsOpen}
@@ -460,22 +471,11 @@ function ProductsContent() {
               productOptions={productOptions}
               onOptionsRefresh={loadProductOptions}
             />
-          </div>
         </div>
-        <div className="pt-4">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search by name, SKU, brand, or category..."
-              className="pl-8 w-full sm:w-1/3"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+
+      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden">
+        <CardContent className="p-0">
         <TooltipProvider>
           <Table>
             <TableHeader>
@@ -574,6 +574,7 @@ function ProductsContent() {
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

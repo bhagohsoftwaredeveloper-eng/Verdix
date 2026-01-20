@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../src/lib/mysql';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '004_alter_conversion_factors_id_length',

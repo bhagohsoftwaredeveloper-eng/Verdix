@@ -23,7 +23,7 @@ interface AddSupplierMappingDialogProps {
   productId: string;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (data?: any) => void;
   editingMapping: SupplierProductMapping | null;
   suppliers: Supplier[];
   onRefreshSuppliers: () => void;

@@ -3,9 +3,9 @@ import { withTransaction } from '@/lib/mysql';
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const invoiceId = params.id;
+    const { id: invoiceId } = await params;
 
     try {
         return await withTransaction(async (connection: any) => {

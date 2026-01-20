@@ -8,7 +8,7 @@ async function main() {
         try {
             const columns = await query('SHOW COLUMNS FROM stock_movements');
             console.log('stock_movements columns:', JSON.stringify(columns, null, 2));
-        } catch (err) {
+        } catch (err: any) {
             if (err.code === 'ER_NO_SUCH_TABLE') {
                 console.log('stock_movements table does not exist.');
             } else {

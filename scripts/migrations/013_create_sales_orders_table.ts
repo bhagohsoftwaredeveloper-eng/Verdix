@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../src/lib/mysql';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '013_create_sales_orders_table',

@@ -4,74 +4,98 @@
 
 @layer base {
   :root {
-    --background: 225 100% 98%;
-    --foreground: 220 10% 20%;
+    /* Premium Slate/Indigo Palette - Light Mode */
+    --background: 210 40% 98%;      /* Soft white/blue-grey tint */
+    --foreground: 222 47% 11%;      /* Deep Slate for text */
+
     --card: 0 0% 100%;
-    --card-foreground: 220 10% 20%;
+    --card-foreground: 222 47% 11%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 220 10% 20%;
-    --primary: 250 80% 55%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 215 30% 94%;
-    --secondary-foreground: 215 20% 40%;
-    --muted: 215 30% 94%;
-    --muted-foreground: 220 10% 50%;
-    --accent: 250 80% 97%;
-    --accent-foreground: 250 80% 55%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 221 83% 53%;         /* Modern Bright Blue/Indigo */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
+
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 215 20% 90%;
-    --input: 215 20% 90%;
-    --ring: 250 80% 55%;
-    --chart-1: 250 80% 55%;
-    --chart-2: 170 70% 45%;
-    --chart-3: 40 90% 55%;
-    --chart-4: 350 85% 60%;
-    --chart-5: 280 80% 55%;
-    --radius: 0.5rem;
-    --sidebar-background: 240 10% 10%;
-    --sidebar-foreground: 210 20% 85%;
-    --sidebar-primary: 250 80% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.75rem;              /* Increased radius for modern feel */
+
+    --chart-1: 221 83% 53%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+
+    /* Sidebar - Deep Slate/Navy */
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 221 83% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 10% 20%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 240 10% 25%;
-    --sidebar-ring: 250 80% 60%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 221 83% 53%;
   }
 
   .dark {
-    --background: 240 10% 10%;
-    --foreground: 210 20% 88%;
-    --card: 240 10% 15%;
-    --card-foreground: 210 20% 88%;
-    --popover: 240 10% 15%;
-    --popover-foreground: 210 20% 88%;
-    --primary: 250 80% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 10% 25%;
-    --secondary-foreground: 210 20% 88%;
-    --muted: 240 10% 25%;
-    --muted-foreground: 215 20% 70%;
-    --accent: 240 10% 30%;
-    --accent-foreground: 250 80% 60%;
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 10% 25%;
-    --input: 240 10% 25%;
-    --ring: 250 80% 60%;
-    --chart-1: 250 80% 60%;
-    --chart-2: 170 70% 45%;
-    --chart-3: 40 90% 55%;
-    --chart-4: 350 85% 60%;
-    --chart-5: 280 80% 55%;
-    --sidebar-background: 240 10% 10%;
-    --sidebar-foreground: 210 20% 88%;
-    --sidebar-primary: 250 80% 60%;
+    /* Premium Dark Mode */
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 224.3 76.3% 48%;
+
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 224.3 76.3% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 10% 25%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 240 10% 25%;
-    --sidebar-ring: 250 80% 60%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 217 91% 60%;
   }
 }
 
@@ -84,19 +108,24 @@
   }
 }
 
+@layer utilities {
+  .glass {
+    @apply bg-white/70 dark:bg-black/50 backdrop-blur-lg border border-white/20 dark:border-white/10 shadow-sm;
+  }
+  
+  .glass-card {
+     @apply bg-card/60 backdrop-blur-sm border-border/50 shadow-sm;
+  }
+}
+
 @media print {
-  /* Hide everything by default */
   body {
     visibility: hidden;
   }
-
-  /* Show only the printable area and its children */
   .printable-area,
   .printable-area * {
     visibility: visible;
   }
-
-  /* Position the printable area at top-left of page */
   .printable-area {
     position: absolute;
     left: 0;
@@ -105,13 +134,9 @@
     margin: 0;
     padding: 0;
   }
-
-  /* Explicitly hide non-printable elements if needed */
   .non-printable {
     display: none !important;
   }
-
-  /* Ensure background colors are printed */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;

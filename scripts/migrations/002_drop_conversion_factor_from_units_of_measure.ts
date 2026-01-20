@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../src/lib/mysql';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '002_drop_conversion_factor_from_units_of_measure',

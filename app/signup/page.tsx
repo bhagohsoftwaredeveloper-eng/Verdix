@@ -41,17 +41,27 @@ export default function SignupPage() {
       setIsSubmitting(true);
       setError(null);
 
-      // Mock signup logic since Firebase is disconnected
       try {
-        // Simulate a delay
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const response = await fetch('/api/auth/signup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
 
-        // Set a mock session item in localStorage
-        localStorage.setItem('mock-user-session', JSON.stringify({ email: data.email, permissions: ['super_admin'] }));
-        router.push('/dashboard');
-      } catch (e) {
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || 'Signup failed');
+        }
+
+        // On success, redirect to login
+        router.push('/login');
+      } catch (e: any) {
         console.error(e);
-        setError('An unexpected error occurred. Please try again.');
+        setError(e.message || 'An unexpected error occurred. Please try again.');
+      } finally {
         setIsSubmitting(false);
       }
     };

@@ -3,8 +3,14 @@
 import { Product } from '@/lib/types';
 import { mockProducts } from '@/lib/data';
 
+export type Suggestion = {
+  productName: string;
+  suggestedRestockQuantity: number;
+  reasoning: string;
+};
+
 export type FormState = {
-  suggestions: string[] | null; // Mock type for restock suggestions
+  suggestions: Suggestion[] | null;
   error: string | null;
 };
 
@@ -22,17 +28,14 @@ export async function generateSuggestions(
   try {
     const products = mockProducts;
 
-    const salesDataString = products
-      .map(
-        (p: Product) =>
-          `Product: ${p.name}, Avg Daily Sales: ${p.avgDailySales}, Current Stock: ${p.stock}, Reorder Point: ${p.reorderPoint}`
-      )
-      .join('\n');
-
     // Mock restock suggestions based on products low on stock
-    const suggestions: string[] = products
+    const suggestions: Suggestion[] = products
       .filter((p: Product) => p.stock <= p.reorderPoint)
-      .map((p: Product) => `Restock ${p.name}: Current stock (${p.stock}) is below reorder point (${p.reorderPoint}). Consider ordering ${Math.max(50, p.avgDailySales * 30 - p.stock)} units.`);
+      .map((p: Product) => ({
+        productName: p.name,
+        suggestedRestockQuantity: Math.max(50, p.avgDailySales * 30 - p.stock),
+        reasoning: `Current stock (${p.stock}) is below reorder point (${p.reorderPoint}).`,
+      }));
 
     // Simulate delay
     await new Promise(resolve => setTimeout(resolve, 2000));

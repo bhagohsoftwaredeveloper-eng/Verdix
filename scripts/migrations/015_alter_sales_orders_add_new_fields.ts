@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../src/lib/mysql';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '015_alter_sales_orders_add_new_fields',

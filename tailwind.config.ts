@@ -1,31 +1,18 @@
-import type {Config} from 'tailwindcss';
+import type { Config } from 'tailwindcss';
 
 export default {
-  darkMode: ['class'],
-  content: [
+    darkMode: ['class'],
+    content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}', // Ensure app dir is included if not in src
   ],
   theme: {
   	extend: {
-  		backgroundImage: {
-  			'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-  			'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))'
-  		},
-  		fontFamily: {
-  			body: [
-  				'PT Sans',
-  				'sans-serif'
-  			],
-  			headline: [
-  				'PT Sans',
-  				'sans-serif'
-  			],
-  			code: [
-  				'monospace'
-  			]
-  		},
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+      },
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -99,11 +86,21 @@ export default {
   				to: {
   					height: '0'
   				}
-  			}
+  			},
+            'fade-in': {
+                from: { opacity: '0' },
+                to: { opacity: '1' }
+            },
+            'slide-in-from-right': {
+                from: { transform: 'translateX(100%)' },
+                to: { transform: 'translateX(0)' }
+            }
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+            'fade-in': 'fade-in 0.3s ease-in-out',
+            'slide-in': 'slide-in-from-right 0.4s ease-out'
   		}
   	}
   },

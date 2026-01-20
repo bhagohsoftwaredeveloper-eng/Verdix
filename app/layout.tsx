@@ -7,6 +7,10 @@ export const metadata = {
   description: 'Point of Sales + Inventory Management',
 };
 
+// import { Inter } from 'next/font/google';
+// const inter = Inter({ subsets: ['latin'] });
+const inter = { className: 'font-sans' };
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -14,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning>
+      <body className={`${inter.className} antialiased`} suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

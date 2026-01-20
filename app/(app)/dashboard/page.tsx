@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -22,12 +21,13 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
-import { Package, ShoppingCart, AlertCircle, Boxes } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { Package, ShoppingCart, AlertCircle, Boxes, TrendingUp, DollarSign } from 'lucide-react';
 import type { ChartConfig } from '@/components/ui/chart';
 import { Product, Sale } from '@/lib/types';
 import { mockProducts, mockSales } from '@/lib/data';
 import { useMemo } from 'react';
+import { Badge } from '@/components/ui/badge';
 
 const chartConfig = {
   sales: {
@@ -37,7 +37,7 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 function CurrencyIcon({ className }: { className?: string }) {
-    return <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" className={className}><path fill="currentColor" d="M10 18v-4H6.816c-.422 0-.645-.24-.868-.617c-.223-.377-.28-.702-.28-1.383V7H4V5h4v4h3.184c.422 0 .645.24.868.617c.223.377.28.702.28 1.383v.831c0 .68-.057 1.006-.28 1.383c-.223.377-.446.617-.868.617H12v4zm2-6.831c0-.491.062-.83.184-1.018c.123-.188.31-.35.564-.515c.254-.166.52-.28.802-.344V7h2V5h-4v3.831c.491.062.83.184 1.018.366c.188.182.35.436.515.762c.166.326.28.675.344 1.047h2v2h-2c-.062.372-.184.72-.366 1.047c-.326-.182-.58-.436-.762-.762c-.182-.326-.304-.675-.366-1.047z"/></svg>
+    return <DollarSign className={className} />
 }
 
 export default function DashboardPage() {
@@ -70,66 +70,105 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 animate-fade-in p-1">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Overview of your business performance.</p>
+        </div>
+        <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground bg-muted/50 px-3 py-1 rounded-full border">
+                Last updated: {new Date().toLocaleTimeString()}
+            </span>
+        </div>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
+        <Card className="glass-card overflow-hidden relative group hover:shadow-md transition-all duration-300 border-primary/10">
+          <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <CurrencyIcon className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+            <div className="p-2 bg-primary/10 rounded-full text-primary">
+                <CurrencyIcon className="w-4 h-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               ₱{totalRevenue.toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+            <div className="flex items-center text-xs text-green-600 mt-1">
+                <TrendingUp className="w-3 h-3 mr-1" />
+                <span>+20.1% from last month</span>
+            </div>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="glass-card overflow-hidden relative group hover:shadow-md transition-all duration-300 border-blue-500/10">
+           <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Sales</CardTitle>
-            <ShoppingCart className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Sales</CardTitle>
+            <div className="p-2 bg-blue-500/10 rounded-full text-blue-500">
+             <ShoppingCart className="w-4 h-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+{totalSales}</div>
-            <p className="text-xs text-muted-foreground">+180.1% from last month</p>
+            <div className="flex items-center text-xs text-green-600 mt-1">
+                <TrendingUp className="w-3 h-3 mr-1" />
+                <span>+180.1% from last month</span>
+            </div>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="glass-card overflow-hidden relative group hover:shadow-md transition-all duration-300 border-purple-500/10">
+           <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Products Sold</CardTitle>
-            <Package className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Products Sold</CardTitle>
+            <div className="p-2 bg-purple-500/10 rounded-full text-purple-500">
+                <Package className="w-4 h-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+{productsSold}</div>
-            <p className="text-xs text-muted-foreground">+19% from last month</p>
+            <div className="flex items-center text-xs text-green-600 mt-1">
+                <TrendingUp className="w-3 h-3 mr-1" />
+                <span>+19% from last month</span>
+            </div>
           </CardContent>
         </Card>
-         <Card>
+
+         <Card className="glass-card overflow-hidden relative group hover:shadow-md transition-all duration-300 border-indigo-500/10">
+           <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Boxes className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Items</CardTitle>
+            <div className="p-2 bg-indigo-500/10 rounded-full text-indigo-500">
+                <Boxes className="w-4 h-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalItems}</div>
-            <p className="text-xs text-muted-foreground">Unique products in inventory</p>
+            <p className="text-xs text-muted-foreground mt-1">Unique products in inventory</p>
           </CardContent>
         </Card>
-        <Link href="/inventory?filter=low-stock" className="block transition-transform hover:scale-105">
-          <Card className="h-full">
+
+        <Link href="/inventory?filter=low-stock" className="block h-full">
+          <Card className="h-full glass-card overflow-hidden relative group hover:shadow-md transition-all duration-300 border-destructive/20 bg-destructive/5 hover:bg-destructive/10 cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-              <AlertCircle className="w-4 h-4 text-destructive" />
+              <CardTitle className="text-sm font-medium text-destructive">Low Stock</CardTitle>
+               <div className="p-2 bg-destructive/10 rounded-full text-destructive group-hover:scale-110 transition-transform">
+                <AlertCircle className="w-4 h-4" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{lowStockItems}</div>
-              <p className="text-xs text-muted-foreground">Items needing attention</p>
+              <div className="text-2xl font-bold text-destructive">{lowStockItems}</div>
+              <p className="text-xs text-destructive/80 mt-1 font-medium">Items Need Attention</p>
             </CardContent>
           </Card>
         </Link>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="lg:col-span-4">
+        <Card className="lg:col-span-4 glass-card border-none shadow-sm">
           <CardHeader>
             <CardTitle>Sales Overview</CardTitle>
             <CardDescription>
@@ -139,53 +178,71 @@ export default function DashboardPage() {
           <CardContent className="pl-2">
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
               <BarChart accessibilityLayer data={salesByDay}>
-                <CartesianGrid vertical={false} />
+                <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
                 <XAxis
                   dataKey="date"
                   tickLine={false}
                   tickMargin={10}
                   axisLine={false}
                   tickFormatter={(value) => value.slice(0, 6)}
+                  className="text-muted-foreground text-xs"
                 />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent indicator="dot" />}
+                 <ChartTooltip
+                  cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  content={<ChartTooltipContent indicator="dot" className="bg-background/90 backdrop-blur border-border/50" />}
                 />
-                <Bar dataKey="sales" fill="var(--color-sales)" radius={8} />
+                <Bar 
+                    dataKey="sales" 
+                    fill="hsl(var(--primary))" 
+                    radius={[4, 4, 0, 0]}
+                    className="hover:opacity-90 transition-opacity"
+                />
               </BarChart>
             </ChartContainer>
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-3">
+        <Card className="lg:col-span-3 glass-card border-none shadow-sm">
           <CardHeader>
-            <CardTitle>Recent Sales</CardTitle>
-            <CardDescription>
-              You made {sales?.length || 0} sales this month.
-            </CardDescription>
+            <div className="flex items-center justify-between">
+                <div>
+                     <CardTitle>Recent Sales</CardTitle>
+                    <CardDescription>
+                    You made {sales?.length || 0} sales this month.
+                    </CardDescription>
+                </div>
+                <Link href="/sales" className="text-sm text-primary hover:underline">View All</Link>
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableHead>Customer</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sales?.slice(0, 5).map((sale) => (
-                  <TableRow key={sale.id}>
+                {sales?.slice(0, 6).map((sale) => (
+                  <TableRow key={sale.id} className="cursor-pointer hover:bg-muted/50 transition-colors">
                     <TableCell>
-                      <div className="font-medium">{sale.customer.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {sale.customer.contactNumber}
+                      <div className="font-medium text-foreground">{sale.customer.name || 'Walk-in Customer'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(sale.date || Date.now()).toLocaleDateString()}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right font-medium">
                       ₱{sale.total.toFixed(2)}
                     </TableCell>
                   </TableRow>
                 ))}
+                {(!sales || sales.length === 0) && (
+                    <TableRow>
+                        <TableCell colSpan={2} className="text-center text-muted-foreground h-24">
+                            No recent sales found.
+                        </TableCell>
+                    </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>

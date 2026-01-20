@@ -1,5 +1,5 @@
 
-import { query, closePool } from './src/lib/mysql';
+import { query, closePool } from './lib/mysql';
 import fs from 'fs';
 import path from 'path';
 

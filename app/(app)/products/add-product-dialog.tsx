@@ -219,7 +219,7 @@ export function AddProductDialog({
 
       // Initialize default price level if form is empty
       const systemPriceLevels = externalProductOptions.priceLevels || [];
-      const currentPriceLevels = form.getValues('priceLevels');
+      const currentPriceLevels = form.getValues('priceLevels') || [];
       
       if (currentPriceLevels.length === 0 && systemPriceLevels.length > 0) {
           // Find default level or take first

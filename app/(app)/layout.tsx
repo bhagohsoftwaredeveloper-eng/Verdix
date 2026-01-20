@@ -15,6 +15,8 @@ import {
   SidebarMenuButton,
   SidebarMenuSub,
   SidebarMenuSubButton,
+  SidebarGroup,
+  SidebarGroupLabel,
   SidebarInset,
   SidebarFooter,
 } from '@/components/ui/sidebar';
@@ -185,168 +187,188 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <Sidebar className="non-printable" collapsible="icon">
-        <SidebarHeader>
-          <div className="flex items-center gap-2">
-            <Logo className="size-7 text-primary" />
-            <h1 className="text-xl font-semibold font-headline text-sidebar-foreground group-data-[collapsible=icon]:hidden">StockPilot</h1>
+      <Sidebar className="non-printable border-r-0" collapsible="icon">
+        <SidebarHeader className="h-16 border-b border-sidebar-border/50 sticky top-0 bg-sidebar/95 backdrop-blur z-10 px-6 justify-center">
+          <div className="flex items-center gap-3 transition-all duration-200 group-data-[collapsible=icon]:justify-center">
+            <div className="p-1.5 bg-primary/10 rounded-lg group-data-[collapsible=icon]:p-1">
+              <Logo className="size-6 text-primary" />
+            </div>
+            <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+               <h1 className="text-lg font-bold font-headline tracking-tight text-sidebar-foreground">StockPilot</h1>
+               <span className="text-[10px] uppercase font-medium text-muted-foreground tracking-wider">Enterprise</span>
+            </div>
           </div>
         </SidebarHeader>
-        <SidebarContent>
-          <SidebarMenu>
-            {filteredNavItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <Link href={item.href}>
-                  <SidebarMenuButton
-                    isActive={pathname === item.href}
-                    tooltip={{ children: item.label }}
-                  >
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            ))}
-
-            {hasPermission('manage_inventory') && (
-              <SidebarMenuItem>
-                <Collapsible defaultOpen={isInventoryPage}>
-                  <CollapsibleTrigger asChild>
+        <SidebarContent className="px-2 py-4 gap-4 overflow-y-auto flex-1">
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 px-4 mb-2">Platform</SidebarGroupLabel>
+            <SidebarMenu>
+              {filteredNavItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <Link href={item.href}>
                     <SidebarMenuButton
-                      isActive={isInventoryPage}
-                      tooltip={{ children: "Inventory" }}
-                      className="justify-between group group-data-[collapsible=icon]:[&>span:last-child]:block group-data-[collapsible=icon]:[&>span:last-child]:block"
+                      isActive={pathname === item.href}
+                      tooltip={{ children: item.label }}
+                      className="gap-3 px-4 font-medium"
                     >
-                      <div className="flex items-center gap-2">
-                        <Warehouse className="size-4" />
-                        <span>Inventory</span>
-                      </div>
-                      <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180 group-data-[state=closed]:rotate-90" />
+                      <item.icon className="bg-transparent" />
+                      <span>{item.label}</span>
                     </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {inventoryNavItems.map((item) => (
-                        <SidebarMenuItem key={item.href}>
-                          <SidebarMenuSubButton asChild isActive={pathname === item.href}>
-                            <Link href={item.href}>{item.label}</Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </Collapsible>
-              </SidebarMenuItem>
-            )}
+                  </Link>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
 
-            {hasPermission('view_sales') && (
-              <SidebarMenuItem>
-                <Collapsible defaultOpen={isSalesPage}>
-                  <CollapsibleTrigger asChild>
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 px-4 mb-2">Operations</SidebarGroupLabel>
+            <SidebarMenu>
+              {hasPermission('manage_inventory') && (
+                <SidebarMenuItem>
+                  <Collapsible defaultOpen={isInventoryPage} className="group/collapsible">
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isInventoryPage}
+                        tooltip={{ children: "Inventory" }}
+                        className="justify-between gap-3 px-4 font-medium"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Warehouse className="size-4" />
+                          <span>Inventory</span>
+                        </div>
+                        <ChevronDown className="size-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-4 border-l border-sidebar-border/50 pl-2 my-1 space-y-0.5">
+                        {inventoryNavItems.map((item) => (
+                          <SidebarMenuItem key={item.href}>
+                            <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-8">
+                              <Link href={item.href}>{item.label}</Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarMenuItem>
+              )}
+
+              {hasPermission('view_sales') && (
+                <SidebarMenuItem>
+                  <Collapsible defaultOpen={isSalesPage} className="group/collapsible">
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isSalesPage}
+                        tooltip={{ children: "Sales" }}
+                        className="justify-between gap-3 px-4 font-medium"
+                      >
+                         <div className="flex items-center gap-3">
+                          <Receipt className="size-4" />
+                          <span>Sales</span>
+                        </div>
+                        <ChevronDown className="size-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-4 border-l border-sidebar-border/50 pl-2 my-1 space-y-0.5">
+                        {salesNavItems.map((item) => (
+                          <SidebarMenuItem key={item.href}>
+                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-8">
+                              <Link href={item.href}>{item.label}</Link>
+                             </SidebarMenuSubButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarMenuItem>
+              )}
+
+               {hasPermission('view_sales') && (
+                <SidebarMenuItem>
+                  <Collapsible defaultOpen={isCustomerPage} className="group/collapsible">
+                     <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isCustomerPage}
+                        tooltip={{ children: "Customers" }}
+                        className="justify-between gap-3 px-4 font-medium"
+                      >
+                        <div className="flex items-center gap-3">
+                          <UserIcon className="size-4" />
+                          <span>Customers</span>
+                        </div>
+                        <ChevronDown className="size-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                     <CollapsibleContent>
+                      <SidebarMenuSub className="ml-4 border-l border-sidebar-border/50 pl-2 my-1 space-y-0.5">
+                        {customerNavItems.map((item) => (
+                           <SidebarMenuItem key={item.href}>
+                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-8">
+                              <Link href={item.href}>{item.label}</Link>
+                             </SidebarMenuSubButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarMenuItem>
+              )}
+
+               {hasPermission('manage_purchases') && (
+                <SidebarMenuItem>
+                  <Collapsible defaultOpen={true} className="group/collapsible">
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip={{ children: "Suppliers" }}
+                         className="justify-between gap-3 px-4 font-medium"
+                      >
+                         <div className="flex items-center gap-3">
+                          <Users className="size-4" />
+                          <span>Suppliers</span>
+                        </div>
+                        <ChevronDown className="size-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-4 border-l border-sidebar-border/50 pl-2 my-1 space-y-0.5">
+                         {suppliersNavItems.map((item) => (
+                          <SidebarMenuItem key={item.href}>
+                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-8">
+                              <Link href={item.href}>{item.label}</Link>
+                             </SidebarMenuSubButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          </SidebarGroup>
+
+           <SidebarGroup className="mt-auto">
+             <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 px-4 mb-2">Management</SidebarGroupLabel>
+            <SidebarMenu>
+              {filteredOtherNavItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <Link href={item.href}>
                     <SidebarMenuButton
-                      isActive={isSalesPage}
-                      tooltip={{ children: "Sales" }}
-                      className="justify-between group group-data-[collapsible=icon]:[&>span:last-child]:block"
+                      isActive={pathname === item.href}
+                      tooltip={{ children: item.label }}
+                       className="gap-3 px-4 font-medium"
                     >
-                      <div className="flex items-center gap-2">
-                        <Receipt className="size-4" />
-                        <span>Sales</span>
-                      </div>
-                      <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180 group-data-[state=closed]:rotate-90" />
+                      <item.icon />
+                      <span>{item.label}</span>
                     </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {salesNavItems.map((item) => (
-                        <SidebarMenuItem key={item.href}>
-                          <SidebarMenuSubButton asChild isActive={pathname === item.href}>
-                            <Link href={item.href}>{item.label}</Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </Collapsible>
-              </SidebarMenuItem>
-            )}
-
-            {hasPermission('view_sales') && (
-              <SidebarMenuItem>
-                <Collapsible defaultOpen={isCustomerPage}>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      isActive={isCustomerPage}
-                      tooltip={{ children: "Customer" }}
-                      className="justify-between group group-data-[collapsible=icon]:[&>span:last-child]:block"
-                    >
-                      <div className="flex items-center gap-2">
-                        <UserIcon className="size-4" />
-                        <span>Customer</span>
-                      </div>
-                      <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180 group-data-[state=closed]:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {customerNavItems.map((item) => (
-                        <SidebarMenuItem key={item.href}>
-                          <SidebarMenuSubButton asChild isActive={pathname === item.href}>
-                            <Link href={item.href}>{item.label}</Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </Collapsible>
-              </SidebarMenuItem>
-            )}
-
-            {hasPermission('manage_purchases') && (
-              <SidebarMenuItem>
-                <Collapsible defaultOpen={true}>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip={{ children: "Suppliers" }}
-                      className="justify-between group group-data-[collapsible=icon]:[&>span:last-child]:block"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Users className="size-4" />
-                        <span>Suppliers</span>
-                      </div>
-                      <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180 group-data-[state=closed]:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {suppliersNavItems.map((item) => (
-                        <SidebarMenuItem key={item.href}>
-                          <SidebarMenuSubButton asChild isActive={pathname === item.href}>
-                            <Link href={item.href}>{item.label}</Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </Collapsible>
-              </SidebarMenuItem>
-            )}
-
-            {filteredOtherNavItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <Link href={item.href}>
-                  <SidebarMenuButton
-                    isActive={pathname === item.href}
-                    tooltip={{ children: item.label }}
-                  >
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
+                  </Link>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter>
+        <SidebarFooter className="sticky bottom-0 bg-sidebar/95 backdrop-blur border-t border-sidebar-border/50 mt-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm text-sidebar-foreground outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2">
@@ -411,9 +433,9 @@ function NotificationsBell() {
         try {
             // Note: In a real app we might want a lighter weight endpoint for this check
             const products = await getProducts(1000, 0); 
-            const lowStock = products.filter(p => p.stock < p.reorderPoint);
+            const lowStock = products.filter((p: Product) => p.stock < p.reorderPoint);
             
-            const newNotifications = lowStock.map(p => ({
+            const newNotifications = lowStock.map((p: Product) => ({
                 id: `low-stock-${p.id}`,
                 title: 'Low Stock Alert',
                 message: `${p.name} is below reorder point (${p.stock}/${p.reorderPoint})`,

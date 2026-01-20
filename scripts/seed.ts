@@ -6,7 +6,7 @@ console.log('DB_PASSWORD:', process.env.DB_PASSWORD);
 console.log('DB_HOST:', process.env.DB_HOST);
 console.log('DB_PORT:', process.env.DB_PORT);
 
-import { query } from '../src/lib/mysql';
+import { query } from '../lib/mysql';
 
 async function createTables() {
   try {

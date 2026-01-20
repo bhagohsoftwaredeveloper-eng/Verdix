@@ -1,5 +1,5 @@
 
-import { query } from '../src/lib/mysql';
+import { query } from '../lib/mysql';
 import dotenv from 'dotenv';
 dotenv.config();
 
