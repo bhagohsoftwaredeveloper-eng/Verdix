@@ -30,8 +30,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PlusCircle, Pencil, Trash2, Loader2, UsersIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-function SalesPersonDialog({ salesPerson, onSave, children, disabled }: { salesPerson?: SalesPerson, onSave: (name: string, contactNumber?: string) => Promise<void>, children: React.ReactNode, disabled?: boolean }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function SalesPersonDialog({ salesPerson, onSave, children, disabled, open, onOpenChange }: { salesPerson?: SalesPerson, onSave: (name: string, contactNumber?: string) => Promise<void>, children: React.ReactNode, disabled?: boolean, open?: boolean, onOpenChange?: (open: boolean) => void }) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
   const [name, setName] = useState(salesPerson?.name || '');
   const [contactNumber, setContactNumber] = useState(salesPerson?.contactNumber || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -220,13 +223,18 @@ function SalesPersonSkeleton() {
   );
 }
 
-export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: React.ReactNode, onChange?: () => void }) {
+export function ManageSalesPersonsDialog({ trigger, onChange, open, onOpenChange }: { trigger?: React.ReactNode, onChange?: () => void, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newContact, setNewContact] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const { toast } = useToast();
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const fetchSalesPersons = async () => {
     try {
@@ -252,8 +260,10 @@ export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: Reac
   };
 
   useEffect(() => {
-    fetchSalesPersons();
-  }, []);
+    if (isOpen) {
+      fetchSalesPersons();
+    }
+  }, [isOpen]);
 
   const handleAddSalesPerson = async () => {
     if (!newName.trim()) {
@@ -312,18 +322,13 @@ export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: Reac
     onChange?.(); // Notify parent component
   };
 
-  const dialogTrigger = trigger || (
-    <Button variant="outline">
-      <UsersIcon className="mr-2 h-4 w-4" />
-      Manage Sales Persons
-    </Button>
-  );
-
   return (
-     <Dialog>
-      <DialogTrigger asChild>
-        {dialogTrigger}
-      </DialogTrigger>
+     <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {trigger && (
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Manage Sales Persons</DialogTitle>

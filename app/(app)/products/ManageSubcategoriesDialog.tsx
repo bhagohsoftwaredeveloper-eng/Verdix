@@ -179,6 +179,7 @@ function SubcategorySkeleton() {
 export function ManageSubcategoriesDialog({ trigger, onSubcategoryAdded }: { trigger?: React.ReactNode; onSubcategoryAdded?: () => void }) {
   const [subcategories, setSubcategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const loadSubcategories = async () => {
     const subs = await getSubcategories();
@@ -214,7 +215,7 @@ export function ManageSubcategoriesDialog({ trigger, onSubcategoryAdded }: { tri
   );
 
   return (
-     <Dialog>
+     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {dialogTrigger}
       </DialogTrigger>

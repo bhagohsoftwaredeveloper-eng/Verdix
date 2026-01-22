@@ -448,7 +448,15 @@ export default function PosSetupPage() {
             <CardDescription className="mb-4">
               Manage accepted payment methods
             </CardDescription>
-            <ManagePaymentMethodsDialog />
+            <div className="flex justify-end">
+              <ManagePaymentMethodsDialog 
+                trigger={
+                  <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
+                    <span className="text-xs font-medium">Manage</span>
+                  </Button>
+                }
+              />
+            </div>
           </CardContent>
         </Card>
       </div>

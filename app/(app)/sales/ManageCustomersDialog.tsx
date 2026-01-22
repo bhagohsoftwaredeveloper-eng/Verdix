@@ -144,6 +144,7 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
   const { customers, loading, error, refetch } = useCustomers();
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleAddCustomer = async (
     customerId: string,
@@ -298,7 +299,7 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
 
   return (
     <>
-      <Dialog>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>{dialogTrigger}</DialogTrigger>
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>

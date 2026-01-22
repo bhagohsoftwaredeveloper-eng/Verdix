@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -33,7 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2 } from 'lucide-react';
+import { Loader2, PlusCircle } from 'lucide-react';
 
 import { useToast } from '@/hooks/use-toast';
 import { Customer, SalesPerson } from '@/lib/types';
@@ -71,8 +72,8 @@ interface EditCustomerDialogProps {
 }
 
 import { AddSalesAreaDialog } from './add-sales-area-dialog';
-
 import { AddSalesGroupDialog } from './add-sales-group-dialog';
+import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms-dialog';
 
 export default function EditCustomerDialog({ customer, onSave, children }: EditCustomerDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -87,6 +88,9 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
   const [isLoadingSalesGroups, setIsLoadingSalesGroups] = useState(false);
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySetting[]>([]);
   const [isLoadingLoyaltySettings, setIsLoadingLoyaltySettings] = useState(false);
+  const [paymentTermsList, setPaymentTermsList] = useState<any[]>([]);
+  const [isLoadingPaymentTerms, setIsLoadingPaymentTerms] = useState(false);
+  const [isManagePaymentTermsOpen, setIsManagePaymentTermsOpen] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<CustomerFormValues>({
@@ -130,6 +134,7 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
       fetchSalesAreas();
       fetchSalesGroups();
       fetchLoyaltySettings();
+      fetchPaymentTerms();
     }
   }, [isOpen, customer, form]);
 
@@ -221,6 +226,21 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
     }
   };
 
+  const fetchPaymentTerms = async () => {
+    try {
+      setIsLoadingPaymentTerms(true);
+      const response = await fetch('/api/payment-terms');
+      const result = await response.json();
+      if (result.success) {
+        setPaymentTermsList(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching payment terms:', error);
+    } finally {
+      setIsLoadingPaymentTerms(false);
+    }
+  };
+
   async function onSubmit(values: CustomerFormValues) {
     setIsSaving(true);
     try {
@@ -244,9 +264,10 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
   }
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-3xl h-[600px] flex flex-col overflow-hidden" style={{ height: '550px' }}>
+      <DialogContent className="sm:max-w-3xl h-[85vh] flex flex-col overflow-hidden !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Edit Customer</DialogTitle>
           <DialogDescription>
@@ -265,20 +286,24 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                 <TabsTrigger value="financial">Financial</TabsTrigger>
               </TabsList>
               <TabsContent value="basic" className="space-y-4 p-6 h-[450px] overflow-y-auto">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Customer Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., John Doe" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="space-y-2">
+                  <Label>Customer ID</Label>
+                  <Input value={customer.id} readOnly placeholder="Customer ID" />
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Customer Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., John Doe" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="contactNumber"
@@ -321,7 +346,9 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                     name="salesPerson"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Sales Person</FormLabel>
+                        <div className="flex items-center h-8">
+                          <FormLabel>Sales Person</FormLabel>
+                        </div>
                         <Select onValueChange={field.onChange} value={field.value || ''}>
                           <FormControl>
                             <SelectTrigger>
@@ -385,7 +412,6 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                     control={form.control}
                     name="salesGroup"
                     render={({ field }) => (
-
                       <FormItem>
                         <div className="flex items-center justify-between">
                           <FormLabel>Sales Group</FormLabel>
@@ -421,7 +447,9 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                     name="loyaltyPoints"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Loyalty Points Setting</FormLabel>
+                        <div className="flex items-center h-8">
+                          <FormLabel>Loyalty Points Setting</FormLabel>
+                        </div>
                         <Select 
                           key={field.value?.toString()}
                           onValueChange={(value) => field.onChange(Number(value))} 
@@ -435,15 +463,16 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                           <SelectContent>
                             {isLoadingLoyaltySettings ? (
                                <SelectItem value="loading" disabled>Loading...</SelectItem>
-                            ) : (
-                              <>
-                                <SelectItem value="0">None (0 points)</SelectItem>
-                                {loyaltySettings.map((setting) => (
+                            ) : loyaltySettings.length > 0 ? (
+                                loyaltySettings.map((setting) => (
                                   <SelectItem key={setting.id} value={Number(setting.amount).toString()}>
                                     {setting.description} ({setting.amount} points)
                                   </SelectItem>
-                                ))}
-                              </>
+                                ))
+                            ) : (
+                                <>
+                                  <SelectItem value="0">None (0 points)</SelectItem>
+                                </>
                             )}
                           </SelectContent>
                         </Select>
@@ -490,9 +519,39 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Payment Terms</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., Net 30" {...field} />
-                      </FormControl>
+                      <Select onValueChange={field.onChange} value={field.value || ''}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Payment Terms" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {isLoadingPaymentTerms ? (
+                            <SelectItem value="loading" disabled>Loading...</SelectItem>
+                          ) : (
+                            paymentTermsList?.map(term => (
+                              <SelectItem key={term.id} value={term.description}>
+                                {term.description}
+                              </SelectItem>
+                            ))
+                          )}
+                          <div className="border-t mt-1 pt-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="w-full justify-start h-8 px-2 text-sm"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setIsManagePaymentTermsOpen(true);
+                                }}
+                              >
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Add Payment Terms
+                              </Button>
+                          </div>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -576,5 +635,12 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ManagePaymentTermsDialog 
+      open={isManagePaymentTermsOpen}
+      onOpenChange={setIsManagePaymentTermsOpen}
+      onPaymentTermsUpdated={fetchPaymentTerms}
+      trigger={null}
+    />
+    </>
   );
 }

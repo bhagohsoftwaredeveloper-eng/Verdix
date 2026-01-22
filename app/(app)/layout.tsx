@@ -21,7 +21,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Logo } from '@/components/logo';
+
 import {
   LayoutDashboard,
   Package,
@@ -39,6 +39,7 @@ import {
   ArrowRightLeft,
   Users,
   Settings,
+  Package2,
 } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
@@ -191,7 +192,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarHeader className="h-16 border-b border-sidebar-border/50 sticky top-0 bg-sidebar/95 backdrop-blur z-10 px-6 justify-center">
           <div className="flex items-center gap-3 transition-all duration-200 group-data-[collapsible=icon]:justify-center">
             <div className="p-1.5 bg-primary/10 rounded-lg group-data-[collapsible=icon]:p-1">
-              <Logo className="size-6 text-primary" />
+              <Package2 className="size-6 text-primary" />
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
                <h1 className="text-lg font-bold font-headline tracking-tight text-sidebar-foreground">StockPilot</h1>

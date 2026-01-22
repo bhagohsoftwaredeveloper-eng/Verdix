@@ -25,7 +25,7 @@ import type { Sale } from '@/lib/types';
 import { format } from 'date-fns';
 import { Logo } from '@/components/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { TerminalSelector } from '@/components/TerminalSelector';
+
 
 interface RecentSalesDialogProps {
   isOpen: boolean;
@@ -114,7 +114,7 @@ export function RecentSalesDialog({
   const [saleToPrint, setSaleToPrint] = useState<Sale | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [terminalId, setTerminalId] = useState<string>('all');
+
   
   useEffect(() => {
     const fetchRecentSales = async () => {
@@ -122,12 +122,7 @@ export function RecentSalesDialog({
       
       setIsLoading(true);
       try {
-        const queryParams = new URLSearchParams();
-        if (terminalId && terminalId !== 'all') {
-            queryParams.append('terminalId', terminalId);
-        }
-        
-        const response = await fetch(`/api/pos/recent-sales?${queryParams.toString()}`);
+        const response = await fetch(`/api/pos/recent-sales`);
         const result = await response.json();
         
         if (result.success) {
@@ -143,7 +138,7 @@ export function RecentSalesDialog({
     };
 
     fetchRecentSales();
-  }, [isOpen, terminalId]);
+  }, [isOpen]);
   
   const handlePrintReceipt = (sale: Sale) => {
     setSaleToPrint(sale);
@@ -175,11 +170,7 @@ export function RecentSalesDialog({
                         A list of the 20 most recent sales.
                     </DialogDescription>
                 </div>
-                <TerminalSelector 
-                    terminalId={terminalId} 
-                    onTerminalChange={setTerminalId} 
-                    showAllOption={true} 
-                />
+
             </div>
             </DialogHeader>
             <ScrollArea className="h-96">

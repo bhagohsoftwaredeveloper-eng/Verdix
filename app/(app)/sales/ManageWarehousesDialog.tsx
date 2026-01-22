@@ -30,8 +30,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PlusCircle, Pencil, Trash2, Loader2, WarehouseIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-function WarehouseDialog({ warehouse, onSave, children, disabled }: { warehouse?: Warehouse, onSave: (name: string, location?: string) => Promise<void>, children: React.ReactNode, disabled?: boolean | null }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function WarehouseDialog({ warehouse, onSave, children, disabled, open, onOpenChange }: { warehouse?: Warehouse, onSave: (name: string, location?: string) => Promise<void>, children: React.ReactNode, disabled?: boolean | null, open?: boolean, onOpenChange?: (open: boolean) => void }) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
   const [name, setName] = useState(warehouse?.name || '');
   const [location, setLocation] = useState(warehouse?.location || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -340,10 +343,15 @@ function WarehouseSkeleton() {
   );
 }
 
-export function ManageWarehousesDialog({ trigger, onChange }: { trigger?: React.ReactNode, onChange?: () => void }) {
+export function ManageWarehousesDialog({ trigger, onChange, open, onOpenChange }: { trigger?: React.ReactNode, onChange?: () => void, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const fetchWarehouses = async () => {
     try {
@@ -369,8 +377,10 @@ export function ManageWarehousesDialog({ trigger, onChange }: { trigger?: React.
   };
 
   useEffect(() => {
-    fetchWarehouses();
-  }, []);
+    if (isOpen) {
+      fetchWarehouses();
+    }
+  }, [isOpen]);
 
   const handleAddWarehouse = async (name: string, location?: string) => {
     try {
@@ -406,18 +416,13 @@ export function ManageWarehousesDialog({ trigger, onChange }: { trigger?: React.
     onChange?.(); // Notify parent component
   };
 
-  const dialogTrigger = trigger || (
-    <Button variant="outline">
-      <WarehouseIcon className="mr-2 h-4 w-4" />
-      Manage Warehouses
-    </Button>
-  );
-
   return (
-     <Dialog>
-      <DialogTrigger asChild>
-        {dialogTrigger}
-      </DialogTrigger>
+     <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {trigger && (
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Manage Warehouses</DialogTitle>

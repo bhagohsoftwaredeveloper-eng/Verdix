@@ -39,7 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Loader2, Trash2, Plus, Search, ArrowRight } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Plus, Search, ArrowRight, CreditCard, Warehouse as WarehouseIcon, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Product, Customer, Sale, PaymentMethod, Warehouse, SalesPerson } from '@/lib/types';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -176,8 +176,11 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
+  const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
   const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
   const [isLoadingSalesPersons, setIsLoadingSalesPersons] = useState(false);
+  const [showSalesPersonDialog, setShowSalesPersonDialog] = useState(false);
+  const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
   const { toast } = useToast();
   const { customers } = useCustomers();
 
@@ -437,6 +440,19 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                   <div className="p-2 border-b sticky top-0 bg-popover z-10">
+                                      <Button
+                                        variant="secondary"
+                                        className="w-full justify-start h-8 px-2 text-sm"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setShowPaymentMethodDialog(true);
+                                        }}
+                                      >
+                                        <CreditCard className="mr-2 h-4 w-4" />
+                                        Manage Methods
+                                      </Button>
+                                   </div>
                                    {isLoadingPaymentMethods ? (
                                     <SelectItem value="loading" disabled>Loading...</SelectItem>
                                   ) : (
@@ -444,8 +460,12 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                   )}
                                 </SelectContent>
                               </Select>
-                              <ManagePaymentMethodsDialog trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>} />
                             </div>
+                            <ManagePaymentMethodsDialog 
+                              open={showPaymentMethodDialog} 
+                              onOpenChange={setShowPaymentMethodDialog}
+                              onChange={fetchPaymentMethods}
+                            />
                             <FormMessage />
                           </FormItem>
                         )}
@@ -523,6 +543,19 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                  <div className="p-2 border-b sticky top-0 bg-popover z-10">
+                                      <Button
+                                        variant="secondary"
+                                        className="w-full justify-start h-8 px-2 text-sm"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setShowWarehouseDialog(true);
+                                        }}
+                                      >
+                                        <WarehouseIcon className="mr-2 h-4 w-4" />
+                                        Manage Warehouses
+                                      </Button>
+                                   </div>
                                   {warehouses?.map(warehouse => (
                                     <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
                                       {warehouse.name}
@@ -530,11 +563,12 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                   ))}
                                 </SelectContent>
                               </Select>
-                               <ManageWarehousesDialog
-                                  trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>}
-                                  onChange={fetchWarehouses}
-                                />
                             </div>
+                            <ManageWarehousesDialog
+                              open={showWarehouseDialog}
+                              onOpenChange={setShowWarehouseDialog}
+                              onChange={fetchWarehouses}
+                            />
                             <FormMessage />
                           </FormItem>
                         )}
@@ -553,6 +587,19 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                  <div className="p-2 border-b sticky top-0 bg-popover z-10">
+                                      <Button
+                                        variant="secondary"
+                                        className="w-full justify-start h-8 px-2 text-sm"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setShowSalesPersonDialog(true);
+                                        }}
+                                      >
+                                        <Users className="mr-2 h-4 w-4" />
+                                        Manage Sales Persons
+                                      </Button>
+                                   </div>
                                   {salesPersons?.map(person => (
                                     <SelectItem key={person.id} value={person.id.toString()}>
                                       {person.name}
@@ -560,11 +607,12 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                   ))}
                                 </SelectContent>
                               </Select>
-                               <ManageSalesPersonsDialog
-                                  trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>}
-                                  onChange={fetchSalesPersons}
-                                />
                             </div>
+                            <ManageSalesPersonsDialog
+                                open={showSalesPersonDialog}
+                                onOpenChange={setShowSalesPersonDialog}
+                                onChange={fetchSalesPersons}
+                              />
                             <FormMessage />
                           </FormItem>
                         )}

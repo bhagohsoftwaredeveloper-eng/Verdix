@@ -203,6 +203,7 @@ function CustomerSkeleton() {
 export function PosManageCustomersDialog({ onCustomersUpdated }: { onCustomersUpdated: () => void }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   useState(() => {
     // Simulate fetching customers
@@ -237,7 +238,7 @@ export function PosManageCustomersDialog({ onCustomersUpdated }: { onCustomersUp
   };
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline">
             <Users className="mr-2 h-4 w-4" />

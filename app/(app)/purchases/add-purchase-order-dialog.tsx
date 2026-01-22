@@ -78,22 +78,42 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
   const { products, loading, error } = useProducts();
   const [inputValue, setInputValue] = useState('');
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [commandSearch, setCommandSearch] = useState('');
 
   const handleScanOrPunch = () => {
-    if (!inputValue.trim()) return;
+    const term = inputValue.trim();
+    if (!term) return;
 
-    // Find product by barcode, SKU, or name (case insensitive)
-    const product = products.find(p =>
-      p.barcode?.toLowerCase() === inputValue.toLowerCase() ||
-      p.sku?.toLowerCase() === inputValue.toLowerCase() ||
-      p.name.toLowerCase() === inputValue.toLowerCase()
+    // 1. Exact match on Barcode or SKU (High priority)
+    const exactMatch = products.find(p =>
+      p.barcode?.toLowerCase() === term.toLowerCase() ||
+      p.sku?.toLowerCase() === term.toLowerCase()
     );
 
-    if (product) {
-      onSelectProduct(product);
+    if (exactMatch) {
+      onSelectProduct(exactMatch);
+      setInputValue('');
+      return;
+    }
+
+    // 2. Exact match on Name
+    const nameMatch = products.find(p => p.name.toLowerCase() === term.toLowerCase());
+    if (nameMatch) {
+      onSelectProduct(nameMatch);
+      setInputValue('');
+      return;
+    }
+
+    // 3. Partial match on Name
+    const partialMatches = products.filter(p => p.name.toLowerCase().includes(term.toLowerCase()));
+
+    if (partialMatches.length === 1) {
+      onSelectProduct(partialMatches[0]);
       setInputValue('');
     } else {
-      console.log('Product not found');
+      // 0 or Multiple matches -> Open dialog to let user choose
+      setCommandSearch(term);
+      setSearchDialogOpen(true);
     }
   };
 
@@ -131,7 +151,11 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
             </div>
           ) : (
             <Command>
-              <CommandInput placeholder="Type product name, SKU, or barcode..." />
+              <CommandInput 
+                placeholder="Type product name, SKU, or barcode..." 
+                value={commandSearch}
+                onValueChange={setCommandSearch}
+              />
               <CommandList>
                 <CommandEmpty>No products found.</CommandEmpty>
                 <CommandGroup>
@@ -409,31 +433,33 @@ export function AddPurchaseOrderDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-xs">Supplier</FormLabel>
-                            <div className="flex gap-2">
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                    <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Select supplier" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {suppliers.map(sup => <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>)}
-                                </SelectContent>
-                                </Select>
-                                <SupplierFormDialog 
-                                  onSave={async (data) => {
-                                      const result = await addSupplier(data);
-                                      if (result.success) {
-                                          const newSuppliers = await import('../products/actions').then(mod => mod.getSuppliers());
-                                          setSuppliers(newSuppliers);
-                                      } else {
-                                          throw new Error(result.message);
-                                      }
-                                  }}
-                                >
-                                    <Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>
-                                </SupplierFormDialog>
-                            </div>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="bg-white">
+                                  <SelectValue placeholder="Select supplier" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <div className="p-1 w-full border-b border-border mb-1">
+                                  <SupplierFormDialog 
+                                    onSave={async (data) => {
+                                        const result = await addSupplier(data);
+                                        if (result.success) {
+                                            const newSuppliers = await import('../products/actions').then(mod => mod.getSuppliers());
+                                            setSuppliers(newSuppliers);
+                                        } else {
+                                            throw new Error(result.message);
+                                        }
+                                    }}
+                                  >
+                                      <Button variant="ghost" size="sm" className="w-full justify-start font-normal px-2 h-8" type="button">
+                                        <Plus className="mr-2 h-4 w-4"/> Add Supplier
+                                      </Button>
+                                  </SupplierFormDialog>
+                                </div>
+                                {suppliers.map(sup => <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -445,19 +471,25 @@ export function AddPurchaseOrderDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-xs">Payment Method</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Select method" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name}>{method.name}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-                              <ManagePaymentMethodsDialog trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>} />
-                            </div>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="bg-white">
+                                  <SelectValue placeholder="Select method" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <div className="p-1 w-full border-b border-border mb-1">
+                                  <ManagePaymentMethodsDialog 
+                                    trigger={
+                                      <Button variant="ghost" size="sm" className="w-full justify-start font-normal px-2 h-8" type="button">
+                                        <Plus className="mr-2 h-4 w-4"/> Manage Methods
+                                      </Button>
+                                    } 
+                                  />
+                                </div>
+                                {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name}>{method.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -527,26 +559,30 @@ export function AddPurchaseOrderDialog({
                         render={({ field }) => (
                           <FormItem className="col-span-2">
                             <FormLabel className="text-xs">Receive To</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Select warehouse" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {warehouses?.map(warehouse => (
-                                    <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
-                                      {warehouse.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                               <ManageWarehousesDialog
-                                  trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>}
-                                  onChange={fetchWarehouses}
-                                />
-                            </div>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="bg-white">
+                                  <SelectValue placeholder="Select warehouse" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <div className="p-1 w-full border-b border-border mb-1">
+                                  <ManageWarehousesDialog
+                                    trigger={
+                                      <Button variant="ghost" size="sm" className="w-full justify-start font-normal px-2 h-8" type="button">
+                                        <Plus className="mr-2 h-4 w-4"/> Manage Warehouses
+                                      </Button>
+                                    }
+                                    onChange={fetchWarehouses}
+                                  />
+                                </div>
+                                {warehouses?.map(warehouse => (
+                                  <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
+                                    {warehouse.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}

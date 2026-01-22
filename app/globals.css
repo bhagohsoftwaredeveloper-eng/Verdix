@@ -116,6 +116,73 @@
   .glass-card {
      @apply bg-card/60 backdrop-blur-sm border-border/50 shadow-sm;
   }
+
+  /* Custom Dialog Animations - Hardcoded to ensure visibility */
+  @keyframes dialog-content-show-css {
+    from {
+      opacity: 0;
+      transform: scale(0.9) translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes dialog-content-hide-css {
+    from {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.9) translateY(20px);
+    }
+  }
+
+  @keyframes dialog-overlay-show-css {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes dialog-overlay-hide-css {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  .animate-dialog-in {
+    animation: dialog-content-show-css 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  }
+
+  .animate-dialog-out {
+    animation: dialog-content-hide-css 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  }
+
+  .animate-overlay-in {
+    animation: dialog-overlay-show-css 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  }
+
+  .animate-overlay-out {
+    animation: dialog-overlay-hide-css 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  }
+
+  /* Custom Sidebar Scrollbar */
+  [data-sidebar="content"]::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  [data-sidebar="content"]::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  [data-sidebar="content"]::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--sidebar-border));
+    border-radius: 4px;
+  }
+
+  [data-sidebar="content"]::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--sidebar-foreground) / 0.5);
+  }
 }
 
 @media print {

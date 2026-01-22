@@ -351,6 +351,19 @@ export default function POSPage() {
         case 'F11': handleOpenTender('E_WALLET'); break;
         case 'F12': handleOpenTender('POINTS'); break;
       }
+
+      if (e.ctrlKey) {
+        switch (e.key) {
+          case '1': e.preventDefault(); setIsEndShiftOpen(true); break;
+          case '2': e.preventDefault(); setIsCashTransferOpen(true); break;
+          case '3': e.preventDefault(); setIsCustomerSelectOpen(true); break;
+          case '4': e.preventDefault(); handleOpenLoyalty(); break;
+          case '5': e.preventDefault(); setIsRecentSalesOpen(true); break;
+          case '6': e.preventDefault(); setIsVoidSalesOpen(true); break;
+          case '7': e.preventDefault(); setIsReturnSalesOpen(true); break;
+          case '0': e.preventDefault(); setIsZReadingOpen(true); break;
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -759,15 +772,15 @@ export default function POSPage() {
   ];
 
   const footerActions = [
-    { icon: Printer, label: 'Cash count', action: () => setIsEndShiftOpen(true) },
-    { icon: CurrencyIcon, label: 'Cash transfer', action: () => setIsCashTransferOpen(true) },
-    { icon: User, label: 'Customer', action: () => setIsCustomerSelectOpen(true) },
-    { icon: Star, label: 'Loyalty', action: handleOpenLoyalty },
-    { icon: Clock, label: 'Recent Sales', action: () => setIsRecentSalesOpen(true) },
-    { icon: Ban, label: 'Void Sales', action: () => setIsVoidSalesOpen(true) },
-    { icon: Undo, label: 'Return Sales', action: () => setIsReturnSalesOpen(true) },
-    { icon: BookOpen, label: 'Z-READING', action: () => setIsZReadingOpen(true) },
-
+    { icon: Printer, label: 'Cash count', shortcut: 'Ctrl+1', action: () => setIsEndShiftOpen(true) },
+    { icon: CurrencyIcon, label: 'Cash transfer', shortcut: 'Ctrl+2', action: () => setIsCashTransferOpen(true) },
+    { icon: User, label: 'Customer', shortcut: 'Ctrl+3', action: () => setIsCustomerSelectOpen(true) },
+    { icon: Star, label: 'Loyalty', shortcut: 'Ctrl+4', action: handleOpenLoyalty },
+    { icon: Clock, label: 'Recent Sales', shortcut: 'Ctrl+5', action: () => setIsRecentSalesOpen(true) },
+    { icon: Ban, label: 'Void Sales', shortcut: 'Ctrl+6', action: () => setIsVoidSalesOpen(true) },
+    { icon: Undo, label: 'Return Sales', shortcut: 'Ctrl+7', action: () => setIsReturnSalesOpen(true) },
+    { icon: BookOpen, label: 'Z-READING', shortcut: 'Ctrl+0', action: () => setIsZReadingOpen(true) },
+    { icon: Search, label: 'Price Inquiry', action: () => setIsPriceInquiryOpen(true) },
   ];
 
   const paymentOptions = [
@@ -986,8 +999,8 @@ export default function POSPage() {
              </div>
              
              {/* Footer Actions */}
-             <div className="grid grid-cols-8 gap-2 shrink-0 h-16">
-                {footerActions.map(({ icon: Icon, label, action }) => (
+            <div className="grid grid-cols-9 gap-2 shrink-0 h-16">
+                {footerActions.map(({ icon: Icon, label, shortcut, action }) => (
                     <Button
                         key={label}
                         variant="secondary"
@@ -1003,6 +1016,7 @@ export default function POSPage() {
                     >
                         <Icon className="w-5 h-5 opacity-80" />
                         <span className="leading-tight text-center px-1">{label}</span>
+                        {shortcut && <span className="text-[9px] text-muted-foreground/70 font-mono">{shortcut}</span>}
                     </Button>
                 ))}
             </div>
@@ -1078,11 +1092,7 @@ export default function POSPage() {
 
       {!isPosLoggedIn && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
-          <Card className="w-full max-w-md shadow-2xl border-none">
-             <CardContent className="p-0">
-                <PosLoginForm onLoginSuccess={handlePosLoginSuccess} />
-             </CardContent>
-          </Card>
+           <PosLoginForm onLoginSuccess={handlePosLoginSuccess} />
         </div>
       )}
 

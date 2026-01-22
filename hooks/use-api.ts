@@ -272,7 +272,13 @@ export function usePurchaseOrders(search?: string, status?: string): UsePurchase
       }
       params.append('limit', '100'); // Get more orders
 
-      const response = await fetch(`/api/purchase-orders?${params.toString()}`);
+      const response = await fetch(`/api/purchase-orders?${params.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
+      });
       const result = await response.json();
 
       if (!result.success) {

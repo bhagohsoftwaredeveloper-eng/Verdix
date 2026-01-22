@@ -56,7 +56,6 @@ export async function GET(request: NextRequest) {
             poi.product_name,
             poi.quantity,
             poi.cost,
-            poi.expiration_date,
             (poi.quantity * poi.cost) as subtotal
           FROM purchase_order_items poi
           WHERE poi.purchase_order_id = ?
@@ -78,7 +77,6 @@ export async function GET(request: NextRequest) {
             productName: item.product_name,
             quantity: parseInt(item.quantity),
             cost: parseFloat(item.cost),
-            expirationDate: item.expiration_date,
           })),
         };
       })
@@ -156,11 +154,14 @@ export async function POST(request: NextRequest) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
+    // Format date for MySQL
+    const formattedDate = new Date(date || new Date()).toISOString().slice(0, 19).replace('T', ' ');
+
     await query(insertOrderQuery, [
       orderId,
       supplierId,
       supplierName,
-      date || new Date().toISOString(),
+      formattedDate,
       total || 0,
       paymentMethod || '',
       status || 'Pending'
@@ -169,20 +170,20 @@ export async function POST(request: NextRequest) {
     // Insert order items
     const insertItemQuery = `
       INSERT INTO purchase_order_items (
-        id, purchase_order_id, product_id, product_name, quantity, cost, expiration_date
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, purchase_order_id, product_id, product_name, quantity, cost
+      ) VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     for (const item of items) {
       const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       await query(insertItemQuery, [
         itemId,
         orderId,
         item.productId,
         item.productName,
         item.quantity,
-        item.cost,
-        item.expirationDate || null
+        item.cost
       ]);
     }
 

@@ -319,7 +319,7 @@ export function EditProductDialog({
             <p>Edit this product</p>
           </TooltipContent>
         </Tooltip>
-        <DialogContent className="sm:max-w-3xl h-[600px] flex flex-col overflow-hidden" style={{ height: '790px' }}>
+        <DialogContent className="sm:max-w-3xl h-[85vh] flex flex-col overflow-hidden !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>Edit Product</DialogTitle>
             <DialogDescription>
@@ -329,7 +329,7 @@ export function EditProductDialog({
           <div className="flex-1 overflow-y-auto px-4 py-1">
             <Form {...form}>
               <form id="edit-product-form" onSubmit={form.handleSubmit(saveChanges, (errors) => console.log('Form validation errors:', errors))}>
-                <div className="min-h-[520px]">
+                <div className="h-full">
                   <Tabs defaultValue="basic" className="w-full h-full">
                     <TabsList className="w-full h-auto justify-start rounded-none border-b bg-transparent p-0">
                       <TabsTrigger 

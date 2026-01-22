@@ -6,13 +6,19 @@ export default {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}', // Ensure app dir is included if not in src
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './hooks/**/*.{js,ts,jsx,tsx,mdx}',
+    './lib/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
   	extend: {
-      fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-      },
+  		fontFamily: {
+  			sans: [
+  				'Inter',
+  				'sans-serif'
+  			]
+  		},
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -87,20 +93,68 @@ export default {
   					height: '0'
   				}
   			},
-            'fade-in': {
-                from: { opacity: '0' },
-                to: { opacity: '1' }
-            },
-            'slide-in-from-right': {
-                from: { transform: 'translateX(100%)' },
-                to: { transform: 'translateX(0)' }
-            }
+  			'fade-in': {
+  				from: {
+  					opacity: '0'
+  				},
+  				to: {
+  					opacity: '1'
+  				}
+  			},
+  			'slide-in-from-right': {
+  				from: {
+  					transform: 'translateX(100%)'
+  				},
+  				to: {
+  					transform: 'translateX(0)'
+  				}
+  			},
+  			'dialog-content-show': {
+  				from: {
+  					opacity: '0',
+  					transform: 'translate(-50%, -48%) scale(0.9)'
+  				},
+  				to: {
+  					opacity: '1',
+  					transform: 'translate(-50%, -50%) scale(1)'
+  				}
+  			},
+  			'dialog-content-hide': {
+  				from: {
+  					opacity: '1',
+  					transform: 'translate(-50%, -50%) scale(1)'
+  				},
+  				to: {
+  					opacity: '0',
+  					transform: 'translate(-50%, -48%) scale(0.9)'
+  				}
+  			},
+  			'dialog-overlay-show': {
+  				from: {
+  					opacity: '0'
+  				},
+  				to: {
+  					opacity: '1'
+  				}
+  			},
+  			'dialog-overlay-hide': {
+  				from: {
+  					opacity: '1'
+  				},
+  				to: {
+  					opacity: '0'
+  				}
+  			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
-            'fade-in': 'fade-in 0.3s ease-in-out',
-            'slide-in': 'slide-in-from-right 0.4s ease-out'
+  			'fade-in': 'fade-in 0.3s ease-in-out',
+  			'slide-in': 'slide-in-from-right 0.4s ease-out',
+  			'dialog-content-show': 'dialog-content-show 500ms cubic-bezier(0.16, 1, 0.3, 1)',
+  			'dialog-content-hide': 'dialog-content-hide 500ms cubic-bezier(0.16, 1, 0.3, 1)',
+  			'dialog-overlay-show': 'dialog-overlay-show 500ms cubic-bezier(0.16, 1, 0.3, 1)',
+  			'dialog-overlay-hide': 'dialog-overlay-hide 500ms cubic-bezier(0.16, 1, 0.3, 1)'
   		}
   	}
   },

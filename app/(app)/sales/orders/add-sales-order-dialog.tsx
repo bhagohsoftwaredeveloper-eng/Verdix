@@ -47,8 +47,8 @@ import { Product, Customer, Sale, PaymentMethod, Warehouse, SalesPerson } from '
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ManageCustomersDialog } from '../ManageCustomersDialog';
 import { ManagePaymentMethodsDialog } from '../ManagePaymentMethodsDialog';
-import { ManageWarehousesDialog } from '../ManageWarehousesDialog';
-import { ManageSalesPersonsDialog } from '../ManageSalesPersonsDialog';
+import { ManageWarehousesDialog, WarehouseDialog as AddWarehouseDialog } from '../ManageWarehousesDialog';
+import { ManageSalesPersonsDialog, SalesPersonDialog as AddSalesPersonDialog } from '../ManageSalesPersonsDialog';
 import { CustomerSelectionField } from '../invoices/customer-selection-field';
 
 import { useProducts, useCustomers } from '@/hooks/use-api';
@@ -173,12 +173,15 @@ export function AddSalesOrderDialog() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(false);
+  const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
+  const [showAddWarehouseDialog, setShowAddWarehouseDialog] = useState(false);
   const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
   const [isLoadingSalesPersons, setIsLoadingSalesPersons] = useState(false);
+  const [showAddSalesPersonDialog, setShowAddSalesPersonDialog] = useState(false);
   const { toast } = useToast();
-  const { customers } = useCustomers();
+  const { customers, refetch: refetchCustomers } = useCustomers();
 
   // Generate auto reference number
   const generateReference = () => {
@@ -254,6 +257,34 @@ export function AddSalesOrderDialog() {
     }
   };
 
+  const handleAddWarehouse = async (name: string, location?: string) => {
+    try {
+      const response = await fetch('/api/warehouses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, location }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to add warehouse');
+      }
+
+      await fetchWarehouses();
+    } catch (error) {
+      console.error('Error adding warehouse:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to add warehouse.',
+      });
+      throw error;
+    }
+  };
+
   // Fetch payment methods from API
   const fetchPaymentMethods = async () => {
     try {
@@ -273,6 +304,8 @@ export function AddSalesOrderDialog() {
     }
   };
 
+
+
   // Fetch sales persons from API
   const fetchSalesPersons = async () => {
     try {
@@ -289,6 +322,34 @@ export function AddSalesOrderDialog() {
       console.error('Error fetching sales persons:', error);
     } finally {
       setIsLoadingSalesPersons(false);
+    }
+  };
+
+  const handleAddSalesPerson = async (name: string, contactNumber?: string) => {
+    try {
+      const response = await fetch('/api/sales-persons', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, contactNumber }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to add sales person');
+      }
+
+      await fetchSalesPersons();
+    } catch (error) {
+      console.error('Error adding sales person:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to add sales person.',
+      });
+      throw error;
     }
   };
 
@@ -422,6 +483,7 @@ export function AddSalesOrderDialog() {
                         control={form.control}
                         customerList={customers}
                         className="bg-white"
+                        onCustomerAdded={refetchCustomers}
                       />
                       <FormField
                         control={form.control}
@@ -437,6 +499,19 @@ export function AddSalesOrderDialog() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                    <div className="p-2 border-b sticky top-0 bg-popover z-10">
+                                      <Button
+                                        variant="secondary"
+                                        className="w-full justify-start h-8 px-2 text-sm"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setShowPaymentMethodDialog(true);
+                                        }}
+                                      >
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Manage Methods
+                                      </Button>
+                                   </div>
                                    {isLoadingPaymentMethods ? (
                                     <SelectItem value="loading" disabled>Loading...</SelectItem>
                                   ) : (
@@ -444,11 +519,15 @@ export function AddSalesOrderDialog() {
                                   )}
                                 </SelectContent>
                               </Select>
-                              <ManagePaymentMethodsDialog trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>} />
                             </div>
                             <FormMessage />
                           </FormItem>
                         )}
+                      />
+                      <ManagePaymentMethodsDialog
+                        open={showPaymentMethodDialog}
+                        onOpenChange={setShowPaymentMethodDialog}
+                        onChange={fetchPaymentMethods}
                       />
                   </div>
                 </div>
@@ -501,6 +580,19 @@ export function AddSalesOrderDialog() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                  <div className="p-2 border-b sticky top-0 bg-popover z-10">
+                                      <Button
+                                        variant="secondary"
+                                        className="w-full justify-start h-8 px-2 text-sm"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setShowAddWarehouseDialog(true);
+                                        }}
+                                      >
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add Warehouse
+                                      </Button>
+                                   </div>
                                   {warehouses?.map(warehouse => (
                                     <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
                                       {warehouse.name}
@@ -508,10 +600,13 @@ export function AddSalesOrderDialog() {
                                   ))}
                                 </SelectContent>
                               </Select>
-                               <ManageWarehousesDialog
-                                  trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>}
-                                  onChange={fetchWarehouses}
-                                />
+                               <AddWarehouseDialog
+                                  open={showAddWarehouseDialog}
+                                  onOpenChange={setShowAddWarehouseDialog}
+                                  onSave={handleAddWarehouse}
+                                >
+                                  <div />
+                                </AddWarehouseDialog>
                             </div>
                             <FormMessage />
                           </FormItem>
@@ -531,6 +626,19 @@ export function AddSalesOrderDialog() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                  <div className="p-2 border-b sticky top-0 bg-popover z-10">
+                                      <Button
+                                        variant="secondary"
+                                        className="w-full justify-start h-8 px-2 text-sm"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setShowAddSalesPersonDialog(true);
+                                        }}
+                                      >
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add Sales Person
+                                      </Button>
+                                   </div>
                                   {salesPersons?.map(person => (
                                     <SelectItem key={person.id} value={person.id.toString()}>
                                       {person.name}
@@ -538,10 +646,13 @@ export function AddSalesOrderDialog() {
                                   ))}
                                 </SelectContent>
                               </Select>
-                               <ManageSalesPersonsDialog
-                                  trigger={<Button variant="ghost" size="icon" type="button"><Plus className="h-4 w-4"/></Button>}
-                                  onChange={fetchSalesPersons}
-                                />
+                               <AddSalesPersonDialog
+                                  open={showAddSalesPersonDialog}
+                                  onOpenChange={setShowAddSalesPersonDialog}
+                                  onSave={handleAddSalesPerson}
+                                >
+                                  <div />
+                                </AddSalesPersonDialog>
                             </div>
                             <FormMessage />
                           </FormItem>

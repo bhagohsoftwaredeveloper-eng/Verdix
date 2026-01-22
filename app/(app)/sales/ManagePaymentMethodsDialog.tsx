@@ -28,8 +28,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PaymentMethod } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlusCircle, Pencil, Trash2, Loader2, CreditCard, AlertTriangle, FileX } from 'lucide-react';
+import { PlusCircle, Pencil, Trash2, Loader2, CreditCard, AlertTriangle, FileX, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 function DataExistDialog({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   return (
@@ -52,8 +61,12 @@ function DataExistDialog({ isOpen, onClose }: { isOpen: boolean, onClose: () => 
   );
 }
 
-function AddPaymentMethodDialog({ onSave, children }: { onSave: (name: string) => Promise<void>, children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }: { onSave: (name: string) => Promise<void>, children: React.ReactNode, open?: boolean, onOpenChange?: (open: boolean) => void }) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
+
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isDataExistOpen, setIsDataExistOpen] = useState(false);
@@ -339,10 +352,18 @@ function PaymentMethodSkeleton() {
   );
 }
 
-export function ManagePaymentMethodsDialog({ trigger, onChange }: { trigger?: React.ReactNode, onChange?: () => void }) {
+export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChange }: { trigger?: React.ReactNode, onChange?: () => void, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
   const { toast } = useToast();
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const fetchPaymentMethods = async () => {
     try {
@@ -368,8 +389,10 @@ export function ManagePaymentMethodsDialog({ trigger, onChange }: { trigger?: Re
   };
 
   useEffect(() => {
-    fetchPaymentMethods();
-  }, []);
+    if (isOpen) {
+      fetchPaymentMethods();
+    }
+  }, [isOpen]);
 
   const handleAddMethod = async (name: string) => {
     // Check if payment method with same name already exists
@@ -419,67 +442,119 @@ export function ManagePaymentMethodsDialog({ trigger, onChange }: { trigger?: Re
     onChange?.(); // Notify parent component
   };
 
-  const dialogTrigger = trigger || (
-    <Button variant="outline">
-      <CreditCard className="mr-2 h-4 w-4" />
-      Manage Payment Methods
-    </Button>
+  const filteredPaymentMethods = paymentMethods.filter(method =>
+    method.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const totalPages = Math.ceil(filteredPaymentMethods.length / pageSize);
+  const paginatedPaymentMethods = filteredPaymentMethods.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   return (
-     <Dialog>
-      <DialogTrigger asChild>
-        {dialogTrigger}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-3xl">
+     <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {trigger && (
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+      )}
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Manage Payment Methods</DialogTitle>
           <DialogDescription>
             Add, edit, or delete your payment methods.
           </DialogDescription>
         </DialogHeader>
-        <div className="mt-4">
-            <div className="flex justify-end mb-4">
-                <AddPaymentMethodDialog onSave={handleAddMethod}>
-                    <Button size="sm">
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Method
-                    </Button>
-                </AddPaymentMethodDialog>
+        <div className="mt-4 flex-1 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <div className="relative flex-1 max-w-xs mr-3 ml-1 mt-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search payment methods..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <AddPaymentMethodDialog onSave={handleAddMethod}>
+                <Button size="sm">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Method
+                </Button>
+              </AddPaymentMethodDialog>
             </div>
-            <Card>
-                <CardContent className='p-0'>
-                    <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>
-                            <span className="sr-only">Actions</span>
-                        </TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading && Array.from({ length: 4 }).map((_, i) => <PaymentMethodSkeleton key={i} />)}
-                        {paymentMethods?.map((method) => (
-                          <PaymentMethodRow
-                            key={method.id}
-                            paymentMethod={method}
-                            onUpdate={handleUpdate}
-                            onDelete={handleDelete}
-                            paymentMethods={paymentMethods}
-                          />
-                        ))}
-                         {!isLoading && paymentMethods?.length === 0 && (
+            <Card className="flex-1 flex flex-col overflow-hidden">
+                <CardContent className='p-0 flex-1 overflow-hidden'>
+                    <ScrollArea className="h-full">
+                        <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableCell colSpan={2} className="text-center h-24">
-                                    No payment methods found.
-                                </TableCell>
+                            <TableHead>Name</TableHead>
+                            <TableHead>
+                                <span className="sr-only">Actions</span>
+                            </TableHead>
                             </TableRow>
-                        )}
-                    </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading && Array.from({ length: 4 }).map((_, i) => <PaymentMethodSkeleton key={i} />)}
+                            {paginatedPaymentMethods?.map((method) => (
+                              <PaymentMethodRow
+                                key={method.id}
+                                paymentMethod={method}
+                                onUpdate={handleUpdate}
+                                onDelete={handleDelete}
+                                paymentMethods={paymentMethods}
+                              />
+                            ))}
+                             {!isLoading && filteredPaymentMethods?.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={2} className="text-center h-24">
+                                        No payment methods found.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                        </Table>
+                    </ScrollArea>
                 </CardContent>
             </Card>
+            {!isLoading && filteredPaymentMethods.length > 0 && (
+              <div className="mt-4">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          onClick={() => setCurrentPage(page)}
+                          isActive={currentPage === page}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
         </div>
         <DialogFooter>
           <DialogTrigger asChild>

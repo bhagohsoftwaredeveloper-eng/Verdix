@@ -24,6 +24,7 @@ import { usePurchaseOrders } from '../../../hooks/use-api';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddPurchaseOrderDialog } from './add-purchase-order-dialog';
+import { ReceivePurchaseOrderDialog } from './receive-purchase-order-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Check, Truck, ChevronRight, Search, CalendarIcon, X, Printer, ArrowLeft } from 'lucide-react';
@@ -48,106 +49,128 @@ import { DateRange } from 'react-day-picker';
 import { Logo } from '@/components/logo';
 
 
-function ApproveButton({ order, onUpdateOrder }: { order: PurchaseOrder, onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void }) {
-  const { toast } = useToast();
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreHorizontal, FileText, Ban, RotateCcw, Edit, Copy } from "lucide-react";
 
-  if (order.status !== 'Pending') return null;
+function PurchaseOrderActions({ 
+  order, 
+  onUpdateOrder, 
+  onReceive, 
+  onPrint, 
+  onViewDetails,
+  onReorder 
+}: { 
+  order: PurchaseOrder, 
+  onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, 
+  onReceive: (order: PurchaseOrder) => void,
+  onPrint: () => void,
+  onViewDetails: () => void,
+  onReorder: (order: PurchaseOrder) => void
+}) {
+  const { toast } = useToast();
 
   const handleApprove = () => {
     onUpdateOrder(order.id, { status: 'Approved' });
-    toast({
-      title: 'Order Approved',
-      description: `Order ${order.id.substring(0, 7)} has been approved.`,
-    });
+    toast({ title: 'Order Approved', description: `Order ${order.id.substring(0, 7)} has been approved.` });
+  };
+
+  const handleVoid = () => {
+    onUpdateOrder(order.id, { status: 'Cancelled' });
+    toast({ title: "Order Voided", description: "Purchase order has been cancelled." });
   };
 
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Check className="mr-2 h-4 w-4" />
-          Approve
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <span className="sr-only">Open menu</span>
+          <MoreHorizontal className="h-4 w-4" />
         </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will mark the order as approved and ready for processing.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleApprove}>Approve</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        
+        {/* Status Actions */}
+        {order.status === 'Pending' && (
+          <DropdownMenuItem onClick={handleApprove}>
+            <Check className="mr-2 h-4 w-4" /> Approve
+          </DropdownMenuItem>
+        )}
+        
+        {['Approved', 'Paid', 'Shipped'].includes(order.status) && (
+          <DropdownMenuItem onClick={() => onReceive(order)}>
+             <Truck className="mr-2 h-4 w-4" /> Receive Items
+          </DropdownMenuItem>
+        )}
+
+        {/* General Actions */}
+        <DropdownMenuItem onClick={onViewDetails}>
+          <FileText className="mr-2 h-4 w-4" /> View Details
+        </DropdownMenuItem>
+
+        <DropdownMenuItem onClick={() => onReorder(order)}>
+           <Copy className="mr-2 h-4 w-4" /> Reorder
+        </DropdownMenuItem>
+
+         {/* Edit - Only for Pending ideally, or allow restricted edits. For now basic. */}
+         {order.status === 'Pending' && (
+             <DropdownMenuItem onClick={() => toast({ title: "Edit", description: "Edit functionality coming soon." })}>
+                <Edit className="mr-2 h-4 w-4" /> Edit
+             </DropdownMenuItem>
+         )}
+
+        <DropdownMenuItem onClick={onPrint}>
+          <Printer className="mr-2 h-4 w-4" /> Print
+        </DropdownMenuItem>
+        
+        <DropdownMenuSeparator />
+        
+        {/* Destructive / Final Actions */}
+        {(order.status === 'Pending' || order.status === 'Approved') && (
+            <DropdownMenuItem onClick={handleVoid} className="text-destructive focus:text-destructive">
+               <Ban className="mr-2 h-4 w-4" /> Void / Cancel
+            </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function ReceiveButton({ order, onUpdateOrder, onUpdateStock }: { order: PurchaseOrder, onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, onUpdateStock: (productId: string, newStock: number) => void }) {
-  const { toast } = useToast();
-
-  if (!['Paid', 'Shipped', 'Approved'].includes(order.status)) return null;
-
-  const handleReceive = () => {
-    // Update stock for each product
-    order.items.forEach(item => {
-      onUpdateStock(item.productId, item.quantity); // Add quantity to existing stock
-    });
-
-    // Update order status to Received
-    onUpdateOrder(order.id, { status: 'Received' });
-
-    toast({
-      title: "Stock Received",
-      description: "Inventory has been updated for the received items.",
-    });
-  };
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Truck className="mr-2 h-4 w-4" />
-          Receive
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Receive Stock?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will mark the order as received and add the items to your inventory. This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleReceive}>Receive Stock</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
-function PurchaseOrderRow({ order, onUpdateOrder, onUpdateStock, onPrint }: { order: PurchaseOrder, onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, onUpdateStock: (productId: string, newStock: number) => void, onPrint: () => void }) {
+function PurchaseOrderRow({ 
+  order, 
+  onUpdateOrder, 
+  onReceive, // This prop is now the handler from PurchasesPage
+  onPrint, 
+  onReorder 
+}: { 
+  order: PurchaseOrder, 
+  onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, 
+  onReceive: (order: PurchaseOrder) => void, // Pass this down to PurchaseOrderActions
+  onPrint: () => void,
+  onReorder: (order: PurchaseOrder) => void
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  
   const statusVariant = (status: string) => {
     switch (status) {
       case 'Paid':
-      case 'Received':
-        return 'default';
-      case 'Pending':
-        return 'secondary';
+      case 'Received': return 'default';
+      case 'Pending': return 'secondary';
       case 'Approved':
-        return 'outline';
-      case 'Shipped':
-        return 'outline';
+      case 'Shipped': return 'outline';
       case 'Failed':
-        return 'destructive';
-      default:
-        return 'secondary';
+      case 'Cancelled': return 'destructive';
+      default: return 'secondary';
     }
   };
+
   return (
     <>
       <TableRow>
@@ -168,14 +191,14 @@ function PurchaseOrderRow({ order, onUpdateOrder, onUpdateStock, onPrint }: { or
         </TableCell>
         <TableCell className="text-right">₱{order.total.toFixed(2)}</TableCell>
         <TableCell className="text-right">
-          <div className="flex justify-end gap-2 non-printable">
-            <ApproveButton order={order} onUpdateOrder={onUpdateOrder} />
-            <ReceiveButton order={order} onUpdateOrder={onUpdateOrder} onUpdateStock={onUpdateStock} />
-            <Button variant="outline" size="sm" onClick={onPrint}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
-          </div>
+          <PurchaseOrderActions 
+            order={order} 
+            onUpdateOrder={onUpdateOrder} 
+            onReceive={onReceive} 
+            onPrint={onPrint}
+            onViewDetails={() => setIsOpen(!isOpen)}
+            onReorder={onReorder}
+          />
         </TableCell>
       </TableRow>
       {isOpen && (
@@ -194,7 +217,7 @@ function PurchaseOrderRow({ order, onUpdateOrder, onUpdateStock, onPrint }: { or
                 </TableHeader>
                 <TableBody>
                   {order.items.map(item => (
-                    <TableRow key={item.productId}>
+                    <TableRow key={item.productId || Math.random()}>
                       <TableCell>{item.productName}</TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">₱{item.cost.toFixed(2)}</TableCell>
@@ -296,29 +319,70 @@ function PurchaseOrderPrintView({ order, onBack }: { order: PurchaseOrder, onBac
 }
 
 export default function PurchasesPage() {
-  const [products, setProducts] = useState<Product[]>(mockProducts);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [orderToPrint, setOrderToPrint] = useState<PurchaseOrder | null>(null);
+  const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
+  const [orderToReceive, setOrderToReceive] = useState<PurchaseOrder | null>(null);
+  const { toast } = useToast();
 
   // Use the real API hook
   const { purchaseOrders, loading, refetch } = usePurchaseOrders(searchTerm);
 
   const updatePurchaseOrder = async (id: string, updates: Partial<PurchaseOrder>) => {
     try {
-      // TODO: Implement API call to update purchase order status
-      console.log('Updating purchase order:', id, updates);
-      // For now, just refetch the data
-      refetch();
+      const response = await fetch(`/api/purchase-orders/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update status');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        refetch();
+      } else {
+         throw new Error(result.error || 'Failed to update');
+      }
     } catch (error) {
       console.error('Failed to update purchase order:', error);
+      // Optional: Toast error here or let child handle logic
     }
   };
 
-  const updateStock = (productId: string, quantity: number) => {
-    setProducts(prev => prev.map(product =>
-      product.id === productId ? { ...product, stock: product.stock + quantity } : product
-    ));
+  const handleReceiveConfirm = async (receivedItems: { productId: string; quantity: number }[]) => {
+    if (!orderToReceive) return;
+
+    try {
+      // Update stocks
+      await Promise.all(receivedItems.map(item =>
+        fetch(`/api/products/${item.productId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stockIncrement: item.quantity }),
+        })
+      ));
+
+      // Update purchase order status
+      await updatePurchaseOrder(orderToReceive.id, { status: 'Received' });
+
+      toast({ title: "Stock Received", description: "Inventory has been updated successfully." });
+      setIsReceiveDialogOpen(false);
+      setOrderToReceive(null);
+      refetch();
+    } catch (error) {
+      console.error('Failed to receive items:', error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to update stock items.", 
+        variant: "destructive" 
+      });
+    }
   };
 
   const addPurchaseOrder = async (order: PurchaseOrder) => {
@@ -385,6 +449,14 @@ export default function PurchasesPage() {
           </div>
           <div className="flex items-center gap-2">
             <AddPurchaseOrderDialog onAddOrder={addPurchaseOrder} />
+            {orderToReceive && (
+              <ReceivePurchaseOrderDialog 
+                open={isReceiveDialogOpen} 
+                onOpenChange={setIsReceiveDialogOpen}
+                order={orderToReceive}
+                onConfirm={handleReceiveConfirm}
+              />
+            )}
           </div>
         </div>
         <div className="flex items-center justify-between gap-4 pt-4">
@@ -462,8 +534,12 @@ export default function PurchasesPage() {
                 key={order.id}
                 order={order}
                 onUpdateOrder={updatePurchaseOrder}
-                onUpdateStock={updateStock}
+                onReceive={(order) => {
+                  setOrderToReceive(order);
+                  setIsReceiveDialogOpen(true);
+                }}
                 onPrint={() => handlePrint(order)}
+                onReorder={addPurchaseOrder}
               />
             ))}
           </TableBody>

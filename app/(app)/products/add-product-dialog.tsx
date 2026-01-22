@@ -37,6 +37,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Category, Brand, UnitOfMeasure, Product, Supplier, Account } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getCategories, getBrands, getSubcategories, getUnitsOfMeasure, addProduct, getSuppliers, getAccounts, getAccountsByType, getWarehouses } from './actions';
 import { ManageCategoriesDialog } from './ManageCategoriesDialog';
@@ -438,7 +439,7 @@ export function AddProductDialog({
           Add Product
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-3xl h-[600px] flex flex-col overflow-hidden" style={{ height: '790px' }}>
+      <DialogContent className="sm:max-w-3xl h-[85vh] flex flex-col overflow-hidden !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Add New Product</DialogTitle>
           <DialogDescription>
@@ -448,7 +449,7 @@ export function AddProductDialog({
         <div className="flex-1 overflow-y-auto px-4 py-1">
           <Form {...form}>
             <form id="add-product-form" onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="h-[520px]">
+              <div className="h-full">
                 <Tabs defaultValue="basic" className="w-full h-full">
                   <TabsList className="w-full h-auto justify-start rounded-none border-b bg-transparent p-0">
                     <TabsTrigger 
@@ -488,7 +489,7 @@ export function AddProductDialog({
                       Conversion
                     </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="basic" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                  <TabsContent value="basic" className="space-y-4 p-6">
                     {/* Buttons and Child Product Logic Removed as requested */}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -676,7 +677,7 @@ export function AddProductDialog({
                       />
                     </div>
                   </TabsContent>
-                  <TabsContent value="inventory" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                  <TabsContent value="inventory" className="space-y-4 p-6">
 
 
                     <FormField
@@ -817,7 +818,7 @@ export function AddProductDialog({
 
                   </TabsContent>
                   
-                  <TabsContent value="suppliers" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                  <TabsContent value="suppliers" className="space-y-4 p-6">
                     <div className="flex justify-between items-center mb-4">
                         <div className="space-y-1">
                             <h4 className="text-sm font-medium">Supplier Mappings</h4>
@@ -890,7 +891,7 @@ export function AddProductDialog({
                     />
                   </TabsContent>
 
-                  <TabsContent value="accounts" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                  <TabsContent value="accounts" className="space-y-4 p-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -986,23 +987,21 @@ export function AddProductDialog({
                       />
                     </div>
                   </TabsContent>
-                  <TabsContent value="conversion" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                  <TabsContent value="conversion" className="space-y-4 p-6">
                     {/* Conversion Factors Section */}
                     <div className="space-y-4">
                       {/* Auto-create Child Unit Switch */}
                       <div className="flex flex-row items-center justify-between rounded-lg border p-4 mb-4">
                         <div className="space-y-0.5">
-                          <FormLabel className="text-base">Auto-create Child Unit</FormLabel>
-                          <FormDescription>
+                          <Label className="text-base">Auto-create Child Unit</Label>
+                          <p className="text-sm text-muted-foreground">
                             If enabled, automatically create a child unit based on conversion factors.
-                          </FormDescription>
+                          </p>
                         </div>
-                        <FormControl>
-                          <Switch
-                            checked={autoCreateChild}
-                            onCheckedChange={setAutoCreateChild}
-                          />
-                        </FormControl>
+                        <Switch
+                          checked={autoCreateChild}
+                          onCheckedChange={setAutoCreateChild}
+                        />
                       </div>
 
                       {/* Conversion Factors List */}
@@ -1123,7 +1122,7 @@ export function AddProductDialog({
                       </div>
                     </div>
                   </TabsContent>
-                  <TabsContent value="price-levels" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+                  <TabsContent value="price-levels" className="space-y-4 p-6">
                     <div className="space-y-4">
                       <div className="rounded-md border p-4">
                         <div className="flex items-center justify-between mb-4">
