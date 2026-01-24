@@ -31,11 +31,19 @@ import { PlusCircle, Pencil, Trash2, Loader2, ListTree } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getBrands, addBrand, updateBrand, deleteBrand } from './actions';
 
-function BrandDialog({ brand, onSave, children, disabled }: { brand?: Brand, onSave: (name: string) => Promise<void>, children: React.ReactNode, disabled?: boolean }) {
+function BrandDialog({ brand, onSave, children, disabled }: { brand?: Brand, onSave: (name: string, markupPercentage?: number) => Promise<void>, children: React.ReactNode, disabled?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState(brand?.name || '');
+  const [markupPercentage, setMarkupPercentage] = useState(brand?.markupPercentage?.toString() || '');
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isOpen) {
+      setName(brand?.name || '');
+      setMarkupPercentage(brand?.markupPercentage?.toString() || '');
+    }
+  }, [isOpen, brand]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -48,13 +56,16 @@ function BrandDialog({ brand, onSave, children, disabled }: { brand?: Brand, onS
     }
     setIsSaving(true);
     try {
-      await onSave(name);
+      await onSave(name, markupPercentage ? parseFloat(markupPercentage) : undefined);
       toast({
         title: brand ? 'Brand Updated' : 'Brand Added',
         description: `Brand "${name}" has been successfully saved.`,
       });
       setIsOpen(false);
-      if (!brand) setName('');
+      if (!brand) {
+        setName('');
+        setMarkupPercentage('');
+      }
     } catch (error) {
       console.error('Failed to save brand', error);
       toast({
@@ -70,11 +81,11 @@ function BrandDialog({ brand, onSave, children, disabled }: { brand?: Brand, onS
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild disabled={disabled}>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
+      <DialogContent className="z-[100] sm:max-w-[425px] !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
         <DialogHeader>
           <DialogTitle>{brand ? 'Edit Brand' : 'Add New Brand'}</DialogTitle>
           <DialogDescription>
-            {brand ? `Editing the brand "${brand.name}".` : 'Enter the name for the new brand.'}
+            {brand ? `Editing the brand "${brand.name}".` : 'Enter the name and default markup for the new brand.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -88,6 +99,21 @@ function BrandDialog({ brand, onSave, children, disabled }: { brand?: Brand, onS
               onChange={(e) => setName(e.target.value)}
               className="col-span-3"
               placeholder="e.g., Logitech"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="markup" className="text-right">
+              Markup %
+            </Label>
+            <Input
+              id="markup"
+              type="number"
+              value={markupPercentage}
+              onChange={(e) => setMarkupPercentage(e.target.value)}
+              className="col-span-3"
+              placeholder="e.g., 20"
+              min="0"
+              step="0.01"
             />
           </div>
         </div>
@@ -106,8 +132,8 @@ function BrandDialog({ brand, onSave, children, disabled }: { brand?: Brand, onS
 function BrandRow({ brand, onBrandUpdated, onBrandDeleted }: { brand: Brand; onBrandUpdated: () => void; onBrandDeleted: () => void }) {
   const { toast } = useToast();
 
-  const handleUpdate = async (name: string) => {
-    const result = await updateBrand(brand.id, name);
+  const handleUpdate = async (name: string, markupPercentage?: number) => {
+    const result = await updateBrand(brand.id, name, markupPercentage);
     if (result.success) {
       toast({
         title: 'Brand Updated',
@@ -143,15 +169,18 @@ function BrandRow({ brand, onBrandUpdated, onBrandDeleted }: { brand: Brand; onB
   return (
     <TableRow>
       <TableCell className="font-medium">{brand.name}</TableCell>
+      <TableCell className="text-center">{brand.markupPercentage !== undefined && brand.markupPercentage !== null ? `${brand.markupPercentage}%` : '-'}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <BrandDialog brand={brand} onSave={handleUpdate}>
-            <Button variant="outline" size="sm">
-              <Pencil className="mr-2 h-4 w-4" /> Edit
+            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
+              <Pencil className="h-4 w-4 text-muted-foreground transition-colors hover:text-primary" />
+              <span className="sr-only">Edit</span>
             </Button>
           </BrandDialog>
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" onClick={handleDelete}>
+            <Trash2 className="h-4 w-4 text-muted-foreground transition-colors hover:text-destructive" />
+            <span className="sr-only">Delete</span>
           </Button>
         </div>
       </TableCell>
@@ -164,6 +193,9 @@ function BrandSkeleton() {
     <TableRow>
       <TableCell>
         <Skeleton className="h-5 w-48" />
+      </TableCell>
+      <TableCell>
+        <Skeleton className="h-5 w-16" />
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
@@ -194,8 +226,8 @@ export function ManageBrandsDialog({ trigger, onBrandAdded, open, onOpenChange }
     refreshBrands();
   }, []);
 
-  const handleAddBrand = async (name: string) => {
-    const result = await addBrand(name);
+  const handleAddBrand = async (name: string, markupPercentage?: number) => {
+    const result = await addBrand(name, markupPercentage);
     if (result.success) {
       await refreshBrands();
       onBrandAdded?.();
@@ -236,6 +268,7 @@ export function ManageBrandsDialog({ trigger, onBrandAdded, open, onOpenChange }
                     <TableHeader>
                         <TableRow>
                         <TableHead>Name</TableHead>
+                        <TableHead className="text-center">Markup</TableHead>
                         <TableHead>
                             <span className="sr-only">Actions</span>
                         </TableHead>
@@ -248,7 +281,7 @@ export function ManageBrandsDialog({ trigger, onBrandAdded, open, onOpenChange }
                         ))}
                          {!isLoading && brands.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={2} className="text-center h-24">
+                                <TableCell colSpan={3} className="text-center h-24">
                                     No brands found. Add a brand to get started.
                                 </TableCell>
                             </TableRow>

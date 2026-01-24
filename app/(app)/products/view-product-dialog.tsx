@@ -25,7 +25,7 @@ function DetailItem({ label, value }: { label: string, value: React.ReactNode })
     return (
         <div className="flex flex-col gap-1">
             <p className="text-sm font-medium text-muted-foreground">{label}</p>
-            <p className="text-lg font-semibold">{value}</p>
+            <div className="text-lg font-semibold">{value}</div>
         </div>
     )
 }
@@ -69,6 +69,8 @@ export function ViewProductDialog({ product, onProductUpdated, products, onChild
                             {product.supplierName && <DetailItem label="Supplier" value={product.supplierName} />}
                             <DetailItem label="SKU" value={<Badge variant="outline">{product.sku}</Badge>} />
                             {product.barcode && <DetailItem label="Barcode" value={<Badge variant="outline">{product.barcode}</Badge>} />}
+                            {product.vatStatus && <DetailItem label="VAT Status" value={<Badge variant="secondary">{product.vatStatus}</Badge>} />}
+                            {product.availability && <DetailItem label="Availability" value={<Badge variant={product.availability === 'in-stock' ? 'default' : 'destructive'}>{product.availability}</Badge>} />}
                         </div>
                         <Separator />
                         <div className="grid grid-cols-2 gap-6">
@@ -81,9 +83,41 @@ export function ViewProductDialog({ product, onProductUpdated, products, onChild
                             <DetailItem label="Reorder Point" value={product.reorderPoint} />
                             <DetailItem label="Unit of Measure" value={product.unitOfMeasure} />
                             {product.parentId && <DetailItem label="Parent Product" value="Child Unit" />}
+                            <DetailItem label="Avg. Daily Sales" value={product.avgDailySales || 0} />
+                            {product.warehouseName && <DetailItem label="Warehouse" value={product.warehouseName} />}
                             {product.createdAt && <DetailItem label="Created" value={new Date(product.createdAt).toLocaleDateString()} />}
                             {product.updatedAt && <DetailItem label="Last Updated" value={new Date(product.updatedAt).toLocaleDateString()} />}
                         </div>
+
+                        {(product.incomeAccount || product.expenseAccount) && (
+                            <>
+                                <Separator />
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-medium">Accounting</h3>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        {product.incomeAccount && <DetailItem label="Income Account" value={product.incomeAccount} />}
+                                        {product.expenseAccount && <DetailItem label="Expense Account" value={product.expenseAccount} />}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {product.priceLevels && product.priceLevels.length > 0 && (
+                            <>
+                                <Separator />
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-medium">Price Levels</h3>
+                                    <div className="grid gap-2">
+                                        {product.priceLevels.map((pl, index) => (
+                                            <div key={index} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                                                <span className="font-medium">Price Level {index + 1}</span>
+                                                <Badge variant="outline">₱{pl.price.toFixed(2)}</Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
 
                         {(() => {
                           const hasConversionFactors = product.conversionFactors && product.conversionFactors.length > 0;

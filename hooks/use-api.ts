@@ -15,7 +15,7 @@ export interface UseSalesInvoicesResult {
   refetch: () => void;
 }
 
-export function useProducts(search?: string): UseProductsResult {
+export function useProducts(search?: string, availability?: string): UseProductsResult {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +28,9 @@ export function useProducts(search?: string): UseProductsResult {
       const params = new URLSearchParams();
       if (search) {
         params.append('search', search);
+      }
+      if (availability) {
+        params.append('availability', availability);
       }
       params.append('limit', '100'); // Get more products for search
 
@@ -49,14 +52,16 @@ export function useProducts(search?: string): UseProductsResult {
         subcategory: '',
         supplier: '',
         stock: item.stock || 0,
-        reorderPoint: 0,
-        avgDailySales: 0,
+        reorderPoint: item.reorderPoint || 0,
+        avgDailySales: item.avgDailySales || 0,
         price: parseFloat(item.price) || 0,
         cost: item.cost ? parseFloat(item.cost) : undefined,
         sku: item.sku || '',
         barcode: item.barcode || '',
         imageUrl: '',
         imageHint: '',
+        vatStatus: item.vat_status,
+        availability: item.availability,
         unitOfMeasure: '',
         incomeAccount: '',
         expenseAccount: '',
@@ -251,10 +256,17 @@ export interface UsePurchaseOrdersResult {
   loading: boolean;
   error: string | null;
   refetch: () => void;
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
 }
 
-export function usePurchaseOrders(search?: string, status?: string): UsePurchaseOrdersResult {
+export function usePurchaseOrders(search?: string, status?: string, page: number = 1, limit: number = 10): UsePurchaseOrdersResult {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [pagination, setPagination] = useState({ total: 0, limit: 10, offset: 0, hasMore: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -263,6 +275,7 @@ export function usePurchaseOrders(search?: string, status?: string): UsePurchase
       setLoading(true);
       setError(null);
 
+      const offset = (page - 1) * limit;
       const params = new URLSearchParams();
       if (search) {
         params.append('search', search);
@@ -270,7 +283,8 @@ export function usePurchaseOrders(search?: string, status?: string): UsePurchase
       if (status) {
         params.append('status', status);
       }
-      params.append('limit', '100'); // Get more orders
+      params.append('limit', limit.toString());
+      params.append('offset', offset.toString());
 
       const response = await fetch(`/api/purchase-orders?${params.toString()}`, {
         cache: 'no-store',
@@ -286,6 +300,9 @@ export function usePurchaseOrders(search?: string, status?: string): UsePurchase
       }
 
       setPurchaseOrders(result.data || []);
+      if (result.pagination) {
+        setPagination(result.pagination);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       console.error('Error fetching purchase orders:', err);
@@ -296,11 +313,11 @@ export function usePurchaseOrders(search?: string, status?: string): UsePurchase
 
   useEffect(() => {
     fetchPurchaseOrders();
-  }, [search, status]);
+  }, [search, status, page, limit]);
 
   const refetch = () => {
     fetchPurchaseOrders();
   };
 
-  return { purchaseOrders, loading, error, refetch };
+  return { purchaseOrders, loading, error, refetch, pagination };
 }

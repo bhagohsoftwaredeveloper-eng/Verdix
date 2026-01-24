@@ -34,6 +34,8 @@ export type ProductFormData = {
     supplierSku?: string;
     isPrimary: boolean;
   }[];
+  vatStatus?: string;
+  availability?: string;
 };
 
 export async function getProducts(limit?: number, offset?: number) {
@@ -114,8 +116,10 @@ export async function getProducts(limit?: number, offset?: number) {
       supplier: product.primary_supplier_id || product.supplier_id, // Use primary mapped supplier if available
       supplierName: product.primary_supplier_name || product.legacy_supplier_name,
       warehouse: product.warehouse_id,
-      warehouseName: product.warehouse_name,
+
       priceLevels: plMap.get(product.id) || [],
+      vatStatus: product.vat_status,
+      availability: product.availability,
       createdAt: product.created_at,
       updatedAt: product.updated_at,
     }));
@@ -136,6 +140,26 @@ export async function getProductsCount() {
   }
 }
 
+export async function getLowStockAlerts() {
+  try {
+    const sql = `
+      SELECT id, name, stock, reorder_point
+      FROM products
+      WHERE stock < reorder_point
+    `;
+    const products = await query(sql);
+    return products.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      stock: p.stock,
+      reorderPoint: p.reorder_point
+    }));
+  } catch (error) {
+    console.error('Error fetching low stock alerts:', error);
+    return [];
+  }
+}
+
 export async function addProduct(formData: ProductFormData) {
   try {
     // Generate unique ID for the product
@@ -153,7 +177,7 @@ export async function addProduct(formData: ProductFormData) {
       supplier_id: formData.supplier || null,
       warehouse_id: formData.warehouse || null,
       stock: formData.stock || 0,
-      reorder_point: formData.reorderPoint || 0,
+      reorder_point: formData.reorderPoint || formData.supplierMappings?.find(m => m.isPrimary)?.rop || 0,
       avg_daily_sales: 0, // Will be calculated later based on sales history
       price: formData.price,
       cost: formData.cost || null,
@@ -164,8 +188,11 @@ export async function addProduct(formData: ProductFormData) {
       unit_of_measure: formData.unitOfMeasure,
       parent_id: formData.parentId || null,
       conversion_factor: formData.conversionFactor || 1,
-      income_account: formData.incomeAccount || null,
+
       expense_account: formData.expenseAccount || null,
+      income_account: formData.incomeAccount || null,
+      vat_status: formData.vatStatus || 'YES (Subject to 12% VAT)',
+      availability: formData.availability || 'Available',
     };
 
     // Insert product into MySQL database
@@ -174,8 +201,9 @@ export async function addProduct(formData: ProductFormData) {
         id, name, description, additional_description, category, brand,
         subcategory, supplier_id, warehouse_id, stock, reorder_point, avg_daily_sales, price, cost,
         sku, barcode, image_url, image_hint,
-        unit_of_measure, parent_id, conversion_factor, income_account, expense_account
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        unit_of_measure, parent_id, conversion_factor, income_account, expense_account,
+        vat_status, availability
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const values_array = [
@@ -202,6 +230,8 @@ export async function addProduct(formData: ProductFormData) {
       productData.conversion_factor,
       productData.income_account,
       productData.expense_account,
+      productData.vat_status,
+      productData.availability,
     ];
 
     await query(sql, values_array);
@@ -260,18 +290,23 @@ export async function getBrands() {
   try {
     const sql = `SELECT * FROM brands ORDER BY name ASC`;
     const brands = await query(sql);
-    return brands.map((b: any) => ({ ...b, created_at: b.created_at, updated_at: b.updated_at }));
+    return brands.map((b: any) => ({ 
+      ...b, 
+      markupPercentage: b.markup_percentage !== null ? parseFloat(b.markup_percentage) : undefined,
+      created_at: b.created_at, 
+      updated_at: b.updated_at 
+    }));
   } catch (error) {
     console.error('Error fetching brands:', error);
     return [];
   }
 }
 
-export async function addBrand(name: string) {
+export async function addBrand(name: string, markupPercentage?: number) {
   try {
     const brandId = `brand_${Date.now()}`;
-    const sql = `INSERT INTO brands (id, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name)`;
-    await query(sql, [brandId, name]);
+    const sql = `INSERT INTO brands (id, name, markup_percentage) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), markup_percentage = VALUES(markup_percentage)`;
+    await query(sql, [brandId, name, markupPercentage || 0]);
     return { success: true, message: `Brand "${name}" has been added.` };
   } catch (error) {
     console.error('Error adding brand:', error);
@@ -279,10 +314,10 @@ export async function addBrand(name: string) {
   }
 }
 
-export async function updateBrand(id: string, name: string) {
+export async function updateBrand(id: string, name: string, markupPercentage?: number) {
   try {
-    const sql = `UPDATE brands SET name = ? WHERE id = ?`;
-    await query(sql, [name, id]);
+    const sql = `UPDATE brands SET name = ?, markup_percentage = ? WHERE id = ?`;
+    await query(sql, [name, markupPercentage !== undefined ? markupPercentage : 0, id]);
     return { success: true, message: `Brand updated to "${name}".` };
   } catch (error) {
     console.error('Error updating brand:', error);
@@ -290,10 +325,10 @@ export async function updateBrand(id: string, name: string) {
   }
 }
 
-export async function updateCategory(id: string, name: string) {
+export async function updateCategory(id: string, name: string, markupPercentage?: number) {
   try {
-    const sql = `UPDATE categories SET name = ? WHERE id = ?`;
-    await query(sql, [name, id]);
+    const sql = `UPDATE categories SET name = ?, markup_percentage = ? WHERE id = ?`;
+    await query(sql, [name, markupPercentage !== undefined ? markupPercentage : 0, id]);
     return { success: true, message: `Category updated to "${name}".` };
   } catch (error) {
     console.error('Error updating category:', error);
@@ -301,10 +336,10 @@ export async function updateCategory(id: string, name: string) {
   }
 }
 
-export async function updateSubcategory(id: string, name: string) {
+export async function updateSubcategory(id: string, name: string, markupPercentage?: number) {
   try {
-    const sql = `UPDATE subcategories SET name = ? WHERE id = ?`;
-    await query(sql, [name, id]);
+    const sql = `UPDATE subcategories SET name = ?, markup_percentage = ? WHERE id = ?`;
+    await query(sql, [name, markupPercentage !== undefined ? markupPercentage : 0, id]);
     return { success: true, message: `Subcategory updated to "${name}".` };
   } catch (error) {
     console.error('Error updating subcategory:', error);
@@ -344,16 +379,19 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
       warehouse_id: formData.warehouse || null,
       conversion_factor: formData.conversionFactor || 1,
       income_account: formData.incomeAccount || null,
+
       expense_account: formData.expenseAccount || null,
+      vat_status: formData.vatStatus || 'YES (Subject to 12% VAT)',
+      availability: formData.availability || 'Available',
     };
 
     // Update product in MySQL database
     const sql = `
       UPDATE products SET
         name = ?, description = ?, additional_description = ?, category = ?,
-        brand = ?, subcategory = ?, supplier_id = ?, reorder_point = ?, price = ?, cost = ?,
+        brand = ?, subcategory = ?, supplier_id = ?, price = ?, cost = ?,
         barcode = ?, unit_of_measure = ?, warehouse_id = ?, conversion_factor = ?,
-        income_account = ?, expense_account = ?
+        income_account = ?, expense_account = ?, vat_status = ?, availability = ?, reorder_point = ?
       WHERE id = ?
     `;
 
@@ -365,7 +403,6 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
       productData.brand,
       productData.subcategory,
       productData.supplier_id,
-      productData.reorder_point,
       productData.price,
       productData.cost,
       productData.barcode,
@@ -374,6 +411,9 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
       productData.conversion_factor,
       productData.income_account,
       productData.expense_account,
+      productData.vat_status,
+      productData.availability,
+      productData.reorder_point,
       id,
     ];
 
@@ -432,18 +472,23 @@ export async function getCategories() {
   try {
     const sql = `SELECT * FROM categories ORDER BY name ASC`;
     const categories = await query(sql);
-    return categories.map((c: any) => ({ ...c, created_at: c.created_at, updated_at: c.updated_at }));
+    return categories.map((c: any) => ({ 
+      ...c, 
+      markupPercentage: c.markup_percentage !== null ? parseFloat(c.markup_percentage) : undefined,
+      created_at: c.created_at, 
+      updated_at: c.updated_at 
+    }));
   } catch (error) {
     console.error('Error fetching categories:', error);
     return [];
   }
 }
 
-export async function addCategory(name: string) {
+export async function addCategory(name: string, markupPercentage?: number) {
   try {
     const categoryId = `category_${Date.now()}`;
-    const sql = `INSERT INTO categories (id, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name)`;
-    await query(sql, [categoryId, name]);
+    const sql = `INSERT INTO categories (id, name, markup_percentage) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), markup_percentage = VALUES(markup_percentage)`;
+    await query(sql, [categoryId, name, markupPercentage || 0]);
     return { success: true, message: `Category "${name}" has been added.` };
   } catch (error) {
     console.error('Error adding category:', error);
@@ -467,18 +512,23 @@ export async function getSubcategories() {
   try {
     const sql = `SELECT * FROM subcategories ORDER BY name ASC`;
     const subcategories = await query(sql);
-    return subcategories.map((s: any) => ({ ...s, created_at: s.created_at, updated_at: s.updated_at }));
+    return subcategories.map((s: any) => ({ 
+      ...s, 
+      markupPercentage: s.markup_percentage !== null ? parseFloat(s.markup_percentage) : undefined,
+      created_at: s.created_at, 
+      updated_at: s.updated_at 
+    }));
   } catch (error) {
     console.error('Error fetching subcategories:', error);
     return [];
   }
 }
 
-export async function addSubcategory(name: string) {
+export async function addSubcategory(name: string, markupPercentage?: number) {
   try {
     const subcategoryId = `subcategory_${Date.now()}`;
-    const sql = `INSERT INTO subcategories (id, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name)`;
-    await query(sql, [subcategoryId, name]);
+    const sql = `INSERT INTO subcategories (id, name, markup_percentage) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), markup_percentage = VALUES(markup_percentage)`;
+    await query(sql, [subcategoryId, name, markupPercentage || 0]);
     return { success: true, message: `Subcategory "${name}" has been added.` };
   } catch (error) {
     console.error('Error adding subcategory:', error);
@@ -510,7 +560,7 @@ export async function getSuppliers() {
       email: s.email,
       company: s.company,
       tin: s.tin,
-      markupPercentage: s.markup_percentage ? parseFloat(s.markup_percentage) : undefined,
+      markupPercentage: s.markup_percentage !== null ? parseFloat(s.markup_percentage) : undefined,
       created_at: s.created_at,
       updated_at: s.updated_at
     }));
@@ -665,6 +715,24 @@ export async function deleteUnitOfMeasure(id: string) {
   } catch (error) {
     console.error('Error deleting unit of measure:', error);
     return { success: false, message: 'Error deleting unit of measure.' };
+  }
+}
+
+// Tax Rates
+export async function getTaxRates() {
+  try {
+    const sql = `SELECT * FROM tax_rates ORDER BY created_at DESC`;
+    const rates = await query(sql);
+    return rates.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      rate: parseFloat(r.rate),
+      description: r.description,
+      isDefault: !!r.is_default
+    }));
+  } catch (error) {
+    console.error('Error fetching tax rates:', error);
+    return [];
   }
 }
 
@@ -984,6 +1052,7 @@ export async function getPriceLevels() {
     return levels.map((l: any) => ({
       ...l,
       isDefault: l.is_default === 1 || l.is_default === true,
+      percentageAdjustment: l.percentage_adjustment ? parseFloat(l.percentage_adjustment) : 100,
       created_at: l.created_at,
       updated_at: l.updated_at
     }));
@@ -993,7 +1062,7 @@ export async function getPriceLevels() {
   }
 }
 
-export async function addPriceLevel(name: string, description?: string, isDefault: boolean = false) {
+export async function addPriceLevel(name: string, description?: string, isDefault: boolean = false, percentageAdjustment: number = 100) {
   try {
     const levelId = `level_${Date.now()}`;
     
@@ -1001,8 +1070,8 @@ export async function addPriceLevel(name: string, description?: string, isDefaul
       await query('UPDATE price_levels SET is_default = FALSE');
     }
     
-    const sql = `INSERT INTO price_levels (id, name, description, is_default) VALUES (?, ?, ?, ?)`;
-    await query(sql, [levelId, name, description || null, isDefault]);
+    const sql = `INSERT INTO price_levels (id, name, description, is_default, percentage_adjustment) VALUES (?, ?, ?, ?, ?)`;
+    await query(sql, [levelId, name, description || null, isDefault, percentageAdjustment]);
     return { success: true, message: `Price level "${name}" has been added.` };
   } catch (error) {
     console.error('Error adding price level:', error);
@@ -1010,14 +1079,14 @@ export async function addPriceLevel(name: string, description?: string, isDefaul
   }
 }
 
-export async function updatePriceLevel(id: string, name: string, description?: string, isDefault: boolean = false) {
+export async function updatePriceLevel(id: string, name: string, description?: string, isDefault: boolean = false, percentageAdjustment: number = 100) {
   try {
     if (isDefault) {
       await query('UPDATE price_levels SET is_default = FALSE');
     }
     
-    const sql = `UPDATE price_levels SET name = ?, description = ?, is_default = ? WHERE id = ?`;
-    await query(sql, [name, description || null, isDefault, id]);
+    const sql = `UPDATE price_levels SET name = ?, description = ?, is_default = ?, percentage_adjustment = ? WHERE id = ?`;
+    await query(sql, [name, description || null, isDefault, percentageAdjustment, id]);
     return { success: true, message: `Price level "${name}" has been updated.` };
   } catch (error) {
     console.error('Error updating price level:', error);
@@ -1095,6 +1164,10 @@ export async function addSupplierMapping(productId: string, supplierId: string, 
     `;
     
     await query(sql, [id, productId, supplierId, supplierSku || null, leadTime, rop, cost || null, isPrimary]);
+
+    if (isPrimary) {
+        await query('UPDATE products SET reorder_point = ? WHERE id = ?', [rop, productId]);
+    }
     
     return { success: true, message: 'Supplier mapping added successfully.', id };
   } catch (error) {
@@ -1126,6 +1199,10 @@ export async function updateSupplierMapping(id: string, leadTime: number, rop: n
     
     await query(sql, [leadTime, rop, cost || null, supplierSku || null, isPrimary, id]);
     
+    if (isPrimary) {
+        await query('UPDATE products SET reorder_point = ? WHERE id = ?', [rop, productId]);
+    }
+
     return { success: true, message: 'Supplier mapping updated successfully.' };
   } catch (error) {
     console.error('Error updating supplier mapping:', error);
@@ -1147,6 +1224,13 @@ export async function setPrimarySupplier(productId: string, mappingId: string) {
   try {
     await query('UPDATE supplier_product_mapping SET is_primary = FALSE WHERE product_id = ?', [productId]);
     await query('UPDATE supplier_product_mapping SET is_primary = TRUE WHERE id = ?', [mappingId]);
+    
+    // Sync ROP
+    const [mapping] = await query('SELECT supplier_specific_rop FROM supplier_product_mapping WHERE id = ?', [mappingId]);
+    if (mapping) {
+        await query('UPDATE products SET reorder_point = ? WHERE id = ?', [mapping.supplier_specific_rop, productId]);
+    }
+
     return { success: true, message: 'Primary supplier updated.' };
   } catch (error) {
     console.error('Error setting primary supplier:', error);
@@ -1165,7 +1249,8 @@ export async function getProductOptions() {
       suppliersResult,
       accountsResult,
       warehousesResult,
-      priceLevelsResult
+      priceLevelsResult,
+      taxRatesResult
     ] = await Promise.allSettled([
       getBrands(),
       getCategories(),
@@ -1174,7 +1259,8 @@ export async function getProductOptions() {
       getSuppliers(),
       getAccounts(),
       getWarehouses(),
-      getPriceLevels()
+      getPriceLevels(),
+      getTaxRates()
     ]);
 
     return {
@@ -1186,6 +1272,7 @@ export async function getProductOptions() {
       accounts: accountsResult.status === 'fulfilled' ? accountsResult.value : [],
       warehouses: warehousesResult.status === 'fulfilled' ? warehousesResult.value : [],
       priceLevels: priceLevelsResult.status === 'fulfilled' ? priceLevelsResult.value : [],
+      taxRates: taxRatesResult.status === 'fulfilled' ? taxRatesResult.value : [],
       errors: {
         accounts: accountsResult.status === 'rejected' ? String(accountsResult.reason) : null,
       }
@@ -1194,7 +1281,7 @@ export async function getProductOptions() {
     console.error('Error fetching product options:', error);
     return {
       brands: [], categories: [], subcategories: [], units: [], suppliers: [], 
-      accounts: [], warehouses: [], priceLevels: [], errors: { global: String(error) }
+      accounts: [], warehouses: [], priceLevels: [], taxRates: [], errors: { global: String(error) }
     };
   }
 }

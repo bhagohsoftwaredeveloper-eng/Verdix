@@ -59,7 +59,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from '@/components/ui/badge';
-import { getProducts } from './products/actions';
+import { getProducts, getLowStockAlerts } from './products/actions';
 import { Product } from '@/lib/types';
 import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
 
@@ -429,14 +429,13 @@ function NotificationsBell() {
   const router = useRouter();
 
   // Poll for low stock notifications
+  // Poll for low stock notifications and listen for updates
   useEffect(() => {
     const checkStock = async () => {
         try {
-            // Note: In a real app we might want a lighter weight endpoint for this check
-            const products = await getProducts(1000, 0); 
-            const lowStock = products.filter((p: Product) => p.stock < p.reorderPoint);
+            const lowStock = await getLowStockAlerts();
             
-            const newNotifications = lowStock.map((p: Product) => ({
+            const newNotifications = lowStock.map((p: any) => ({
                 id: `low-stock-${p.id}`,
                 title: 'Low Stock Alert',
                 message: `${p.name} is below reorder point (${p.stock}/${p.reorderPoint})`,
@@ -451,9 +450,21 @@ function NotificationsBell() {
     };
     
     checkStock();
-    // Poll every minute
-    const interval = setInterval(checkStock, 60000);
-    return () => clearInterval(interval);
+    
+    // Listen for stock updates
+    const handleStockUpdate = () => {
+      checkStock();
+    };
+    
+    window.addEventListener('stock-updated', handleStockUpdate);
+    
+    // Poll every 30 seconds as a fallback
+    const interval = setInterval(checkStock, 30000);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('stock-updated', handleStockUpdate);
+    };
   }, []);
 
   const unreadCount = notifications.length;

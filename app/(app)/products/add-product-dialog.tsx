@@ -34,7 +34,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { PlusCircle, Loader2, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Category, Brand, UnitOfMeasure, Product, Supplier, Account } from '@/lib/types';
+import { Category, Brand, UnitOfMeasure, Product, Supplier, Account, TaxRate, SystemSettings } from '@/lib/types';
+
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -45,14 +46,15 @@ import { ManageBrandsDialog } from './ManageBrandsDialog';
 import { ManageSubcategoriesDialog } from './ManageSubcategoriesDialog';
 import { ManageUnitOfMeasureDialog } from './ManageUnitOfMeasureDialog';
 
-import { ManageAccountsDialog } from './ManageAccountsDialog';
 
+
+import { ManageAccountsDialog } from './ManageAccountsDialog';
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
-import { AddSupplierMappingDialog } from './AddSupplierMappingDialog';
+import { ManageSuppliersDialog } from './ManageSuppliersDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Star, Plus } from 'lucide-react';
-import { SupplierProductMapping } from '@/lib/types';
+
 
 
 function CurrencyIcon({ className }: { className?: string }) {
@@ -85,7 +87,7 @@ const productSchema = z.object({
   warehouse: z.string().optional(),
   unitOfMeasure: z.string().min(1, 'Unit of measure is required'),
   stock: z.coerce.number().int().nonnegative('Initial stock must be a non-negative integer'),
-  reorderPoint: z.coerce.number().int().nonnegative('Reorder point must be non-negative'),
+  reorderPoint: z.coerce.number().int().nonnegative().optional().default(0),
   price: z.coerce.number().positive("Price must be a positive number"),
   cost: z.coerce.number().nonnegative("Cost must be non-negative").optional(),
   incomeAccount: z.string().optional(),
@@ -100,6 +102,8 @@ const productSchema = z.object({
     levelId: z.string().min(1, 'Level is required'),
     price: z.coerce.number().positive('Price must be positive'),
   })).optional(),
+  vatStatus: z.string().default('YES (Subject to 12% VAT)'),
+  availability: z.string().default('Available'),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -137,39 +141,24 @@ export function AddProductDialog({
   const [warehouses, setWarehouses] = useState<any[]>([]); // Using any for now to avoid cross-file type issues
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
+  const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
 
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
 
-  // Supplier Mappings State
-  const [supplierMappings, setSupplierMappings] = useState<any[]>([]);
-  const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false);
-  const [editingMapping, setEditingMapping] = useState<any | null>(null);
+  useEffect(() => {
+    fetch('/api/pos-settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+            setSystemSettings(data.data);
+        }
+      })
+      .catch(err => console.error('Failed to fetch settings', err));
+  }, []);
 
-  const handleAddSupplierMapping = (mapping: any) => {
-    // If setting as primary, remove primary flag from others
-    const newMappings = [...supplierMappings];
-    if (mapping.isPrimary) {
-        newMappings.forEach(m => m.isPrimary = false);
-    }
-    
-    // Check if supplier already exists
-    const existingIndex = newMappings.findIndex(m => m.supplierId === mapping.supplierId);
-    if (existingIndex >= 0) {
-        newMappings[existingIndex] = mapping;
-    } else {
-        newMappings.push(mapping);
-    }
-    setSupplierMappings(newMappings);
-  };
 
-  const handleRemoveSupplierMapping = (supplierId: string) => {
-    setSupplierMappings(prev => prev.filter(m => m.supplierId !== supplierId));
-  };
- 
-  const openSupplierDialog = (mapping?: any) => {
-      setEditingMapping(mapping || null);
-      setIsSupplierDialogOpen(true);
-  };
+
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -217,6 +206,7 @@ export function AddProductDialog({
       setSuppliers(externalProductOptions.suppliers || []);
       setWarehouses(externalProductOptions.warehouses || []);
       setPriceLevels(externalProductOptions.priceLevels || []);
+      setTaxRates(externalProductOptions.taxRates || []);
 
       // Initialize default price level if form is empty
       const systemPriceLevels = externalProductOptions.priceLevels || [];
@@ -248,10 +238,15 @@ export function AddProductDialog({
   useEffect(() => {
     if (isOpen) {
       form.reset();
+      
+      // Set default tax rate if available and valid
+      if (taxRates.length > 0) {
+        const defaultTax = taxRates.find(t => t.isDefault) || taxRates[0];
+        form.setValue('vatStatus', defaultTax.name);
+      }
 
       setProductType('parent');
       setAutoCreateChild(true);
-      setSupplierMappings([]);
     }
   }, [isOpen, form]);
 
@@ -269,6 +264,120 @@ export function AddProductDialog({
       // since conversion factors are now managed separately
     }
   }, [productType]);
+
+  const watchedCost = form.watch('cost');
+  const watchedCategoryName = form.watch('category');
+  const watchedSubcategoryName = form.watch('subcategory');
+  const watchedBrandName = form.watch('brand');
+  const watchedSupplierId = form.watch('supplier');
+  const [markupSource, setMarkupSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!systemSettings?.enableAutomaticMarkup) {
+        setMarkupSource(null);
+        return;
+    }
+
+    const category = categories.find(c => c.name === watchedCategoryName);
+    const subcategory = subcategories.find(s => s.name === watchedSubcategoryName);
+    const brand = brands.find(b => b.name === watchedBrandName);
+    const supplier = suppliers.find(s => s.id === watchedSupplierId);
+
+    let markup = 0;
+    let source = '';
+    const priority = systemSettings.markupPriority || ["subcategory", "category", "brand", "supplier"];
+
+    for (const type of priority) {
+        if (type === 'subcategory' && subcategory && subcategory.markupPercentage && subcategory.markupPercentage > 0) {
+            markup = subcategory.markupPercentage;
+            source = 'Subcategory';
+            break;
+        } else if (type === 'category' && category && category.markupPercentage && category.markupPercentage > 0) {
+            markup = category.markupPercentage;
+            source = 'Category';
+            break;
+        } else if (type === 'brand' && brand && brand.markupPercentage && brand.markupPercentage > 0) {
+            markup = brand.markupPercentage;
+            source = 'Brand';
+            break;
+        } else if (type === 'supplier' && supplier && supplier.markupPercentage && supplier.markupPercentage > 0) {
+            markup = supplier.markupPercentage;
+            source = 'Supplier';
+            break;
+        }
+    }
+
+    // Fallback to global default if no specific markup found
+    if (!source && systemSettings.defaultMarkupPercentage && systemSettings.defaultMarkupPercentage > 0) {
+        markup = systemSettings.defaultMarkupPercentage;
+        source = 'Global Default';
+    }
+
+    if (source) {
+      setMarkupSource(`Calculated from ${source} Markup (${markup}%)`);
+      if (watchedCost && watchedCost > 0) {
+          const basePrice = watchedCost * (1 + markup / 100);
+          
+          // Apply to main price (which follows default price level logic or base price)
+          // Find default price level to determine what the 'main' price should be
+          const defaultLevel = priceLevels.find((l: any) => l.isDefault) || priceLevels[0];
+          let mainPrice = basePrice;
+
+          if (defaultLevel && defaultLevel.percentageAdjustment) {
+             mainPrice = basePrice * (defaultLevel.percentageAdjustment / 100);
+          }
+          form.setValue('price', parseFloat(mainPrice.toFixed(2)));
+
+          // Apply to all price levels based on their specific adjustment
+          if (priceLevels.length > 0) {
+              // We need to update existing fields or add them
+              // Best way is to map through system priceLevels and ensure form has them
+              const currentFields = form.getValues('priceLevels') || [];
+              
+              // Helper to find existing field index
+              const getFieldIndex = (levelId: string) => currentFields.findIndex((f: any) => f.levelId === levelId);
+
+              priceLevels.forEach((level: any) => {
+                  const adjustment = level.percentageAdjustment || 100;
+                  const levelPrice = parseFloat((basePrice * (adjustment / 100)).toFixed(2));
+                  
+                  const index = getFieldIndex(level.id);
+                  if (index >= 0) {
+                      form.setValue(`priceLevels.${index}.price`, levelPrice);
+                  } else {
+                      // Note: appendPriceLevel is a stable function reference from useFieldArray, 
+                      // but using it inside useEffect might be tricky due to dependencies.
+                      // Ideally we should have initialized fields previously.
+                      // If not, we can only safely update existing ones here to avoid infinite loops if we add append to dependency.
+                      // However, we initialized default level in the other useEffect.
+                      // Let's assume the user might have added levels manually or we initialized them.
+                      // If we want to fully automate, we should perhaps sync the form fields with system levels when cost changes?
+                      // That might be too aggressive.
+                      // Let's stick to updating existing fields that match. 
+                      // If the form is empty of price levels (except default), maybe we should populate all?
+                      
+                      // For now, let's just update the ones present in the form to be safe.
+                  }
+              });
+              
+              // AUTO-POPULATE: If the form has NO price levels or only 1, maybe let's populate ALL system levels?
+              // This is a design decision. Often users want to see all levels.
+              // Let's try to update all fields that exist in the form.
+              priceLevelFields.forEach((field, index) => {
+                  const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
+                  if (levelDef) {
+                      const adjustment = levelDef.percentageAdjustment || 100;
+                      const levelPrice = parseFloat((basePrice * (adjustment / 100)).toFixed(2));
+                      form.setValue(`priceLevels.${index}.price`, levelPrice);
+                  }
+              });
+          }
+      }
+    } else {
+      setMarkupSource(null);
+    }
+
+  }, [watchedCost, watchedCategoryName, watchedSubcategoryName, watchedBrandName, watchedSupplierId, categories, subcategories, brands, suppliers, form, priceLevels, priceLevelFields, systemSettings]);
 
   const applySupplierMarkup = () => {
     const cost = form.getValues('cost');
@@ -355,7 +464,6 @@ export function AddProductDialog({
         ...values,
         ...values,
         image: `https://picsum.photos/seed/${values.sku}/400/300`,
-        supplierMappings: supplierMappings,
       });
 
       if (result.success) {
@@ -399,6 +507,7 @@ export function AddProductDialog({
         });
         form.reset();
         onProductAdded?.();
+        window.dispatchEvent(new Event('stock-updated'));
         setIsOpen(false);
       } else {
         toast({
@@ -464,12 +573,7 @@ export function AddProductDialog({
                     >
                       Inventory
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="suppliers"
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
-                    >
-                      Suppliers
-                    </TabsTrigger>
+
                     <TabsTrigger 
                       value="price-levels"
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
@@ -494,11 +598,12 @@ export function AddProductDialog({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Row 1: Name and Brand */}
+                      {/* Row 1: Name, Brand, VAT and Availability */}
                       <FormField
                         control={form.control}
                         name="name"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="col-span-2 sm:col-span-1">
                             <FormLabel>Product Name</FormLabel>
                             <FormControl>
                               <Input placeholder="e.g., Cola-Cola" {...field} />
@@ -511,7 +616,7 @@ export function AddProductDialog({
                         control={form.control}
                         name="brand"
                         render={({ field }) => (
-                            <FormItem>
+                            <FormItem className="col-span-2 sm:col-span-1">
                               <FormLabel>Brand</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
@@ -539,6 +644,8 @@ export function AddProductDialog({
                             </FormItem>
                         )}
                       />
+
+
 
                       {/* Row 2: SKU and Barcode */}
                       <FormField
@@ -626,10 +733,7 @@ export function AddProductDialog({
                         name="category"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Category</FormLabel>
-                              <ManageCategoriesDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0 text-primary">Manage</Button>} />
-                            </div>
+                            <FormLabel>Category</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
@@ -642,6 +746,19 @@ export function AddProductDialog({
                                 ) : (
                                   categories?.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)
                                 )}
+                                <div className="p-1 w-full border-t mt-1">
+                                  <ManageCategoriesDialog 
+                                    trigger={
+                                      <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add Category
+                                      </Button>
+                                    } 
+                                    onCategoryAdded={() => {
+                                      getCategories().then(setCategories);
+                                    }}
+                                  />
+                                </div>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -653,10 +770,7 @@ export function AddProductDialog({
                         name="subcategory"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Subcategory (Optional)</FormLabel>
-                              <ManageSubcategoriesDialog trigger={<Button variant="link" size="sm" type="button" className="h-auto p-0 text-primary">Manage</Button>} />
-                            </div>
+                            <FormLabel>Subcategory (Optional)</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger>
@@ -669,6 +783,19 @@ export function AddProductDialog({
                                 ) : (
                                   subcategories?.map(sub => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)
                                 )}
+                                <div className="p-1 w-full border-t mt-1">
+                                    <ManageSubcategoriesDialog 
+                                        trigger={
+                                            <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Add Subcategory
+                                            </Button>
+                                        } 
+                                        onSubcategoryAdded={() => {
+                                            getSubcategories().then(setSubcategories);
+                                        }}
+                                    />
+                                </div>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -678,44 +805,132 @@ export function AddProductDialog({
                     </div>
                   </TabsContent>
                   <TabsContent value="inventory" className="space-y-4 p-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      
+                      <FormField
+                        control={form.control}
+                        name="vatStatus"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>VAT Status</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select VAT status" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {taxRates.map((rate) => (
+                                  <SelectItem key={rate.id} value={rate.name}>
+                                    {rate.name} {rate.rate > 0 ? `(${rate.rate}%)` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="availability"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Availability</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} defaultValue="Available">
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select availability" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Available">Available</SelectItem>
+                                <SelectItem value="Unavailable">Unavailable</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
 
-                    <FormField
-                      control={form.control}
-                      name="warehouse"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Warehouse (Optional)</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a warehouse" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {isLoadingWarehouses ? (
-                                <SelectItem value="loading" disabled>Loading...</SelectItem>
-                              ) : (
-                                warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)
-                              )}
-                              <div className="p-1 w-full border-t mt-1">
-                                  <ManageWarehousesDialog trigger={
-                                      <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                          <Plus className="mr-2 h-4 w-4" />
-                                          Manage Warehouses
-                                      </Button>
-                                  } onChange={() => {
-                                    getWarehouses().then(setWarehouses);
-                                  }} />
-                              </div>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="supplier"
+                        render={({ field }) => (
+                          <FormItem>
+                            <div className="flex items-center justify-between">
+                              <FormLabel>Supplier (Optional)</FormLabel>
+                            </div>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a supplier" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingSuppliers ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : (
+                                  suppliers?.map(supplier => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)
+                                )}
+                                <div className="p-1 w-full border-t mt-1">
+                                    <ManageSuppliersDialog trigger={
+                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Manage Suppliers
+                                        </Button>
+                                    } onSupplierAdded={() => {
+                                      getSuppliers().then(setSuppliers);
+                                    }} />
+                                </div>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="warehouse"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Warehouse (Optional)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a warehouse" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingWarehouses ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : (
+                                  warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)
+                                )}
+                                <div className="p-1 w-full border-t mt-1">
+                                    <ManageWarehousesDialog trigger={
+                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Manage Warehouses
+                                        </Button>
+                                    } onChange={() => {
+                                      getWarehouses().then(setWarehouses);
+                                    }} />
+                                </div>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="unitOfMeasure"
@@ -790,14 +1005,12 @@ export function AddProductDialog({
                           <FormItem>
                             <FormLabel>Reorder Point</FormLabel>
                             <FormControl>
-                              <Input type="number" placeholder="e.g., 20" value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                              <Input type="number" placeholder="0" value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="cost"
@@ -813,83 +1026,11 @@ export function AddProductDialog({
                           </FormItem>
                         )}
                       />
-
                     </div>
 
                   </TabsContent>
                   
-                  <TabsContent value="suppliers" className="space-y-4 p-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <div className="space-y-1">
-                            <h4 className="text-sm font-medium">Supplier Mappings</h4>
-                            <p className="text-xs text-muted-foreground">Manage multiple suppliers for this product.</p>
-                        </div>
-                        <Button type="button" size="sm" onClick={() => openSupplierDialog()}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Supplier
-                        </Button>
-                    </div>
 
-                    <div className="border rounded-md">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[50px]"></TableHead>
-                                    <TableHead>Supplier</TableHead>
-                                    <TableHead>Lead Time</TableHead>
-                                    <TableHead>ROP</TableHead>
-                                    <TableHead className="text-right">Cost</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {supplierMappings.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                                            No suppliers mapped yet.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    supplierMappings.map((mapping, index) => {
-                                        const supplier = suppliers.find(s => s.id === mapping.supplierId);
-                                        return (
-                                            <TableRow key={index}>
-                                                <TableCell>
-                                                    {mapping.isPrimary && <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {supplier?.name || 'Unknown'}
-                                                    {mapping.isPrimary && <Badge variant="secondary" className="ml-2 text-xs">Primary</Badge>}
-                                                </TableCell>
-                                                <TableCell>{mapping.leadTime} days</TableCell>
-                                                <TableCell>{mapping.rop}</TableCell>
-                                                <TableCell className="text-right">₱{mapping.cost?.toFixed(2) || '-'}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="sm" type="button" onClick={() => openSupplierDialog(mapping)}>
-                                                        Edit
-                                                    </Button>
-                                                    <Button variant="ghost" size="sm" type="button" className="text-destructive" onClick={() => handleRemoveSupplierMapping(mapping.supplierId)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-
-                    <AddSupplierMappingDialog
-                        productId="new" // Special flag for local mode
-                        isOpen={isSupplierDialogOpen}
-                        onOpenChange={setIsSupplierDialogOpen}
-                        onSuccess={(data: any) => handleAddSupplierMapping(data)}
-                        editingMapping={editingMapping}
-                        suppliers={suppliers}
-                        onRefreshSuppliers={() => getSuppliers().then(setSuppliers)}
-                    />
-                  </TabsContent>
 
                   <TabsContent value="accounts" className="space-y-4 p-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1254,6 +1395,12 @@ export function AddProductDialog({
           <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
             Cancel
           </Button>
+          {markupSource && (
+            <span className="text-xs text-muted-foreground mr-auto ml-2 flex items-center">
+              <Wand2 className="mr-1 h-3 w-3" />
+              {markupSource}
+            </span>
+          )}
           <Button type="submit" form="add-product-form" disabled={isSubmitting}>
             {isSubmitting ? (
               <>

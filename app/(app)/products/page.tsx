@@ -69,7 +69,7 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
     stockStatus === 'out-of-stock'
       ? 'destructive'
       : stockStatus === 'low-stock'
-        ? 'secondary'
+        ? 'destructive'
         : 'default';
   const badgeText =
     stockStatus === 'out-of-stock'
@@ -206,7 +206,7 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
             })()}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="destructive" size="icon" onClick={() => setDeleteDialogOpen(true)}>
+                <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteDialogOpen(true)}>
                   <Trash2 className="h-4 w-4" />
                   <span className="sr-only">Delete product</span>
                 </Button>
@@ -399,10 +399,10 @@ function ProductsContent() {
       <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
         <div>
            <h1 className="text-3xl font-bold tracking-tight text-foreground">Products</h1>
-           <p className="text-muted-foreground mt-1">
+           <div className="text-muted-foreground mt-1">
              Manage your inventory, pricing, and suppliers.
              {showLowStockOnly && <Badge variant="destructive" className="ml-2 animate-pulse">Low Stock Filter Active</Badge>}
-           </p>
+           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <div className="relative group">

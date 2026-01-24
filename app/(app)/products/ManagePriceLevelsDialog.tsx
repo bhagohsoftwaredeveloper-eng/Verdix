@@ -50,10 +50,11 @@ function CurrencyIcon({ className }: { className?: string }) {
   );
 }
 
-function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: PriceLevel, onSave: (name: string, description: string, isDefault: boolean) => Promise<boolean>, onCancel: () => void }) {
+function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: PriceLevel, onSave: (name: string, description: string, isDefault: boolean, percentageAdjustment: number) => Promise<boolean>, onCancel: () => void }) {
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [isDefault, setIsDefault] = useState(initialData?.isDefault || false);
+  const [percentageAdjustment, setPercentageAdjustment] = useState(initialData?.percentageAdjustment?.toString() || '100');
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -66,9 +67,19 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
       });
       return;
     }
+    const adjustment = parseFloat(percentageAdjustment);
+    if (isNaN(adjustment) || adjustment < 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Percentage adjustment must be a valid positive number.',
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const success = await onSave(name, description, isDefault);
+      const success = await onSave(name, description, isDefault, adjustment);
       if (success) {
         toast({
           title: initialData ? 'Price Level Updated' : 'Price Level Added',
@@ -78,6 +89,7 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
           setName('');
           setDescription('');
           setIsDefault(false);
+          setPercentageAdjustment('100');
         }
       }
     } catch (error) {
@@ -119,6 +131,19 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="adjustment" className="text-right">
+          Adjustment %
+        </Label>
+        <Input
+          id="adjustment"
+          type="number"
+          value={percentageAdjustment}
+          onChange={(e) => setPercentageAdjustment(e.target.value)}
+          className="col-span-3"
+          placeholder="e.g., 100 for normal, 90 for 10% discount"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="isDefault" className="text-right">
           Default
         </Label>
@@ -144,8 +169,6 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
 
 function PriceLevelRow({ level, onUpdated, onDeleted, onEdit }: { level: PriceLevel; onUpdated: () => void; onDeleted: () => void; onEdit: (level: PriceLevel) => void }) {
   const { toast } = useToast();
-
-
 
   const handleDelete = async () => {
     const result = await deletePriceLevel(level.id);
@@ -175,6 +198,7 @@ function PriceLevelRow({ level, onUpdated, onDeleted, onEdit }: { level: PriceLe
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">{level.description}</TableCell>
+      <TableCell className="text-center">{level.percentageAdjustment}%</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => onEdit(level)}>
@@ -194,6 +218,7 @@ function PriceLevelSkeleton() {
     <TableRow>
       <TableCell><Skeleton className="h-5 w-32" /></TableCell>
       <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Skeleton className="h-9 w-24" />
@@ -226,8 +251,8 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
     refreshLevels();
   }, []);
 
-  const handleAddLevel = async (name: string, description: string, isDefault: boolean): Promise<boolean> => {
-    const result = await addPriceLevel(name, description, isDefault);
+  const handleAddLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number): Promise<boolean> => {
+    const result = await addPriceLevel(name, description, isDefault, percentageAdjustment);
     if (result.success) {
       await refreshLevels();
       onLevelAdded?.();
@@ -243,9 +268,9 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
     }
   };
 
-  const handleUpdateLevel = async (name: string, description: string, isDefault: boolean): Promise<boolean> => {
+  const handleUpdateLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number): Promise<boolean> => {
     if (!editingLevel) return false;
-    const result = await updatePriceLevel(editingLevel.id, name, description, isDefault);
+    const result = await updatePriceLevel(editingLevel.id, name, description, isDefault, percentageAdjustment);
     if (result.success) {
       await refreshLevels();
       setView('list');

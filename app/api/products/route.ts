@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const warehouseId = searchParams.get('warehouseId');
     const countOnly = searchParams.get('countOnly') === 'true';
+    const availability = searchParams.get('availability');
 
     let sql = `
       SELECT
@@ -24,6 +25,10 @@ export async function GET(request: NextRequest) {
         cost,
         sku,
         barcode,
+        vat_status,
+        availability,
+        reorder_point as reorderPoint,
+        avg_daily_sales as avgDailySales,
         created_at,
         updated_at
       FROM products
@@ -44,6 +49,11 @@ export async function GET(request: NextRequest) {
     if (warehouseId) {
       sql += ' AND warehouse_id = ?';
       params.push(warehouseId);
+    }
+
+    if (availability) {
+      sql += ' AND availability = ?';
+      params.push(availability);
     }
 
     if (countOnly) {
@@ -94,6 +104,11 @@ export async function GET(request: NextRequest) {
     if (warehouseId) {
       countSql += ' AND warehouse_id = ?';
       countParams.push(warehouseId);
+    }
+
+    if (availability) {
+      countSql += ' AND availability = ?';
+      countParams.push(availability);
     }
 
     const countResult = await query(countSql, countParams);
@@ -148,12 +163,12 @@ export async function POST(request: NextRequest) {
 
     const sql = `
       INSERT INTO products (
-        id, name, description, category, brand, stock, price, cost, sku, barcode
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, description, category, brand, stock, price, cost, sku, barcode, reorder_point, avg_daily_sales
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     await query(sql, [
-      id, name, description, category, brand, stock, price, cost, sku, barcode
+      id, name, description, category, brand, stock, price, cost, sku, barcode, 0, 0
     ]);
 
     // Insert price levels if provided

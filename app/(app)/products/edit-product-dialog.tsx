@@ -34,7 +34,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { PlusCircle, Pencil, Loader2, X, Plus, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Category, Product, Brand, UnitOfMeasure, Supplier, Account } from '@/lib/types';
+import { Category, Product, Brand, UnitOfMeasure, Supplier, Account, TaxRate, SystemSettings } from '@/lib/types';
+
 import { ManageCategoriesDialog } from './ManageCategoriesDialog';
 import { ManageBrandsDialog } from './ManageBrandsDialog';
 import { ManageSubcategoriesDialog } from './ManageSubcategoriesDialog';
@@ -66,7 +67,7 @@ function CurrencyIcon({ className }: { className?: string }) {
 }
 import { updateProduct, getBrands, getCategories, getSubcategories, getUnitsOfMeasure, getSuppliers, getAccounts, getWarehouses } from './actions';
 
-import { ProductSuppliers } from './product-suppliers';
+
 
 const productSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
@@ -81,7 +82,7 @@ const productSchema = z.object({
   warehouse: z.string().optional(),
   isSerialized: z.boolean().default(false),
   unitOfMeasure: z.string().min(1, 'Unit of measure is required'),
-  reorderPoint: z.coerce.number().int().nonnegative('Reorder point must be non-negative'),
+  reorderPoint: z.coerce.number().int().nonnegative().optional().default(0),
   price: z.coerce.number().positive("Price must be a positive number"),
   cost: z.coerce.number().nonnegative("Cost must be non-negative").optional(),
   incomeAccount: z.string().optional(),
@@ -95,6 +96,8 @@ const productSchema = z.object({
     levelId: z.string().min(1, 'Level is required'),
     price: z.coerce.number().positive('Price must be positive'),
   })).optional(),
+  vatStatus: z.string().default('YES (Subject to 12% VAT)'),
+  availability: z.string().default('Available'),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -121,7 +124,23 @@ export function EditProductDialog({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
+  const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+  
+  // Guard to prevent auto-calculation on initial form reset
+  const isInitialLoad = useState(true);
+
+  useEffect(() => {
+    fetch('/api/pos-settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+            setSystemSettings(data.data);
+        }
+      })
+      .catch(err => console.error('Failed to fetch settings', err));
+  }, []);
 
   // Use pre-loaded data from parent when available
   useEffect(() => {
@@ -134,6 +153,7 @@ export function EditProductDialog({
       setAccounts(externalProductOptions.accounts || []);
       setWarehouses(externalProductOptions.warehouses || []);
       setPriceLevels(externalProductOptions.priceLevels || []);
+      setTaxRates(externalProductOptions.taxRates || []);
       setIsLoadingPriceLevels(false);
     }
   }, [externalProductOptions]);
@@ -154,6 +174,8 @@ export function EditProductDialog({
       conversionFactor: product.conversionFactor ?? 1, // Handle null/0 by defaulting to 1
       conversionFactors: product.conversionFactors || [],
       priceLevels: product.priceLevels || [],
+      vatStatus: product.vatStatus || 'YES (Subject to 12% VAT)',
+      availability: product.availability || 'Available',
     },
   });
 
@@ -180,87 +202,121 @@ export function EditProductDialog({
           additionalDescription: product.additionalDescription ?? '',
           incomeAccount: product.incomeAccount ?? '',
           expenseAccount: product.expenseAccount ?? '',
-          warehouse: product.warehouse ?? '',
+          warehouse: product.warehouseId ?? product.warehouse ?? '',
+          reorderPoint: product.reorderPoint ?? 0,
           subcategory: product.subcategory ?? '', // Handle null
           supplier: product.supplier ?? '', // Handle null
           unitOfMeasure: product.unitOfMeasure ?? '', // Handle null
           conversionFactor: product.conversionFactor ?? 1, // Handle null/0 by defaulting to 1
           conversionFactors: product.conversionFactors || [],
           priceLevels: product.priceLevels || [],
+          vatStatus: product.vatStatus || 'YES (Subject to 12% VAT)',
+          availability: product.availability || 'Available',
       };
       console.log('Resetting form with:', sanitizedProduct);
       form.reset(sanitizedProduct);
     }
   }, [product, isOpen, form]);
 
-  const applySupplierMarkup = () => {
-    const cost = form.getValues('cost');
-    const supplierId = form.getValues('supplier');
-    const supplier = suppliers.find(s => s.id === supplierId);
+  const [markupSource, setMarkupSource] = useState<string | null>(null);
 
-    if (!cost) {
-      toast({
-        variant: 'destructive',
-        title: 'Cost Required',
-        description: 'Please enter the cost before applying markup.',
-      });
-      return;
+  // Track initial load to prevent overwriting existing prices
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+        // Reset initialization state when dialog opens
+        setIsInitialized(false);
+        // Small timeout to allow form.reset to complete before allowing calculations
+        const timer = setTimeout(() => setIsInitialized(true), 1000);
+        return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    // Skip if not initialized or automation disabled
+    if (!isInitialized || !systemSettings?.enableAutomaticMarkup) {
+        setMarkupSource(null);
+        return;
     }
 
-    if (!supplier || supplier.markupPercentage === undefined) {
-      toast({
-        variant: 'destructive',
-        title: 'Supplier Markup Not Found',
-        description: 'The selected supplier does not have a markup percentage defined.',
-      });
-      return;
+    const category = categories.find(c => c.name === form.getValues('category'));
+    const subcategory = subcategories.find(s => s.name === form.getValues('subcategory'));
+    const brand = brands.find(b => b.name === form.getValues('brand'));
+    const supplier = suppliers.find(s => s.id === form.getValues('supplier'));
+
+    let markup = 0;
+    let source = '';
+    const priority = systemSettings.markupPriority || ["subcategory", "category", "brand", "supplier"];
+
+    for (const type of priority) {
+        if (type === 'subcategory' && subcategory && subcategory.markupPercentage && subcategory.markupPercentage > 0) {
+            markup = subcategory.markupPercentage;
+            source = 'Subcategory';
+            break;
+        } else if (type === 'category' && category && category.markupPercentage && category.markupPercentage > 0) {
+            markup = category.markupPercentage;
+            source = 'Category';
+            break;
+        } else if (type === 'brand' && brand && brand.markupPercentage && brand.markupPercentage > 0) {
+            markup = brand.markupPercentage;
+            source = 'Brand';
+            break;
+        } else if (type === 'supplier' && supplier && supplier.markupPercentage && supplier.markupPercentage > 0) {
+            markup = supplier.markupPercentage;
+            source = 'Supplier';
+            break;
+        }
     }
 
-    const markup = supplier.markupPercentage / 100;
-    const basePrice = cost * (1 + markup);
-    
-    // Apply to price levels
-    let firstLevelPrice = basePrice;
+    // Fallback to global default
+    if (!source && systemSettings.defaultMarkupPercentage && systemSettings.defaultMarkupPercentage > 0) {
+        markup = systemSettings.defaultMarkupPercentage;
+        source = 'Global Default';
+    }
 
-    if (priceLevels.length > 0) {
-      priceLevels.forEach((level) => {
-        let levelMarkup = markup;
-        const name = level.name.toLowerCase();
-        
-        if (name.includes('wholesale')) {
-          levelMarkup = markup * 0.7;
-        } else if (name.includes('vip')) {
-          levelMarkup = markup * 0.85;
-        } else if (!level.isDefault) {
-          levelMarkup = markup * 0.9;
-        }
+    if (source) {
+      setMarkupSource(`Calculated from ${source} Markup (${markup}%)`);
+      const currentCost = form.getValues('cost') || 0;
+      
+      if (currentCost > 0) {
+          const basePrice = currentCost * (1 + markup / 100);
+          
+          const defaultLevel = priceLevels.find((l: any) => l.isDefault) || priceLevels[0];
+          let mainPrice = basePrice;
 
-        const levelPrice = parseFloat((cost * (1 + levelMarkup)).toFixed(2));
-        
-        if (level.isDefault) {
-            firstLevelPrice = levelPrice;
-        }
+          if (defaultLevel && defaultLevel.percentageAdjustment) {
+             mainPrice = basePrice * (defaultLevel.percentageAdjustment / 100);
+          }
+          
+          // Only update if the calculated price is different (avoid infinite loops/unnecessary renders)
+          // Actually setValue trigger re-renders, so we should be careful.
+          // But since we are reacting to cost/category/etc changes, it's fine.
+          form.setValue('price', parseFloat(mainPrice.toFixed(2)));
 
-        // Find if this level is already in priceLevelFields
-        const fieldIndex = priceLevelFields.findIndex(f => (f as any).levelId === level.id);
-        if (fieldIndex > -1) {
-          form.setValue(`priceLevels.${fieldIndex}.price`, levelPrice);
-        } else {
-          appendPriceLevel({ levelId: level.id, price: levelPrice });
-        }
-      });
+          if (priceLevels.length > 0) {
+              const currentFields = form.getValues('priceLevels') || [];
+              const getFieldIndex = (levelId: string) => currentFields.findIndex((f: any) => f.levelId === levelId);
+
+              priceLevels.forEach((level: any) => {
+                  const adjustment = level.percentageAdjustment || 100;
+                  const levelPrice = parseFloat((basePrice * (adjustment / 100)).toFixed(2));
+                  
+                  const index = getFieldIndex(level.id);
+                  if (index >= 0) {
+                      form.setValue(`priceLevels.${index}.price`, levelPrice);
+                  } else {
+                      appendPriceLevel({ levelId: level.id, price: levelPrice });
+                  }
+              });
+          }
+      }
     } else {
-       form.setValue('price', parseFloat(basePrice.toFixed(2)));
+      setMarkupSource(null);
     }
-    
-    // Always sync the main price to the default level's price
-    form.setValue('price', firstLevelPrice);
 
-    toast({
-      title: 'Markup Applied',
-      description: `Calculated prices based on ${supplier.name}'s ${supplier.markupPercentage}% markup.`,
-    });
-  };
+  }, [costValue, selectedUnitOfMeasure, selectedSupplierId, form.watch('category'), form.watch('subcategory'), form.watch('brand'), isInitialized, systemSettings, categories, subcategories, brands, suppliers, priceLevels]);
+
 
   const saveChanges = async (values: ProductFormValues) => {
     console.log('EditProductDialog saveChanges called with values:', values);
@@ -283,6 +339,7 @@ export function EditProductDialog({
           description: result.message,
         });
         onProductUpdated?.();
+        window.dispatchEvent(new Event('stock-updated'));
         setIsOpen(false);
       } else {
         toast({
@@ -309,7 +366,7 @@ export function EditProductDialog({
         <Tooltip>
           <TooltipTrigger asChild>
             <DialogTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
                 <Pencil className="h-4 w-4" />
                 <span className="sr-only">Edit product</span>
               </Button>
@@ -344,12 +401,7 @@ export function EditProductDialog({
                       >
                         Inventory
                       </TabsTrigger>
-                      <TabsTrigger 
-                        value="suppliers"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
-                      >
-                        Suppliers
-                      </TabsTrigger>
+
                       <TabsTrigger 
                         value="price-levels"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
@@ -384,6 +436,10 @@ export function EditProductDialog({
                             </FormItem>
                           )}
                         />
+
+                        
+
+
                         <FormField
                           control={form.control}
                           name="brand"
@@ -530,36 +586,147 @@ export function EditProductDialog({
                       </div>
                     </TabsContent>
                     <TabsContent value="inventory" className="space-y-4 p-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="vatStatus"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>VAT Status</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value} defaultValue="YES (Subject to 12% VAT)">
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select VAT status" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {taxRates.map((rate) => (
+                                    <SelectItem key={rate.id} value={rate.name}>
+                                      {rate.name} {rate.rate > 0 ? `(${rate.rate}%)` : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="availability"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Availability</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value} defaultValue="Available">
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select availability" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Available">Available</SelectItem>
+                                  <SelectItem value="Unavailable">Unavailable</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
 
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="supplier"
+                          render={({ field }) => (
+                            <FormItem>
+                              <div className="flex items-center justify-between">
+                                <FormLabel>Supplier (Optional)</FormLabel>
+                              </div>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a supplier" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {suppliers?.map((supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageSuppliersDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage Suppliers
+                                          </Button>
+                                      } onSupplierAdded={onOptionsRefresh} />
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      <FormField
-                        control={form.control}
-                        name="warehouse"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Warehouse (Optional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                        <FormField
+                          control={form.control}
+                          name="warehouse"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Warehouse (Optional)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a warehouse" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)}
+                                  <div className="p-1 w-full border-t mt-1">
+                                      <ManageWarehousesDialog trigger={
+                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage Warehouses
+                                          </Button>
+                                      } onChange={onOptionsRefresh} />
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                         <FormField
+                          control={form.control}
+                          name="reorderPoint"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Reorder Point</FormLabel>
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a warehouse" />
-                                </SelectTrigger>
+                                <Input type="number" placeholder="0" value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                               </FormControl>
-                              <SelectContent>
-                                {warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)}
-                                <div className="p-1 w-full border-t mt-1">
-                                    <ManageWarehousesDialog trigger={
-                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Manage Warehouses
-                                        </Button>
-                                    } onChange={onOptionsRefresh} />
-                                </div>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="cost"
+                          render={({ field }) => (
+                            <FormItem>
+                              <div className="flex items-center justify-between h-6">
+                                <FormLabel>Cost (₱)</FormLabel>
+                              </div>
+                              <FormControl>
+                                <Input type="number" step="0.01" placeholder="e.g., 50.00" value={field.value || ''} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField
@@ -590,37 +757,6 @@ export function EditProductDialog({
                                   </div>
                                 </SelectContent>
                               </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="reorderPoint"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Reorder Point</FormLabel>
-                              <FormControl>
-                                <Input type="number" placeholder="e.g., 20" value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="cost"
-                          render={({ field }) => (
-                            <FormItem>
-                              <div className="flex items-center justify-between h-6">
-                                <FormLabel>Cost (₱)</FormLabel>
-                              </div>
-                              <FormControl>
-                                <Input type="number" step="0.01" placeholder="e.g., 50.00" value={field.value || ''} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
-                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -716,12 +852,7 @@ export function EditProductDialog({
                         />
                       </div>
                     </TabsContent>
-                    <TabsContent value="suppliers" className="space-y-4 p-6">
-                      <ProductSuppliers productId={product.id} onUpdate={() => {
-                          // Optionally refresh parent or show success
-                          if (onProductUpdated) onProductUpdated();
-                      }} />
-                    </TabsContent>
+
                     <TabsContent value="conversion" className="space-y-4 p-6">
                       {/* Conversion Factors List */}
                       <div className="rounded-md border p-4">
@@ -928,17 +1059,7 @@ export function EditProductDialog({
                                                 }} 
                                               />
                                             </FormControl>
-                                            {/* Show apply markup button ONLY on the Price Levels tab now */}
-                                            <Button 
-                                                type="button" 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                className="h-8 w-8 text-primary"
-                                                title="Apply Supplier Markup"
-                                                onClick={applySupplierMarkup}
-                                            >
-                                                <Wand2 className="h-4 w-4" />
-                                            </Button>
+
                                           </div>
                                           <FormMessage />
                                         </FormItem>

@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+
 import { Badge } from '@/components/ui/badge';
 import { PurchaseOrder, Product } from '../../../lib/types';
 import { mockProducts } from '../../../lib/data';
@@ -25,9 +26,10 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddPurchaseOrderDialog } from './add-purchase-order-dialog';
 import { ReceivePurchaseOrderDialog } from './receive-purchase-order-dialog';
+import { ViewPurchaseOrderDialog } from './view-purchase-order-dialog';
 
 import { Button } from '@/components/ui/button';
-import { Check, Truck, ChevronRight, Search, CalendarIcon, X, Printer, ArrowLeft } from 'lucide-react';
+import { Check, Truck, Search, CalendarIcon, X, Printer, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -58,6 +60,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, FileText, Ban, RotateCcw, Edit, Copy } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 function PurchaseOrderActions({ 
   order, 
@@ -65,14 +76,16 @@ function PurchaseOrderActions({
   onReceive, 
   onPrint, 
   onViewDetails,
-  onReorder 
+  onReorder,
+  onEdit 
 }: { 
   order: PurchaseOrder, 
   onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, 
   onReceive: (order: PurchaseOrder) => void,
   onPrint: () => void,
   onViewDetails: () => void,
-  onReorder: (order: PurchaseOrder) => void
+  onReorder: (order: PurchaseOrder) => void,
+  onEdit: (order: PurchaseOrder) => void
 }) {
   const { toast } = useToast();
 
@@ -121,7 +134,7 @@ function PurchaseOrderActions({
 
          {/* Edit - Only for Pending ideally, or allow restricted edits. For now basic. */}
          {order.status === 'Pending' && (
-             <DropdownMenuItem onClick={() => toast({ title: "Edit", description: "Edit functionality coming soon." })}>
+             <DropdownMenuItem onClick={() => onEdit(order)}>
                 <Edit className="mr-2 h-4 w-4" /> Edit
              </DropdownMenuItem>
          )}
@@ -146,90 +159,73 @@ function PurchaseOrderActions({
 function PurchaseOrderRow({ 
   order, 
   onUpdateOrder, 
-  onReceive, // This prop is now the handler from PurchasesPage
+  onReceive, 
   onPrint, 
-  onReorder 
+  onReorder,
+  onEdit,
+  onViewDetails
 }: { 
   order: PurchaseOrder, 
   onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, 
-  onReceive: (order: PurchaseOrder) => void, // Pass this down to PurchaseOrderActions
+  onReceive: (order: PurchaseOrder) => void,
   onPrint: () => void,
-  onReorder: (order: PurchaseOrder) => void
+  onReorder: (order: PurchaseOrder) => void,
+  onEdit: (order: PurchaseOrder) => void,
+  onViewDetails: (order: PurchaseOrder) => void
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   
   const statusVariant = (status: string) => {
     switch (status) {
       case 'Paid':
-      case 'Received': return 'default';
+      case 'Received': return 'success'; // Assuming success variant exists or default to default
       case 'Pending': return 'secondary';
       case 'Approved':
-      case 'Shipped': return 'outline';
+      case 'Shipped': return 'default';
       case 'Failed':
       case 'Cancelled': return 'destructive';
       default: return 'secondary';
     }
   };
 
+  // Calculate strict order total (items subtotal)
+  const itemsSubtotal = order.items.reduce((acc, item) => acc + (item.cost * item.quantity), 0);
+  
   return (
     <>
-      <TableRow>
-        <TableCell className="w-12">
-          <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)}>
-            <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
-          </Button>
+      <TableRow className="hover:bg-muted/50 transition-colors data-[state=selected]:bg-muted text-xs group">
+        <TableCell className="w-8 p-1">
+          {/* Removed Accordion Trigger */}
         </TableCell>
-        <TableCell className="font-medium">{order.id.substring(0, 7)}...</TableCell>
-        <TableCell>
-          <div className="font-medium">{order.supplierName}</div>
+        <TableCell className="px-2 py-1 font-medium text-primary whitespace-nowrap">{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</TableCell>
+        <TableCell className="px-2 py-1 whitespace-nowrap">{order.orderedBy || '-'}</TableCell>
+        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{itemsSubtotal.toFixed(2)}</TableCell>
+        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.shippingFee || 0).toFixed(2)}</TableCell>
+        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.vatAmount || 0).toFixed(2)}</TableCell>
+        <TableCell className="px-2 py-1 text-right font-bold whitespace-nowrap">₱{order.total.toFixed(2)}</TableCell>
+        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.receivedTotal || 0).toFixed(2)}</TableCell>
+        <TableCell className="px-2 py-1 max-w-[150px] truncate" title={order.supplierName}>
+            {order.supplierName}
         </TableCell>
-        <TableCell className="hidden md:table-cell">{format(new Date(order.date), 'PP')}</TableCell>
-        <TableCell>
-          <Badge variant={statusVariant(order.status)}>
+        <TableCell className="px-2 py-1 whitespace-nowrap">{format(new Date(order.date), 'MMM dd, yyyy')}</TableCell>
+        <TableCell className="px-2 py-1 whitespace-nowrap">{order.deliveryDate ? format(new Date(order.deliveryDate), 'MMM dd, yyyy') : '-'}</TableCell>
+        <TableCell className="px-2 py-1 text-center">
+          <Badge variant={statusVariant(order.status) as any} className="rounded-sm uppercase text-[9px] px-1.5 py-0 min-w-[70px] justify-center h-5">
             {order.status}
           </Badge>
         </TableCell>
-        <TableCell className="text-right">₱{order.total.toFixed(2)}</TableCell>
-        <TableCell className="text-right">
+        <TableCell className="px-2 py-1 text-right">
           <PurchaseOrderActions 
             order={order} 
             onUpdateOrder={onUpdateOrder} 
             onReceive={onReceive} 
             onPrint={onPrint}
-            onViewDetails={() => setIsOpen(!isOpen)}
+            onViewDetails={() => onViewDetails(order)}
             onReorder={onReorder}
+            onEdit={onEdit}
           />
         </TableCell>
       </TableRow>
-      {isOpen && (
-        <TableRow className="bg-muted/50 non-printable">
-          <TableCell colSpan={7}>
-            <div className="p-4">
-              <h4 className="font-semibold mb-2">Order Items ({order.items.length})</h4>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-right">Cost per Item</TableHead>
-                    <TableHead className="text-right">Subtotal</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {order.items.map(item => (
-                    <TableRow key={item.productId || Math.random()}>
-                      <TableCell>{item.productName}</TableCell>
-                      <TableCell className="text-right">{item.quantity}</TableCell>
-                      <TableCell className="text-right">₱{item.cost.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">₱{(item.cost * item.quantity).toFixed(2)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </TableCell>
-        </TableRow>
-      )}
+      {/* Removed Accordion Content */}
     </>
   );
 }
@@ -320,14 +316,22 @@ function PurchaseOrderPrintView({ order, onBack }: { order: PurchaseOrder, onBac
 
 export default function PurchasesPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  
   const [orderToPrint, setOrderToPrint] = useState<PurchaseOrder | null>(null);
   const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
   const [orderToReceive, setOrderToReceive] = useState<PurchaseOrder | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [viewingOrder, setViewingOrder] = useState<PurchaseOrder | null>(null);
+  const pageSize = 10;
+
   const { toast } = useToast();
 
   // Use the real API hook
-  const { purchaseOrders, loading, refetch } = usePurchaseOrders(searchTerm);
+  const { purchaseOrders, loading, refetch, pagination } = usePurchaseOrders(searchTerm, undefined, currentPage, pageSize);
 
   const updatePurchaseOrder = async (id: string, updates: Partial<PurchaseOrder>) => {
     try {
@@ -368,13 +372,24 @@ export default function PurchasesPage() {
         })
       ));
 
-      // Update purchase order status
-      await updatePurchaseOrder(orderToReceive.id, { status: 'Received' });
+      // Calculate received total value
+      const receivedTotalValue = receivedItems.reduce((acc, receivedItem) => {
+        const originalItem = orderToReceive.items.find(i => i.productId === receivedItem.productId);
+        const cost = originalItem ? originalItem.cost : 0;
+        return acc + (cost * receivedItem.quantity);
+      }, 0);
+
+      // Update purchase order status and total
+      await updatePurchaseOrder(orderToReceive.id, { 
+        status: 'Received',
+        receivedTotal: receivedTotalValue
+      });
 
       toast({ title: "Stock Received", description: "Inventory has been updated successfully." });
       setIsReceiveDialogOpen(false);
       setOrderToReceive(null);
       refetch();
+      window.dispatchEvent(new Event('stock-updated'));
     } catch (error) {
       console.error('Failed to receive items:', error);
       toast({ 
@@ -391,44 +406,39 @@ export default function PurchasesPage() {
       console.log('Adding purchase order:', order);
       // For now, just refetch the data
       refetch();
+      setEditingOrder(null); // Clear edit state
     } catch (error) {
       console.error('Failed to add purchase order:', error);
     }
   };
 
-  const filteredPurchaseOrders = useMemo(() => {
-    return purchaseOrders.filter(order => {
-      // Date filter
-      const orderDate = new Date(order.date);
-      if (dateRange?.from && orderDate < dateRange.from) return false;
-      if (dateRange?.to) {
-        const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        if (orderDate > toDate) return false;
-      }
+  // API handles search and pagination. We use the results directly.
+  // Note: Date range filtering is temporarily disabled for server-side pagination unless implemented in API.
+  const filteredPurchaseOrders = purchaseOrders;
 
-      // Search term filter
-      const term = searchTerm.toLowerCase();
-      if (!term) return true;
-
-      const idMatch = order.id.toLowerCase().includes(term);
-      const supplierMatch = order.supplierName.toLowerCase().includes(term);
-      const itemMatch = order.items.some(item =>
-        item.productName.toLowerCase().includes(term)
-      );
-
-      return idMatch || supplierMatch || itemMatch;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  }, [purchaseOrders, dateRange, searchTerm]);
+  const handleSearch = () => {
+    setSearchTerm(searchQuery);
+    setCurrentPage(1);
+  };
 
   const resetFilters = () => {
     setSearchTerm('');
+    setSearchQuery('');
     setDateRange(undefined);
+    setCurrentPage(1);
   };
 
   const handlePrint = (order: PurchaseOrder) => {
     setOrderToPrint(order);
+  };
+
+  const handleEdit = (order: PurchaseOrder) => {
+      setEditingOrder(order);
+      setIsEditOpen(true);
+  };
+
+  const handleViewDetails = (order: PurchaseOrder) => {
+    setViewingOrder(order);
   };
 
   const hasActiveFilters = searchTerm || dateRange;
@@ -449,6 +459,19 @@ export default function PurchasesPage() {
           </div>
           <div className="flex items-center gap-2">
             <AddPurchaseOrderDialog onAddOrder={addPurchaseOrder} />
+            
+            {(isEditOpen && editingOrder) && (
+                <AddPurchaseOrderDialog 
+                    editOrder={editingOrder} 
+                    open={isEditOpen}
+                    onOpenChange={setIsEditOpen}
+                    onAddOrder={(order) => {
+                        addPurchaseOrder(order);
+                        setIsEditOpen(false);
+                    }}
+                /> 
+            )}
+
             {orderToReceive && (
               <ReceivePurchaseOrderDialog 
                 open={isReceiveDialogOpen} 
@@ -457,18 +480,28 @@ export default function PurchasesPage() {
                 onConfirm={handleReceiveConfirm}
               />
             )}
+
+            <ViewPurchaseOrderDialog 
+              open={!!viewingOrder} 
+              onOpenChange={(open) => !open && setViewingOrder(null)} 
+              order={viewingOrder} 
+            />
           </div>
         </div>
         <div className="flex items-center justify-between gap-4 pt-4">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search by ID, supplier, product..."
-              className="pl-8 sm:w-[300px]"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="relative flex items-center gap-2">
+            <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                type="search"
+                placeholder="Search by ID, supplier..."
+                className="pl-8 sm:w-[300px]"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                />
+            </div>
+            <Button variant="secondary" onClick={handleSearch}>Search</Button>
           </div>
           <div className="flex items-center gap-2">
             <Popover>
@@ -515,35 +548,73 @@ export default function PurchasesPage() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12"><span className="sr-only">Expand</span></TableHead>
-              <TableHead>Order ID</TableHead>
-              <TableHead>Supplier</TableHead>
-              <TableHead className="hidden md:table-cell">Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead className="text-right w-48"><span className="sr-only">Actions</span></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredPurchaseOrders?.map((order) => (
-              <PurchaseOrderRow
-                key={order.id}
-                order={order}
-                onUpdateOrder={updatePurchaseOrder}
-                onReceive={(order) => {
-                  setOrderToReceive(order);
-                  setIsReceiveDialogOpen(true);
-                }}
-                onPrint={() => handlePrint(order)}
-                onReorder={addPurchaseOrder}
-              />
-            ))}
-          </TableBody>
-        </Table>
+      <CardContent className="p-0">
+        <div className="rounded-md border m-4">
+          <Table className="text-xs">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent bg-muted/50">
+                <TableHead className="w-8 p-1 text-center"></TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground whitespace-nowrap">Ref No</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground whitespace-nowrap">Ordered by</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground text-right whitespace-nowrap">Order Total</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground text-right whitespace-nowrap">Shipping</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground text-right whitespace-nowrap">Included Vat</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground text-right whitespace-nowrap">Grand total</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground text-right whitespace-nowrap">Received Total</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground whitespace-nowrap">Supplier</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground whitespace-nowrap">Issue date</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground whitespace-nowrap">Delivery date</TableHead>
+                <TableHead className="h-8 px-2 py-1 font-semibold text-foreground text-center whitespace-nowrap">Status</TableHead>
+                <TableHead className="w-8 p-1"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredPurchaseOrders?.map((order) => (
+                <PurchaseOrderRow
+                  key={order.id}
+                  order={order}
+                  onUpdateOrder={updatePurchaseOrder}
+                  onReceive={(order) => {
+                    setOrderToReceive(order);
+                    setIsReceiveDialogOpen(true);
+                  }}
+                  onPrint={() => handlePrint(order)}
+                  onReorder={addPurchaseOrder}
+                  onEdit={handleEdit}
+                  onViewDetails={handleViewDetails}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        
+        {pagination && pagination.total > 0 && (
+          <div className="py-2 border-t px-4">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                
+                <PaginationItem>
+                  <span className="text-xs text-muted-foreground px-4 whitespace-nowrap">
+                    Page {currentPage} of {Math.ceil(pagination.total / pageSize)}
+                  </span>
+                </PaginationItem>
+
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    className={!pagination.hasMore ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -38,6 +38,12 @@ function SubcategoryDialog({ subcategory, onSave, children, disabled }: { subcat
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (isOpen) {
+      setName(subcategory?.name || '');
+    }
+  }, [isOpen, subcategory]);
+
   const handleSave = async () => {
     if (!name.trim()) {
       toast({
@@ -71,7 +77,7 @@ function SubcategoryDialog({ subcategory, onSave, children, disabled }: { subcat
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild disabled={disabled}>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="z-[100] sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{subcategory ? 'Edit Subcategory' : 'Add New Subcategory'}</DialogTitle>
           <DialogDescription>
@@ -147,12 +153,14 @@ function SubcategoryRow({ subcategory, onSubcategoryUpdated, onSubcategoryDelete
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <SubcategoryDialog subcategory={subcategory} onSave={handleUpdate}>
-            <Button variant="outline" size="sm">
-              <Pencil className="mr-2 h-4 w-4" /> Edit
+            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
+              <Pencil className="h-4 w-4 text-muted-foreground transition-colors hover:text-primary" />
+              <span className="sr-only">Edit</span>
             </Button>
           </SubcategoryDialog>
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" onClick={handleDelete}>
+            <Trash2 className="h-4 w-4 text-muted-foreground transition-colors hover:text-destructive" />
+            <span className="sr-only">Delete</span>
           </Button>
         </div>
       </TableCell>
@@ -191,8 +199,8 @@ export function ManageSubcategoriesDialog({ trigger, onSubcategoryAdded }: { tri
     loadSubcategories();
   }, []);
 
-  const handleAddSubcategory = async (name: string) => {
-    const result = await addSubcategory(name);
+  const handleAddSubcategory = async (name: string, markupPercentage?: number) => {
+    const result = await addSubcategory(name, markupPercentage);
     if (result.success) {
       loadSubcategories();
       onSubcategoryAdded?.();

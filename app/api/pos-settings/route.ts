@@ -15,6 +15,9 @@ export async function GET(request: NextRequest) {
         currency_code AS currencyCode,
         timezone,
         date_format AS dateFormat,
+        enable_automatic_markup AS enableAutomaticMarkup,
+        default_markup_percentage AS defaultMarkupPercentage,
+        markup_priority AS markupPriority,
         address,
         contact_number AS contactNumber,
         tin,
@@ -30,8 +33,8 @@ export async function GET(request: NextRequest) {
     if (result.length === 0) {
       // Create default settings if none exist
       const insertSQL = `
-        INSERT INTO pos_settings (id, business_name, enable_advanced_inventory, transaction_prefix, currency_symbol, currency_code, timezone, date_format)
-        VALUES ('pos_settings_1', 'My Business', FALSE, 'TXN', '$', 'USD', 'UTC', 'MM/DD/YYYY')
+        INSERT INTO pos_settings (id, business_name, enable_advanced_inventory, transaction_prefix, currency_symbol, currency_code, timezone, date_format, enable_automatic_markup, default_markup_percentage, markup_priority)
+        VALUES ('pos_settings_1', 'My Business', FALSE, 'TXN', '$', 'USD', 'UTC', 'MM/DD/YYYY', TRUE, 0.00, '["subcategory", "category", "brand", "supplier"]')
       `;
       await query(insertSQL);
       
@@ -72,16 +75,18 @@ export async function POST(request: NextRequest) {
       const { 
         businessName, logoPath, enableAdvancedInventory, transactionPrefix, 
         address, contactNumber, tin, email,
-        currencySymbol, currencyCode, timezone, dateFormat
+        currencySymbol, currencyCode, timezone, dateFormat,
+        enableAutomaticMarkup, defaultMarkupPercentage, markupPriority
       } = body;
 
       const insertSQL = `
         INSERT INTO pos_settings (
           id, business_name, logo_path, enable_advanced_inventory, transaction_prefix, 
           address, contact_number, tin, email,
-          currency_symbol, currency_code, timezone, date_format
+          currency_symbol, currency_code, timezone, date_format,
+          enable_automatic_markup, default_markup_percentage, markup_priority
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
@@ -95,7 +100,10 @@ export async function POST(request: NextRequest) {
         currencySymbol || '$',
         currencyCode || 'USD',
         timezone || 'UTC',
-        dateFormat || 'MM/DD/YYYY'
+        dateFormat || 'MM/DD/YYYY',
+        enableAutomaticMarkup ?? true,
+        defaultMarkupPercentage || 0.00,
+        markupPriority ? JSON.stringify(markupPriority) : JSON.stringify(["subcategory", "category", "brand", "supplier"])
       ]);
     } else {
       // Update existing settings - Dynamic Update
@@ -111,7 +119,10 @@ export async function POST(request: NextRequest) {
         currencySymbol: 'currency_symbol',
         currencyCode: 'currency_code',
         timezone: 'timezone',
-        dateFormat: 'date_format'
+        dateFormat: 'date_format',
+        enableAutomaticMarkup: 'enable_automatic_markup',
+        defaultMarkupPercentage: 'default_markup_percentage',
+        markupPriority: 'markup_priority'
       };
 
       const updates: string[] = [];
@@ -120,7 +131,12 @@ export async function POST(request: NextRequest) {
       for (const [key, val] of Object.entries(body)) {
         if (allowedFields[key] && val !== undefined) {
           updates.push(`${allowedFields[key]} = ?`);
-          values.push(val);
+          
+          if (key === 'markupPriority' && Array.isArray(val)) {
+             values.push(JSON.stringify(val));
+          } else {
+             values.push(val);
+          }
         }
       }
 
@@ -144,3 +160,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

@@ -18,6 +18,8 @@ export interface Product {
   imageUrl: string;
   imageHint: string;
   unitOfMeasure: string;
+  vatStatus?: string;
+  availability?: string;
 
   // Accounting
   incomeAccount?: string;
@@ -52,6 +54,7 @@ export interface PriceLevel {
   name: string;
   description?: string;
   isDefault: boolean;
+  percentageAdjustment?: number; // 100 = 100% (No change), 90 = 10% discount
   createdAt?: string;
   updatedAt?: string;
 }
@@ -121,22 +124,37 @@ export interface PurchaseOrder {
     productName: string;
     quantity: number;
     cost: number;
+    sellingPrice?: number;
+    discount?: number;
+    discountType?: 'amount' | 'percentage';
+    vatSubject?: boolean;
     expirationDate?: string;
+    barcode?: string;
+    currentStock?: number;
   }[];
   total: number;
   paymentMethod: string;
   status: string;
+  // New tracking fields
+  orderedBy?: string;
+  shippingFee?: number;
+  vatAmount?: number;
+  deliveryDate?: string; // or Date
+  receivedTotal?: number;
+  referenceNumber?: string;
 }
 
 
 export interface Category {
   id: string;
   name: string;
+  markupPercentage?: number;
 }
 
 export interface Brand {
   id: string;
   name: string;
+  markupPercentage?: number;
 }
 
 export interface PaymentMethod {
@@ -222,6 +240,18 @@ export interface StockMovement {
 }
 
 // POS-specific interfaces
+export interface SystemSettings {
+  id?: string;
+  businessName?: string;
+  currencySymbol: string;
+  currencyCode: string;
+  timezone: string;
+  dateFormat: string;
+  enableAutomaticMarkup?: boolean;
+  defaultMarkupPercentage?: number;
+  markupPriority?: string[];
+}
+
 export interface User {
   id: string;
   username: string;
@@ -233,6 +263,7 @@ export interface User {
   createdAt?: string;
   updatedAt?: string;
 }
+
 
 export interface PosTerminal {
   id: string;
@@ -310,6 +341,16 @@ export interface SupplierProductMapping {
   supplierSpecificRop: number;
   supplierCost?: number;
   isPrimary: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TaxRate {
+  id: string;
+  name: string;
+  rate: number;
+  description?: string;
+  isDefault: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -488,6 +488,8 @@ export default function POSPage() {
     }
     setItems([]);
     setSelectedCustomer(WALK_IN_CUSTOMER);
+    // Trigger notification update
+    window.dispatchEvent(new Event('stock-updated'));
   };
 
   const handleOpenTender = (method: string) => {

@@ -33,7 +33,7 @@ interface ProductSearchDialogProps {
 export function ProductSearchDialog({ onSelectProduct, children }: ProductSearchDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const { products, loading, error } = useProducts(searchTerm);
+  const { products, loading, error } = useProducts(searchTerm, 'Available');
 
   useEffect(() => {
     if (isOpen) {

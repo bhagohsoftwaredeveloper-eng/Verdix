@@ -170,6 +170,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
       });
       setIsOpen(false);
       onSuccess?.(); // Refresh the product list
+      window.dispatchEvent(new Event('stock-updated'));
     } catch (error) {
       toast({
         variant: 'destructive',

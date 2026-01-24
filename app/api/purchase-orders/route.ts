@@ -20,7 +20,14 @@ export async function GET(request: NextRequest) {
         po.payment_method,
         po.status,
         po.created_at,
-        po.updated_at
+        po.updated_at,
+        po.ordered_by,
+        po.shipping_fee,
+        po.vat_amount,
+        po.delivery_date,
+        po.delivery_date,
+        po.received_total,
+        po.reference_number
       FROM purchase_orders po
       WHERE 1=1
     `;
@@ -37,8 +44,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      sql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      sql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ? OR po.reference_number LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     sql += ' ORDER BY po.created_at DESC LIMIT ? OFFSET ?';
@@ -56,8 +63,15 @@ export async function GET(request: NextRequest) {
             poi.product_name,
             poi.quantity,
             poi.cost,
+            poi.selling_price,
+            poi.discount,
+            poi.discount_type,
+            poi.vat_subject,
+            p.barcode,
+            p.stock as current_stock,
             (poi.quantity * poi.cost) as subtotal
           FROM purchase_order_items poi
+          LEFT JOIN products p ON poi.product_id = p.id
           WHERE poi.purchase_order_id = ?
           ORDER BY poi.created_at ASC
         `;
@@ -72,11 +86,24 @@ export async function GET(request: NextRequest) {
           total: parseFloat(row.total),
           paymentMethod: row.payment_method || '',
           status: row.status,
+          // New tracking fields
+          orderedBy: row.ordered_by || '',
+          shippingFee: parseFloat(row.shipping_fee || '0'),
+          vatAmount: parseFloat(row.vat_amount || '0'),
+          deliveryDate: row.delivery_date ? row.delivery_date : undefined,
+          receivedTotal: parseFloat(row.received_total || '0'),
+          referenceNumber: row.reference_number || '',
           items: items.map((item: any) => ({
             productId: item.product_id,
             productName: item.product_name,
             quantity: parseInt(item.quantity),
             cost: parseFloat(item.cost),
+            sellingPrice: item.selling_price ? parseFloat(item.selling_price) : undefined,
+            discount: item.discount ? parseFloat(item.discount) : 0,
+            discountType: item.discount_type || 'amount',
+            vatSubject: item.vat_subject === 1,
+            barcode: item.barcode || undefined,
+            currentStock: item.current_stock || 0,
           })),
         };
       })
@@ -97,8 +124,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      countSql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ?)';
-      countParams.push(`%${search}%`, `%${search}%`);
+      countSql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ? OR po.reference_number LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     const countResult = await query(countSql, countParams);
@@ -134,7 +161,14 @@ export async function POST(request: NextRequest) {
       items,
       total,
       paymentMethod,
-      status
+      status,
+      // New fields
+      reference,
+      shipping,
+      receiveToWarehouse, 
+      note,
+      orderedBy,
+      vatAmount
     } = body;
 
     if (!supplierId || !supplierName || !items || items.length === 0) {
@@ -150,8 +184,9 @@ export async function POST(request: NextRequest) {
     // Insert purchase order
     const insertOrderQuery = `
       INSERT INTO purchase_orders (
-        id, supplier_id, supplier_name, date, total, payment_method, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, supplier_id, supplier_name, date, total, payment_method, status, 
+        reference_number, shipping_fee, ordered_by, vat_amount
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     // Format date for MySQL
@@ -164,14 +199,19 @@ export async function POST(request: NextRequest) {
       formattedDate,
       total || 0,
       paymentMethod || '',
-      status || 'Pending'
+      status || 'Pending',
+      reference || null,
+      shipping || 0,
+      orderedBy || null,
+      vatAmount || 0
     ]);
 
     // Insert order items
     const insertItemQuery = `
       INSERT INTO purchase_order_items (
-        id, purchase_order_id, product_id, product_name, quantity, cost
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        id, purchase_order_id, product_id, product_name, quantity, cost,
+        selling_price, discount, discount_type, vat_subject
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for (const item of items) {
@@ -183,7 +223,11 @@ export async function POST(request: NextRequest) {
         item.productId,
         item.productName,
         item.quantity,
-        item.cost
+        item.cost,
+        item.sellingPrice || null,
+        item.discount || 0,
+        item.discountType || 'amount',
+        item.vatSubject ? 1 : 0
       ]);
     }
 
