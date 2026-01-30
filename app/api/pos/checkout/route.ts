@@ -259,9 +259,13 @@ export async function POST(request: NextRequest) {
         userId
       ]);
 
+      // Fetch the auto-generated order number
+      const [orderResult]: any = await connection.query('SELECT order_number FROM pos_transactions WHERE id = ?', [posTransId]);
+      const orderNumber = orderResult[0]?.order_number;
+
       return NextResponse.json({
         success: true,
-        data: { saleId, posTransId, invoiceId, paymentDetailsId },
+        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber },
         message: 'Transaction saved successfully'
       });
     });

@@ -69,6 +69,7 @@ import { DiscountDialog } from './discount-dialog';
 import { ShutdownConfirmationDialog } from './shutdown-confirmation-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { InsufficientStockDialog } from './insufficient-stock-dialog';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 
 const MOCK_PRODUCTS: Product[] = [
@@ -393,24 +394,75 @@ export default function POSPage() {
     }
   }, [selectedPriceLevelId, items]);
 
+  const calculateEffectivePrice = (product: Product, quantity: number, customerLevelId?: string) => {
+      let effectivePrice = product.price; // Default to Base Price
+      let priceFound = false;
+
+      // 1. Check for Product-Specific Quantity-Based Price Levels
+      if (product.priceLevels && product.priceLevels.length > 0) {
+          const applicableProductLevels = product.priceLevels.filter((pl: any) => 
+               pl.minQuantity && quantity >= pl.minQuantity
+          ).sort((a: any, b: any) => (b.minQuantity || 0) - (a.minQuantity || 0));
+
+          if (applicableProductLevels.length > 0) {
+              return applicableProductLevels[0].price;
+          }
+      }
+
+      // 2. Check for Global Quantity-Based Price Levels (Higher Min Quantity takes precedence)
+      // Only if no product-specific quantity rule matched (which would have returned above)
+      if (priceLevels.length > 0) {
+          // Find all applicable GLOBAL levels for this quantity
+          const applicableSystemLevels = priceLevels.filter((sysLevel: any) => 
+              sysLevel.minQuantity && quantity >= sysLevel.minQuantity
+          ).sort((a: any, b: any) => b.minQuantity - a.minQuantity);
+
+          if (applicableSystemLevels.length > 0) {
+              const bestLevelId = applicableSystemLevels[0].id;
+              // Check if product has an override for this specific level ID
+              const productPriceLevel = product.priceLevels?.find((pl: any) => pl.levelId === bestLevelId);
+              if (productPriceLevel) {
+                  return productPriceLevel.price;
+              }
+               // If logic requires applying global percentage to base price if no override exists:
+               // But usually product.priceLevels contains the specific price.
+               // If product doesn't have an entry for "Wholesale", we might not want to apply it?
+               // Or we calculate based on markup? 
+               // Default behavior: Look for override. If not found, ignore? 
+               // Let's assume strict override for now as per current schema structure.
+          }
+      }
+
+      // 3. Fallback to Specific Customer Level or Selected Global Level (if no quantity override found)
+      if (customerLevelId && product.priceLevels) {
+          const override = product.priceLevels.find((pl: any) => pl.levelId === customerLevelId);
+          if (override) {
+              effectivePrice = override.price;
+              priceFound = true;
+          }
+      } 
+      
+      if (!priceFound && selectedPriceLevelId && product.priceLevels) {
+           // Fallback to global selected level
+           const override = product.priceLevels.find((pl: any) => pl.levelId === selectedPriceLevelId);
+           if (override) {
+               effectivePrice = override.price;
+           }
+      }
+      
+      return effectivePrice;
+  };
+
   const handleAddItem = (product: Product | undefined) => {
     if (product) {
       const existingItem = items.find((item) => item.id === product.id);
       if (existingItem) {
         updateQuantity(product.id, existingItem.quantity + 1);
       } else {
-        // Calculate price based on selected price level
-        let itemPrice = product.price;
-        if (selectedPriceLevelId && product.priceLevels) {
-          const override = product.priceLevels.find((pl: any) => pl.levelId === selectedPriceLevelId);
-          if (override) {
-            itemPrice = override.price;
-          }
-        }
-
+        const itemPrice = calculateEffectivePrice(product, 1, selectedCustomer?.priceLevelId);
         const newItem: SaleItem = { ...product, quantity: 1, discount: 0, name: product.name, price: itemPrice };
         setItems([...items, newItem]);
-        setSelectedItemId(newItem.id); // Select the new item
+        setSelectedItemId(newItem.id); 
       }
     } else {
       toast({
@@ -432,9 +484,13 @@ export default function POSPage() {
     if (newQuantity <= 0) {
       removeItem(productId);
     } else {
-      setItems(items.map(item =>
-        item.id === productId ? { ...item, quantity: newQuantity } : item
-      ));
+      setItems(items.map(item => {
+        if (item.id === productId) {
+             const newPrice = calculateEffectivePrice(item, newQuantity, selectedCustomer?.priceLevelId);
+             return { ...item, quantity: newQuantity, price: newPrice };
+        }
+        return item;
+      }));
     }
   };
 
@@ -843,6 +899,7 @@ export default function POSPage() {
                     <div className="text-[10px] text-muted-foreground/70">{currentTime}</div>
                  </div>
                  <div className={`h-2 w-2 rounded-full ${shiftActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`} />
+                 <ThemeToggle />
               </div>
           </header>
 

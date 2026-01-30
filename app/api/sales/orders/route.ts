@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTransaction, query } from '../../../../lib/mysql';
 
+// Helper function to format ISO date strings to MySQL format
+function formatDateForMySQL(dateValue: string | null | undefined): string | null {
+    if (!dateValue) return null;
+    try {
+        const date = new Date(dateValue);
+        if (isNaN(date.getTime())) return null;
+        // Format as YYYY-MM-DD HH:MM:SS
+        return date.toISOString().slice(0, 19).replace('T', ' ');
+    } catch {
+        return null;
+    }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -11,6 +24,14 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
 
+    const status = searchParams.get('status');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const salesPersonId = searchParams.get('salesPersonId');
+    const customerId = searchParams.get('customerId');
+    const salesArea = searchParams.get('salesArea');
+    const reference = searchParams.get('reference');
+
     // Query to fetch all sales orders with customer information
     let baseQuery = `
       SELECT
@@ -19,6 +40,7 @@ export async function GET(request: NextRequest) {
         c.name as customer_name,
         c.contact_number as customer_contact,
         c.payment_terms as customer_payment_terms,
+        c.sales_area as customer_sales_area,
         so.order_date,
         so.delivery_date,
         so.reference,
@@ -30,11 +52,13 @@ export async function GET(request: NextRequest) {
         so.shipping,
         so.warehouse_id,
         so.sales_person_id,
+        sp.name as sales_person_name,
         so.note,
         so.created_at,
         so.updated_at
       FROM sales_orders so
       LEFT JOIN customers c ON so.customer_id = c.id
+      LEFT JOIN sales_persons sp ON so.sales_person_id = sp.id
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -42,6 +66,41 @@ export async function GET(request: NextRequest) {
     if (warehouseId) {
       baseQuery += ' AND so.warehouse_id = ?';
       params.push(warehouseId);
+    }
+
+    if (status) {
+      baseQuery += ' AND so.status = ?';
+      params.push(status);
+    }
+
+    if (startDate) {
+      baseQuery += ' AND so.order_date >= ?';
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      baseQuery += ' AND so.order_date <= ?';
+      params.push(endDate);
+    }
+
+    if (salesPersonId) {
+      baseQuery += ' AND so.sales_person_id = ?';
+      params.push(salesPersonId);
+    }
+
+    if (customerId) {
+        baseQuery += ' AND so.customer_id = ?';
+        params.push(customerId);
+    }
+
+    if (salesArea) {
+        baseQuery += ' AND c.sales_area = ?';
+        params.push(salesArea);
+    }
+
+    if (reference) {
+        baseQuery += ' AND so.reference LIKE ?';
+        params.push(`%${reference}%`);
     }
 
     if (countOnly) {
@@ -107,7 +166,9 @@ export async function GET(request: NextRequest) {
             name: row.customer_name || 'Walk-in Customer',
             contactNumber: row.customer_contact || '',
             paymentTerms: row.customer_payment_terms || '',
+            salesArea: row.customer_sales_area || '',
           },
+          salesPerson: row.sales_person_name || row.sales_person_id || '',
           orderDate: row.order_date,
           deliveryDate: row.delivery_date,
           reference: row.reference,
@@ -181,8 +242,8 @@ export async function POST(request: NextRequest) {
       await connection.query(insertOrderQuery, [
         orderId,
         customer.id,
-        orderDate,
-        deliveryDate || null,
+        formatDateForMySQL(orderDate),
+        formatDateForMySQL(deliveryDate),
         reference || null,
         deliveryAddress || null,
         total,

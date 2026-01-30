@@ -50,11 +50,12 @@ function CurrencyIcon({ className }: { className?: string }) {
   );
 }
 
-function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: PriceLevel, onSave: (name: string, description: string, isDefault: boolean, percentageAdjustment: number) => Promise<boolean>, onCancel: () => void }) {
+function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: PriceLevel, onSave: (name: string, description: string, isDefault: boolean, percentageAdjustment: number, minQuantity: number) => Promise<boolean>, onCancel: () => void }) {
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [isDefault, setIsDefault] = useState(initialData?.isDefault || false);
-  const [percentageAdjustment, setPercentageAdjustment] = useState(initialData?.percentageAdjustment?.toString() || '100');
+  const [percentageAdjustment, setPercentageAdjustment] = useState(initialData?.percentageAdjustment?.toString() || '0');
+  const [minQuantity, setMinQuantity] = useState(initialData?.minQuantity?.toString() || '0');
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -68,6 +69,8 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
       return;
     }
     const adjustment = parseFloat(percentageAdjustment);
+    const minQty = parseInt(minQuantity);
+
     if (isNaN(adjustment) || adjustment < 0) {
       toast({
         variant: 'destructive',
@@ -77,9 +80,18 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
       return;
     }
 
+    if (isNaN(minQty) || minQty < 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'Minimum quantity must be a valid positive number.',
+        });
+        return;
+      }
+
     setIsSaving(true);
     try {
-      const success = await onSave(name, description, isDefault, adjustment);
+      const success = await onSave(name, description, isDefault, adjustment, minQty);
       if (success) {
         toast({
           title: initialData ? 'Price Level Updated' : 'Price Level Added',
@@ -89,7 +101,8 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
           setName('');
           setDescription('');
           setIsDefault(false);
-          setPercentageAdjustment('100');
+          setPercentageAdjustment('0');
+          setMinQuantity('0');
         }
       }
     } catch (error) {
@@ -132,7 +145,7 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="adjustment" className="text-right">
-          Adjustment %
+          Markup %
         </Label>
         <Input
           id="adjustment"
@@ -140,7 +153,20 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
           value={percentageAdjustment}
           onChange={(e) => setPercentageAdjustment(e.target.value)}
           className="col-span-3"
-          placeholder="e.g., 100 for normal, 90 for 10% discount"
+          placeholder="e.g., 20 for 20% markup on cost"
+        />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="minQuantity" className="text-right">
+          Min. Quantity
+        </Label>
+        <Input
+          id="minQuantity"
+          type="number"
+          value={minQuantity}
+          onChange={(e) => setMinQuantity(e.target.value)}
+          className="col-span-3"
+          placeholder="e.g., 10 for bulk pricing"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
@@ -199,6 +225,7 @@ function PriceLevelRow({ level, onUpdated, onDeleted, onEdit }: { level: PriceLe
       </TableCell>
       <TableCell className="text-muted-foreground">{level.description}</TableCell>
       <TableCell className="text-center">{level.percentageAdjustment}%</TableCell>
+      <TableCell className="text-center">{level.minQuantity || 0}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => onEdit(level)}>
@@ -251,8 +278,8 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
     refreshLevels();
   }, []);
 
-  const handleAddLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number): Promise<boolean> => {
-    const result = await addPriceLevel(name, description, isDefault, percentageAdjustment);
+  const handleAddLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number, minQuantity: number): Promise<boolean> => {
+    const result = await addPriceLevel(name, description, isDefault, percentageAdjustment, minQuantity);
     if (result.success) {
       await refreshLevels();
       onLevelAdded?.();
@@ -268,9 +295,9 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
     }
   };
 
-  const handleUpdateLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number): Promise<boolean> => {
+  const handleUpdateLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number, minQuantity: number): Promise<boolean> => {
     if (!editingLevel) return false;
-    const result = await updatePriceLevel(editingLevel.id, name, description, isDefault, percentageAdjustment);
+    const result = await updatePriceLevel(editingLevel.id, name, description, isDefault, percentageAdjustment, minQuantity);
     if (result.success) {
       await refreshLevels();
       setView('list');
@@ -325,6 +352,8 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
                                 <TableRow>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Description</TableHead>
+                                <TableHead>Markup</TableHead>
+                                <TableHead>Min Qty</TableHead>
                                 <TableHead>
                                     <span className="sr-only">Actions</span>
                                 </TableHead>

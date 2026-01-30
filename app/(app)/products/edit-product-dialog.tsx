@@ -95,6 +95,7 @@ const productSchema = z.object({
   priceLevels: z.array(z.object({
     levelId: z.string().min(1, 'Level is required'),
     price: z.coerce.number().positive('Price must be positive'),
+    minQuantity: z.number().min(0).optional(),
   })).optional(),
   vatStatus: z.string().default('YES (Subject to 12% VAT)'),
   availability: z.string().default('Available'),
@@ -299,8 +300,9 @@ export function EditProductDialog({
               const getFieldIndex = (levelId: string) => currentFields.findIndex((f: any) => f.levelId === levelId);
 
               priceLevels.forEach((level: any) => {
-                  const adjustment = level.percentageAdjustment || 100;
-                  const levelPrice = parseFloat((basePrice * (adjustment / 100)).toFixed(2));
+                  const markup = level.percentageAdjustment ?? 0;
+                  // Use currentCost as base, ignoring the calculated basePrice which includes default/system markup
+                  const levelPrice = parseFloat((currentCost * (1 + markup / 100)).toFixed(2));
                   
                   const index = getFieldIndex(level.id);
                   if (index >= 0) {
@@ -1062,6 +1064,26 @@ export function EditProductDialog({
 
                                           </div>
                                           <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  </div>
+                                  <div className="w-[100px]">
+                                    <FormField
+                                      control={form.control}
+                                      name={`priceLevels.${index}.minQuantity`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-xs text-nowrap">Min Qty</FormLabel>
+                                            <FormControl>
+                                                <Input 
+                                                    type="number"
+                                                    placeholder="0"
+                                                    value={field.value || ''}
+                                                    onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
                                         </FormItem>
                                       )}
                                     />

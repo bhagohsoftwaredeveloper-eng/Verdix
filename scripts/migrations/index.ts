@@ -44,6 +44,7 @@ import './043_alter_purchase_orders_add_tracking_fields.ts';
 import './044_alter_purchase_orders_add_reference_number.ts';
 import './045_add_tax_rates.ts';
 import './046_add_markup_percentage_to_categories_brands.ts';
+import './047_alter_sales_transactions_add_voided_status.ts';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

@@ -99,8 +99,9 @@ const productSchema = z.object({
     factor: z.coerce.number().positive('Factor must be positive'),
   })).optional(),
   priceLevels: z.array(z.object({
-    levelId: z.string().min(1, 'Level is required'),
-    price: z.coerce.number().positive('Price must be positive'),
+    levelId: z.string().min(1, 'Price level is required'),
+    price: z.number().min(0, 'Price cannot be negative'),
+    minQuantity: z.number().min(0).optional(),
   })).optional(),
   vatStatus: z.string().default('YES (Subject to 12% VAT)'),
   availability: z.string().default('Available'),
@@ -338,36 +339,22 @@ export function AddProductDialog({
               const getFieldIndex = (levelId: string) => currentFields.findIndex((f: any) => f.levelId === levelId);
 
               priceLevels.forEach((level: any) => {
-                  const adjustment = level.percentageAdjustment || 100;
-                  const levelPrice = parseFloat((basePrice * (adjustment / 100)).toFixed(2));
+                  // Percentage Adjustment is now treated as Markup %
+                  const markup = level.percentageAdjustment ?? 0;
+                  const levelPrice = parseFloat((basePrice * (1 + markup / 100)).toFixed(2));
                   
                   const index = getFieldIndex(level.id);
                   if (index >= 0) {
                       form.setValue(`priceLevels.${index}.price`, levelPrice);
-                  } else {
-                      // Note: appendPriceLevel is a stable function reference from useFieldArray, 
-                      // but using it inside useEffect might be tricky due to dependencies.
-                      // Ideally we should have initialized fields previously.
-                      // If not, we can only safely update existing ones here to avoid infinite loops if we add append to dependency.
-                      // However, we initialized default level in the other useEffect.
-                      // Let's assume the user might have added levels manually or we initialized them.
-                      // If we want to fully automate, we should perhaps sync the form fields with system levels when cost changes?
-                      // That might be too aggressive.
-                      // Let's stick to updating existing fields that match. 
-                      // If the form is empty of price levels (except default), maybe we should populate all?
-                      
-                      // For now, let's just update the ones present in the form to be safe.
                   }
               });
               
-              // AUTO-POPULATE: If the form has NO price levels or only 1, maybe let's populate ALL system levels?
-              // This is a design decision. Often users want to see all levels.
-              // Let's try to update all fields that exist in the form.
+              // AUTO-POPULATE: Update all fields that exist in the form
               priceLevelFields.forEach((field, index) => {
                   const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
                   if (levelDef) {
-                      const adjustment = levelDef.percentageAdjustment || 100;
-                      const levelPrice = parseFloat((basePrice * (adjustment / 100)).toFixed(2));
+                      const markup = levelDef.percentageAdjustment ?? 0;
+                      const levelPrice = parseFloat((basePrice * (1 + markup / 100)).toFixed(2));
                       form.setValue(`priceLevels.${index}.price`, levelPrice);
                   }
               });
@@ -417,20 +404,11 @@ export function AddProductDialog({
       // and populate the form fields.
       
       priceLevels.forEach((level) => {
-        let levelMarkup = markup;
-        const name = level.name.toLowerCase();
+        const markup = level.percentageAdjustment ?? 0;
+        // Calculate price based on Cost + Level Markup
+        const levelPrice = parseFloat((cost * (1 + markup / 100)).toFixed(2));
         
-        if (name.includes('wholesale')) {
-          levelMarkup = markup * 0.7;
-        } else if (name.includes('vip')) {
-          levelMarkup = markup * 0.85;
-        } else if (!level.isDefault) {
-          levelMarkup = markup * 0.9;
-        }
-
-        const levelPrice = parseFloat((cost * (1 + levelMarkup)).toFixed(2));
-        
-        // If this is the default level (usually Retail), it sets the base price
+        // If this is the default level, it sets the main price
         if (level.isDefault) {
             firstLevelPrice = levelPrice;
         }
@@ -1366,6 +1344,26 @@ export function AddProductDialog({
                                             </Button>
                                           </div>
                                           <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  </div>
+                                  <div className="w-[100px]">
+                                    <FormField
+                                      control={form.control}
+                                      name={`priceLevels.${index}.minQuantity`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-xs text-nowrap">Min Qty</FormLabel>
+                                            <FormControl>
+                                                <Input 
+                                                    type="number"
+                                                    placeholder="0"
+                                                    value={field.value || ''}
+                                                    onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
                                         </FormItem>
                                       )}
                                     />

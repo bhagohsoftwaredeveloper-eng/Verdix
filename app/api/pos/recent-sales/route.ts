@@ -6,8 +6,9 @@ export async function GET(request: NextRequest) {
     // 1. Fetch recent sales transactions
     const { searchParams } = new URL(request.url);
     const terminalId = searchParams.get('terminalId');
+    const queryParam = searchParams.get('query');
 
-    // 1. Fetch recent sales transactions
+    // 1. Fetch sales transactions
     // We join with pos_transactions to get terminal info and strictly filter POS sales
     let salesQuery = `
       SELECT
@@ -22,11 +23,12 @@ export async function GET(request: NextRequest) {
         st.status,
         st.notes,
         st.created_at,
-        pt.terminal_id
+        pt.terminal_id,
+        pt.order_number
       FROM sales_transactions st
       JOIN pos_transactions pt ON st.id = pt.sale_id
       LEFT JOIN customers c ON st.customer_id = c.id
-      WHERE 1=1
+      WHERE st.status != 'voided'
     `;
 
     const params: any[] = [];
@@ -36,10 +38,17 @@ export async function GET(request: NextRequest) {
         params.push(terminalId);
     }
 
-    salesQuery += `
-      ORDER BY st.created_at DESC
-      LIMIT 20
-    `;
+    if (queryParam) {
+        salesQuery += ' AND (pt.order_number LIKE ? OR st.id LIKE ?)';
+        params.push(`%${queryParam}%`, `%${queryParam}%`);
+    }
+
+    salesQuery += ' ORDER BY st.created_at DESC';
+    
+    // Only limit if not searching, to ensure we find specific transactions
+    if (!queryParam) {
+        salesQuery += ' LIMIT 20';
+    }
 
     const sales = await query(salesQuery, params);
 
@@ -74,6 +83,7 @@ export async function GET(request: NextRequest) {
           paymentMethod: sale.payment_method,
           status: sale.status,
           notes: sale.notes,
+          orderNumber: sale.order_number,
           items: items.map((item: any) => ({
             product: {
               id: item.product_id,

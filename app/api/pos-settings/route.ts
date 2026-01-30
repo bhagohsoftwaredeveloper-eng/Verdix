@@ -23,7 +23,10 @@ export async function GET(request: NextRequest) {
         tin,
         email,
         created_at AS createdAt,
-        updated_at AS updatedAt
+        updated_at AS updatedAt,
+        enable_void_return_auth AS enableVoidReturnAuth,
+        void_auth_username AS voidAuthUsername,
+        void_auth_password AS voidAuthPassword
       FROM pos_settings
       LIMIT 1
     `;
@@ -76,7 +79,8 @@ export async function POST(request: NextRequest) {
         businessName, logoPath, enableAdvancedInventory, transactionPrefix, 
         address, contactNumber, tin, email,
         currencySymbol, currencyCode, timezone, dateFormat,
-        enableAutomaticMarkup, defaultMarkupPercentage, markupPriority
+        enableAutomaticMarkup, defaultMarkupPercentage, markupPriority,
+        enableVoidReturnAuth, voidAuthUsername, voidAuthPassword
       } = body;
 
       const insertSQL = `
@@ -84,9 +88,10 @@ export async function POST(request: NextRequest) {
           id, business_name, logo_path, enable_advanced_inventory, transaction_prefix, 
           address, contact_number, tin, email,
           currency_symbol, currency_code, timezone, date_format,
-          enable_automatic_markup, default_markup_percentage, markup_priority
+          enable_automatic_markup, default_markup_percentage, markup_priority,
+          enable_void_return_auth, void_auth_username, void_auth_password
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
@@ -103,7 +108,10 @@ export async function POST(request: NextRequest) {
         dateFormat || 'MM/DD/YYYY',
         enableAutomaticMarkup ?? true,
         defaultMarkupPercentage || 0.00,
-        markupPriority ? JSON.stringify(markupPriority) : JSON.stringify(["subcategory", "category", "brand", "supplier"])
+        markupPriority ? JSON.stringify(markupPriority) : JSON.stringify(["subcategory", "category", "brand", "supplier"]),
+        enableVoidReturnAuth ?? false,
+        voidAuthUsername || null,
+        voidAuthPassword || null
       ]);
     } else {
       // Update existing settings - Dynamic Update
@@ -122,7 +130,10 @@ export async function POST(request: NextRequest) {
         dateFormat: 'date_format',
         enableAutomaticMarkup: 'enable_automatic_markup',
         defaultMarkupPercentage: 'default_markup_percentage',
-        markupPriority: 'markup_priority'
+        markupPriority: 'markup_priority',
+        enableVoidReturnAuth: 'enable_void_return_auth',
+        voidAuthUsername: 'void_auth_username',
+        voidAuthPassword: 'void_auth_password'
       };
 
       const updates: string[] = [];

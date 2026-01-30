@@ -1,6 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -9,31 +16,38 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Search, Eye, X } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { DateRange } from 'react-day-picker';
 import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Calendar } from '@/components/ui/calendar';
+import { DateRange } from 'react-day-picker';
+import { Search, X, Loader2, SlidersHorizontal, Download, FileText, FileSpreadsheet, ChevronDown, ChevronUp, CalendarIcon } from 'lucide-react';
+import { TerminalSelector } from '@/components/TerminalSelector';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { TerminalSelector } from '@/components/TerminalSelector';
-
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import {
   Pagination,
   PaginationContent,
@@ -44,62 +58,89 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 
-
-
 export default function SalesDetailsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [terminal, setTerminal] = useState<string>('all');
+  const [terminalId, setTerminalId] = useState<string>('all');
   const [sales, setSales] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedTx, setSelectedTx] = useState<any>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const limit = 10; // Items per page
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const limit = 10; // Transactions per page
 
-  // Fetch transactions from new API
-  const fetchTransactions = async (page = 1) => {
+  // Filter states
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
+  const [salesStatusFilter, setSalesStatusFilter] = useState<string>('all');
+  const [customerFilter, setCustomerFilter] = useState<string>('');
+  const [salesGroupFilter, setSalesGroupFilter] = useState<string>('all');
+  const [referenceNumberFilter, setReferenceNumberFilter] = useState<string>('');
+  const [transactionFromFilter, setTransactionFromFilter] = useState<string>('all');
+
+  // Filter dialog open states
+  const [paymentTypeDialogOpen, setPaymentTypeDialogOpen] = useState(false);
+  const [terminalDialogOpen, setTerminalDialogOpen] = useState(false);
+  const [dateRangeDialogOpen, setDateRangeDialogOpen] = useState(false);
+  const [salesStatusDialogOpen, setSalesStatusDialogOpen] = useState(false);
+  // simplified for this iteration to core filters needed
+
+  // Temporary filter values
+  const [tempPaymentType, setTempPaymentType] = useState<string>('all');
+  const [tempTerminalId, setTempTerminalId] = useState<string>('all');
+  const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>(undefined);
+
+  const toggleRowExpansion = (id: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const fetchSales = async (page = 1) => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (dateRange?.from) {
-        params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
-      }
-      if (dateRange?.to) {
-        params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
-      }
-      if (terminal && terminal !== 'all') {
-         params.append('terminalId', terminal);
-      }
-      
-      params.append('page', page.toString());
-      params.append('limit', limit.toString());
-
-      const response = await fetch(`/api/sales/transactions?${params.toString()}`);
-      const result = await response.json();
-      if (result.success) {
-        setSales(result.data);
-        if (result.pagination) {
-            setTotalPages(result.pagination.totalPages);
-            setCurrentPage(result.pagination.page);
+        const params = new URLSearchParams();
+        if (dateRange?.from) {
+            params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
         }
-      }
+        if (dateRange?.to) {
+            params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+        }
+        if (terminalId && terminalId !== 'all') {
+            params.append('terminalId', terminalId);
+        }
+        
+        // Add pagination params
+        params.append('page', page.toString());
+        params.append('limit', limit.toString());
+        
+        const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            setSales(result.data);
+            if (result.pagination) {
+                setTotalPages(result.pagination.totalPages);
+                setCurrentPage(result.pagination.page);
+            }
+        } else {
+            console.error("Failed to fetch sales:", result.error);
+        }
     } catch (error) {
-        console.error("Error fetching transactions:", error);
+        console.error("Error fetching sales:", error);
     } finally {
         setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTransactions(currentPage);
-  }, [dateRange, terminal, currentPage]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-      setCurrentPage(1);
-  }, [dateRange, terminal]);
+    fetchSales(currentPage);
+  }, [dateRange, terminalId, currentPage]);
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -107,29 +148,223 @@ export default function SalesDetailsPage() {
     }
   };
 
-  const filteredSales = sales.filter((sale) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      sale.id.toString().toLowerCase().includes(term) ||
-      sale.customer?.name?.toLowerCase().includes(term) ||
-      sale.cashier?.toLowerCase().includes(term)
-    );
+  // Reset to page 1 when filters change
+  useEffect(() => {
+      setCurrentPage(1);
+  }, [dateRange, terminalId]);
+
+  const filteredSales = sales.filter(sale => {
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const idMatch = String(sale.id || sale.posTransactionId).toLowerCase().includes(term);
+        const customerMatch = sale.customer?.name?.toLowerCase().includes(term);
+        if (!idMatch && !customerMatch) return false;
+      }
+      if (paymentTypeFilter !== 'all' && sale.paymentMethod !== paymentTypeFilter) return false;
+      if (salesStatusFilter !== 'all') {
+        const saleStatus = sale.status || (sale.paymentStatus === 'completed' ? 'Paid' : 'Pending');
+        if (saleStatus !== salesStatusFilter) return false;
+      }
+      return true;
   });
 
   const resetFilters = () => {
     setSearchTerm('');
     setDateRange(undefined);
-    setTerminal('all');
+    setTerminalId('all');
+    setPaymentTypeFilter('all');
+    setSalesStatusFilter('all');
+    setCustomerFilter('');
+    setSalesGroupFilter('all');
+    setReferenceNumberFilter('');
+    setTransactionFromFilter('all');
     setCurrentPage(1);
+    setExpandedRows(new Set());
   };
 
-  const handleViewDetail = (tx: any) => {
-      setSelectedTx(tx);
-      setIsDetailOpen(true);
+  const hasActiveFilters = searchTerm || dateRange || terminalId !== 'all' || 
+    paymentTypeFilter !== 'all' || salesStatusFilter !== 'all';
+
+  // Calculate summary totals
+  const summaryTotals = sales.reduce((acc, sale) => {
+    const totalAmount = Number(sale.total || 0);
+    const costAmount = Number(sale.cost || 0);
+    const taxAmount = Number(sale.taxAmount || 0);
+    return {
+      discounts: acc.discounts + Number(sale.discount || 0),
+      revenue: acc.revenue + totalAmount,
+      amountPaid: acc.amountPaid + Number(sale.amountPaid || totalAmount),
+      customerBalance: acc.customerBalance + Number(sale.balance || 0),
+      cost: acc.cost + costAmount,
+      grossProfit: acc.grossProfit + (totalAmount - costAmount - taxAmount), // Profit = Rev - Cost - Tax
+      vatableSales: acc.vatableSales + Number(sale.vatableSales || 0),
+      vatAmount: acc.vatAmount + taxAmount,
+      nonVatSales: acc.nonVatSales + Number(sale.nonVatSales || 0),
+      accountPayments: acc.accountPayments + (sale.paymentMethod === 'Account' ? totalAmount : 0),
+    };
+  }, {
+    discounts: 0, revenue: 0, amountPaid: 0, customerBalance: 0, cost: 0, grossProfit: 0, vatableSales: 0, vatAmount: 0, nonVatSales: 0, accountPayments: 0
+  });
+
+  const fetchAllSalesForExport = async () => {
+    const params = new URLSearchParams();
+    if (dateRange?.from) params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+    if (dateRange?.to) params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+    if (terminalId && terminalId !== 'all') params.append('terminalId', terminalId);
+    params.append('limit', '1000000');
+    
+    try {
+        const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+            return result.data;
+        }
+        return [];
+    } catch (error) {
+        console.error("Export fetch error:", error);
+        return [];
+    }
   };
 
-  // Render pagination items logic
+  const formatAmount = (val: any) => Number(val || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const exportToCSV = async () => {
+    const data = await fetchAllSalesForExport();
+    
+    // Flatten data for export
+    const rows = data.flatMap((sale: any) => {
+        const items = sale.items || [];
+        if (items.length === 0) {
+            // Include sale even if no items
+            return [{...sale, itemName: 'No Items', itemCost: 0, itemPrice: 0, itemQty: 0, itemTotal: 0}];
+        }
+        return items.map((item: any) => ({ 
+            ...sale, 
+            ...item, 
+            itemName: item.productName,
+            itemCost: item.cost,
+            itemPrice: item.price,
+            itemQty: item.quantity,
+            itemTotal: item.total
+        }));
+    });
+
+    const headers = [
+      'SO No.', 'Receipt No.', 'Date', 'Terminal', 'Cashier', 'Customer', 
+      'Description', 'Cost', 'Price', 'Quantity', 'Discount', 'Amount Due', 'Profit', 'Payment Type', 'Note'
+    ];
+    
+    const csvRows = rows.map((row: any) => [
+      row.orderNumber || '',
+      row.receiptNo || row.orderNumber || '',
+      row.date ? format(new Date(row.date), 'yyyy-MM-dd HH:mm') : '', 
+      row.terminal || '',
+      row.cashier || '',
+      row.customer?.name || 'Walk-in',
+      row.itemName || row.productName || 'General Item',
+      row.itemCost || 0,
+      row.itemPrice || 0,
+      row.itemQty || 1,
+      row.discount || 0,
+      row.itemTotal || row.total || 0,
+      (row.itemTotal || 0) - ((row.itemCost || 0) * (row.itemQty || 1)), // Rough item profit
+      row.paymentMethod || '',
+      row.notes || ''
+    ]);
+
+    const csvContent = [
+        headers.join(','), 
+        ...csvRows.map((r: any[]) => r.map(c => `"${c}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `sales_details_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+  };
+
+  const exportToPDF = async () => {
+     const data = await fetchAllSalesForExport();
+     const printWindow = window.open('', '_blank');
+     if (!printWindow) return;
+
+     const printContent = `
+       <html>
+         <head>
+           <title>Sales Details Report</title>
+           <style>
+             body { font-family: sans-serif; font-size: 10px; }
+             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+             th, td { border: 1px solid #ddd; padding: 4px; text-align: left; }
+             th { background-color: #f2f2f2; font-weight: bold; }
+             .text-right { text-align: right; }
+             .sub-table { margin: 10px; width: 95%; background-color: #fafafa; }
+             .sub-table th { background-color: #eee; }
+             .summary-row { font-weight: bold; background-color: #f9f9f9; }
+           </style>
+         </head>
+         <body>
+           <h2>Sales Details Report</h2>
+           <p>Generated: ${format(new Date(), 'PPpp')}</p>
+           <table>
+             <thead>
+               <tr>
+                 <th>SO No.</th>
+                 <th>Date</th>
+                 <th>Customer</th>
+                 <th>Payment Type</th>
+                 <th>Total Amount</th>
+               </tr>
+             </thead>
+             <tbody>
+               ${data.map((sale: any) => `
+                 <tr class="summary-row">
+                   <td>${sale.orderNumber || ''}</td>
+                   <td>${sale.date ? format(new Date(sale.date), 'MM/dd/yyyy HH:mm') : ''}</td>
+                   <td>${sale.customer?.name || 'Walk-in'}</td>
+                   <td>${sale.paymentMethod || '-'}</td>
+                   <td class="text-right">${formatAmount(sale.total)}</td>
+                 </tr>
+                 <tr>
+                   <td colspan="5">
+                      <table class="sub-table">
+                        <thead>
+                          <tr>
+                            <th>Description</th>
+                            <th class="text-right">Cost</th>
+                            <th class="text-right">Price</th>
+                            <th class="text-right">Qty</th>
+                            <th class="text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${(sale.items || []).map((item: any) => `
+                            <tr>
+                              <td>${item.productName}</td>
+                              <td class="text-right">${formatAmount(item.cost)}</td>
+                              <td class="text-right">${formatAmount(item.price)}</td>
+                              <td class="text-right">${item.quantity}</td>
+                              <td class="text-right">${formatAmount(item.total)}</td>
+                            </tr>
+                          `).join('')}
+                        </tbody>
+                      </table>
+                   </td>
+                 </tr>
+               `).join('')}
+             </tbody>
+           </table>
+         </body>
+       </html>
+     `;
+     
+     printWindow.document.write(printContent);
+     printWindow.document.close();
+     setTimeout(() => printWindow.print(), 500);
+  };
+
+   // Render pagination items logic
   const renderPaginationItems = () => {
       const items = [];
       const maxVisiblePages = 5;
@@ -148,59 +383,25 @@ export default function SalesDetailsPage() {
               );
           }
       } else {
-          // Always show first page
           items.push(
               <PaginationItem key={1}>
-                  <PaginationLink
-                      isActive={currentPage === 1}
-                      onClick={() => handlePageChange(1)}
-                  >
-                      1
-                  </PaginationLink>
+                  <PaginationLink isActive={currentPage === 1} onClick={() => handlePageChange(1)}>1</PaginationLink>
               </PaginationItem>
           );
-
-          if (currentPage > 3) {
-              items.push(
-                  <PaginationItem key="ellipsis-start">
-                      <PaginationEllipsis />
-                  </PaginationItem>
-              );
-          }
-
+          if (currentPage > 3) items.push(<PaginationItem key="e1"><PaginationEllipsis /></PaginationItem>);
           const start = Math.max(2, currentPage - 1);
           const end = Math.min(totalPages - 1, currentPage + 1);
-
           for (let i = start; i <= end; i++) {
               items.push(
                   <PaginationItem key={i}>
-                      <PaginationLink
-                          isActive={currentPage === i}
-                          onClick={() => handlePageChange(i)}
-                      >
-                          {i}
-                      </PaginationLink>
+                      <PaginationLink isActive={currentPage === i} onClick={() => handlePageChange(i)}>{i}</PaginationLink>
                   </PaginationItem>
               );
           }
-
-          if (currentPage < totalPages - 2) {
-              items.push(
-                  <PaginationItem key="ellipsis-end">
-                      <PaginationEllipsis />
-                  </PaginationItem>
-              );
-          }
-
-          // Always show last page
+          if (currentPage < totalPages - 2) items.push(<PaginationItem key="e2"><PaginationEllipsis /></PaginationItem>);
           items.push(
               <PaginationItem key={totalPages}>
-                  <PaginationLink
-                      isActive={currentPage === totalPages}
-                      onClick={() => handlePageChange(totalPages)}
-                  >
-                      {totalPages}
-                  </PaginationLink>
+                  <PaginationLink isActive={currentPage === totalPages} onClick={() => handlePageChange(totalPages)}>{totalPages}</PaginationLink>
               </PaginationItem>
           );
       }
@@ -208,218 +409,352 @@ export default function SalesDetailsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-        <div>
-           <h1 className="text-3xl font-bold tracking-tight text-foreground">Sales History</h1>
-           <p className="text-muted-foreground mt-1">
-             Detailed log of all point of sale transactions.
-           </p>
-        </div>
-      </div>
-
-       <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 sm:flex-none">
-              <Search className="absolute left-3 top-[0.65rem] h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <Input
-                type="search"
-                placeholder="Search ID, customer..."
-                className="pl-9 w-full sm:w-[280px] bg-background/50 border-input/50 focus:bg-background transition-all shadow-sm"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-             <TerminalSelector 
-                terminalId={terminal} 
-                onTerminalChange={setTerminal} 
-                showAllOption={true} 
-             />
-             <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-[240px] justify-start text-left font-normal bg-background/50 border-input/50 hover:bg-background transition-all",
-                      !dateRange && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "LLL dd, y")} -{" "}
-                          {format(dateRange.to, "LLL dd, y")}
-                        </>
-                      ) : (
-                        format(dateRange.from, "LLL dd, y")
-                      )
-                    ) : (
-                      <span>Pick a date range</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 glass-card" align="center">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
-               <Button variant="ghost" onClick={resetFilters} size="icon" className={(searchTerm || dateRange || terminal !== 'all') ? 'visible text-muted-foreground hover:text-destructive' : 'invisible'}>
-                <X className="h-4 w-4" />
-                <span className="sr-only">Reset filters</span>
-              </Button>
-      </div>
-
-      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow className="hover:bg-transparent border-b border-white/10">
-                <TableHead className="w-[120px]">Transaction ID</TableHead>
-                <TableHead>Date & Time</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Cashier</TableHead>
-                <TableHead>Terminal</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right w-[80px]">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSales.length > 0 ? (
-                filteredSales.map((sale) => (
-                  <TableRow key={sale.posTransactionId} className="group hover:bg-muted/50 transition-colors">
-                    <TableCell className="font-medium font-mono text-primary">
-                      {sale.posTransactionId}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {format(new Date(sale.date), 'MMM d, yyyy h:mm a')}
-                    </TableCell>
-                    <TableCell className="font-medium">{sale.customer?.name || 'Walk-in'}</TableCell>
-                    <TableCell className="text-muted-foreground">{sale.cashier || 'N/A'}</TableCell>
-                    <TableCell className="text-muted-foreground">{sale.terminal || 'N/A'}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant="secondary"
-                        className={cn(
-                            "capitalize font-normal border",
-                            sale.transactionType === 'void' ? 'bg-destructive/10 text-destructive border-destructive/20' : 
-                            sale.transactionType === 'return' ? 'bg-orange-500/10 text-orange-600 border-orange-500/20' : 
-                            'bg-green-500/10 text-green-600 border-green-500/20'
-                        )}
-                      >
-                        {sale.transactionType === 'sale' ? 'Paid' : sale.transactionType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-medium">
-                      ₱{sale.total.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                         <Button variant="ghost" size="icon" onClick={() => handleViewDetail(sale)} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Eye className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                         </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center h-32 text-muted-foreground">
-                    No transactions found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-
-          {/* Pagination Controls */}
-          {!isLoading && sales.length > 0 && (
-              <div className="p-4 border-t border-border/50 bg-muted/20">
-                  <Pagination>
-                      <PaginationContent>
-                          <PaginationItem>
-                              <PaginationPrevious
-                                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                                  aria-disabled={currentPage === 1}
-                                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                              />
-                          </PaginationItem>
-                          {renderPaginationItems()}
-                          <PaginationItem>
-                              <PaginationNext
-                                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                                  aria-disabled={currentPage === totalPages}
-                                  className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                              />
-                          </PaginationItem>
-                      </PaginationContent>
-                  </Pagination>
+    <>
+    <div className="flex flex-col gap-4">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle>Sales Details</CardTitle>
+                <CardDescription>
+                  Detailed view of sales items and transactions.
+                </CardDescription>
               </div>
-          )}
-        </CardContent>
-      </Card>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Summary Cards */}
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                <p className="text-xs text-muted-foreground font-medium">Discounts</p>
+                <p className="text-lg font-bold">₱{summaryTotals.discounts.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                 <p className="text-xs text-muted-foreground font-medium">Revenue</p>
+                 <p className="text-lg font-bold text-primary">₱{summaryTotals.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                <p className="text-xs text-muted-foreground font-medium">Amount Paid</p>
+                <p className="text-lg font-bold">₱{summaryTotals.amountPaid.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                <p className="text-xs text-muted-foreground font-medium">Customer Balance</p>
+                <p className="text-lg font-bold">₱{summaryTotals.customerBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                 <p className="text-xs text-muted-foreground font-medium">Cost</p>
+                 <p className="text-lg font-bold">₱{summaryTotals.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+               <div className="bg-muted/50 rounded-lg p-3 border">
+                 <p className="text-xs text-muted-foreground font-medium">Gross Profit</p>
+                 <p className="text-lg font-bold text-green-600">₱{summaryTotals.grossProfit.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                 <p className="text-xs text-muted-foreground font-medium">Vatable Sales</p>
+                 <p className="text-lg font-bold">₱{summaryTotals.vatableSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                 <p className="text-xs text-muted-foreground font-medium">VAT Amount</p>
+                 <p className="text-lg font-bold">₱{summaryTotals.vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                <p className="text-xs text-muted-foreground font-medium">Non-Vat Sales</p>
+                <p className="text-lg font-bold">₱{summaryTotals.nonVatSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                <p className="text-xs text-muted-foreground font-medium">Account Payments</p>
+                <p className="text-lg font-bold">₱{summaryTotals.accountPayments.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
 
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-md glass-card border-none shadow-2xl">
-            <DialogHeader className="border-b border-border/50 pb-4">
-                <DialogTitle className="text-xl">Transaction Details</DialogTitle>
-                <DialogDescription className="font-mono text-primary">{selectedTx?.posTransactionId}</DialogDescription>
-            </DialogHeader>
-             {selectedTx && (
-                 <div className="space-y-6 pt-2">
-                     <div className="grid grid-cols-2 gap-y-4 text-sm">
-                         <div className="flex flex-col gap-1">
-                             <span className="text-xs text-muted-foreground uppercase tracking-wider">Date</span>
-                             <span className="font-medium">{format(new Date(selectedTx.date), 'PPpp')}</span>
-                         </div>
-                         
-                         <div className="flex flex-col gap-1">
-                             <span className="text-xs text-muted-foreground uppercase tracking-wider">Customer</span>
-                             <span className="font-medium">{selectedTx.customer?.name || 'Walk-in'}</span>
-                         </div>
-                         
-                         <div className="flex flex-col gap-1">
-                             <span className="text-xs text-muted-foreground uppercase tracking-wider">Cashier</span>
-                             <span className="font-medium">{selectedTx.cashier || 'N/A'}</span>
-                         </div>
-                         
-                         <div className="flex flex-col gap-1">
-                             <span className="text-xs text-muted-foreground uppercase tracking-wider">Terminal</span>
-                             <span className="font-medium">{selectedTx.terminal || 'N/A'}</span>
-                         </div>
-                         
-                         <div className="flex flex-col gap-1">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wider">Payment</span>
-                            <span className="font-medium">{selectedTx.paymentMethod || 'N/A'}</span>
-                         </div>
-                         
-                         <div className="flex flex-col gap-1">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wider">Status</span>
-                             <Badge 
-                                variant="outline"
-                                className={cn(
-                                    "capitalize w-fit",
-                                    selectedTx.transactionType === 'void' ? 'border-destructive text-destructive' : 
-                                    selectedTx.transactionType === 'return' ? 'border-orange-500 text-orange-600' : 
-                                    'border-green-500 text-green-600'
-                                )}
-                              >
-                                {selectedTx.transactionType}
-                              </Badge>
-                         </div>
-                     </div>
-                     <div className="border-t border-border/50 pt-4 flex justify-between items-center bg-muted/30 -mx-6 px-6 -mb-2 py-4 rounded-b-lg">
-                         <span className="font-semibold text-muted-foreground">Total Amount</span>
-                         <span className="font-bold text-2xl text-primary">₱{selectedTx.total.toFixed(2)}</span>
-                     </div>
-                 </div>
-             )}
+            {/* Filter Bar */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search by ID or customer..."
+                  className="pl-8 w-full"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <SlidersHorizontal className="h-4 w-4 mr-2" />
+                      Filters
+                      {hasActiveFilters && (
+                        <Badge variant="secondary" className="ml-2 h-5 px-1.5">!</Badge>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                     <DropdownMenuItem onSelect={() => { setTempPaymentType(paymentTypeFilter); setPaymentTypeDialogOpen(true); }}>Payment Type</DropdownMenuItem>
+                     <DropdownMenuItem onSelect={() => { setTempTerminalId(terminalId); setTerminalDialogOpen(true); }}>Terminal</DropdownMenuItem>
+                     <DropdownMenuItem onSelect={() => { setTempDateRange(dateRange); setDateRangeDialogOpen(true); }}>Date Range</DropdownMenuItem>
+                     <DropdownMenuSeparator />
+                     <DropdownMenuItem onSelect={resetFilters} className="text-destructive">Clear All Filters</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Download className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={exportToCSV}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                      Export as CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={exportToPDF}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Export as PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {hasActiveFilters && (
+                  <Button variant="ghost" onClick={resetFilters} size="sm">
+                    <X className="h-4 w-4 mr-1" />
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Main Table with Accordion */}
+            <div className="overflow-x-auto border rounded-md">
+            <Table className="text-xs w-full">
+              <TableHeader>
+                <TableRow className="bg-primary hover:bg-primary">
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">SO No.</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Receipt</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Date</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Terminal</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Cashier</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Customer</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 text-right whitespace-nowrap">Amount</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Payment</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {isLoading ? (
+                    <TableRow>
+                        <TableCell colSpan={10} className="h-24 text-center">
+                             <div className="flex justify-center items-center">
+                                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                                Loading transactions...
+                            </div>
+                        </TableCell>
+                    </TableRow>
+                ) : filteredSales.length > 0 ? (
+                  filteredSales.map((sale, index) => {
+                    const rowId = sale.posTransactionId || sale.id;
+                    const isExpanded = expandedRows.has(rowId);
+                    const isPaid = sale.paymentStatus === 'completed' || sale.status === 'Paid';
+                    
+                    return (
+                        <Fragment key={rowId}>
+                        <TableRow 
+                            className={`cursor-pointer hover:bg-accent ${index % 2 === 0 ? 'bg-background' : 'bg-muted/50'}`}
+                            onClick={() => toggleRowExpansion(rowId)}
+                        >
+                          <TableCell className="py-2 px-2 w-8">
+                             {isExpanded ? <ChevronUp className="h-4 w-4 text-primary" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                          </TableCell>
+                          <TableCell className="py-2 px-2 whitespace-nowrap font-medium text-primary">{sale.orderNumber || '-'}</TableCell>
+                          <TableCell className="py-2 px-2 whitespace-nowrap">{sale.receiptNo || sale.orderNumber || '-'}</TableCell>
+                          <TableCell className="py-2 px-2 whitespace-nowrap">{sale.date ? format(new Date(sale.date), 'MMM dd, yyyy HH:mm') : '-'}</TableCell>
+                          <TableCell className="py-2 px-2 whitespace-nowrap">{sale.terminal || '-'}</TableCell>
+                          <TableCell className="py-2 px-2 whitespace-nowrap">{sale.cashier || '-'}</TableCell>
+                          <TableCell className="py-2 px-2 whitespace-nowrap">{sale.customer?.name || 'Walk-in'}</TableCell>
+                          <TableCell className="py-2 px-2 text-right whitespace-nowrap font-medium">{formatAmount(sale.total)}</TableCell>
+                          <TableCell className="py-2 px-2 whitespace-nowrap">{sale.paymentMethod || '-'}</TableCell>
+                          <TableCell className="py-2 px-2 whitespace-nowrap">
+                             <Badge variant={isPaid ? 'default' : 'destructive'} className="font-normal">
+                                {isPaid ? 'Paid' : sale.status || 'Pending'}
+                             </Badge>
+                          </TableCell>
+                        </TableRow>
+                        
+                        {isExpanded && (
+                          <TableRow key={`${rowId}-details`} className="bg-muted/30">
+                            <TableCell colSpan={10} className="py-3 px-4">
+                              {/* Summary Grid matches Sales Transaction layout */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 text-xs mb-4">
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Discount</span>
+                                  <span className="font-semibold">{formatAmount(sale.discount)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Amount Paid</span>
+                                  <span className="font-semibold">{formatAmount(sale.amountPaid || sale.total)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Balance</span>
+                                  <span className="font-semibold">{formatAmount(sale.balance)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Cost</span>
+                                  <span className="font-semibold">{formatAmount(sale.cost)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Profit</span>
+                                  <span className="font-semibold">{formatAmount(sale.profit)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Vatable Sales</span>
+                                  <span className="font-semibold">{formatAmount(sale.vatableSales)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">VAT Amount</span>
+                                  <span className="font-semibold">{formatAmount(sale.taxAmount)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Non-Vat Sales</span>
+                                  <span className="font-semibold">{formatAmount(sale.nonVatSales)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Note</span>
+                                  <span className="font-semibold">{sale.notes || '-'}</span>
+                                </div>
+                              </div>
+
+                              {/* Detailed Item Layout */}
+                              <div className="border rounded-md bg-background/50 overflow-hidden">
+                                <Table className="text-xs">
+                                    <TableHeader>
+                                        <TableRow className="bg-muted hover:bg-muted border-b border-border/50">
+                                            <TableHead className="py-2 h-8 font-semibold">Description</TableHead>
+                                            <TableHead className="py-2 h-8 font-semibold text-right">Cost</TableHead>
+                                            <TableHead className="py-2 h-8 font-semibold text-right">Price</TableHead>
+                                            <TableHead className="py-2 h-8 font-semibold text-center">Qty</TableHead>
+                                            <TableHead className="py-2 h-8 font-semibold text-right">Discount</TableHead>
+                                            <TableHead className="py-2 h-8 font-semibold text-right">Amount Due</TableHead>
+                                            <TableHead className="py-2 h-8 font-semibold text-right text-muted-foreground">Profit</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {(sale.items && sale.items.length > 0) ? (
+                                            sale.items.map((item: any) => {
+                                                const profit = (item.total || 0) - ((item.cost || 0) * (item.quantity || 1));
+                                                return (
+                                                    <TableRow key={item.id} className="hover:bg-muted/30">
+                                                        <TableCell className="py-2">{item.productName || item.description || 'Item'}</TableCell>
+                                                        <TableCell className="py-2 text-right text-muted-foreground">{formatAmount(item.cost)}</TableCell>
+                                                        <TableCell className="py-2 text-right">{formatAmount(item.price)}</TableCell>
+                                                        <TableCell className="py-2 text-center">{item.quantity}</TableCell>
+                                                        <TableCell className="py-2 text-right text-red-500">{item.discount > 0 ? `-${formatAmount(item.discount)}` : '-'}</TableCell>
+                                                        <TableCell className="py-2 text-right font-medium">{formatAmount(item.total)}</TableCell>
+                                                        <TableCell className="py-2 text-right text-green-600/80">{formatAmount(profit)}</TableCell>
+                                                    </TableRow>
+                                                );
+                                            })
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={7} className="text-center py-4 text-muted-foreground">No item details available</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        </Fragment>
+                    );
+                  })
+                ) : (
+                    <TableRow>
+                        <TableCell colSpan={10} className="h-24 text-center">
+                            No transactions found for the selected criteria.
+                        </TableCell>
+                    </TableRow>
+                )}
+              </TableBody>
+            </Table>
+            </div>
+             {/* Pagination Controls */}
+             {!isLoading && sales.length > 0 && (
+                <div className="mt-4">
+                    <Pagination>
+                        <PaginationContent>
+                            <PaginationItem>
+                                <PaginationPrevious
+                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                    aria-disabled={currentPage === 1}
+                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                            {renderPaginationItems()}
+                            <PaginationItem>
+                                <PaginationNext
+                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                    aria-disabled={currentPage === totalPages}
+                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+       {/* Include Filter Dialogs */}
+       <Dialog open={paymentTypeDialogOpen} onOpenChange={setPaymentTypeDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader><DialogTitle>Filter by Payment Type</DialogTitle></DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="paymentType">Payment Type</Label>
+            <Select value={tempPaymentType} onValueChange={setTempPaymentType}>
+              <SelectTrigger className="mt-2"><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="Cash">Cash</SelectItem>
+                <SelectItem value="Card">Card</SelectItem>
+                <SelectItem value="GCash">GCash</SelectItem>
+                <SelectItem value="Maya">Maya</SelectItem>
+                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                <SelectItem value="Account">Account</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter><Button onClick={() => { setPaymentTypeFilter(tempPaymentType); setPaymentTypeDialogOpen(false); }}>Apply</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      
+      <Dialog open={terminalDialogOpen} onOpenChange={setTerminalDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader><DialogTitle>Filter by Terminal</DialogTitle></DialogHeader>
+          <div className="py-4">
+              <TerminalSelector terminalId={tempTerminalId} onTerminalChange={setTempTerminalId} showAllOption={true} />
+          </div>
+          <DialogFooter><Button onClick={() => { setTerminalId(tempTerminalId); setTerminalDialogOpen(false); }}>Apply</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={dateRangeDialogOpen} onOpenChange={setDateRangeDialogOpen}>
+        <DialogContent className="sm:max-w-fit">
+          <DialogHeader><DialogTitle>Filter by Date</DialogTitle></DialogHeader>
+          <div className="py-2 flex justify-center">
+               <Calendar mode="range" selected={tempDateRange} onSelect={setTempDateRange} numberOfMonths={1} className="rounded-md border" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setTempDateRange(undefined); }}>Clear</Button>
+            <Button onClick={() => { setDateRange(tempDateRange); setDateRangeDialogOpen(false); }}>Apply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

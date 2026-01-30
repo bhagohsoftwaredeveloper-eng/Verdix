@@ -37,8 +37,9 @@ export function CustomerSelectionField({
   name = 'customer',
   label = 'Customer',
   className,
-  onCustomerAdded
-}: CustomerSelectionFieldProps) {
+  onCustomerAdded,
+  labelClassName
+}: CustomerSelectionFieldProps & { labelClassName?: string }) {
   const [showAddDialog, setShowAddDialog] = useState(false);
 
   const handleAddCustomer = async (
@@ -100,7 +101,7 @@ export function CustomerSelectionField({
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          {label && <FormLabel className={labelClassName}>{label}</FormLabel>}
 
           <Select onValueChange={(value) => {
               const customer = customerList?.find(c => c.id === value);

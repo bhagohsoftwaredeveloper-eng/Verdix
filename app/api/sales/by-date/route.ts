@@ -7,83 +7,111 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const terminalId = searchParams.get('terminalId');
+    const interval = searchParams.get('interval') || 'daily'; // daily, hourly, monthly
+    const paymentType = searchParams.get('paymentType');
 
     const params: any[] = [];
-    let queryStr = '';
+    let whereClause = "WHERE pt.transaction_type = 'sale' AND pt.payment_status = 'completed'";
 
-    // If terminal filter is active, we ONLY look at POS transactions
     if (terminalId && terminalId !== 'all') {
-        queryStr = `
-            SELECT
-                DATE(pt.transaction_time) as date,
-                COUNT(DISTINCT pt.id) as transaction_count,
-                SUM(pt.total_amount) as total_revenue
-            FROM pos_transactions pt
-            WHERE pt.terminal_id = ?
-            AND pt.transaction_type = 'sale' 
-        `;
+        whereClause += " AND pt.terminal_id = ?";
         params.push(terminalId);
-
-        if (startDate) {
-            queryStr += ` AND DATE(pt.transaction_time) >= ?`;
-            params.push(startDate);
-        }
-        if (endDate) {
-            queryStr += ` AND DATE(pt.transaction_time) <= ?`;
-            params.push(endDate);
-        }
-
-        queryStr += `
-            GROUP BY DATE(pt.transaction_time)
-            ORDER BY DATE(pt.transaction_time) DESC
-        `;
-    } else {
-        // Base query to aggregate sales by date from all sources (Legacy + POS)
-        queryStr = `
-          WITH all_sales AS (
-            SELECT id, total, invoice_date, status FROM sales_transactions
-            UNION ALL
-            SELECT id, total, invoice_date, status FROM sales_invoices WHERE (notes IS NULL OR notes NOT LIKE '%POS Sale%')
-          )
-          SELECT
-            DATE(asl.invoice_date) as date,
-            COUNT(DISTINCT asl.id) as transaction_count,
-            SUM(asl.total) as total_revenue
-          FROM all_sales asl
-          WHERE asl.status = 'Paid'
-        `;
-
-        // Add date filtering if provided
-        if (startDate) {
-          queryStr += ` AND DATE(asl.invoice_date) >= ?`;
-          params.push(startDate);
-        }
-        if (endDate) {
-          queryStr += ` AND DATE(asl.invoice_date) <= ?`;
-          params.push(endDate);
-        }
-
-        // Group by date and order by date descending
-        queryStr += `
-          GROUP BY DATE(asl.invoice_date)
-          ORDER BY DATE(asl.invoice_date) DESC
-        `;
     }
 
-    const dailySales = await query(queryStr, params);
+    if (paymentType && paymentType !== 'all') {
+        whereClause += " AND pt.payment_method = ?";
+        params.push(paymentType);
+    }
 
-    // Transform the data to match expected format
-    const formattedData = dailySales.map((row: any) => ({
-      date: row.date,
-      transactionCount: parseInt(row.transaction_count),
-      totalRevenue: parseFloat(row.total_revenue),
-    }));
+    if (startDate) {
+        whereClause += " AND DATE(pt.transaction_time) >= ?";
+        params.push(startDate);
+    }
+    if (endDate) {
+        whereClause += " AND DATE(pt.transaction_time) <= ?";
+        params.push(endDate);
+    }
+
+    // Determine grouping and date format
+    let groupBy = "";
+    let selectDate = "";
+    
+    switch (interval) {
+        case 'hourly':
+            selectDate = "DATE_FORMAT(pt.transaction_time, '%Y-%m-%d %H:00:00')";
+            groupBy = "GROUP BY DATE_FORMAT(pt.transaction_time, '%Y-%m-%d %H:00:00')";
+            break;
+        case 'monthly':
+            selectDate = "DATE_FORMAT(pt.transaction_time, '%Y-%m-01')";
+            groupBy = "GROUP BY DATE_FORMAT(pt.transaction_time, '%Y-%m-01')";
+            break;
+        case 'daily':
+        default:
+            selectDate = "DATE(pt.transaction_time)";
+            groupBy = "GROUP BY DATE(pt.transaction_time)";
+            break;
+    }
+
+    const queryStr = `
+        SELECT
+            ${selectDate} as date,
+            COUNT(DISTINCT pt.id) as transaction_count,
+            MIN(pt.order_number) as start_or,
+            MAX(pt.order_number) as end_or,
+            SUM(pt.total_amount) as total_revenue,
+            SUM(pt.discount_amount) as total_discount,
+            SUM(pt.tax_amount) as total_tax,
+            SUM(
+                (SELECT SUM(COALESCE(p.cost, 0) * pti.quantity)
+                 FROM pos_transaction_items pti
+                 LEFT JOIN products p ON pti.product_id = p.id
+                 WHERE pti.pos_transaction_id = pt.id)
+            ) as total_cost
+        FROM pos_transactions pt
+        ${whereClause}
+        ${groupBy}
+        ORDER BY date DESC
+    `;
+
+    const result = await query(queryStr, params);
+
+    const formattedData = result.map((row: any) => {
+        const date = row.date instanceof Date ? row.date.toISOString() : row.date;
+        const totalRevenue = parseFloat(row.total_revenue) || 0;
+        const totalTax = parseFloat(row.total_tax) || 0;
+        const totalCost = parseFloat(row.total_cost) || 0;
+        const totalDiscount = parseFloat(row.total_discount) || 0;
+        
+        // Vatable Sales = Total Revenue - Tax (assuming all are vatable for now)
+        // In a complex system, we'd sum based on item tax type. 
+        // For now, mirroring the logic in sales/details which assumes simple tax structure.
+        const vatableSales = totalRevenue - totalTax;
+        
+        // Profit = Revenue - Cost - Tax
+        const profit = totalRevenue - totalCost - totalTax;
+
+        return {
+            date: date,
+            transactionCount: parseInt(row.transaction_count),
+            startOR: row.start_or,
+            endOR: row.end_or,
+            totalRevenue,
+            totalDiscount,
+            vatableSales,
+            vatAmount: totalTax,
+            vatExemptSales: 0, // Placeholder
+            zeroRatedSales: 0, // Placeholder
+            nonVatSales: 0,    // Placeholder
+            cost: totalCost,
+            profit
+        };
+    });
 
     return NextResponse.json({
-      success: true,
-      data: formattedData,
-      totalDays: formattedData.length,
+        success: true,
+        data: formattedData,
     });
+
   } catch (error) {
     console.error('Error fetching sales by date:', error);
     return NextResponse.json(

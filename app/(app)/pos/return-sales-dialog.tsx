@@ -80,7 +80,7 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
                     <div>
                         <DialogTitle>Select Items to Return</DialogTitle>
                         <DialogDescription>
-                            From Sale ID: {sale.id.substring(0,7)}...
+                            From SO Number: {sale.orderNumber || sale.id}
                         </DialogDescription>
                     </div>
                 </div>
@@ -140,14 +140,45 @@ export function ReturnSalesDialog({
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [itemsToReturn, setItemsToReturn] = useState<SaleItem[]>([]);
+  const [posSettings, setPosSettings] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/api/pos-settings')
+      .then(res => res.json())
+      .then(result => {
+        if (result.success) setPosSettings(result.data);
+      })
+      .catch(err => console.error(err));
+  }, []);
   
   useEffect(() => {
     if (isOpen) {
         setIsLoading(true);
-        setTimeout(() => {
-            setSales(MOCK_RETURNABLE_SALES);
-            setIsLoading(false);
-        }, 500);
+
+        // Fetch fresh settings
+        fetch('/api/pos-settings')
+          .then(res => res.json())
+          .then(result => {
+            if (result.success) {
+                 console.log('ReturnSalesDialog: Loaded settings', result.data);
+                 setPosSettings(result.data);
+            }
+          })
+          .catch(err => console.error(err));
+
+        // Fetch recent sales for returns
+        fetch('/api/pos/recent-sales')
+          .then(res => res.json())
+          .then(result => {
+             if (result.success) {
+                 console.log('ReturnSalesDialog: Loaded sales', result.data);
+                 setSales(result.data);
+             } else {
+                 console.error('ReturnSalesDialog: Failed to load sales', result.error);
+             }
+          })
+          .catch(err => console.error('ReturnSalesDialog: Error loading sales', err))
+          .finally(() => setIsLoading(false));
     } else {
         setSelectedSale(null);
         setSearchTerm('');
@@ -160,12 +191,18 @@ export function ReturnSalesDialog({
   
   const handleReturnItems = (items: SaleItem[]) => {
       setItemsToReturn(items);
-      setIsAuthDialogOpen(true);
+
+      if (posSettings?.enableVoidReturnAuth) {
+        setIsAuthDialogOpen(true);
+      } else {
+        handleAdminAuthSuccess(items);
+      }
   };
   
-  const handleAdminAuthSuccess = () => {
-    if (selectedSale && itemsToReturn.length > 0) {
-        console.log(`Returning ${itemsToReturn.length} items from sale ${selectedSale.id}...`);
+  const handleAdminAuthSuccess = (directItems?: SaleItem[]) => {
+    const items = directItems || itemsToReturn;
+    if (selectedSale && items.length > 0) {
+        console.log(`Returning ${items.length} items from sale ${selectedSale.id}...`);
         
         // In a real app, you would update the sale status or create a return record.
         // For this mock, we'll just close the dialog.
@@ -214,7 +251,7 @@ export function ReturnSalesDialog({
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                     type="search"
-                    placeholder="Search by Sale ID or customer..."
+                    placeholder="Search by SO Number or customer..."
                     className="pl-8"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -224,7 +261,7 @@ export function ReturnSalesDialog({
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Sale ID</TableHead>
+                            <TableHead>SO Number</TableHead>
                             <TableHead>Customer</TableHead>
                             <TableHead>Time</TableHead>
                             <TableHead className="text-right">Total</TableHead>
@@ -241,7 +278,7 @@ export function ReturnSalesDialog({
                         ) : filteredSales.length > 0 ? (
                             filteredSales.map((sale) => (
                                 <TableRow key={sale.id}>
-                                    <TableCell className="font-mono">{sale.id.substring(0, 7)}...</TableCell>
+                                    <TableCell className="font-mono">{sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7)}</TableCell>
                                     <TableCell>{sale.customer.name}</TableCell>
                                     <TableCell>{format(new Date(sale.date || new Date()), 'p')}</TableCell>
                                     <TableCell className="text-right">₱{sale.total.toFixed(2)}</TableCell>
@@ -280,7 +317,13 @@ export function ReturnSalesDialog({
       <AdminAuthDialog
         isOpen={isAuthDialogOpen}
         onOpenChange={setIsAuthDialogOpen}
-        onSuccess={handleAdminAuthSuccess}
+        onSuccess={() => handleAdminAuthSuccess()}
+        requiredCredentials={posSettings?.enableVoidReturnAuth ? {
+            username: posSettings.voidAuthUsername,
+            password: posSettings.voidAuthPassword
+        } : null}
+        title={posSettings?.enableVoidReturnAuth ? "Return Authorization" : undefined}
+        description={posSettings?.enableVoidReturnAuth ? "Enter authorized credentials to return these items." : undefined}
       />
     </>
   );

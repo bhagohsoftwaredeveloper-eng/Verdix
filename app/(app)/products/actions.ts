@@ -25,7 +25,7 @@ export type ProductFormData = {
   parentId?: string;
   conversionFactor?: number;
   conversionFactors?: { unit: string; factor: number }[];
-  priceLevels?: { levelId: string; price: number }[];
+  priceLevels?: { levelId: string; price: number; minQuantity?: number }[];
   supplierMappings?: {
     supplierId: string;
     leadTime: number;
@@ -92,7 +92,8 @@ export async function getProducts(limit?: number, offset?: number) {
       }
       plMap.get(pl.product_id).push({
         levelId: pl.price_level_id,
-        price: parseFloat(pl.price)
+        price: parseFloat(pl.price),
+        minQuantity: pl.min_quantity ? parseInt(pl.min_quantity) : 0
       });
     });
 
@@ -252,10 +253,10 @@ export async function addProduct(formData: ProductFormData) {
     if (formData.priceLevels && formData.priceLevels.length > 0) {
       for (const pl of formData.priceLevels) {
         const plSql = `
-          INSERT INTO product_price_levels (product_id, price_level_id, price)
-          VALUES (?, ?, ?)
+          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity)
+          VALUES (?, ?, ?, ?)
         `;
-        await query(plSql, [productId, pl.levelId, pl.price]);
+        await query(plSql, [productId, pl.levelId, pl.price, pl.minQuantity || 0]);
       }
     }
 
@@ -441,10 +442,10 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
     if (formData.priceLevels && formData.priceLevels.length > 0) {
       for (const pl of formData.priceLevels) {
         const plSql = `
-          INSERT INTO product_price_levels (product_id, price_level_id, price)
-          VALUES (?, ?, ?)
+          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity)
+          VALUES (?, ?, ?, ?)
         `;
-        await query(plSql, [id, pl.levelId, pl.price]);
+        await query(plSql, [id, pl.levelId, pl.price, pl.minQuantity || 0]);
       }
     }
 
@@ -1052,7 +1053,8 @@ export async function getPriceLevels() {
     return levels.map((l: any) => ({
       ...l,
       isDefault: l.is_default === 1 || l.is_default === true,
-      percentageAdjustment: l.percentage_adjustment ? parseFloat(l.percentage_adjustment) : 100,
+      percentageAdjustment: l.percentage_adjustment ? parseFloat(l.percentage_adjustment) : 0,
+      minQuantity: l.min_quantity ? parseInt(l.min_quantity) : 0,
       created_at: l.created_at,
       updated_at: l.updated_at
     }));
@@ -1062,7 +1064,7 @@ export async function getPriceLevels() {
   }
 }
 
-export async function addPriceLevel(name: string, description?: string, isDefault: boolean = false, percentageAdjustment: number = 100) {
+export async function addPriceLevel(name: string, description?: string, isDefault: boolean = false, percentageAdjustment: number = 0, minQuantity: number = 0) {
   try {
     const levelId = `level_${Date.now()}`;
     
@@ -1070,8 +1072,8 @@ export async function addPriceLevel(name: string, description?: string, isDefaul
       await query('UPDATE price_levels SET is_default = FALSE');
     }
     
-    const sql = `INSERT INTO price_levels (id, name, description, is_default, percentage_adjustment) VALUES (?, ?, ?, ?, ?)`;
-    await query(sql, [levelId, name, description || null, isDefault, percentageAdjustment]);
+    const sql = `INSERT INTO price_levels (id, name, description, is_default, percentage_adjustment, min_quantity) VALUES (?, ?, ?, ?, ?, ?)`;
+    await query(sql, [levelId, name, description || null, isDefault, percentageAdjustment, minQuantity]);
     return { success: true, message: `Price level "${name}" has been added.` };
   } catch (error) {
     console.error('Error adding price level:', error);
@@ -1079,14 +1081,14 @@ export async function addPriceLevel(name: string, description?: string, isDefaul
   }
 }
 
-export async function updatePriceLevel(id: string, name: string, description?: string, isDefault: boolean = false, percentageAdjustment: number = 100) {
+export async function updatePriceLevel(id: string, name: string, description?: string, isDefault: boolean = false, percentageAdjustment: number = 0, minQuantity: number = 0) {
   try {
     if (isDefault) {
       await query('UPDATE price_levels SET is_default = FALSE');
     }
     
-    const sql = `UPDATE price_levels SET name = ?, description = ?, is_default = ?, percentage_adjustment = ? WHERE id = ?`;
-    await query(sql, [name, description || null, isDefault, percentageAdjustment, id]);
+    const sql = `UPDATE price_levels SET name = ?, description = ?, is_default = ?, percentage_adjustment = ?, min_quantity = ? WHERE id = ?`;
+    await query(sql, [name, description || null, isDefault, percentageAdjustment, minQuantity, id]);
     return { success: true, message: `Price level "${name}" has been updated.` };
   } catch (error) {
     console.error('Error updating price level:', error);

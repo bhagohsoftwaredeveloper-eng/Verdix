@@ -55,6 +55,7 @@ export interface PriceLevel {
   description?: string;
   isDefault: boolean;
   percentageAdjustment?: number; // 100 = 100% (No change), 90 = 10% discount
+  minQuantity?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -111,7 +112,10 @@ export interface Sale {
   total: number;
   formattedTotal?: string;
   paymentMethod: string;
-  status: 'Paid' | 'Pending' | 'Failed' | 'Shipped' | 'Delivered' | 'Returned' | 'Voided';
+  status: 'Paid' | 'Pending' | 'Failed' | 'Shipped' | 'Delivered' | 'Returned' | 'Voided' | 'To Deliver' | 'Fully Delivered';
+  orderNumber?: number;
+  notes?: string;
+  shipping?: number;
 }
 
 export interface PurchaseOrder {

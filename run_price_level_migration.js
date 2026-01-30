@@ -24,6 +24,8 @@ async function runPriceLevelMigration() {
         name VARCHAR(100) NOT NULL,
         description TEXT,
         is_default BOOLEAN DEFAULT FALSE,
+        percentage_adjustment DECIMAL(5,2) DEFAULT 100.00,
+        min_quantity INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_name (name),
@@ -34,12 +36,37 @@ async function runPriceLevelMigration() {
     await connection.execute(createPriceLevelsTable);
     console.log('✅ price_levels table created/verified');
 
+    // Add percentage_adjustment column if missing (for existing tables)
+    try {
+        await connection.execute(`ALTER TABLE price_levels ADD COLUMN percentage_adjustment DECIMAL(5,2) DEFAULT 100.00`);
+        console.log('✅ Added percentage_adjustment column to price_levels');
+    } catch (e) {
+        if (e.code === 'ER_DUP_FIELDNAME') {
+            console.log('ℹ️ percentage_adjustment column already exists');
+        } else {
+            console.warn('⚠️ Error adding percentage_adjustment column:', e.message);
+        }
+    }
+
+    // Add min_quantity column if missing
+    try {
+        await connection.execute(`ALTER TABLE price_levels ADD COLUMN min_quantity INT DEFAULT 0`);
+        console.log('✅ Added min_quantity column to price_levels');
+    } catch (e) {
+        if (e.code === 'ER_DUP_FIELDNAME') {
+            console.log('ℹ️ min_quantity column already exists');
+        } else {
+            console.warn('⚠️ Error adding min_quantity column:', e.message);
+        }
+    }
+
     // Create product_price_levels table
     const createProductPriceLevelsTable = `
       CREATE TABLE IF NOT EXISTS product_price_levels (
         product_id VARCHAR(50) NOT NULL,
         price_level_id VARCHAR(50) NOT NULL,
         price DECIMAL(10,2) NOT NULL,
+        min_quantity INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (product_id, price_level_id),
@@ -50,6 +77,18 @@ async function runPriceLevelMigration() {
 
     await connection.execute(createProductPriceLevelsTable);
     console.log('✅ product_price_levels table created/verified');
+
+    // Add min_quantity column if missing (for existing tables)
+    try {
+        await connection.execute(`ALTER TABLE product_price_levels ADD COLUMN min_quantity INT DEFAULT 0`);
+        console.log('✅ Added min_quantity column to product_price_levels');
+    } catch (e) {
+        if (e.code === 'ER_DUP_FIELDNAME') {
+            console.log('ℹ️ min_quantity column already exists in product_price_levels');
+        } else {
+            console.warn('⚠️ Error adding min_quantity column to product_price_levels:', e.message);
+        }
+    }
 
     // Add price_level_id to customers table
     const addPriceLevelToCustomers = `

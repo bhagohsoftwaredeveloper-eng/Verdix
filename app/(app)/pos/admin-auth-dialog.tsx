@@ -19,12 +19,21 @@ interface AdminAuthDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onSuccess: () => void;
+  requiredCredentials?: {
+    username?: string | null;
+    password?: string | null;
+  } | null;
+  title?: string;
+  description?: string;
 }
 
 export function AdminAuthDialog({
   isOpen,
   onOpenChange,
   onSuccess,
+  requiredCredentials,
+  title,
+  description,
 }: AdminAuthDialogProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -44,6 +53,31 @@ export function AdminAuthDialog({
     setIsProcessing(true);
     setError(null);
 
+    // If custom credentials are required (e.g. for Void/Return), validate locally
+    if (requiredCredentials) {
+        // Simple local validation
+        // We only check password if it is set in the required credentials
+        // If username is set, we check that too
+        
+        const validUser = !requiredCredentials.username || requiredCredentials.username === username;
+        const validPass = !requiredCredentials.password || requiredCredentials.password === password;
+
+        if (validUser && validPass) {
+             // Simulate a small delay for better UX
+             setTimeout(() => {
+                 onSuccess();
+                 onOpenChange(false);
+                 setIsProcessing(false);
+             }, 500);
+             return;
+        } else {
+            setError('Invalid credentials');
+            setPassword('');
+            setIsProcessing(false);
+            return;
+        }
+    }
+
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
@@ -54,9 +88,11 @@ export function AdminAuthDialog({
       const result = await response.json();
 
       if (response.ok) {
-        // Check if user has admin or manager role
-        const user = result.user;
-        const hasPermission = user.userType === 'Admin' || user.permissions.includes('edit_price') || user.permissions.includes('super_admin');
+        // The API returns user data directly in result (not result.user)
+        const user = result;
+        const userType = user.userType || '';
+        const permissions = user.permissions || [];
+        const hasPermission = userType === 'Admin' || permissions.includes('edit_price') || permissions.includes('super_admin');
 
         if (hasPermission) {
           onSuccess();
@@ -80,9 +116,9 @@ export function AdminAuthDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Admin Authentication Required</DialogTitle>
+          <DialogTitle>{title || 'Admin Authentication Required'}</DialogTitle>
           <DialogDescription>
-            Enter admin credentials to authorize this action.
+            {description || 'Enter admin credentials to authorize this action.'}
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Building2, Settings, FileText, Monitor, MapPin, Users, CreditCard, DollarSign } from 'lucide-react';
+import { Loader2, Upload, Building2, Settings, FileText, Monitor, MapPin, Users, CreditCard, DollarSign, Lock } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ManageTransactionReferenceDialog } from './manage-transaction-reference-dialog';
@@ -29,6 +29,9 @@ interface PosSettings {
   email: string | null;
   currentTerminalId?: string | null;
   currentTerminalName?: string | null;
+  enableVoidReturnAuth?: boolean;
+  voidAuthUsername?: string | null;
+  voidAuthPassword?: string | null;
 }
 
 export default function PosSetupPage() {
@@ -42,7 +45,10 @@ export default function PosSetupPage() {
     tin: '',
     email: '',
     currentTerminalId: null,
-    currentTerminalName: null
+    currentTerminalName: null,
+    enableVoidReturnAuth: false,
+    voidAuthUsername: '',
+    voidAuthPassword: ''
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -326,6 +332,32 @@ export default function PosSetupPage() {
               id="advancedInventory"
               checked={settings.enableAdvancedInventory}
               onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableAdvancedInventory: checked }))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Void/Return Security Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            Void/Return Security
+          </CardTitle>
+          <CardDescription>Configure authentication requirements for voiding and returning items</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="enableVoidAuth">Require Admin Authentication</Label>
+              <p className="text-sm text-muted-foreground">
+                When enabled, users must authenticate with admin credentials to process voids and returns
+              </p>
+            </div>
+            <Switch
+              id="enableVoidAuth"
+              checked={!!settings.enableVoidReturnAuth}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableVoidReturnAuth: checked }))}
             />
           </div>
         </CardContent>

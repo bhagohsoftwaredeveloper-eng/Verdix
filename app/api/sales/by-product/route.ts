@@ -7,6 +7,10 @@ export async function GET(request: NextRequest) {
     const startDate = queryParams.get('startDate');
     const endDate = queryParams.get('endDate');
     const terminalId = queryParams.get('terminalId');
+    const category = queryParams.get('category');
+    const brand = queryParams.get('brand');
+    const cashier = queryParams.get('cashier');
+    const reference = queryParams.get('reference');
     const page = parseInt(queryParams.get('page') || '1');
     const limit = parseInt(queryParams.get('limit') || '10');
     const search = queryParams.get('search') || '';
@@ -28,10 +32,14 @@ export async function GET(request: NextRequest) {
              p.unit_of_measure,
              SUM(si.quantity) as units_sold,
              SUM(si.price * si.quantity) as total_revenue,
+             SUM(GREATEST(0, COALESCE(pti.discount_amount, 0))) as total_discount,
+             SUM(si.quantity * COALESCE(p.cost, 0)) as total_cost,
              COUNT(DISTINCT pt.id) as number_of_sales,
              AVG(si.price) as avg_price_per_unit
            FROM sale_items si
            JOIN pos_transactions pt ON si.sale_id = pt.sale_id
+           JOIN users u ON pt.user_id = u.id
+           JOIN pos_transaction_items pti ON pti.sale_item_id = si.id
            JOIN products p ON si.product_id = p.id
            WHERE pt.terminal_id = ? 
            AND (pt.transaction_type = 'sale')
@@ -46,6 +54,22 @@ export async function GET(request: NextRequest) {
           whereClause += ` AND DATE(pt.transaction_time) <= ?`;
           params.push(endDate);
         }
+        if (category && category !== 'all') {
+            whereClause += ` AND p.category = ?`;
+            params.push(category);
+        }
+        if (brand && brand !== 'all') {
+            whereClause += ` AND p.brand = ?`;
+            params.push(brand);
+        }
+        if (cashier && cashier !== 'all') {
+            whereClause += ` AND u.display_name = ?`;
+            params.push(cashier);
+        }
+        if (reference) {
+             whereClause += ` AND pt.id LIKE ?`;
+             params.push(`%${reference}%`);
+        }
         if (search) {
           whereClause += ` AND (p.name LIKE ? OR p.sku LIKE ?)`;
           params.push(`%${search}%`, `%${search}%`);
@@ -59,10 +83,16 @@ export async function GET(request: NextRequest) {
               si.product_id, 
               si.quantity, 
               si.price,
+              GREATEST(0, COALESCE(pti.discount_amount, 0)) as discount_amount,
               st.id as source_id,
-              st.invoice_date as transaction_date
+              st.invoice_date as transaction_date,
+              u.display_name as cashier_name,
+              pt.id as reference_no
             FROM sale_items si
             JOIN sales_transactions st ON si.sale_id = st.id
+            LEFT JOIN pos_transactions pt ON st.id = pt.sale_id
+            LEFT JOIN users u ON pt.user_id = u.uid
+            LEFT JOIN pos_transaction_items pti ON pti.sale_item_id = si.id
             WHERE st.status = 'Paid'
             
             UNION ALL
@@ -72,8 +102,11 @@ export async function GET(request: NextRequest) {
               sii.product_id, 
               sii.quantity, 
               sii.price,
+              0 as discount_amount,
               sinv.id as source_id,
-              sinv.invoice_date as transaction_date
+              sinv.invoice_date as transaction_date,
+              NULL as cashier_name,
+              sinv.id as reference_no
             FROM sales_invoice_items sii
             JOIN sales_invoices sinv ON sii.sales_invoice_id = sinv.id
             WHERE sinv.status = 'Paid' AND (sinv.notes IS NULL OR sinv.notes NOT LIKE '%POS Sale%')
@@ -85,8 +118,11 @@ export async function GET(request: NextRequest) {
               soi.product_id, 
               soi.quantity, 
               soi.price,
+              0 as discount_amount,
               so.id as source_id,
-              so.order_date as transaction_date
+              so.order_date as transaction_date,
+              NULL as cashier_name,
+              so.reference as reference_no
             FROM sales_order_items soi
             JOIN sales_orders so ON soi.sales_order_id = so.id
             WHERE so.status = 'Paid'
@@ -100,6 +136,8 @@ export async function GET(request: NextRequest) {
             p.unit_of_measure,
             SUM(asi.quantity) as units_sold,
             SUM(asi.price * asi.quantity) as total_revenue,
+            SUM(asi.discount_amount) as total_discount,
+            SUM(asi.quantity * COALESCE(p.cost, 0)) as total_cost,
             COUNT(DISTINCT asi.source_id) as number_of_sales,
             AVG(asi.price) as avg_price_per_unit
           FROM all_sale_items asi
@@ -107,18 +145,34 @@ export async function GET(request: NextRequest) {
           WHERE 1=1
         `;
 
-        // Add filters
+        // Apply filters to the unified query
         if (startDate) {
-          whereClause += ` AND DATE(asi.transaction_date) >= ?`;
-          params.push(startDate);
+            baseQueryStr += ` AND DATE(asi.transaction_date) >= ?`;
+            params.push(startDate);
         }
         if (endDate) {
-          whereClause += ` AND DATE(asi.transaction_date) <= ?`;
-          params.push(endDate);
+            baseQueryStr += ` AND DATE(asi.transaction_date) <= ?`;
+            params.push(endDate);
+        }
+        if (category && category !== 'all') {
+            baseQueryStr += ` AND p.category = ?`;
+            params.push(category);
+        }
+        if (brand && brand !== 'all') {
+            baseQueryStr += ` AND p.brand = ?`;
+            params.push(brand);
+        }
+        if (cashier && cashier !== 'all') {
+            baseQueryStr += ` AND asi.cashier_name = ?`;
+            params.push(cashier);
+        }
+        if (reference) {
+            baseQueryStr += ` AND asi.reference_no LIKE ?`;
+            params.push(`%${reference}%`);
         }
         if (search) {
-          whereClause += ` AND (p.name LIKE ? OR p.sku LIKE ?)`;
-          params.push(`%${search}%`, `%${search}%`);
+            baseQueryStr += ` AND (p.name LIKE ? OR p.sku LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`);
         }
     }
 
@@ -156,6 +210,9 @@ export async function GET(request: NextRequest) {
       },
       unitsSold: parseInt(row.units_sold),
       totalRevenue: parseFloat(row.total_revenue),
+      totalDiscount: parseFloat(row.total_discount || 0),
+      totalCost: parseFloat(row.total_cost || 0),
+      totalProfit: parseFloat(row.total_revenue) - parseFloat(row.total_cost || 0) - parseFloat(row.total_discount || 0),
       numberOfSales: parseInt(row.number_of_sales),
       avgPricePerUnit: parseFloat(row.avg_price_per_unit),
     }));
