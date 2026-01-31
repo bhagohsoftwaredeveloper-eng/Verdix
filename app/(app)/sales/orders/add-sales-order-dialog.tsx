@@ -64,7 +64,6 @@ const salesOrderSchema = z.object({
   customer: z.any(), // Keep full customer object
   orderDate: z.string().min(1, 'Order date is required'),
   deliveryDate: z.string().optional(),
-  dueDate: z.string().optional(),
   reference: z.string().optional(),
   deliveryAddress: z.string().optional(),
   paymentMethod: z.string().min(1, 'Payment method is required'),
@@ -213,7 +212,6 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
       customer: undefined,
       orderDate: new Date().toISOString().split('T')[0],
       deliveryDate: '',
-      dueDate: new Date().toISOString().split('T')[0], 
       reference: '',
       deliveryAddress: '',
       paymentMethod: '',
@@ -236,8 +234,6 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                 customer: initialData.customer,
                 orderDate: initialData.orderDate ? new Date(initialData.orderDate).toISOString().split('T')[0] : '',
                 deliveryDate: initialData.deliveryDate ? new Date(initialData.deliveryDate).toISOString().split('T')[0] : '',
-                // dueDate logic or fallback
-                dueDate: initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : undefined,
                 reference: initialData.reference,
                 deliveryAddress: initialData.deliveryAddress,
                 paymentMethod: initialData.paymentMethod,
@@ -420,38 +416,6 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     }
   }, [isOpen, form]);
 
-  const watchedCustomer = form.watch('customer');
-  const watchedOrderDate = form.watch('orderDate');
-  const watchedPaymentMethod = form.watch('paymentMethod');
-
-  useEffect(() => {
-    if (!watchedOrderDate) return;
-
-    const customer = watchedCustomer;
-    let calculatedDueDate = watchedOrderDate;
-
-    const immediatePaymentMethods = ['Cash', 'PayPal', 'GCash'];
-    if (watchedPaymentMethod && immediatePaymentMethods.includes(watchedPaymentMethod)) {
-      form.setValue('dueDate', calculatedDueDate);
-      return;
-    }
-
-    if (customer?.paymentTerms) {
-      const terms = customer.paymentTerms.toLowerCase();
-      if (terms === 'due on receipt') {
-        calculatedDueDate = watchedOrderDate;
-      } else {
-        const netMatch = terms.match(/net (\d+)/);
-        if (netMatch) {
-          const days = parseInt(netMatch[1], 10);
-          calculatedDueDate = addDays(new Date(watchedOrderDate), days).toISOString().split('T')[0];
-        }
-      }
-    }
-
-    form.setValue('dueDate', calculatedDueDate, { shouldValidate: true });
-  }, [watchedCustomer, watchedOrderDate, watchedPaymentMethod]);
-
   const handleAddProduct = (product: Product) => {
     const existingItemIndex = fields.findIndex(field => field.product.id === product.id);
     if(existingItemIndex !== -1) {
@@ -625,10 +589,10 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                         />
                          <FormField
                             control={form.control}
-                            name="dueDate"
+                            name="deliveryDate"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Delivery Date</FormLabel>
                                 <FormControl>
                                 <Input type="date" className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>

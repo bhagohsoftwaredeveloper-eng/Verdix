@@ -401,7 +401,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
           New Sales Invoice
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-none w-screen h-screen flex flex-col p-0 gap-0 bg-background">
+      <DialogContent className="max-w-[100vw] w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none">
         <DialogHeader className="px-6 py-4 border-b bg-background">
           <DialogTitle>New Sales Invoice</DialogTitle>
           <DialogDescription>
@@ -411,411 +411,357 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 flex overflow-hidden">
-              {/* LEFT SIDEBAR - DETAILS */}
-              <div className="w-[400px] border-r bg-background flex flex-col overflow-y-auto p-5 gap-6">
-                
-                {/* Section: Customer */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="w-1 h-4 bg-primary rounded-full"/> Customer & Payment
-                  </h3>
-                  <div className="space-y-4 pl-3">
-                     <CustomerSelectionField
-                        control={form.control}
-                        customerList={customers}
-                        className="bg-white"
-                      />
+            <div className="flex-1 flex flex-col overflow-hidden bg-muted/10">
+              
+              {/* TOP HEADER - Form Fields (Compact Grid) */}
+              <div className="bg-background border-b p-4 grid grid-cols-4 gap-4 shrink-0">
+                  
+                  {/* Column 1: Customer & Sales Person */}
+                  <div className="space-y-3">
+                         <CustomerSelectionField
+                            control={form.control}
+                            customerList={customers}
+                            className="bg-white h-8 text-xs"
+                            labelClassName="text-xs font-semibold text-muted-foreground"
+                        />
+
                       <FormField
                         control={form.control}
-                        name="paymentMethod"
+                        name="salesPerson"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Payment Method</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
-                                  <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Select method" />
+                                  <SelectTrigger className="h-8 bg-white text-xs">
+                                    <SelectValue placeholder="Select sales person" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                   <div className="p-2 border-b sticky top-0 bg-popover z-10">
+                                  <div className="p-1 w-full border-b border-border mb-1">
                                       <Button
-                                        variant="secondary"
-                                        className="w-full justify-start h-8 px-2 text-sm"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowSalesPersonDialog(true);
+                                        }}
+                                      >
+                                        <Plus className="mr-2 h-3 w-3" /> Add Sales Person
+                                      </Button>
+                                   </div>
+                                  {salesPersons?.map(person => (
+                                    <SelectItem key={person.id} value={person.id.toString()} className="text-xs">
+                                      {person.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                            </Select>
+                             <ManageSalesPersonsDialog
+                                open={showSalesPersonDialog}
+                                onOpenChange={setShowSalesPersonDialog}
+                                onChange={fetchSalesPersons}
+                              />
+                          </FormItem>
+                        )}
+                      />
+                  </div>
+
+                  {/* Column 2: Dates & Warehouse */}
+                  <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <FormField
+                            control={form.control}
+                            name="invoiceDate"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Invoice Date</FormLabel>
+                                <FormControl>
+                                <Input type="date" className="h-8 bg-white text-xs" {...field} />
+                                </FormControl>
+                            </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name="dueDate"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
+                                <FormControl>
+                                <Input type="date" className="h-8 bg-white text-xs" {...field} />
+                                </FormControl>
+                            </FormItem>
+                            )}
+                        />
+                      </div>
+                       <FormField
+                            control={form.control}
+                            name="warehouse"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                    <SelectValue placeholder="Select warehouse" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    <div className="p-1 w-full border-b border-border mb-1">
+                                      <Button
+                                        variant="ghost" 
+                                        size="sm"
+                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowWarehouseDialog(true);
+                                        }}
+                                      >
+                                        <Plus className="mr-2 h-3 w-3"/> Add Warehouse
+                                      </Button>
+                                    </div>
+                                    {warehouses?.map(warehouse => (
+                                    <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
+                                        {warehouse.name}
+                                    </SelectItem>
+                                    ))}
+                                </SelectContent>
+                                </Select>
+                                <ManageWarehousesDialog
+                                    open={showWarehouseDialog}
+                                    onOpenChange={setShowWarehouseDialog}
+                                    onChange={fetchWarehouses}
+                                />
+                            </FormItem>
+                            )}
+                        />
+                  </div>
+                  
+                  {/* Column 3: Payment & Shipping */}
+                  <div className="space-y-3">
+                       <FormField
+                            control={form.control}
+                            name="paymentMethod"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                    <SelectValue placeholder="Select method" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    <div className="p-1 w-full border-b border-border mb-1">
+                                     <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
+                                        type="button"
                                         onClick={(e) => {
                                           e.preventDefault();
                                           setShowPaymentMethodDialog(true);
                                         }}
                                       >
-                                        <CreditCard className="mr-2 h-4 w-4" />
+                                        <Plus className="mr-2 h-3 w-3" />
                                         Manage Methods
                                       </Button>
-                                   </div>
-                                   {isLoadingPaymentMethods ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    paymentMethods?.map(method => <SelectItem key={method.id} value={method.name}>{method.name}</SelectItem>)
-                                  )}
+                                    </div>
+                                    {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
                                 </SelectContent>
-                              </Select>
-                            </div>
-                            <ManagePaymentMethodsDialog 
-                              open={showPaymentMethodDialog} 
-                              onOpenChange={setShowPaymentMethodDialog}
-                              onChange={fetchPaymentMethods}
-                            />
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="depositAccount"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Deposit Account</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger className="bg-white">
-                                  <SelectValue placeholder="Select account" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="cash">Cash Account</SelectItem>
-                                <SelectItem value="bank">Bank Account</SelectItem>
-                                <SelectItem value="petty-cash">Petty Cash</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                  </div>
-                </div>
-
-                <hr className="border-border/50"/>
-
-                {/* Section: Invoice Info */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="w-1 h-4 bg-primary rounded-full"/> Invoice Info
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4 pl-3">
-                     <FormField
-                        control={form.control}
-                        name="invoiceDate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Invoice Date</FormLabel>
-                            <FormControl>
-                              <Input type="date" className="bg-white" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="dueDate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Due Date</FormLabel>
-                            <FormControl>
-                              <Input type="date" className="bg-white" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="warehouse"
-                        render={({ field }) => (
-                          <FormItem className="col-span-2">
-                            <FormLabel className="text-xs">Warehouse</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Select warehouse" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <div className="p-2 border-b sticky top-0 bg-popover z-10">
-                                      <Button
-                                        variant="secondary"
-                                        className="w-full justify-start h-8 px-2 text-sm"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          setShowWarehouseDialog(true);
-                                        }}
-                                      >
-                                        <WarehouseIcon className="mr-2 h-4 w-4" />
-                                        Manage Warehouses
-                                      </Button>
-                                   </div>
-                                  {warehouses?.map(warehouse => (
-                                    <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
-                                      {warehouse.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <ManageWarehousesDialog
-                              open={showWarehouseDialog}
-                              onOpenChange={setShowWarehouseDialog}
-                              onChange={fetchWarehouses}
-                            />
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="salesPerson"
-                        render={({ field }) => (
-                          <FormItem className="col-span-2">
-                            <FormLabel className="text-xs">Sales Person</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Select agent" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <div className="p-2 border-b sticky top-0 bg-popover z-10">
-                                      <Button
-                                        variant="secondary"
-                                        className="w-full justify-start h-8 px-2 text-sm"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          setShowSalesPersonDialog(true);
-                                        }}
-                                      >
-                                        <Users className="mr-2 h-4 w-4" />
-                                        Manage Sales Persons
-                                      </Button>
-                                   </div>
-                                  {salesPersons?.map(person => (
-                                    <SelectItem key={person.id} value={person.id.toString()}>
-                                      {person.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <ManageSalesPersonsDialog
-                                open={showSalesPersonDialog}
-                                onOpenChange={setShowSalesPersonDialog}
-                                onChange={fetchSalesPersons}
-                              />
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="shipping"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Shipping Cost</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.01" className="bg-white" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                       <FormField
-                          control={form.control}
-                          name="reference"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs">Reference</FormLabel>
-                              <FormControl>
-                                <Input className="bg-white" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                  </div>
-                </div>
-
-                <hr className="border-border/50"/>
-                 
-                {/* Section: Delivery */}
-                <div className="space-y-3">
-                   <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="w-1 h-4 bg-primary rounded-full"/> Delivery
-                  </h3>
-                   <div className="space-y-4 pl-3">
-                     <FormField
-                        control={form.control}
-                        name="deliveryAddress"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Address</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Full delivery address" className="bg-white" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                       <FormField
-                        control={form.control}
-                        name="deliveryDate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">Date</FormLabel>
-                            <FormControl>
-                              <Input type="date" className="bg-white" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                   </div>
-                </div>
-
-              </div>
-              
-              {/* RIGHT MAIN - ITEMS */}
-              <div className="flex-1 flex flex-col bg-muted/5 p-6 overflow-hidden">
-                <div className="mb-4">
-                  <ProductSelector onSelectProduct={handleAddProduct} />
-                </div>
-
-                <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col">
-                  {/* Table Header */}
-                   <div className="overflow-y-auto flex-1 relative">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-muted/50 z-10 backdrop-blur-sm">
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className='w-[40%] pl-4'>Product</TableHead>
-                          <TableHead className='w-[15%] text-center'>Qty</TableHead>
-                          <TableHead className='w-[20%] text-right'>Price</TableHead>
-                          <TableHead className='w-[20%] text-right pr-4'>Total</TableHead>
-                          <TableHead className='w-[5%]'></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {fields.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="h-[300px] text-center text-muted-foreground flex flex-col items-center justify-center border-none">
-                                    <Search className="h-10 w-10 mb-2 opacity-20"/>
-                                    <p>No items added.</p>
-                                    <p className="text-xs">Scan or search products to begin.</p>
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            fields.map((field, index) => (
-                          <TableRow key={field.id} className="group bg-white">
-                            <TableCell className="font-medium pl-4 py-2">
-                                <div className="text-sm font-semibold">{field.product.name}</div>
-                                <div className="text-xs text-muted-foreground flex gap-2">
-                                  <span>{field.product.sku || 'No SKU'}</span>
-                                  {field.product.stock !== undefined && (
-                                    <span className={field.product.stock <= 0 ? "text-destructive" : "text-emerald-600"}>
-                                      Stock: {field.product.stock}
-                                    </span>
-                                  )}
-                                </div>
-                            </TableCell>
-                            <TableCell className="py-2">
-                             <div className="flex justify-center">
-                                <FormField
-                                  control={form.control}
-                                  name={`items.${index}.quantity`}
-                                  render={({ field }) => (
-                                    <Input 
-                                      type="number" 
-                                      className="h-8 w-20 text-center bg-white" 
-                                      {...field} 
-                                      onFocus={(e) => e.target.select()}
-                                    />
-                                  )}
+                                </Select>
+                                 <ManagePaymentMethodsDialog
+                                    open={showPaymentMethodDialog}
+                                    onOpenChange={setShowPaymentMethodDialog}
+                                    onChange={fetchPaymentMethods}
                                 />
-                             </div>
-                            </TableCell>
-                            <TableCell className="py-2 text-right">
-                              <FormField
+                            </FormItem>
+                            )}
+                        />
+                          <div className="grid grid-cols-2 gap-2">
+                            <FormField
                                 control={form.control}
-                                name={`items.${index}.price`}
+                                name="shipping"
                                 render={({ field }) => (
-                                  <Input 
-                                    type="number" 
-                                    step="0.01" 
-                                    className="h-8 w-24 text-right ml-auto border-transparent hover:border-input focus:border-input bg-white" 
-                                    {...field} 
-                                  />
+                                <FormItem className="space-y-1">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
+                                    <FormControl>
+                                    <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
+                                    </FormControl>
+                                </FormItem>
                                 )}
-                              />
-                            </TableCell>
-                            <TableCell className="text-right py-2 pr-4 font-mono">
-                              ₱{(form.watch(`items.${index}.price`) * form.watch(`items.${index}.quantity`)).toFixed(2)}
-                            </TableCell>
-                            <TableCell className="py-2">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
-                                onClick={() => remove(index)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        )))}
-                      </TableBody>
-                    </Table>
-                   </div>
-                </div>
+                            />
+                            <FormField
+                                control={form.control}
+                                name="depositAccount"
+                                render={({ field }) => (
+                                <FormItem className="space-y-1">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Deposit Acc</FormLabel>
+                                    <FormControl>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger className="h-8 bg-white text-xs">
+                                            <SelectValue placeholder="Select" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          <SelectItem value="cash" className="text-xs">Cash</SelectItem>
+                                          <SelectItem value="bank" className="text-xs">Bank</SelectItem>
+                                          <SelectItem value="petty-cash" className="text-xs">Petty Cash</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </FormControl>
+                                </FormItem>
+                                )}
+                            />
+                        </div>
+                  </div>
 
-                {/* Footer / Summary Area */}
-                <div className="mt-6 grid grid-cols-12 gap-6">
-                   {/* Left: Notes */}
-                   <div className="col-span-7">
+                  {/* Column 4: Address / Notes */}
+                  <div className="space-y-3">
                       <FormField
+                            control={form.control}
+                            name="deliveryAddress"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                                <FormControl>
+                                <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
+                                </FormControl>
+                            </FormItem>
+                            )}
+                       />
+                       <FormField
                           control={form.control}
                           name="note"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs text-muted-foreground">Notes / Remarks</FormLabel>
+                            <FormItem className="space-y-1">
+                              <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
                               <FormControl>
-                                <textarea
-                                  className="flex h-24 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                                  placeholder="Internal notes..."
-                                  {...field}
-                                />
+                                <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
                               </FormControl>
                             </FormItem>
                           )}
                         />
-                   </div>
+                  </div>
 
-                   {/* Right: Totals */}
-                   <div className="col-span-5 bg-card rounded-lg border p-4 shadow-sm space-y-3">
-                      <div className="flex justify-between text-sm">
-                         <span className="text-muted-foreground">Subtotal ({fields.length} items)</span>
-                         <span>₱{(total - (form.watch('shipping') || 0)).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                         <span className="text-muted-foreground">Shipping</span>
-                         <span>₱{(form.watch('shipping') || 0).toFixed(2)}</span>
-                      </div>
-                      <div className="border-t pt-2 flex justify-between items-end">
-                         <span className="font-semibold text-lg">Total</span>
-                         <span className="font-bold text-2xl text-primary">₱{total.toFixed(2)}</span>
-                      </div>
-                   </div>
-                </div>
+              </div>
 
+              {/* CENTER - ITEMS TABLE */}
+              <div className="flex-1 flex flex-col overflow-hidden bg-muted/5 p-4 relative">
+                  <div className="max-w-2xl mb-4 z-10">
+                    <ProductSelector onSelectProduct={handleAddProduct} />
+                  </div>
+                  
+                  <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col relative">
+                      <div className="overflow-y-auto flex-1 h-full relative">
+                        <table className="w-full caption-bottom text-sm text-left border-collapse">
+                            <TableHeader className="sticky top-0 bg-white z-50 shadow-sm">
+                                <TableRow className="hover:bg-transparent border-b">
+                                <TableHead className='w-[40%] pl-4 h-10'>Product</TableHead>
+                                <TableHead className='w-[15%] text-center h-10'>Qty</TableHead>
+                                <TableHead className='w-[20%] text-right h-10'>Price</TableHead>
+                                <TableHead className='w-[20%] text-right pr-4 h-10'>Total</TableHead>
+                                <TableHead className='w-[5%] h-10'></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {fields.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-[300px] text-center text-muted-foreground flex flex-col items-center justify-center border-none">
+                                            <div className="bg-muted p-4 rounded-full mb-4"><Search className="h-8 w-8 opacity-20"/></div>
+                                            <p className="font-medium">No items added</p>
+                                            <p className="text-xs text-muted-foreground">Scan barcode or search above to add products.</p>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    fields.map((field, index) => (
+                                    <TableRow key={field.id} className="group hover:bg-muted/50 border-b">
+                                        <TableCell className="font-medium pl-4 py-2">
+                                            <div className="font-medium">{field.product.name}</div>
+                                            <div className="text-xs text-muted-foreground flex gap-2">
+                                                <span>{field.product.sku || 'No SKU'}</span>
+                                                {field.product.stock !== undefined && (
+                                                    <span className={field.product.stock <= 0 ? "text-destructive" : "text-emerald-600"}>
+                                                    Stock: {field.product.stock}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-2">
+                                            <div className="flex justify-center">
+                                                <FormField
+                                                control={form.control}
+                                                name={`items.${index}.quantity`}
+                                                render={({ field }) => (
+                                                    <Input 
+                                                    type="number" 
+                                                    className="h-8 w-20 text-center bg-white" 
+                                                    {...field} 
+                                                    onFocus={(e) => e.target.select()}
+                                                    />
+                                                )}
+                                                />
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-2 text-right">
+                                            <FormField
+                                                control={form.control}
+                                                name={`items.${index}.price`}
+                                                render={({ field }) => (
+                                                <Input 
+                                                    type="number" 
+                                                    step="0.01" 
+                                                    className="h-8 w-24 text-right ml-auto border-transparent hover:border-input focus:border-input bg-white" 
+                                                    {...field} 
+                                                />
+                                                )}
+                                            />
+                                        </TableCell>
+                                        <TableCell className="text-right py-2 pr-4 font-mono">
+                                            ₱{(form.watch(`items.${index}.price`) * form.watch(`items.${index}.quantity`)).toFixed(2)}
+                                        </TableCell>
+                                        <TableCell className="py-2">
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
+                                                onClick={() => remove(index)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                )))}
+                            </TableBody>
+                        </table>
+                      </div>
+
+                      {/* Footer Totals */}
+                      <div className="bg-muted/30 p-4 border-t grid grid-cols-12 gap-4">
+                          <div className="col-span-8">
+                             {/* Optional Left content */}
+                          </div>
+                          <div className="col-span-4 space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Subtotal</span>
+                                <span>₱{(total - (form.watch('shipping') || 0)).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Shipping</span>
+                                <span>₱{(form.watch('shipping') || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="border-t pt-2 flex justify-between items-center">
+                                <span className="font-semibold text-lg">Total</span>
+                                <span className="font-bold text-xl text-primary">₱{total.toFixed(2)}</span>
+                            </div>
+                          </div>
+                      </div>
+                  </div>
               </div>
             </div>
 
@@ -833,7 +779,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                     Processing...
                   </>
                 ) : (
-                  <>Create Invoice <ArrowRight className="ml-2 h-4 w-4"/></>
+                  <>{'Create Invoice'} <ArrowRight className="ml-2 h-4 w-4"/></>
                 )}
               </Button>
             </DialogFooter>

@@ -58,7 +58,7 @@ import { format } from 'date-fns';
 import type { Sale, SalesPerson, Customer } from '@/lib/types';
 import { AddSalesOrderDialog } from './add-sales-order-dialog';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Printer, Trash2, ChevronDown, Filter, Calendar as CalendarIcon, X } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, ChevronDown, Filter, Calendar as CalendarIcon, X, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
 import {
@@ -306,9 +306,11 @@ export default function SalesOrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState({ totalCount: 0, totalAmount: 0 });
   const { toast } = useToast();
 
   // Filters State
+  const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     status: '',
     startDate: '',
@@ -362,7 +364,8 @@ export default function SalesOrdersPage() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '10',
-        ...filters
+        ...filters,
+        ...(searchTerm ? { search: searchTerm } : {})
       });
       // Remove empty params
       Array.from(params.keys()).forEach(key => {
@@ -376,6 +379,9 @@ export default function SalesOrdersPage() {
         if (data.pagination) {
           setTotalPages(data.pagination.totalPages);
           setCurrentPage(data.pagination.page);
+        }
+        if (data.summary) {
+          setSummary(data.summary);
         }
       } else {
         toast({
@@ -397,7 +403,7 @@ export default function SalesOrdersPage() {
 
   useEffect(() => {
     fetchSalesOrders(currentPage);
-  }, [currentPage, filters]); // Re-fetch when filters change
+  }, [currentPage, filters, searchTerm]); // Re-fetch when filters or search change
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -510,7 +516,21 @@ export default function SalesOrdersPage() {
               Manage and track customer sales orders.
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Search Field */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search orders..."
+                className="pl-8 w-[200px]"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
             {/* Filter Dropdown */}
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -574,6 +594,20 @@ export default function SalesOrdersPage() {
               <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={clearFilters}>Clear all</Button>
           </div>
       )}
+
+      {/* Summary Cards */}
+      <div className="px-6 pb-4 non-printable">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-muted/50 rounded-lg p-4 border">
+            <p className="text-xs text-muted-foreground font-medium">Total Orders</p>
+            <p className="text-2xl font-bold">{summary.totalCount.toLocaleString('en-PH')}</p>
+          </div>
+          <div className="bg-muted/50 rounded-lg p-4 border">
+            <p className="text-xs text-muted-foreground font-medium">Total Amount</p>
+            <p className="text-2xl font-bold text-primary">₱{summary.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+        </div>
+      </div>
 
       <CardContent className="flex-1 overflow-hidden">
         <Table>

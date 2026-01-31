@@ -515,18 +515,18 @@ export default function SalesByProductPage() {
                     <TableCell className="font-medium">{item.product.sku}</TableCell>
                     <TableCell>{item.product.name}</TableCell>
                     <TableCell>{item.product.category} / {item.product.brand}</TableCell>
-                    <TableCell className="text-right">{item.unitsSold}</TableCell>
+                    <TableCell className="text-right">{item.unitsSold.toLocaleString()}</TableCell>
                     <TableCell className="text-right text-red-500">
-                        {item.totalDiscount > 0 ? `(${item.totalDiscount.toFixed(2)})` : '0.00'}
+                        {item.totalDiscount > 0 ? `(${item.totalDiscount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : '0.00'}
                     </TableCell>
                     <TableCell className="text-right font-bold">
-                      {item.totalRevenue.toFixed(2)}
+                      {item.totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                     <TableCell className="text-right">
-                      {item.totalCost.toFixed(2)}
+                      {item.totalCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                     <TableCell className="text-right text-green-600 font-bold">
-                        {item.totalProfit.toFixed(2)}
+                        {item.totalProfit.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                   </TableRow>
                   {expandedRows.has(item.product.id) && (

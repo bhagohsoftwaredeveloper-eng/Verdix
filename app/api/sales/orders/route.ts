@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId');
     const salesArea = searchParams.get('salesArea');
     const reference = searchParams.get('reference');
+    const search = searchParams.get('search');
 
     // Query to fetch all sales orders with customer information
     let baseQuery = `
@@ -103,6 +104,11 @@ export async function GET(request: NextRequest) {
         params.push(`%${reference}%`);
     }
 
+    if (search) {
+        baseQuery += ' AND (c.name LIKE ? OR so.reference LIKE ? OR sp.name LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
     if (countOnly) {
       const countQuery = `SELECT COUNT(*) as total FROM (${baseQuery}) as subquery`;
       const countResult = await query(countQuery, params);
@@ -118,6 +124,21 @@ export async function GET(request: NextRequest) {
     const countResult = await query(countQuery, params);
     const totalRecords = countResult[0]?.total || 0;
     const totalPages = Math.ceil(totalRecords / limit);
+
+    // Get total amount for summary
+    const sumQuery = `SELECT COALESCE(SUM(so.total), 0) as totalAmount FROM sales_orders so LEFT JOIN customers c ON so.customer_id = c.id LEFT JOIN sales_persons sp ON so.sales_person_id = sp.id WHERE 1=1${warehouseId ? ' AND so.warehouse_id = ?' : ''}${status ? ' AND so.status = ?' : ''}${startDate ? ' AND so.order_date >= ?' : ''}${endDate ? ' AND so.order_date <= ?' : ''}${salesPersonId ? ' AND so.sales_person_id = ?' : ''}${customerId ? ' AND so.customer_id = ?' : ''}${salesArea ? ' AND c.sales_area = ?' : ''}${reference ? ' AND so.reference LIKE ?' : ''}${search ? ' AND (c.name LIKE ? OR so.reference LIKE ? OR sp.name LIKE ?)' : ''}`;
+    const sumParams: any[] = [];
+    if (warehouseId) sumParams.push(warehouseId);
+    if (status) sumParams.push(status);
+    if (startDate) sumParams.push(startDate);
+    if (endDate) sumParams.push(endDate);
+    if (salesPersonId) sumParams.push(salesPersonId);
+    if (customerId) sumParams.push(customerId);
+    if (salesArea) sumParams.push(salesArea);
+    if (reference) sumParams.push(`%${reference}%`);
+    if (search) sumParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    const sumResult = await query(sumQuery, sumParams);
+    const totalAmount = parseFloat(sumResult[0]?.totalAmount || 0);
 
     // Append standard ordering and pagination
     let ordersQuery = baseQuery + ' ORDER BY so.created_at DESC LIMIT ? OFFSET ?';
@@ -193,6 +214,10 @@ export async function GET(request: NextRequest) {
         limit,
         totalRecords,
         totalPages
+      },
+      summary: {
+        totalCount: totalRecords,
+        totalAmount: totalAmount
       },
       count: ordersWithItems.length
     });
