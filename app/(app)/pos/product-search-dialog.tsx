@@ -27,11 +27,12 @@ import { useProducts } from '@/hooks/use-api';
 
 interface ProductSearchDialogProps {
   onSelectProduct: (product: Product) => void;
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function ProductSearchDialog({ onSelectProduct, children }: ProductSearchDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenChange }: ProductSearchDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const { products, loading, error } = useProducts(searchTerm, 'Available');
 
@@ -45,12 +46,12 @@ export function ProductSearchDialog({ onSelectProduct, children }: ProductSearch
     const product = products.find(p => p.id === productId);
     if (product) {
       onSelectProduct(product);
-      setIsOpen(false);
+      onOpenChange(false);
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
@@ -61,7 +62,7 @@ export function ProductSearchDialog({ onSelectProduct, children }: ProductSearch
         </DialogHeader>
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Type a product name or SKU..."
+            placeholder="Type a product name or Barcode..."
             value={searchTerm}
             onValueChange={setSearchTerm}
           />
@@ -75,7 +76,7 @@ export function ProductSearchDialog({ onSelectProduct, children }: ProductSearch
                   {products.map((product) => (
                     <CommandItem
                       key={product.id}
-                      value={`${product.name} ${product.sku}`}
+                      value={`${product.name} ${product.barcode || ''} ${product.sku}`}
                       onSelect={() => handleSelect(product.id)}
                       className="flex items-center justify-between"
                     >
@@ -89,7 +90,7 @@ export function ProductSearchDialog({ onSelectProduct, children }: ProductSearch
                         />
                         <div>
                           <p className="font-medium">{product.name}</p>
-                          <p className="text-sm text-muted-foreground">{product.sku}</p>
+                          <p className="text-sm text-muted-foreground">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
                         </div>
                       </div>
                       <p className="font-mono">₱{product.price.toFixed(2)}</p>
@@ -101,7 +102,7 @@ export function ProductSearchDialog({ onSelectProduct, children }: ProductSearch
           </CommandList>
         </Command>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
         </DialogFooter>

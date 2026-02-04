@@ -18,6 +18,7 @@ export type SupplierWithBalance = {
   totalPurchases: number;
   totalPayments: number;
   balance: number;
+  orderSchedule?: string;
 };
 
 export async function getSuppliersWithBalance(search?: string): Promise<SupplierWithBalance[]> {
@@ -65,7 +66,8 @@ export async function getSuppliersWithBalance(search?: string): Promise<Supplier
         markupPercentage: row.markup_percentage ? parseFloat(row.markup_percentage) : undefined,
         totalPurchases: totalPurchases,
         totalPayments: totalPayments,
-        balance: totalPurchases - totalPayments
+        balance: totalPurchases - totalPayments,
+        orderSchedule: row.order_schedule
       };
     });
   } catch (error) {

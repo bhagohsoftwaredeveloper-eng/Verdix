@@ -39,6 +39,21 @@ import {
   } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
+const SCHEDULE_OPTIONS = [
+  "Daily",
+  "Every Monday",
+  "Every Tuesday",
+  "Every Wednesday",
+  "Every Thursday",
+  "Every Friday",
+  "Every Saturday",
+  "Every Sunday",
+  "Every 2 Weeks",
+  // Generate Monthly 1-31
+  ...Array.from({ length: 31 }, (_, i) => `Monthly (Day ${i + 1})`),
+  "Monthly (End of Month)",
+];
+
 
 export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: Supplier, onSave: (data: any) => Promise<void>, children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -51,6 +66,7 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
   const [tin, setTin] = useState(supplier?.tin || '');
   const [paymentTerms, setPaymentTerms] = useState(supplier?.paymentTerms || 'CASH');
   const [markupPercentage, setMarkupPercentage] = useState(supplier?.markupPercentage?.toString() || '0');
+  const [orderSchedule, setOrderSchedule] = useState(supplier?.orderSchedule || '');
   
   const [availablePaymentTerms, setAvailablePaymentTerms] = useState<any[]>([]);
 
@@ -91,6 +107,7 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
         tin,
         paymentTerms,
         markupPercentage: parseFloat(markupPercentage) || 0,
+        orderSchedule,
       });
       // specific toast handling can be here or in parent, but component already has it. 
       // Keeping it here for consistency with original code.
@@ -109,6 +126,7 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
         setTin('');
         setPaymentTerms('CASH');
         setMarkupPercentage('0');
+        setOrderSchedule('');
       }
     } catch (error) {
       console.error('Failed to save supplier', error);
@@ -231,6 +249,22 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
                     />
                 </div>
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="orderSchedule">Order Schedule</Label>
+             <Select value={orderSchedule} onValueChange={setOrderSchedule}>
+                 <SelectTrigger className="w-full">
+                     <SelectValue placeholder="Select schedule" />
+                 </SelectTrigger>
+                 <SelectContent>
+                     {SCHEDULE_OPTIONS.map((option) => (
+                         <SelectItem key={option} value={option}>
+                             {option}
+                         </SelectItem>
+                     ))}
+                 </SelectContent>
+             </Select>
           </div>
 
           <div className="flex flex-col gap-2">

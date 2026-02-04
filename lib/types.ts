@@ -20,6 +20,7 @@ export interface Product {
   unitOfMeasure: string;
   vatStatus?: string;
   availability?: string;
+  taxType?: 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT';
 
   // Accounting
   incomeAccount?: string;
@@ -89,6 +90,7 @@ export interface Supplier {
   tin?: string;
   paymentTerms?: string;
   markupPercentage?: number;
+  orderSchedule?: string;
 }
 
 export interface SaleItem {

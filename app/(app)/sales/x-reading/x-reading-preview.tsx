@@ -54,9 +54,11 @@ export function XReadingPreview({ data, printerFormat = '80mm', businessSettings
   
   // Tailwind doesn't support mm widths by default, but we can use style or closest px. 
   // 80mm is approx 300px, 58mm is approx 220px. 
-  const widthClass = is58mm ? 'w-[220px]' : 'w-[300px]';
-  const fontSize = 'text-[10px]'; // Standard small thermal font
-  const headerSize = 'text-[12px]';
+  // Updated to match print-x-reading.ts: 80mm->58mm (~219px), 58mm->38mm (~143px)
+  const widthClass = is58mm ? 'w-[143px]' : 'w-[219px]';
+  // Updated fonts to 10px / 9px
+  const fontSize = is58mm ? 'text-[9px]' : 'text-[10px]'; 
+  const headerSize = is58mm ? 'text-[11px]' : 'text-[11px]';
 
   // Helper for dashed line
   const DashedLine = () => (
@@ -67,7 +69,7 @@ export function XReadingPreview({ data, printerFormat = '80mm', businessSettings
     amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className={`${widthClass} mx-auto bg-white text-black font-mono leading-tight p-2`} style={{ fontFamily: '"Courier New", Courier, monospace' }}>
+    <div className={`${widthClass} mx-auto bg-white text-black font-mono leading-tight p-0 overflow-hidden`} style={{ fontFamily: '"Arial", "Helvetica", sans-serif', width: is58mm ? '38mm' : '58mm' }}>
       
       {/* Business Header */}
       <div className="text-center mb-2">
@@ -84,26 +86,26 @@ export function XReadingPreview({ data, printerFormat = '80mm', businessSettings
       <DashedLine />
       
       {/* Header Info */}
-      <div className={`${fontSize} uppercase mb-1`}>
-        <div className="flex">
-          <span className="w-24">Cashier:</span>
-          <span>{data.cashierName}</span>
+      <div className={`${fontSize} uppercase mb-1 space-y-0.5`}>
+        <div className="flex justify-between items-start">
+          <span className="w-24 shrink-0">Cashier:</span>
+          <span className="text-right break-words w-full">{data.cashierName}</span>
         </div>
-        <div className="flex">
-          <span className="w-24">Terminal:</span>
-          <span>{data.terminalId}</span>
+        <div className="flex justify-between items-start">
+          <span className="w-24 shrink-0">Terminal:</span>
+          <span className="text-right break-words w-full">{data.terminalId}</span>
         </div>
-        <div className="flex">
-          <span className="w-24">Reading #:</span>
-          <span>{data.readingNumber || data.id.substring(0, 8).toUpperCase()}</span>
+        <div className="flex justify-between items-start">
+          <span className="w-24 shrink-0">Reading #:</span>
+          <span className="text-right break-words w-full">{data.readingNumber || data.id.substring(0, 8).toUpperCase()}</span>
         </div>
-        <div className="flex justify-between mt-1">
+        <div className="flex justify-between mt-1 items-start">
           <span>Start shift</span>
-          <span>{data.shiftStart ? format(new Date(data.shiftStart), 'MM/dd/yyyy hh:mm a') : '-'}</span>
+          <span className="text-right">{data.shiftStart ? format(new Date(data.shiftStart), 'MM/dd/yyyy hh:mm a') : '-'}</span>
         </div>
-        <div className="flex justify-between">
+        <div className="flex justify-between items-start">
           <span>End shift</span>
-          <span>{data.shiftEnd ? format(new Date(data.shiftEnd), 'MM/dd/yyyy hh:mm a') : '-'}</span>
+          <span className="text-right">{data.shiftEnd ? format(new Date(data.shiftEnd), 'MM/dd/yyyy hh:mm a') : '-'}</span>
         </div>
       </div>
 

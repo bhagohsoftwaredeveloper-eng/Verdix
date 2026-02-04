@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import type { Sale } from '@/lib/types';
 import { format } from 'date-fns';
 import { Logo } from '@/components/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { AdminAuthDialog } from './admin-auth-dialog';
 
 
 interface RecentSalesDialogProps {
@@ -33,13 +34,14 @@ interface RecentSalesDialogProps {
 }
 
 
-
+// ... (existing printReceipt, formatCurrency, ReceiptPrintView helper functions preserved)
 const printReceipt = (sale: Sale) => {
     // Adapter to match tender-dialog structure
     const items = sale.items.map(item => ({
         name: item.product.name,
         price: item.price,
         quantity: item.quantity,
+        unitOfMeasure: item.product.unitOfMeasure,
         discount: 0 // Default to 0 if not stored
     }));
 
@@ -104,8 +106,9 @@ const printReceipt = (sale: Sale) => {
                 .border-t { border-top: 1.5px dashed black; }
                 .flex { display: flex; justify-content: space-between; }
                 .item-row { display: flex; align-items: flex-start; margin-bottom: 2px; }
-                .qty { width: 20px; text-align: center; flex-shrink: 0; }
-                .name { flex-grow: 1; white-space: normal; overflow-wrap: break-word; padding-right: 4px; text-align: center; }
+                .item-row { display: flex; align-items: flex-start; margin-bottom: 2px; }
+                .qty { width: 32px; text-align: left; flex-shrink: 0; white-space: nowrap; font-size: 9px; }
+                .name { flex-grow: 1; white-space: normal; overflow-wrap: break-word; padding-right: 4px; text-align: left; }
                 .price { width: 35px; text-align: right; flex-shrink: 0; }
                 .text-sm { font-size: 12px; }
             </style>
@@ -128,12 +131,12 @@ const printReceipt = (sale: Sale) => {
                 <div class="mb-2">
                     <div class="item-row font-bold border-b mb-1">
                         <span class="qty">Qty</span>
-                        <span class="name text-center">Item</span>
+                        <span class="name">Item</span>
                         <span class="price">Amt</span>
                     </div>
                     ${items.map((item: any) => `
                         <div class="item-row">
-                            <span class="qty">${item.quantity}</span>
+                            <span class="qty">${item.quantity} ${item.unitOfMeasure || ''}</span>
                             <span class="name">
                                 <div>${item.name}</div>
                                 <div style="font-size: 9px;">@ ${formatCurrency(item.price)}</div>
@@ -231,6 +234,7 @@ function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) 
                 <TableHeader>
                   <TableRow>
                     <TableHead>Product</TableHead>
+                    <TableHead>Unit</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
                     <TableHead className="text-right">Price</TableHead>
                     <TableHead className="text-right">Subtotal</TableHead>
@@ -240,13 +244,14 @@ function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) 
                   {sale.items.map(item => (
                     <TableRow key={item.product.id}>
                       <TableCell>{item.product.name}</TableCell>
+                      <TableCell>{item.product.unitOfMeasure}</TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
                       <TableCell className="text-right">₱{formatCurrency(item.price)}</TableCell>
                       <TableCell className="text-right">₱{formatCurrency(item.price * item.quantity)}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="border-t-2 border-primary">
-                      <TableCell colSpan={3} className="text-right font-bold text-lg">Total</TableCell>
+                      <TableCell colSpan={4} className="text-right font-bold text-lg">Total</TableCell>
                       <TableCell className="text-right font-bold text-lg">₱{formatCurrency(sale.total)}</TableCell>
                   </TableRow>
                 </TableBody>
@@ -265,44 +270,78 @@ function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) 
     );
 }
 
-
-
-
-// ... (existing imports)
-
 export function RecentSalesDialog({
   isOpen,
   onOpenChange,
 }: RecentSalesDialogProps) {
+  const [step, setStep] = useState<'loading' | 'auth' | 'list'>('loading');
   const [saleToPrint, setSaleToPrint] = useState<Sale | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [posSettings, setPosSettings] = useState<any>(null);
+  const authSucceededRef = useRef(false);
 
-  
   useEffect(() => {
-    const fetchRecentSales = async () => {
-      if (!isOpen) return;
-      
-      setIsLoading(true);
-      try {
-        const response = await fetch(`/api/pos/recent-sales`);
-        const result = await response.json();
+    if (isOpen) {
+        authSucceededRef.current = false;
+        setStep('loading');
+        setIsLoading(true);
+        setSaleToPrint(null);
         
-        if (result.success) {
-          setRecentSales(result.data);
-        } else {
-          console.error('Failed to fetch recent sales:', result.error);
-        }
-      } catch (error) {
-        console.error('Error fetching recent sales:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+        // Fetch settings first to determine step
+        fetch(`/api/pos-settings?_t=${Date.now()}`, { cache: 'no-store' })
+          .then(res => res.json())
+          .then(result => {
+             if (result.success) {
+                 const settings = result.data;
+                 setPosSettings(settings);
+                 
+                 if (settings.enableRecentSalesAuth) {
+                     setStep('auth');
+                 } else {
+                     setStep('list');
+                 }
+            } else {
+                setStep('list'); // Fallback
+            }
+          })
+          .catch(err => {
+              console.error(err);
+              setStep('list');
+          });
 
-    fetchRecentSales();
+        const fetchRecentSales = async () => {
+            try {
+                const response = await fetch(`/api/pos/recent-sales`);
+                const result = await response.json();
+                
+                if (result.success) {
+                setRecentSales(result.data);
+                } else {
+                console.error('Failed to fetch recent sales:', result.error);
+                }
+            } catch (error) {
+                console.error('Error fetching recent sales:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchRecentSales();
+    }
   }, [isOpen]);
   
+  const handleAuthSuccess = () => {
+      authSucceededRef.current = true;
+      setStep('list');
+  };
+
+  const handleAuthClose = (open: boolean) => {
+      if (!open && !authSucceededRef.current) {
+          onOpenChange(false);
+      }
+      authSucceededRef.current = false;
+  };
+
   const handlePrintReceipt = (sale: Sale) => {
     setSaleToPrint(sale);
   };
@@ -319,7 +358,8 @@ export function RecentSalesDialog({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <>
+    <Dialog open={isOpen && (step === 'list')} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         {saleToPrint ? (
             <ReceiptPrintView sale={saleToPrint} onBack={handleBackToList} />
@@ -397,5 +437,18 @@ export function RecentSalesDialog({
         )}
       </DialogContent>
     </Dialog>
+
+    <AdminAuthDialog
+        isOpen={isOpen && step === 'auth'}
+        onOpenChange={handleAuthClose}
+        onSuccess={handleAuthSuccess}
+        requiredCredentials={posSettings?.enableRecentSalesAuth ? {
+            username: posSettings.recentSalesAuthUsername,
+            password: posSettings.recentSalesAuthPassword
+        } : null}
+        title="Recent Sales Authorization"
+        description="Enter authorized credentials to view recent sales."
+      />
+    </>
   );
 }

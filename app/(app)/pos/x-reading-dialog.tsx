@@ -118,11 +118,11 @@ export function XReadingDialog({
     onOpenChange(open);
   }
 
-  const handlePrint = () => {
-      // Small delay to ensure render
-      setTimeout(() => {
-          window.print();
-      }, 100);
+  const handlePrint = async () => {
+      if (!reportData) return;
+      
+      const printUtils = await import('./print-x-reading');
+      printUtils.printXReading(reportData, businessSettings, printerFormat);
   };
 
   return (

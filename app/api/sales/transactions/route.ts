@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 // Force rebuild: Fixed import path
-import { query } from '@/lib/mysql';
+import { query, withTransaction } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -231,3 +231,196 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      items,
+      customer,
+      paymentMethod,
+      totalDue,
+      userId,
+      shiftId,
+      terminalId,
+      notes,
+      amountTendered,
+      change
+    } = body;
+
+    // Validation
+    if (!items || items.length === 0) {
+      return NextResponse.json({ success: false, error: 'No items in transaction' }, { status: 400 });
+    }
+
+    // Default User ID if not provided (safety check, though API users should provide it)
+    const finalUserId = userId || 'api_user'; 
+
+    // Generate IDs
+    const saleId = `SALE-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const posTransId = `PT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const paymentDetailsId = `PD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const auditLogId = `PAL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+    return await withTransaction(async (connection) => {
+      // 1. Log payment initiation
+      await connection.query(`
+        INSERT INTO payment_audit_log (
+          id, transaction_id, payment_method, action, status, amount, user_id, created_at
+        ) VALUES (?, ?, ?, 'initiated', 'pending', ?, ?, NOW())
+      `, [auditLogId, posTransId, paymentMethod, totalDue, finalUserId]);
+
+      // 2. Insert into sales_transactions
+      const insertSaleSql = `
+        INSERT INTO sales_transactions (
+          id, customer_id, invoice_date, date, total, payment_method, status, notes, created_at, updated_at
+        ) VALUES (?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', ?, NOW(), NOW())
+      `;
+      await connection.query(insertSaleSql, [
+        saleId,
+        (customer && customer.id !== 'walk-in') ? customer.id : null,
+        totalDue,
+        paymentMethod,
+        notes || 'API Sale'
+      ]);
+
+      // 3. Insert into sale_items and update stock
+      const insertItemSql = `
+        INSERT INTO sale_items (
+          id, sale_id, product_id, product_name, quantity, price, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+      `;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const itemId = `${saleId}-ITEM-${i + 1}`;
+
+        await connection.query(insertItemSql, [
+          itemId,
+          saleId,
+          item.id,
+          item.name,
+          item.quantity,
+          item.price
+        ]);
+
+        // Stock Deduction Logic (Simplified for API - assumes standard product flow)
+        // Note: Full family sync logic from checkout is omitted for brevity unless critical.
+        // If critical, we should extract to a shared library. 
+        // For now, doing direct stock update for the specific product to ensure basic correctness.
+        
+        // Fetch current stock
+        const [prodResult]: any = await connection.query('SELECT stock FROM products WHERE id = ?', [item.id]);
+        if (prodResult && prodResult.length > 0) {
+            const currentStock = prodResult[0].stock;
+            const newStock = currentStock - item.quantity;
+            
+            // Record movement
+            const movementId = `MOV-${Date.now()}-${i}-${item.id.substring(Math.max(0, item.id.length - 4))}`;
+            await connection.query(`
+                INSERT INTO stock_movements (
+                    id, product_id, product_name, movement_type, 
+                    quantity_change, previous_stock, new_stock, 
+                    reference_id, reference_type, notes, created_at, updated_at
+                ) VALUES (?, ?, ?, 'sale', ?, ?, ?, ?, 'sale', ?, NOW(), NOW())
+            `, [movementId, item.id, item.name, -item.quantity, currentStock, newStock, saleId, 'API Sale']);
+
+            // Update product
+            await connection.query('UPDATE products SET stock = ? WHERE id = ?', [newStock, item.id]);
+        }
+      }
+
+      // 4. Insert into sales_invoices (Legacy/Reporting Sync)
+      const invoiceId = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      await connection.query(`
+        INSERT INTO sales_invoices (
+          id, customer_id, invoice_date, due_date, total, payment_method,
+          status, notes, created_at, updated_at
+        ) VALUES (?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', ?, NOW(), NOW())
+      `, [
+        invoiceId,
+        (customer && customer.id !== 'walk-in') ? customer.id : null,
+        totalDue,
+        paymentMethod,
+        notes || 'API Sale'
+      ]);
+
+      // 5. Insert into pos_transactions
+      const insertPosTransSql = `
+        INSERT INTO pos_transactions (
+          id, sale_id, shift_id, user_id, terminal_id, transaction_type,
+          subtotal, tax_amount, discount_amount, total_amount, payment_method, 
+          payment_status, payment_details_id, payment_validated_at,
+          notes, transaction_time, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, 'completed', ?, NOW(), ?, NOW(), NOW(), NOW())
+      `;
+      
+      const posNotes = `API Transaction. Tendered: ${amountTendered || totalDue}`;
+      
+      await connection.query(insertPosTransSql, [
+        posTransId,
+        saleId,
+        shiftId || null,
+        finalUserId,
+        terminalId || null,
+        totalDue, // assuming subtotal = total for simple API calls
+        0, // tax placeholder
+        0, // discount placeholder
+        totalDue,
+        paymentMethod,
+        paymentDetailsId,
+        posNotes
+      ]);
+
+      // 6. Insert items into sales_invoice_items and pos_transaction_items
+       for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const invoiceItemId = `${invoiceId}-ITEM-${i + 1}`;
+        const posItemId = `${posTransId}-DETAIL-${i + 1}`;
+        const saleItemId = `${saleId}-ITEM-${i + 1}`; // Match ID generated above logic
+
+        // Sales Invoice Items
+        await connection.query(`
+          INSERT INTO sales_invoice_items (
+            id, sales_invoice_id, product_id, product_name, quantity, price, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+        `, [invoiceItemId, invoiceId, item.id, item.name, item.quantity, item.price]);
+
+        // POS Transaction Items
+        await connection.query(`
+          INSERT INTO pos_transaction_items (
+            id, pos_transaction_id, sale_item_id, product_id, product_name, 
+            quantity, unit_price, line_total, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `, [
+          posItemId, 
+          posTransId, 
+          saleItemId, 
+          item.id, 
+          item.name, 
+          item.quantity, 
+          item.price, 
+          item.quantity * item.price
+        ]);
+      }
+
+      // Fetch order number
+      const [orderResult]: any = await connection.query('SELECT order_number FROM pos_transactions WHERE id = ?', [posTransId]);
+      const orderNumber = orderResult[0]?.order_number;
+
+      return NextResponse.json({
+        success: true,
+        data: { saleId, posTransId, orderNumber },
+        message: 'Transaction created successfully via API'
+      });
+    });
+
+  } catch (error: any) {
+    console.error('Error creating sales transaction:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to create transaction' },
+      { status: 500 }
+    );
+  }
+}
+

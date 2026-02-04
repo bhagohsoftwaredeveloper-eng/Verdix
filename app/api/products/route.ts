@@ -15,23 +15,25 @@ export async function GET(request: NextRequest) {
 
     let sql = `
       SELECT
-        id,
-        name,
-        description,
-        category,
-        brand,
-        stock,
-        price,
-        cost,
-        sku,
-        barcode,
-        vat_status,
-        availability,
-        reorder_point as reorderPoint,
-        avg_daily_sales as avgDailySales,
-        created_at,
-        updated_at
+        products.id,
+        products.name,
+        products.description,
+        products.category,
+        products.brand,
+        products.stock,
+        products.price,
+        products.cost,
+        products.sku,
+        products.barcode,
+        products.vat_status,
+        products.availability,
+        COALESCE(uom.abbreviation, products.unit_of_measure) as unitOfMeasure,
+        products.reorder_point as reorderPoint,
+        products.avg_daily_sales as avgDailySales,
+        products.created_at,
+        products.updated_at
       FROM products
+      LEFT JOIN units_of_measure uom ON products.unit_of_measure = uom.name
       WHERE 1=1
     `;
     const params: any[] = [];

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -71,6 +71,7 @@ import { useToast } from '@/hooks/use-toast';
 import { InsufficientStockDialog } from './insufficient-stock-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 
+import { BusinessSettings } from '../sales/x-reading/x-reading-preview';
 
 const MOCK_PRODUCTS: Product[] = [
   {
@@ -168,7 +169,13 @@ const MOCK_PRODUCTS: Product[] = [
 ];
 
 
-export type SaleItem = Product & { quantity: number; discount: number; name: string; };
+
+export type SaleItem = Product & { 
+    quantity: number; 
+    discount: number; 
+    name: string;
+    taxType?: 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT';
+};
 
 const initialItems: SaleItem[] = [];
 
@@ -176,11 +183,40 @@ function CurrencyIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M10 18v-4H6.816c-.422 0-.645-.24-.868-.617c-.223-.377-.28-.702-.28-1.383V7H4V5h4v4h3.184c.422 0 .645.24.868.617c-.223-.377-.28.702-.28 1.383v.831c0 .68-.057 1.006-.28 1.383c-.223.377-.446.617-.868.617H12v4zm2-6.831c0-.491.062-.83.184-1.018c.123-.188.31-.35.564-.515c.254-.166.52-.28.802-.344V7h2V5h-4v3.831c.491.062.83.184 1.018.366c.188.182.35.436.515.762c.166.326.28.675.344 1.047h2v2h-2c-.062.372-.184.72-.366 1.047c-.326-.182-.58-.436-.762-.762c-.182-.326-.304-.675-.366-1.047z" /></svg>
 }
 
+import { useProducts } from '@/hooks/use-api';
+
+// Shift Management State
+// ... (keep imports)
+
 export default function POSPage() {
+  // Shift Management State
+  const [currentShiftId, setCurrentShiftId] = useState<string | null>(null);
+  // Show X-Reading report after shift end
+  const [showEndShiftReport, setShowEndShiftReport] = useState(false);
+  const [lastEndedShiftId, setLastEndedShiftId] = useState<string | null>(null);
+
+  // Terminal State
+  const [terminals, setTerminals] = useState<any[]>([]);
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string>('');
+
+  const { toast } = useToast();
+
   const [currentTime, setCurrentTime] = useState('');
   const [items, setItems] = useState<SaleItem[]>(initialItems);
   const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Use the hook to fetch real products
+  const { products: fetchedProducts, loading: productsLoading } = useProducts('', 'Available');
   const [products, setProducts] = useState<Product[]>([]);
+  
+  // Sync fetched products to local state
+  useEffect(() => {
+    if (!productsLoading && fetchedProducts) {
+        setProducts(fetchedProducts);
+    }
+  }, [fetchedProducts, productsLoading]);
+
   const [isTenderDialogOpen, setIsTenderDialogOpen] = useState(false);
   const [tenderMethod, setTenderMethod] = useState<string | null>(null);
   const [heldTransactions, setHeldTransactions] = useState<SaleItem[][]>([]);
@@ -199,15 +235,24 @@ export default function POSPage() {
   const [isPriceInquiryOpen, setIsPriceInquiryOpen] = useState(false);
   const [isZReadingOpen, setIsZReadingOpen] = useState(false);
   const [isShutdownConfirmOpen, setIsShutdownConfirmOpen] = useState(false);
-
+  
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
+  
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
   const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
   
   const [enableAdvancedInventory, setEnableAdvancedInventory] = useState(false);
+  const [enableNegativeInventory, setEnableNegativeInventory] = useState(false);
+  const [enableCashCountAuth, setEnableCashCountAuth] = useState(false);
+  const [cashCountAuthCredentials, setCashCountAuthCredentials] = useState<{username?: string | null, password?: string | null} | null>(null);
+  const [isCashCountAuthOpen, setIsCashCountAuthOpen] = useState(false);
+  const [enableLineVoidAuth, setEnableLineVoidAuth] = useState(false);
+  const [lineVoidAuthCredentials, setLineVoidAuthCredentials] = useState<{username?: string | null, password?: string | null} | null>(null);
+  const [isLineVoidAuthOpen, setIsLineVoidAuthOpen] = useState(false);
+
   const [isInsufficientStockOpen, setIsInsufficientStockOpen] = useState(false);
   const [insufficientItems, setInsufficientItems] = useState<SaleItem[]>([]);
-
 
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
   const [isQuantityDialogOpen, setIsQuantityDialogOpen] = useState(false);
@@ -217,19 +262,53 @@ export default function POSPage() {
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
   
-  // Shift Management State
-  const [currentShiftId, setCurrentShiftId] = useState<string | null>(null);
-  // Show X-Reading report after shift end
-  const [showEndShiftReport, setShowEndShiftReport] = useState(false);
-  const [lastEndedShiftId, setLastEndedShiftId] = useState<string | null>(null);
-
-  // Terminal State
-  const [terminals, setTerminals] = useState<any[]>([]);
-  const [selectedTerminalId, setSelectedTerminalId] = useState<string>('');
-
-  const { toast } = useToast();
+  // Payment Methods
+  const [paymentMethods, setPaymentMethods] = useState<{id: string; name: string; isActive: boolean}[]>([]);
   
+  // Sticky Focus Logic
+  useEffect(() => {
+    const isAnyDialogOpen = 
+      isTenderDialogOpen ||
+      isEditItemOpen ||
+      isQuantityDialogOpen ||
+      isCancelDialogOpen ||
+      isDiscountDialogOpen ||
+      isHeldTransOpen ||
+      isAuthDialogOpen ||
+      isLineVoidAuthOpen ||
+      isEndShiftOpen ||
+      isCashTransferOpen ||
+      isCustomerSelectOpen ||
+      isLoyaltyOpen ||
+      isRecentSalesOpen ||
+      isVoidSalesOpen ||
+      isReturnSalesOpen ||
+      isPriceInquiryOpen ||
+      isZReadingOpen ||
+      isShutdownConfirmOpen ||
+      isInsufficientStockOpen ||
+      isProductSearchOpen ||
+      showEndShiftReport;
+
+    if (!isAnyDialogOpen && isPosLoggedIn && shiftActive) {
+      // Small timeout to allow dialogs to fully unmount/close
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [
+      isTenderDialogOpen, isEditItemOpen, isQuantityDialogOpen, isCancelDialogOpen, isDiscountDialogOpen,
+      isHeldTransOpen, isAuthDialogOpen, isLineVoidAuthOpen, isEndShiftOpen, isCashTransferOpen,
+      isCustomerSelectOpen, isLoyaltyOpen, isRecentSalesOpen, isVoidSalesOpen, isReturnSalesOpen,
+      isPriceInquiryOpen, isZReadingOpen, isShutdownConfirmOpen, isInsufficientStockOpen, isProductSearchOpen,
+      showEndShiftReport, isPosLoggedIn, shiftActive
+  ]);
+
   // Persist shift ID
   useEffect(() => {
       const storedShiftId = localStorage.getItem('pos_current_shift_id');
@@ -244,10 +323,8 @@ export default function POSPage() {
     return items.find(item => item.id === selectedItemId) || null;
   }, [items, selectedItemId]);
 
+  // Fetch initial data
   useEffect(() => {
-    // Simulate fetching products
-    setProducts(MOCK_PRODUCTS);
-
     // Fetch price levels
     const fetchPriceLevels = async () => {
       try {
@@ -271,6 +348,18 @@ export default function POSPage() {
             const result = await response.json();
             if (result.success) {
                 setEnableAdvancedInventory(result.data.enableAdvancedInventory);
+                setEnableNegativeInventory(result.data.enableNegativeInventory);
+                setEnableCashCountAuth(result.data.enableCashCountAuth);
+                setCashCountAuthCredentials({
+                    username: result.data.cashCountAuthUsername,
+                    password: result.data.cashCountAuthPassword
+                });
+                setEnableLineVoidAuth(result.data.enableLineVoidAuth);
+                setLineVoidAuthCredentials({
+                    username: result.data.lineVoidAuthUsername,
+                    password: result.data.lineVoidAuthPassword
+                });
+                setBusinessSettings(result.data);
             }
         } catch (error) {
             console.error('Error fetching settings:', error);
@@ -304,6 +393,20 @@ export default function POSPage() {
       }
     };
     fetchTerminals();
+    
+    // Fetch Payment Methods
+    const fetchPaymentMethods = async () => {
+      try {
+        const response = await fetch('/api/payment-methods?activeOnly=true');
+        const result = await response.json();
+        if (result.success && result.data) {
+          setPaymentMethods(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching payment methods:', error);
+      }
+    };
+    fetchPaymentMethods();
   }, []);
 
   const currentTerminalName = useMemo(() => {
@@ -339,7 +442,15 @@ export default function POSPage() {
 
       switch (e.key) {
         case 'F1': handleOpenEditDialog(); break;
-        case 'F2': setIsCancelDialogOpen(true); break;
+        case 'F2': 
+          if (items.length > 0) {
+             if (enableLineVoidAuth) {
+                  setIsLineVoidAuthOpen(true);
+             } else {
+                  setIsCancelDialogOpen(true);
+             }
+          }
+          break;
         case 'F3': handleOpenDiscountDialog(); break;
         case 'F4': handleHold(); break;
         case 'F5': setIsHeldTransOpen(true); break;
@@ -347,7 +458,10 @@ export default function POSPage() {
         case 'F7': handleRequestPriceEdit(); break;
         case 'F8': setIsShutdownConfirmOpen(true); break;
         // Payment method shortcuts
-        case 'F9': handleOpenTender('CASH'); break;
+        case 'F9': 
+             e.preventDefault();
+             setIsProductSearchOpen(true); 
+             break;
         case 'F10': handleOpenTender('CREDIT_CARD'); break;
         case 'F11': handleOpenTender('E_WALLET'); break;
         case 'F12': handleOpenTender('POINTS'); break;
@@ -355,7 +469,7 @@ export default function POSPage() {
 
       if (e.ctrlKey) {
         switch (e.key) {
-          case '1': e.preventDefault(); setIsEndShiftOpen(true); break;
+          case '1': e.preventDefault(); handleOpenEndShift(); break;
           case '2': e.preventDefault(); setIsCashTransferOpen(true); break;
           case '3': e.preventDefault(); setIsCustomerSelectOpen(true); break;
           case '4': e.preventDefault(); handleOpenLoyalty(); break;
@@ -363,13 +477,18 @@ export default function POSPage() {
           case '6': e.preventDefault(); setIsVoidSalesOpen(true); break;
           case '7': e.preventDefault(); setIsReturnSalesOpen(true); break;
           case '0': e.preventDefault(); setIsZReadingOpen(true); break;
+          case 'p': 
+          case 'P':
+            e.preventDefault(); 
+            setIsPriceInquiryOpen(true); 
+            break;
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [items, selectedItemId, heldTransactions]); // Dependencies for relevant state
+  }, [items, selectedItemId, heldTransactions, enableLineVoidAuth]); // Dependencies for relevant state - validated
 
   // Update item prices when price level changes
   useEffect(() => {
@@ -476,7 +595,20 @@ export default function POSPage() {
 
   const handleAddItemBySKU = (sku: string) => {
     if (!sku) return;
-    const product = products?.find((p) => p.sku === sku);
+    
+    // Priority 1: Exact SKU or Barcode match
+    let product = products?.find((p) => p.sku === sku || p.barcode === sku);
+    
+    // Priority 2: Exact Name match (case-insensitive)
+    if (!product) {
+         product = products?.find(p => p.name.toLowerCase() === sku.toLowerCase());
+    }
+
+    // Priority 3: Partial Name match (if nothing else found)
+    if (!product) {
+         product = products?.find(p => p.name.toLowerCase().includes(sku.toLowerCase()));
+    }
+
     handleAddItem(product);
   };
 
@@ -504,7 +636,11 @@ export default function POSPage() {
 
   const handleCancelSale = () => {
     if (items.length > 0) {
-      setIsCancelDialogOpen(true);
+      if (enableLineVoidAuth) {
+           setIsLineVoidAuthOpen(true);
+      } else {
+           setIsCancelDialogOpen(true);
+      }
     } else {
       toast({
         title: "Cart Empty",
@@ -513,14 +649,27 @@ export default function POSPage() {
     }
   };
 
-  const handleCancelSelected = () => {
+  const handleCancelSelected = (quantityToVoid: number) => {
     if (selectedItemId) {
-      removeItem(selectedItemId);
-      setSelectedItemId(null);
-      toast({
-        title: "Item Removed",
-        description: "The selected item has been removed from the cart.",
-      });
+      const item = items.find(i => i.id === selectedItemId);
+      if (item) {
+          if (quantityToVoid < item.quantity) {
+              // Partial Void
+              updateQuantity(selectedItemId, item.quantity - quantityToVoid);
+              toast({
+                  title: "Item Value Reduced",
+                  description: `Voided ${quantityToVoid} from ${item.name}`,
+              });
+          } else {
+              // Full Void
+              removeItem(selectedItemId);
+              setSelectedItemId(null);
+              toast({
+                  title: "Item Removed",
+                  description: "The selected item has been removed from the cart.",
+              });
+          }
+      }
     }
   };
 
@@ -550,7 +699,7 @@ export default function POSPage() {
 
   const handleOpenTender = (method: string) => {
     if (items.length > 0) {
-      if (!enableAdvancedInventory) {
+      if (!enableNegativeInventory) {
         const lowStockItems = items.filter(item => item.quantity > item.stock);
         if (lowStockItems.length > 0) {
             setInsufficientItems(lowStockItems);
@@ -562,6 +711,11 @@ export default function POSPage() {
       setTenderMethod(method);
       setIsTenderDialogOpen(true);
     }
+  };
+
+  const handleDefaultTender = () => {
+    const cashMethod = paymentMethods.find(m => m.name.toUpperCase() === 'CASH');
+    handleOpenTender(cashMethod ? cashMethod.name : (paymentMethods.length > 0 ? paymentMethods[0].name : 'CASH'));
   };
 
   const handleOpenEditDialog = () => {
@@ -726,6 +880,24 @@ export default function POSPage() {
           const result = await response.json();
           
           if (result.success) {
+              // 1. Fetch X-Reading Data for this ended shift
+              try {
+                  const xReadingRes = await fetch(`/api/sales/x-reading?shiftId=${currentShiftId}&limit=1`);
+                  const xReadingResult = await xReadingRes.json();
+                  
+                  if (xReadingResult.success && xReadingResult.data.length > 0) {
+                      // 2. Print X-Reading
+                      const printUtils = await import('./print-x-reading');
+                      printUtils.printXReading(xReadingResult.data[0], businessSettings);
+                      toast({ title: "Printing Report", description: "X-Reading is being printed..." });
+                  } else {
+                      console.warn("Could not fetch X-Reading for printing");
+                  }
+              } catch (printError) {
+                  console.error("Error printing X-Reading:", printError);
+                  // Don't fail the whole end shift process just because print failed
+              }
+
               setLastEndedShiftId(currentShiftId);
               localStorage.removeItem('pos_current_shift_id');
               setCurrentShiftId(null);
@@ -737,8 +909,8 @@ export default function POSPage() {
               setHeldTransactions([]);
               setSelectedCustomer(WALK_IN_CUSTOMER);
               
-              // Trigger X-Reading Report
-              setShowEndShiftReport(true);
+              // No longer needed if we print automatically, but can keep for manual view?
+              // setShowEndShiftReport(true); 
               
               toast({ title: "Shift Ended", description: "Shift closed successfully." });
           } else {
@@ -803,42 +975,92 @@ export default function POSPage() {
     setIsLoyaltyOpen(true);
   };
 
-  const subTotal = items.reduce(
-    (acc, item) => acc + item.price * item.quantity,
-    0
-  );
-  const totalDiscount = items.reduce(
-    (acc, item) => acc + (item.price * item.quantity * item.discount) / 100,
-    0
-  );
-  const taxableAmount = subTotal - totalDiscount;
-  const vatSales = taxableAmount / 1.12;
-  const vatAmount = taxableAmount - vatSales;
-  const totalDue = taxableAmount;
+  // Tax Calculations
+  const taxDetails = useMemo(() => {
+    let vatSales = 0;
+    let vatAmount = 0;
+    let nonVatSales = 0;
+    let zeroRatedSales = 0;
+    let vatExemptSales = 0;
+    let subTotal = 0;
+
+    items.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        const netItemTotal = itemTotal - ((itemTotal * item.discount) / 100);
+        
+        subTotal += netItemTotal; // This acts as net sales after item discount
+
+        // Default to VAT if undefined
+        const taxType = item.taxType || 'VAT';
+
+        if (taxType === 'VAT') {
+            const vatable = netItemTotal / 1.12;
+            vatSales += vatable;
+            vatAmount += (netItemTotal - vatable);
+        } else if (taxType === 'NON_VAT') {
+            nonVatSales += netItemTotal;
+        } else if (taxType === 'ZERO_RATED') {
+            zeroRatedSales += netItemTotal;
+        } else if (taxType === 'VAT_EXEMPT') {
+            vatExemptSales += netItemTotal;
+        }
+    });
+
+    return {
+        vatSales,
+        vatAmount,
+        nonVatSales,
+        zeroRatedSales,
+        vatExemptSales,
+        subTotal
+    };
+  }, [items]);
+
+  const totalDue = useMemo(() => {
+    return items.reduce((acc, item) => {
+      const itemTotal = item.price * item.quantity;
+      return acc + (itemTotal - (itemTotal * item.discount) / 100);
+    }, 0);
+  }, [items]);
+
+  // Derived for display
+  const subTotal = taxDetails.subTotal;
+  const vatSales = taxDetails.vatSales;
+  const vatAmount = taxDetails.vatAmount;
   const numberOfItems = items.reduce((acc, item) => acc + item.quantity, 0);
 
 
+
+
+  const handleOpenEndShift = () => {
+    if (enableCashCountAuth) {
+        setIsCashCountAuthOpen(true);
+    } else {
+        setIsEndShiftOpen(true);
+    }
+  };
+
   const headerActions = [
-    { icon: Pencil, label: 'Edit Item', fKey: 'F1', action: handleOpenEditDialog },
-    { icon: X, label: 'Cancel', fKey: 'F2', action: handleCancelSale },
-    { icon: Percent, label: 'Discount', fKey: 'F3', action: handleOpenDiscountDialog },
-    { icon: Tag, label: 'Hold', fKey: 'F4', action: handleHold },
-    { icon: ListOrdered, label: 'Hold Trans', fKey: 'F5', action: () => setIsHeldTransOpen(true) },
-    { icon: Plus, label: '+/- quantity', fKey: 'F6', action: handleOpenQuantityDialog },
-    { icon: CurrencyIcon, label: 'Edit Price', fKey: 'F7', action: handleRequestPriceEdit },
-    { icon: Power, label: 'Shutdown', fKey: 'F8', action: handleShutdown },
+    { icon: Pencil, label: 'Edit Item', fKey: 'F1', action: handleOpenEditDialog, className: "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100 hover:border-blue-200" },
+    { icon: X, label: 'Line Void', fKey: 'F2', action: handleCancelSale, className: "bg-red-50 text-red-700 hover:bg-red-100 border-red-100 hover:border-red-200" },
+    { icon: Percent, label: 'Discount', fKey: 'F3', action: handleOpenDiscountDialog, className: "bg-green-50 text-green-700 hover:bg-green-100 border-green-100 hover:border-green-200" },
+    { icon: Tag, label: 'Suspend', fKey: 'F4', action: handleHold, className: "bg-orange-50 text-orange-800 hover:bg-orange-100 border-orange-100 hover:border-orange-200" },
+    { icon: ListOrdered, label: 'Suspended', fKey: 'F5', action: () => setIsHeldTransOpen(true), className: "bg-orange-50 text-orange-800 hover:bg-orange-100 border-orange-100 hover:border-orange-200" },
+    { icon: Plus, label: 'Quantity', fKey: 'F6', action: handleOpenQuantityDialog, className: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100 hover:border-indigo-200" },
+    { icon: CurrencyIcon, label: 'Edit Price', fKey: 'F7', action: handleRequestPriceEdit, className: "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-100 hover:border-purple-200" },
+    { icon: Power, label: 'Shutdown', fKey: 'F8', action: handleShutdown, className: "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-100 hover:border-slate-200" },
   ];
 
   const footerActions = [
-    { icon: Printer, label: 'Cash count', shortcut: 'Ctrl+1', action: () => setIsEndShiftOpen(true) },
+    { icon: Printer, label: 'Cash count', shortcut: 'Ctrl+1', action: handleOpenEndShift },
     { icon: CurrencyIcon, label: 'Cash transfer', shortcut: 'Ctrl+2', action: () => setIsCashTransferOpen(true) },
     { icon: User, label: 'Customer', shortcut: 'Ctrl+3', action: () => setIsCustomerSelectOpen(true) },
     { icon: Star, label: 'Loyalty', shortcut: 'Ctrl+4', action: handleOpenLoyalty },
     { icon: Clock, label: 'Recent Sales', shortcut: 'Ctrl+5', action: () => setIsRecentSalesOpen(true) },
-    { icon: Ban, label: 'Void Sales', shortcut: 'Ctrl+6', action: () => setIsVoidSalesOpen(true) },
-    { icon: Undo, label: 'Return Sales', shortcut: 'Ctrl+7', action: () => setIsReturnSalesOpen(true) },
+    { icon: Ban, label: 'Post Void', shortcut: 'Ctrl+6', action: () => setIsVoidSalesOpen(true) },
+    { icon: Undo, label: 'Merch Credit', shortcut: 'Ctrl+7', action: () => setIsReturnSalesOpen(true) },
     { icon: BookOpen, label: 'Z-READING', shortcut: 'Ctrl+0', action: () => setIsZReadingOpen(true) },
-    { icon: Search, label: 'Price Inquiry', action: () => setIsPriceInquiryOpen(true) },
+    { icon: Search, label: 'Price Inquiry', shortcut: 'Ctrl+P', action: () => setIsPriceInquiryOpen(true) },
   ];
 
   const paymentOptions = [
@@ -851,14 +1073,24 @@ export default function POSPage() {
 
   const matteGreenButtons = ['Cash count', 'Cash transfer'];
   const matteBlueButtons = ['Customer', 'Loyalty'];
-  const matteYellowButtons = ['Recent Sales', 'Void Sales', 'Return Sales'];
+  const matteYellowButtons = ['Recent Sales', 'Post Void', 'Merch Credit'];
   const mattePurpleButtons = ['Z-READING', 'Price Inquiry'];
+
+
 
   const showOverlay = !isPosLoggedIn || !shiftActive;
 
   return (
     <>
       <div className="flex h-screen w-screen bg-muted/30 font-sans overflow-hidden">
+        <AdminAuthDialog 
+          isOpen={isCashCountAuthOpen}
+          onOpenChange={setIsCashCountAuthOpen}
+          onSuccess={() => setIsEndShiftOpen(true)}
+          requiredCredentials={cashCountAuthCredentials}
+          title="Cash Count Authentication"
+          description="Please enter credentials to access Cash Count."
+        />
         {/* Left Section: Main Transaction Area */}
         <div className="flex-1 flex flex-col relative min-w-0">
           {showOverlay && (
@@ -873,16 +1105,16 @@ export default function POSPage() {
           {/* Header Bar */}
           <header className="h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center px-4 gap-4 justify-between shrink-0 z-10">
              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mask-gradient-x flex-1">
-                {headerActions.map(({ icon: Icon, label, fKey, action }) => (
+                {headerActions.map(({ icon: Icon, label, fKey, action, className }) => (
                   <Button 
                     key={label} 
                     variant="ghost" 
                     size="sm"
-                    className="flex flex-col gap-0.5 h-12 min-w-[4.5rem] px-2 hover:bg-muted/80 transition-all font-normal" 
+                    className={`flex flex-col gap-0.5 h-12 min-w-[4.5rem] px-2 transition-all font-normal border ${className}`} 
                     onClick={action}
                   >
                     <Icon className="w-4 h-4 mb-0.5" />
-                    <span className="text-[10px] leading-none font-medium">{label}</span>
+                    <span className="text-[10px] leading-none font-medium text-center">{label}</span>
                     <span className="text-[9px] text-muted-foreground leading-none font-mono opacity-70">{fKey}</span>
                     {label === 'Hold Trans' && heldTransactions.length > 0 && (
                       <span className="absolute top-1 right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
@@ -913,15 +1145,25 @@ export default function POSPage() {
                      <Search className="w-4 h-4" />
                   </div>
                   <Input
+                    ref={inputRef}
                     type="text"
                     placeholder="Scan Barcode or Enter Product SKU (Enter)"
                     className="pl-9 h-12 text-lg bg-background shadow-sm border-muted-foreground/20 focus-visible:ring-primary/20"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddItemBySKU(inputValue)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.stopPropagation();
+                            if (inputValue.trim()) {
+                                handleAddItemBySKU(inputValue);
+                            } else {
+                                handleDefaultTender();
+                            }
+                        }
+                    }}
                     autoFocus
                   />
-                  <ProductSearchDialog onSelectProduct={handleAddItem}>
+                  <ProductSearchDialog onSelectProduct={handleAddItem} isOpen={isProductSearchOpen} onOpenChange={setIsProductSearchOpen}>
                     <Button
                       type="button"
                       variant="ghost"
@@ -929,7 +1171,7 @@ export default function POSPage() {
                       className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-2 text-muted-foreground hover:text-foreground"
                     >
                       <span className="text-xs mr-1">Search</span>
-                      <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">F3</kbd>
+                      <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">F9</kbd>
                     </Button>
                   </ProductSearchDialog>
                 </div>
@@ -956,10 +1198,10 @@ export default function POSPage() {
                       <TableRow className="hover:bg-transparent border-b-border/50">
                         <TableHead className="w-10 pl-4"></TableHead>
                         <TableHead className="w-[40%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</TableHead>
+                        <TableHead className="w-[10%] text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unit</TableHead>
                         <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Price</TableHead>
                         <TableHead className="text-center w-32 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qty</TableHead>
                         <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total</TableHead>
-                        <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -992,42 +1234,19 @@ export default function POSPage() {
                                             {item.discount > 0 && <span className="text-[10px] text-green-600 font-medium">Discount: {item.discount}%</span>}
                                         </div>
                                     </TableCell>
+                                    <TableCell className="text-left text-sm text-muted-foreground">
+                                        {item.unitOfMeasure}
+                                    </TableCell>
                                     <TableCell className="text-right font-mono text-sm">
                                         ₱{item.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                                     </TableCell>
                                     <TableCell className="p-0">
                                         <div className="flex items-center justify-center gap-1 h-full">
-                                            <Button 
-                                                size="icon" 
-                                                variant="ghost" 
-                                                className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted" 
-                                                onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, item.quantity - 1); }}
-                                            >
-                                                <Minus className="h-3 w-3" />
-                                            </Button>
                                             <span className="w-8 text-center font-mono text-sm font-medium">{item.quantity}</span>
-                                            <Button 
-                                                size="icon" 
-                                                variant="ghost" 
-                                                className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted" 
-                                                onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, item.quantity + 1); }}
-                                            >
-                                                <Plus className="h-3 w-3" />
-                                            </Button>
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right font-mono font-medium">
                                          ₱{(item.price * item.quantity * (1 - item.discount / 100)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Button 
-                                            size="icon" 
-                                            variant="ghost" 
-                                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors" 
-                                            onClick={(e) => { e.stopPropagation(); removeItem(item.id); }}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -1036,25 +1255,7 @@ export default function POSPage() {
                   </Table>
                 </div>
                 
-                {/* Summary Strip */}
-                <div className="border-t bg-muted/20 p-3 grid grid-cols-4 gap-4 text-xs text-muted-foreground">
-                    <div>
-                        <span className="block opacity-70">Total Items</span>
-                        <span className="font-mono font-medium text-foreground">{numberOfItems}</span>
-                    </div>
-                    <div>
-                        <span className="block opacity-70">Subtotal</span>
-                         <span className="font-mono font-medium text-foreground">₱{subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div>
-                         <span className="block opacity-70">VAT Sales</span>
-                         <span className="font-mono font-medium text-foreground">₱{vatSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div>
-                        <span className="block opacity-70">VAT Amount</span>
-                        <span className="font-mono font-medium text-foreground">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                </div>
+                {/* Summary Strip Removed - Moved to Sidebar */}
              </div>
              
              {/* Footer Actions */}
@@ -1104,31 +1305,72 @@ export default function POSPage() {
                         <span className="text-2xl mt-2 mr-1">₱</span>
                         {totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                     </div>
+                    {/* Detailed Breakdown Card */}
+                    <Card className="mx-4 mt-12 bg-muted/30 border-dashed">
+                        <CardContent className="p-4">
+                            <div className="grid grid-cols-1 gap-y-2 text-sm text-muted-foreground">
+                                <div className="flex justify-between">
+                                    <span>Sub total:</span>
+                                    <span className="font-mono">{subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Vat Sales:</span>
+                                    <span className="font-mono">{vatSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Sub discount:</span>
+                                    {/* Placeholder logic for discount sum if needed, typically difference between gross and net if not per item stored */}
+                                    <span className="font-mono">{(items.reduce((acc, item) => acc + item.price * item.quantity, 0) - totalDue).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Vat amount:</span>
+                                    <span className="font-mono">{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                 <div className="flex justify-between font-bold text-foreground">
+                                    <span>Amount due:</span>
+                                    <span className="font-mono text-primary">{totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Non-vat sales:</span>
+                                    <span className="font-mono">{taxDetails.nonVatSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                 <div className="flex justify-between">
+                                     {/* Divider / Spacer */}
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>No of Items:</span>
+                                    <span className="font-mono">{numberOfItems}</span>
+                                </div>
+                                
+                                 <div className="flex justify-between">
+                                    <span>Vat-Exempt sales:</span>
+                                    <span className="font-mono">{taxDetails.vatExemptSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                 <div className="flex justify-between">
+                                     <span>Zero-Rated Sales:</span>
+                                     <span className="font-mono">{taxDetails.zeroRatedSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 <div className="flex-1 flex flex-col justify-center gap-3">
-                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest pl-1">Payment Method</p>
-                     <div className="grid grid-cols-2 gap-3">
-                        {paymentOptions.slice(0, 4).map((option) => (
+                    
+                     {/* Individual Payment Buttons Removed as per request to move selection to dialog */}
+                     {/* <div className="grid grid-cols-2 gap-3">
+                        {paymentMethods.map((method) => (
                             <Button
-                                key={option.value}
+                                key={method.id}
                                 variant="outline"
-                                onClick={() => handleOpenTender(option.label)}
+                                onClick={() => handleOpenTender(method.name)}
                                 disabled={items.length === 0}
                                 className="h-16 flex flex-col items-center justify-center gap-1 border-muted-foreground/20 hover:border-primary hover:bg-primary/5 transition-all text-muted-foreground hover:text-primary"
                             >
-                                <span className="font-semibold">{option.label}</span>
+                                <span className="font-semibold">{method.name}</span>
                             </Button>
                         ))}
-                     </div>
-                      <Button
-                        variant="outline"
-                         onClick={() => handleOpenTender('POINTS')}
-                         disabled={items.length === 0}
-                         className="h-12 border-muted-foreground/20 text-muted-foreground hover:text-primary"
-                      >
-                         Points / Other
-                      </Button>
+                     </div> */}
                 </div>
             </div>
 
@@ -1137,7 +1379,7 @@ export default function POSPage() {
                 <Button 
                     size="lg" 
                     className="w-full h-20 text-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-1 transition-all rounded-xl"
-                    onClick={() => handleOpenTender('CASH')}
+                    onClick={handleDefaultTender}
                     disabled={items.length === 0}
                 >
                     <span className="flex-1 text-left pl-4">TENDER</span>
@@ -1173,6 +1415,7 @@ export default function POSPage() {
         onSuccess={handleSuccessfulSale}
         shiftId={currentShiftId}
         terminalId={selectedTerminalId}
+        paymentMethods={paymentMethods}
       />
       <EditItemDialog
         isOpen={isEditItemOpen}
@@ -1192,7 +1435,7 @@ export default function POSPage() {
         onOpenChange={setIsCancelDialogOpen}
         onCancelSelected={handleCancelSelected}
         onCancelAll={handleCancelAll}
-        hasSelectedItem={!!selectedItemId}
+        selectedItem={selectedItem}
       />
       <DiscountDialog
         isOpen={isDiscountDialogOpen}
@@ -1212,6 +1455,17 @@ export default function POSPage() {
         isOpen={isAuthDialogOpen}
         onOpenChange={setIsAuthDialogOpen}
         onSuccess={handleAdminAuthSuccess}
+      />
+      <AdminAuthDialog
+        isOpen={isLineVoidAuthOpen}
+        onOpenChange={setIsLineVoidAuthOpen}
+        title="Authorisation Required"
+        description="Please provide credentials to Void Line Items"
+        requiredCredentials={lineVoidAuthCredentials}
+        onSuccess={() => {
+             setIsLineVoidAuthOpen(false);
+             setIsCancelDialogOpen(true);
+        }}
       />
       <EndShiftDialog
         isOpen={isEndShiftOpen}

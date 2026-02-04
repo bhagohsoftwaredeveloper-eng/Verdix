@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AddPurchaseOrderDialog } from './add-purchase-order-dialog';
 import { ReceivePurchaseOrderDialog } from './receive-purchase-order-dialog';
 import { ViewPurchaseOrderDialog } from './view-purchase-order-dialog';
+import { ScheduledOrdersDialog } from './scheduled-orders-dialog';
 
 import { Button } from '@/components/ui/button';
 import { Check, Truck, Search, CalendarIcon, X, Printer, ArrowLeft } from 'lucide-react';
@@ -321,11 +322,18 @@ export default function PurchasesPage() {
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   
+  const [reorderData, setReorderData] = useState<PurchaseOrder | null>(null);
+  const [isReorderOpen, setIsReorderOpen] = useState(false);
+  
   const [orderToPrint, setOrderToPrint] = useState<PurchaseOrder | null>(null);
   const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
   const [orderToReceive, setOrderToReceive] = useState<PurchaseOrder | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [viewingOrder, setViewingOrder] = useState<PurchaseOrder | null>(null);
+  
+  const [isScheduledOrderOpen, setIsScheduledOrderOpen] = useState(false);
+  const [scheduledSupplierId, setScheduledSupplierId] = useState<string | undefined>(undefined);
+
   const pageSize = 10;
 
   const { toast } = useToast();
@@ -436,6 +444,11 @@ export default function PurchasesPage() {
       setEditingOrder(order);
       setIsEditOpen(true);
   };
+  
+  const handleReorder = (order: PurchaseOrder) => {
+      setReorderData(order);
+      setIsReorderOpen(true);
+  };
 
   const handleViewDetails = (order: PurchaseOrder) => {
     setViewingOrder(order);
@@ -458,7 +471,25 @@ export default function PurchasesPage() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            <ScheduledOrdersDialog 
+                onCreateOrder={(supplierId) => {
+                    setScheduledSupplierId(supplierId);
+                    setIsScheduledOrderOpen(true);
+                }} 
+            />
             <AddPurchaseOrderDialog onAddOrder={addPurchaseOrder} />
+            
+            {isScheduledOrderOpen && (
+                <AddPurchaseOrderDialog 
+                    open={isScheduledOrderOpen}
+                    onOpenChange={setIsScheduledOrderOpen}
+                    prefillSupplierId={scheduledSupplierId}
+                    onAddOrder={(order) => {
+                        addPurchaseOrder(order);
+                        setIsScheduledOrderOpen(false);
+                    }}
+                />
+            )}
             
             {(isEditOpen && editingOrder) && (
                 <AddPurchaseOrderDialog 
@@ -468,6 +499,18 @@ export default function PurchasesPage() {
                     onAddOrder={(order) => {
                         addPurchaseOrder(order);
                         setIsEditOpen(false);
+                    }}
+                /> 
+            )}
+
+            {(isReorderOpen && reorderData) && (
+                <AddPurchaseOrderDialog 
+                    reorderData={reorderData} 
+                    open={isReorderOpen}
+                    onOpenChange={setIsReorderOpen}
+                    onAddOrder={(order) => {
+                        addPurchaseOrder(order);
+                        setIsReorderOpen(false);
                     }}
                 /> 
             )}
@@ -579,7 +622,7 @@ export default function PurchasesPage() {
                     setIsReceiveDialogOpen(true);
                   }}
                   onPrint={() => handlePrint(order)}
-                  onReorder={addPurchaseOrder}
+                  onReorder={handleReorder}
                   onEdit={handleEdit}
                   onViewDetails={handleViewDetails}
                 />

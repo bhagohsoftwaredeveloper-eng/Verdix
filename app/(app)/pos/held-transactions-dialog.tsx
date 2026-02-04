@@ -49,7 +49,7 @@ export function HeldTransactionsDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Held Transactions</DialogTitle>
+          <DialogTitle>Suspended Transactions</DialogTitle>
           <DialogDescription>
             Select a transaction to restore it to the cart or delete it.
           </DialogDescription>
@@ -96,7 +96,7 @@ export function HeldTransactionsDialog({
               ) : (
                 <TableRow>
                   <TableCell colSpan={4} className="h-24 text-center">
-                    No transactions on hold.
+                    No transactions suspended.
                   </TableCell>
                 </TableRow>
               )}

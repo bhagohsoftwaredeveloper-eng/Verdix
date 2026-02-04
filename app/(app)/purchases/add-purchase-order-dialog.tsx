@@ -201,14 +201,18 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
 export function AddPurchaseOrderDialog({ 
   onAddOrder, 
   prefillProduct,
+  prefillSupplierId,
   editOrder,
+  reorderData,
   trigger,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: { 
   onAddOrder?: (order: PurchaseOrder) => void;
   prefillProduct?: Product; 
-  editOrder?: PurchaseOrder | null; 
+  prefillSupplierId?: string;
+  editOrder?: PurchaseOrder | null;
+  reorderData?: PurchaseOrder | null;
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -224,6 +228,7 @@ export function AddPurchaseOrderDialog({
   
   const { toast } = useToast();
   const { paymentMethods } = usePaymentMethods();
+  const { products } = useProducts();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const { user } = useUser();
 
@@ -373,9 +378,58 @@ export function AddPurchaseOrderDialog({
                   expirationDate: ''
               })),
           });
+      } else if (reorderData) {
+          // Prefill for REORDER - Creates new order based on old one
+          const autoReference = generateReference();
+          
+          // Map items and update with latest stock info if available
+          const updatedItems = reorderData.items.map(item => {
+              const currentProduct = products.find(p => p.id === item.productId);
+              return {
+                  productId: item.productId,
+                  productName: item.productName,
+                  quantity: item.quantity,
+                  cost: item.cost, // Keep original cost for now, unless user wants latest cost
+                  sellingPrice: currentProduct ? currentProduct.price : 0,
+                  discount: item.discount || 0,
+                  discountType: 'amount',
+                  vatSubject: false,
+                  expirationDate: '',
+                  // CRITICAL: Update stock to current level
+                  currentStock: currentProduct ? currentProduct.stock : 0, 
+                  barcode: currentProduct ? currentProduct.barcode : '',
+              };
+          });
+
+          form.reset({
+              purchaseType: 'Order', 
+              issueDate: new Date().toISOString().split('T')[0], // Today
+              deliveryDate: '', // Clear delivery date
+              reference: autoReference, // New reference
+              supplierId: reorderData.supplierId,
+              shipping: reorderData.shippingFee || 0,
+              receiveToWarehouse: '',
+              deliveryAddress: '',
+              paymentMethod: reorderData.paymentMethod,
+              note: '', 
+              items: updatedItems,
+          });
       } else {
         const autoReference = generateReference();
         form.setValue('reference', autoReference);
+
+        if (prefillSupplierId) {
+             // We rely on suppliers being loaded or we might need to wait, but usually they load fast.
+             // We can try to set it, and if suppliers update, maybe we need to ensure it's valid?
+             // Actually, since we use Select, setting the value is enough if the option exists.
+             if(suppliers.length > 0) {
+                 const sup = suppliers.find(s => s.id === prefillSupplierId);
+                 if(sup) form.setValue('supplierId', sup.id);
+             } else {
+                 // If not loaded yet, we can set it and hope the Select renders correctly once suppliers load.
+                 form.setValue('supplierId', prefillSupplierId);
+             }
+        }
 
         if (prefillProduct && fields.length === 0) {
            if(prefillProduct.supplier) {
@@ -386,7 +440,7 @@ export function AddPurchaseOrderDialog({
         }
       }
     }
-  }, [isOpen, editOrder, prefillProduct]);
+  }, [isOpen, editOrder, reorderData, prefillProduct, prefillSupplierId, suppliers, products]); // Added prefillSupplierId and suppliers to dependency
 
   const handleAddProduct = (product: Product) => {
     const existingItemIndex = fields.findIndex(field => field.productId === product.id);

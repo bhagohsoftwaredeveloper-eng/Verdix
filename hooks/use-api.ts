@@ -62,7 +62,7 @@ export function useProducts(search?: string, availability?: string): UseProducts
         imageHint: '',
         vatStatus: item.vat_status,
         availability: item.availability,
-        unitOfMeasure: '',
+        unitOfMeasure: item.unitOfMeasure || item.unit_of_measure || '',
         incomeAccount: '',
         expenseAccount: '',
         createdAt: item.created_at,

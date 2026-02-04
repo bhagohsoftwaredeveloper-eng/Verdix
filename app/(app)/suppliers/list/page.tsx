@@ -148,6 +148,7 @@ export default function SuppliersListPage() {
               <TableRow>
                 <TableHead className="w-[250px]">Name</TableHead>
                 <TableHead>Contact</TableHead>
+                <TableHead>Schedule</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>TIN</TableHead>
                 <TableHead>Payment Terms</TableHead>
@@ -158,13 +159,13 @@ export default function SuppliersListPage() {
             <TableBody>
               {loading ? (
                  <TableRow>
-                   <TableCell colSpan={7} className="text-center py-10">
+                   <TableCell colSpan={8} className="text-center py-10">
                      Loading...
                    </TableCell>
                  </TableRow>
               ) : suppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                     No suppliers found.
                   </TableCell>
                 </TableRow>
@@ -182,6 +183,15 @@ export default function SuppliersListPage() {
                         <span>{supplier.contactNumber || supplier.mobilePhone || supplier.telephone || '-'}</span>
                         <span className="text-xs text-muted-foreground truncate max-w-[200px]">{supplier.address}</span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                         {supplier.orderSchedule ? (
+                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                {supplier.orderSchedule}
+                            </span>
+                         ) : (
+                             <span className="text-muted-foreground text-xs">-</span>
+                         )}
                     </TableCell>
                     <TableCell>{supplier.company || '-'}</TableCell>
                     <TableCell>{supplier.tin || '-'}</TableCell>

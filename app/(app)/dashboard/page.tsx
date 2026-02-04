@@ -28,6 +28,10 @@ import { Product, Sale } from '@/lib/types';
 import { mockProducts, mockSales } from '@/lib/data';
 import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { SupplierScheduleCard } from './supplier-schedule-card';
+import { HourlySalesChart } from './hourly-sales-chart';
+import { TopSellingProductsChart } from './top-selling-products-chart';
+import { MonthlySalesPieChart } from './monthly-sales-pie-chart';
 
 const chartConfig = {
   sales: {
@@ -165,6 +169,22 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
+      </div>
+      
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+         <div className="col-span-1 lg:col-span-7">
+            <HourlySalesChart />
+         </div>
+         <div className="col-span-1 lg:col-span-4">
+             <TopSellingProductsChart />
+         </div>
+         <div className="col-span-1 lg:col-span-3">
+             <MonthlySalesPieChart />
+         </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-1">
+         <SupplierScheduleCard />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">

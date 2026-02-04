@@ -60,7 +60,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
 
   const displayDate = order.orderDate || order.date;
   const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = (order as any).shipping || 0;
+  const shipping = Number((order as any).shipping || 0);
   const grandTotal = subtotal + shipping;
   const documentTitle = mode === 'delivery-note' ? 'DELIVERY NOTE' : 'SALES ORDER';
 

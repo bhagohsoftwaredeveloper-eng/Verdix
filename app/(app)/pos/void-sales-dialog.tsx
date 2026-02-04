@@ -67,6 +67,7 @@ function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Product</TableHead>
+                                <TableHead>Unit</TableHead>
                                 <TableHead className="text-right">Qty</TableHead>
                                 <TableHead className="text-right">Price</TableHead>
                             </TableRow>
@@ -75,6 +76,7 @@ function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError
                             {sale.items.map((item, index) => (
                                 <TableRow key={index}>
                                     <TableCell>{item.product.name}</TableCell>
+                                    <TableCell>{item.product.unitOfMeasure}</TableCell>
                                     <TableCell className="text-right">{item.quantity}</TableCell>
                                     <TableCell className="text-right">₱{item.price.toFixed(2)}</TableCell>
                                 </TableRow>

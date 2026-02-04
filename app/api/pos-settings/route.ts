@@ -24,9 +24,24 @@ export async function GET(request: NextRequest) {
         email,
         created_at AS createdAt,
         updated_at AS updatedAt,
+        enable_line_void_auth AS enableLineVoidAuth,
+        line_void_auth_username AS lineVoidAuthUsername,
+        line_void_auth_password AS lineVoidAuthPassword,
         enable_void_return_auth AS enableVoidReturnAuth,
         void_auth_username AS voidAuthUsername,
-        void_auth_password AS voidAuthPassword
+        void_auth_password AS voidAuthPassword,
+        enable_return_auth AS enableReturnAuth,
+        return_auth_username AS returnAuthUsername,
+        return_auth_password AS returnAuthPassword,
+        enable_recent_sales_auth AS enableRecentSalesAuth,
+        recent_sales_auth_username AS recentSalesAuthUsername,
+        recent_sales_auth_password AS recentSalesAuthPassword,
+        paper_size AS paperSize,
+        print_mode AS printMode,
+        enable_negative_inventory AS enableNegativeInventory,
+        enable_cash_count_auth AS enableCashCountAuth,
+        cash_count_auth_username AS cashCountAuthUsername,
+        cash_count_auth_password AS cashCountAuthPassword
       FROM pos_settings
       LIMIT 1
     `;
@@ -80,7 +95,13 @@ export async function POST(request: NextRequest) {
         address, contactNumber, tin, email,
         currencySymbol, currencyCode, timezone, dateFormat,
         enableAutomaticMarkup, defaultMarkupPercentage, markupPriority,
-        enableVoidReturnAuth, voidAuthUsername, voidAuthPassword
+        enableLineVoidAuth, lineVoidAuthUsername, lineVoidAuthPassword,
+        enableVoidReturnAuth, voidAuthUsername, voidAuthPassword,
+        enableReturnAuth, returnAuthUsername, returnAuthPassword, // Fixed duplicate
+        enableRecentSalesAuth, recentSalesAuthUsername, recentSalesAuthPassword,
+        paperSize, printMode,
+        enableNegativeInventory,
+        enableCashCountAuth, cashCountAuthUsername, cashCountAuthPassword
       } = body;
 
       const insertSQL = `
@@ -89,9 +110,14 @@ export async function POST(request: NextRequest) {
           address, contact_number, tin, email,
           currency_symbol, currency_code, timezone, date_format,
           enable_automatic_markup, default_markup_percentage, markup_priority,
-          enable_void_return_auth, void_auth_username, void_auth_password
+          enable_line_void_auth, line_void_auth_username, line_void_auth_password,
+          enable_void_return_auth, void_auth_username, void_auth_password,
+          enable_return_auth, return_auth_username, return_auth_password,
+          enable_recent_sales_auth, recent_sales_auth_username, recent_sales_auth_password,
+          paper_size, print_mode, enable_negative_inventory,
+          enable_cash_count_auth, cash_count_auth_username, cash_count_auth_password
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
@@ -109,9 +135,24 @@ export async function POST(request: NextRequest) {
         enableAutomaticMarkup ?? true,
         defaultMarkupPercentage || 0.00,
         markupPriority ? JSON.stringify(markupPriority) : JSON.stringify(["subcategory", "category", "brand", "supplier"]),
+        enableLineVoidAuth ?? false,
+        lineVoidAuthUsername || null,
+        lineVoidAuthPassword || null,
         enableVoidReturnAuth ?? false,
         voidAuthUsername || null,
-        voidAuthPassword || null
+        voidAuthPassword || null,
+        enableReturnAuth ?? false,
+        returnAuthUsername || null,
+        returnAuthPassword || null,
+        enableRecentSalesAuth ?? false,
+        recentSalesAuthUsername || null,
+        recentSalesAuthPassword || null,
+        paperSize || '58mm',
+        printMode || 'browser',
+        enableNegativeInventory ?? false,
+        enableCashCountAuth ?? false,
+        cashCountAuthUsername || null,
+        cashCountAuthPassword || null
       ]);
     } else {
       // Update existing settings - Dynamic Update
@@ -131,9 +172,24 @@ export async function POST(request: NextRequest) {
         enableAutomaticMarkup: 'enable_automatic_markup',
         defaultMarkupPercentage: 'default_markup_percentage',
         markupPriority: 'markup_priority',
+        enableLineVoidAuth: 'enable_line_void_auth',
+        lineVoidAuthUsername: 'line_void_auth_username',
+        lineVoidAuthPassword: 'line_void_auth_password',
         enableVoidReturnAuth: 'enable_void_return_auth',
         voidAuthUsername: 'void_auth_username',
-        voidAuthPassword: 'void_auth_password'
+        voidAuthPassword: 'void_auth_password',
+        enableReturnAuth: 'enable_return_auth',
+        returnAuthUsername: 'return_auth_username',
+        returnAuthPassword: 'return_auth_password',
+        enableRecentSalesAuth: 'enable_recent_sales_auth',
+        recentSalesAuthUsername: 'recent_sales_auth_username',
+        recentSalesAuthPassword: 'recent_sales_auth_password',
+        paperSize: 'paper_size',
+        printMode: 'print_mode',
+        enableNegativeInventory: 'enable_negative_inventory',
+        enableCashCountAuth: 'enable_cash_count_auth',
+        cashCountAuthUsername: 'cash_count_auth_username',
+        cashCountAuthPassword: 'cash_count_auth_password'
       };
 
       const updates: string[] = [];

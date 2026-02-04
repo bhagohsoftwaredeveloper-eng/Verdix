@@ -562,6 +562,7 @@ export async function getSuppliers() {
       company: s.company,
       tin: s.tin,
       markupPercentage: s.markup_percentage !== null ? parseFloat(s.markup_percentage) : undefined,
+      orderSchedule: s.order_schedule,
       created_at: s.created_at,
       updated_at: s.updated_at
     }));
@@ -570,14 +571,14 @@ export async function getSuppliers() {
   }
 }
 
-export async function addSupplier(data: { name: string, contactNumber?: string, address?: string, paymentTerms?: string, markupPercentage?: number, telephone?: string, mobilePhone?: string, email?: string, company?: string, tin?: string }) {
+export async function addSupplier(data: { name: string, contactNumber?: string, address?: string, paymentTerms?: string, markupPercentage?: number, telephone?: string, mobilePhone?: string, email?: string, company?: string, tin?: string, orderSchedule?: string }) {
   try {
     const supplierId = `supplier_${Date.now()}`;
     const sql = `
       INSERT INTO suppliers (
         id, name, contact_number, address, payment_terms, markup_percentage,
-        telephone, mobile_phone, email, company, tin
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        telephone, mobile_phone, email, company, tin, order_schedule
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE 
         name = VALUES(name), 
         contact_number = VALUES(contact_number), 
@@ -588,7 +589,8 @@ export async function addSupplier(data: { name: string, contactNumber?: string, 
         mobile_phone = VALUES(mobile_phone),
         email = VALUES(email),
         company = VALUES(company),
-        tin = VALUES(tin)
+        tin = VALUES(tin),
+        order_schedule = VALUES(order_schedule)
     `;
     await query(sql, [
       supplierId, 
@@ -601,7 +603,8 @@ export async function addSupplier(data: { name: string, contactNumber?: string, 
       data.mobilePhone || null,
       data.email || null,
       data.company || null,
-      data.tin || null
+      data.tin || null,
+      data.orderSchedule || null
     ]);
     return { success: true, message: `Supplier "${data.name}" has been added.` };
   } catch (error) {
@@ -610,7 +613,7 @@ export async function addSupplier(data: { name: string, contactNumber?: string, 
   }
 }
 
-export async function updateSupplier(id: string, data: { name: string, contactNumber?: string, address?: string, paymentTerms?: string, markupPercentage?: number, telephone?: string, mobilePhone?: string, email?: string, company?: string, tin?: string }) {
+export async function updateSupplier(id: string, data: { name: string, contactNumber?: string, address?: string, paymentTerms?: string, markupPercentage?: number, telephone?: string, mobilePhone?: string, email?: string, company?: string, tin?: string, orderSchedule?: string }) {
   try {
     const sql = `
       UPDATE suppliers SET 
@@ -623,7 +626,8 @@ export async function updateSupplier(id: string, data: { name: string, contactNu
         mobile_phone = ?,
         email = ?,
         company = ?,
-        tin = ?
+        tin = ?,
+        order_schedule = ?
       WHERE id = ?
     `;
     await query(sql, [
@@ -637,6 +641,7 @@ export async function updateSupplier(id: string, data: { name: string, contactNu
       data.email || null,
       data.company || null,
       data.tin || null,
+      data.orderSchedule || null,
       id
     ]);
     return { success: true, message: `Supplier updated to "${data.name}".` };
@@ -890,19 +895,19 @@ export async function getAccounts() {
     if (!Array.isArray(accounts)) return [];
 
     return accounts.map((a: any) => {
-      const cat = (a.category || a.Category || '').toLowerCase();
+      const cat = (a.category || a.Category || a.account_category || '').toLowerCase();
       let derivedType = 'income';
       if (cat.includes('expense')) derivedType = 'expense';
-      else if (cat.includes('income')) derivedType = 'income';
+      else if (cat.includes('income') || cat.includes('revenue')) derivedType = 'income';
 
       return {
         ...a,
         id: a.id || a.Id || a.ID || a.accountId || a.AccountId,
-        name: a.name || a.Name || a.accountName || a.AccountName || a.title || a.Title || 'Unknown Account',
-        code: a.code || a.Code || a.accountCode || a.AccountCode || '',
+        name: a.name || a.Name || a.accountName || a.AccountName || a.account_name || a.title || a.Title || 'Unknown Account',
+        code: a.code || a.Code || a.accountCode || a.AccountCode || a.account_no || '',
         type: derivedType as 'income' | 'expense',
-        created_at: a.created_at,
-        updated_at: a.updated_at
+        created_at: a.created_at || a.date_created,
+        updated_at: a.updated_at || a.last_updated_at
       };
     });
   } catch (error) {
@@ -939,19 +944,19 @@ export async function getAccountsByType(type: 'income' | 'expense') {
 
     return accounts
       .map((a: any) => {
-        const cat = (a.category || a.Category || '').toLowerCase();
+        const cat = (a.category || a.Category || a.account_category || '').toLowerCase();
         let derivedType = '';
         if (cat.includes('expense')) derivedType = 'expense';
-        else if (cat.includes('income')) derivedType = 'income';
+        else if (cat.includes('income') || cat.includes('revenue')) derivedType = 'income';
 
         return {
           ...a,
           id: a.id || a.Id || a.ID || a.accountId || a.AccountId,
-          name: a.name || a.Name || a.accountName || a.AccountName || a.title || a.Title || 'Unknown Account',
-          code: a.code || a.Code || a.accountCode || a.AccountCode || '',
+          name: a.name || a.Name || a.accountName || a.AccountName || a.account_name || a.title || a.Title || 'Unknown Account',
+          code: a.code || a.Code || a.accountCode || a.AccountCode || a.account_no || '',
           type: derivedType as 'income' | 'expense',
-          created_at: a.created_at,
-          updated_at: a.updated_at
+          created_at: a.created_at || a.date_created,
+          updated_at: a.updated_at || a.last_updated_at
         };
       })
       .filter(a => a.type === type);

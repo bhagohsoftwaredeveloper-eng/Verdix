@@ -39,6 +39,32 @@ const coinDenominations = [
   { value: 0.01, label: '₱0.01 Coin' },
 ];
 
+// Helper component extracted to prevent re-renders losing focus
+const DenominationInput = ({ 
+  denom, 
+  value, 
+  onChange 
+}: { 
+  denom: { value: number, label: string }, 
+  value: number | undefined, 
+  onChange: (value: number, count: string) => void 
+}) => (
+  <div className="grid grid-cols-3 items-center gap-4">
+    <Label htmlFor={`denom-${denom.value}`} className="text-right">
+      {denom.label}
+    </Label>
+    <span className="text-center text-muted-foreground">x</span>
+    <Input
+      id={`denom-${denom.value}`}
+      type="number"
+      placeholder="0"
+      value={value || ''}
+      onChange={(e) => onChange(denom.value, e.target.value)}
+      className="col-span-1"
+    />
+  </div>
+);
+
 export function StartShiftDialog({ isOpen, onShiftStart }: StartShiftDialogProps) {
   const [counts, setCounts] = useState<Record<number, number>>({});
   
@@ -67,23 +93,6 @@ export function StartShiftDialog({ isOpen, onShiftStart }: StartShiftDialogProps
     }
   }, [isOpen]);
 
-  const DenominationInput = ({ denom }: { denom: { value: number, label: string }}) => (
-    <div key={denom.value} className="grid grid-cols-3 items-center gap-4">
-      <Label htmlFor={`denom-${denom.value}`} className="text-right">
-        {denom.label}
-      </Label>
-      <span className="text-center text-muted-foreground">x</span>
-      <Input
-        id={`denom-${denom.value}`}
-        type="number"
-        placeholder="0"
-        value={counts[denom.value] || ''}
-        onChange={(e) => handleCountChange(denom.value, e.target.value)}
-        className="col-span-1"
-      />
-    </div>
-  );
-
   return (
     <Dialog open={isOpen}>
       <DialogContent className="sm:max-w-2xl">
@@ -98,13 +107,23 @@ export function StartShiftDialog({ isOpen, onShiftStart }: StartShiftDialogProps
             <div className="space-y-4">
               <h3 className="font-medium text-center">Bills</h3>
               {billDenominations.map(denom => (
-                <DenominationInput key={denom.value} denom={denom} />
+                <DenominationInput 
+                  key={denom.value} 
+                  denom={denom} 
+                  value={counts[denom.value]}
+                  onChange={handleCountChange}
+                />
               ))}
             </div>
             <div className="space-y-4">
                <h3 className="font-medium text-center">Coins</h3>
               {coinDenominations.map(denom => (
-                <DenominationInput key={denom.value} denom={denom} />
+                <DenominationInput 
+                  key={denom.value} 
+                  denom={denom} 
+                  value={counts[denom.value]}
+                  onChange={handleCountChange}
+                />
               ))}
             </div>
           </div>

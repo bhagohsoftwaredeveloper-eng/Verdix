@@ -83,7 +83,7 @@ const salesNavItems = [
   { href: '/sales/by-date', label: 'Sales by Date' },
   { href: '/sales/orders', label: 'Sales Order' },
   { href: '/sales/invoices', label: 'Sales Invoice/Delivery' },
-  { href: '/sales/returns', label: 'Returned Sales' },
+  { href: '/sales/returns', label: 'Merchandise Credits' },
   { href: '/sales/voids', label: 'Voided Sales' },
   { href: '/sales/z-reading', label: 'POS Z-Reading' },
   { href: '/sales/x-reading', label: 'POS X-Reading' },

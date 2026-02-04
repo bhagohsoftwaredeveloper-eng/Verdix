@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Building2, Settings, FileText, Monitor, MapPin, Users, CreditCard, DollarSign, Lock } from 'lucide-react';
+import { Loader2, Upload, Building2, Settings, FileText, Monitor, MapPin, Users, CreditCard, DollarSign, Lock, Undo, Printer } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ManageTransactionReferenceDialog } from './manage-transaction-reference-dialog';
@@ -29,9 +29,24 @@ interface PosSettings {
   email: string | null;
   currentTerminalId?: string | null;
   currentTerminalName?: string | null;
+  enableLineVoidAuth?: boolean;
+  lineVoidAuthUsername?: string | null;
+  lineVoidAuthPassword?: string | null;
   enableVoidReturnAuth?: boolean;
   voidAuthUsername?: string | null;
   voidAuthPassword?: string | null;
+  enableReturnAuth?: boolean;
+  returnAuthUsername?: string | null;
+  returnAuthPassword?: string | null;
+  enableRecentSalesAuth?: boolean;
+  recentSalesAuthUsername?: string | null;
+  recentSalesAuthPassword?: string | null;
+  paperSize?: '58mm' | '80mm';
+  printMode?: 'browser' | 'escpos';
+  enableNegativeInventory?: boolean;
+  enableCashCountAuth?: boolean;
+  cashCountAuthUsername?: string | null;
+  cashCountAuthPassword?: string | null;
 }
 
 export default function PosSetupPage() {
@@ -46,9 +61,24 @@ export default function PosSetupPage() {
     email: '',
     currentTerminalId: null,
     currentTerminalName: null,
+    enableLineVoidAuth: false,
+    lineVoidAuthUsername: '',
+    lineVoidAuthPassword: '',
     enableVoidReturnAuth: false,
     voidAuthUsername: '',
-    voidAuthPassword: ''
+    voidAuthPassword: '',
+    enableReturnAuth: false,
+    returnAuthUsername: '',
+    returnAuthPassword: '',
+    enableRecentSalesAuth: false,
+    recentSalesAuthUsername: '',
+    recentSalesAuthPassword: '',
+    paperSize: '58mm',
+    printMode: 'browser',
+    enableNegativeInventory: false,
+    enableCashCountAuth: false,
+    cashCountAuthUsername: '',
+    cashCountAuthPassword: ''
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -337,21 +367,85 @@ export default function PosSetupPage() {
         </CardContent>
       </Card>
 
-      {/* Void/Return Security Configuration */}
+      {/* Inventory Rules */}
+      <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Inventory Rules
+            </CardTitle>
+            <CardDescription>Configure inventory movement rules</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                    <Label htmlFor="enableNegativeInventory">Allow Negative Inventory</Label>
+                    <p className="text-sm text-muted-foreground">
+                        Allow sales even when stock is insufficient
+                    </p>
+                </div>
+                <Switch 
+                    id="enableNegativeInventory"
+                    checked={settings.enableNegativeInventory}
+                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableNegativeInventory: checked }))}
+                />
+            </div>
+        </CardContent>
+      </Card>
+
+      {/* Void Security Configuration */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5" />
-            Void/Return Security
+            Void Security
           </CardTitle>
-          <CardDescription>Configure authentication requirements for voiding and returning items</CardDescription>
+          <CardDescription>Configure authentication requirements for voiding items</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label htmlFor="enableVoidAuth">Require Admin Authentication</Label>
+              <Label htmlFor="enableLineVoidAuth">Require Admin Authentication for Line Void</Label>
               <p className="text-sm text-muted-foreground">
-                When enabled, users must authenticate with admin credentials to process voids and returns
+                When enabled, users must authenticate with specific credentials to remove an item (Line Void)
+              </p>
+            </div>
+            <Switch
+              id="enableLineVoidAuth"
+              checked={!!settings.enableLineVoidAuth}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableLineVoidAuth: checked }))}
+            />
+          </div>
+
+          {settings.enableLineVoidAuth && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+               <div className="space-y-2">
+                  <Label htmlFor="lineVoidAuthUsername">Line Void Username</Label>
+                  <Input 
+                      id="lineVoidAuthUsername"
+                      value={settings.lineVoidAuthUsername || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, lineVoidAuthUsername: e.target.value }))}
+                      placeholder="e.g. admin"
+                  />
+               </div>
+               <div className="space-y-2">
+                  <Label htmlFor="lineVoidAuthPassword">Line Void Password</Label>
+                  <Input 
+                      id="lineVoidAuthPassword"
+                      type="password"
+                      value={settings.lineVoidAuthPassword || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, lineVoidAuthPassword: e.target.value }))}
+                      placeholder="e.g. 1234"
+                  />
+               </div>
+            </div>
+          )}
+          
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div className="space-y-0.5">
+              <Label htmlFor="enableVoidAuth">Require Admin Authentication for Post Void</Label>
+              <p className="text-sm text-muted-foreground">
+                When enabled, users must authenticate with specific credentials to process voids
               </p>
             </div>
             <Switch
@@ -359,6 +453,230 @@ export default function PosSetupPage() {
               checked={!!settings.enableVoidReturnAuth}
               onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableVoidReturnAuth: checked }))}
             />
+          </div>
+          
+          {settings.enableVoidReturnAuth && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+               <div className="space-y-2">
+                  <Label htmlFor="voidAuthUsername">Void Username</Label>
+                  <Input 
+                      id="voidAuthUsername"
+                      value={settings.voidAuthUsername || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, voidAuthUsername: e.target.value }))}
+                      placeholder="e.g. admin"
+                  />
+               </div>
+               <div className="space-y-2">
+                  <Label htmlFor="voidAuthPassword">Void Password</Label>
+                  <Input 
+                      id="voidAuthPassword"
+                      type="password"
+                      value={settings.voidAuthPassword || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, voidAuthPassword: e.target.value }))}
+                      placeholder="e.g. 1234"
+                  />
+               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Return Security Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Undo className="h-5 w-5" />
+            Return Security
+          </CardTitle>
+          <CardDescription>Configure authentication requirements for returning items</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="enableReturnAuth">Require Admin Authentication for Return</Label>
+              <p className="text-sm text-muted-foreground">
+                When enabled, users must authenticate with specific credentials to process returns
+              </p>
+            </div>
+            <Switch
+              id="enableReturnAuth"
+              checked={!!settings.enableReturnAuth}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableReturnAuth: checked }))}
+            />
+          </div>
+
+          {settings.enableReturnAuth && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+               <div className="space-y-2">
+                  <Label htmlFor="returnAuthUsername">Return Username</Label>
+                  <Input 
+                      id="returnAuthUsername"
+                      value={settings.returnAuthUsername || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, returnAuthUsername: e.target.value }))}
+                      placeholder="e.g. manager"
+                  />
+               </div>
+               <div className="space-y-2">
+                  <Label htmlFor="returnAuthPassword">Return Password</Label>
+                  <Input 
+                      id="returnAuthPassword"
+                      type="password"
+                      value={settings.returnAuthPassword || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, returnAuthPassword: e.target.value }))}
+                      placeholder="e.g. 5678"
+                  />
+               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+       {/* Recent Sales Security Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            Recent Sales Security
+          </CardTitle>
+          <CardDescription>Configure authentication requirements for viewing recent sales</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="enableRecentSalesAuth">Require Admin Authentication for Recent Sales</Label>
+              <p className="text-sm text-muted-foreground">
+                When enabled, users must authenticate with specific credentials to view recent sales history
+              </p>
+            </div>
+            <Switch
+              id="enableRecentSalesAuth"
+              checked={!!settings.enableRecentSalesAuth}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableRecentSalesAuth: checked }))}
+            />
+          </div>
+
+          {settings.enableRecentSalesAuth && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+               <div className="space-y-2">
+                  <Label htmlFor="recentSalesAuthUsername">Recent Sales Username</Label>
+                  <Input 
+                      id="recentSalesAuthUsername"
+                      value={settings.recentSalesAuthUsername || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, recentSalesAuthUsername: e.target.value }))}
+                      placeholder="e.g. supervisor"
+                  />
+               </div>
+               <div className="space-y-2">
+                  <Label htmlFor="recentSalesAuthPassword">Recent Sales Password</Label>
+                  <Input 
+                      id="recentSalesAuthPassword"
+                      type="password"
+                      value={settings.recentSalesAuthPassword || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, recentSalesAuthPassword: e.target.value }))}
+                      placeholder="e.g. 4321"
+                  />
+               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Cash Count Security Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            Cash Count Security
+          </CardTitle>
+          <CardDescription>Configure authentication requirements for accessing cash count (end shift)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="enableCashCountAuth">Require Admin Authentication for Cash Count</Label>
+              <p className="text-sm text-muted-foreground">
+                When enabled, users must authenticate with specific credentials before accessing the Cash Count screen
+              </p>
+            </div>
+            <Switch
+              id="enableCashCountAuth"
+              checked={!!settings.enableCashCountAuth}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableCashCountAuth: checked }))}
+            />
+          </div>
+
+          {settings.enableCashCountAuth && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+               <div className="space-y-2">
+                  <Label htmlFor="cashCountAuthUsername">Cash Count Username</Label>
+                  <Input 
+                      id="cashCountAuthUsername"
+                      value={settings.cashCountAuthUsername || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, cashCountAuthUsername: e.target.value }))}
+                      placeholder="e.g. auditor"
+                  />
+               </div>
+               <div className="space-y-2">
+                  <Label htmlFor="cashCountAuthPassword">Cash Count Password</Label>
+                  <Input 
+                      id="cashCountAuthPassword"
+                      type="password"
+                      value={settings.cashCountAuthPassword || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, cashCountAuthPassword: e.target.value }))}
+                      placeholder="e.g. 9999"
+                  />
+               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Printer Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Printer className="h-5 w-5" />
+            Printer Configuration
+          </CardTitle>
+          <CardDescription>Configure receipt printer settings</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+             <div className="space-y-0.5">
+                <Label htmlFor="paperSize">Paper Size</Label>
+                <p className="text-sm text-muted-foreground">Select the width of your thermal paper</p>
+             </div>
+             <div className="w-[200px]">
+                <select
+                    id="paperSize"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={settings.paperSize || '58mm'}
+                    onChange={(e) => setSettings(prev => ({ ...prev, paperSize: e.target.value as any }))}
+                >
+                    <option value="58mm">58mm (Standard Thermal)</option>
+                    <option value="80mm">80mm (Wide Thermal)</option>
+                </select>
+             </div>
+          </div>
+          
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div className="space-y-0.5">
+              <Label htmlFor="printMode">Print Mode</Label>
+              <p className="text-sm text-muted-foreground">
+                Choose how receipts are sent to the printer
+              </p>
+            </div>
+             <div className="w-[200px]">
+                <select
+                    id="printMode"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={settings.printMode || 'browser'}
+                    onChange={(e) => setSettings(prev => ({ ...prev, printMode: e.target.value as any }))}
+                >
+                    <option value="browser">Browser Print (System Dialog)</option>
+                    <option value="escpos">Direct Serial (ESC/POS)</option>
+                </select>
+             </div>
           </div>
         </CardContent>
       </Card>

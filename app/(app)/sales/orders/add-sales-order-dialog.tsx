@@ -274,7 +274,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
           const quantity = item?.quantity || 0;
           return acc + (price * quantity);
         }, 0);
-        const shippingCost = value.shipping || 0;
+        const shippingCost = Number(value.shipping || 0);
         setTotal(itemsTotal + shippingCost);
       }
     });
@@ -286,7 +286,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
       const quantity = item?.quantity || 0;
       return acc + (price * quantity);
     }, 0);
-    const shippingCost = currentValues.shipping || 0;
+    const shippingCost = Number(currentValues.shipping || 0);
     setTotal(itemsTotal + shippingCost);
 
     return () => subscription.unsubscribe();
@@ -843,11 +843,11 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                           <div className="col-span-4 space-y-2">
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Subtotal</span>
-                                <span>₱{(total - (form.watch('shipping') || 0)).toFixed(2)}</span>
+                                <span>₱{(total - Number(form.watch('shipping') || 0)).toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Shipping</span>
-                                <span>₱{(form.watch('shipping') || 0).toFixed(2)}</span>
+                                <span>₱{Number(form.watch('shipping') || 0).toFixed(2)}</span>
                             </div>
                             <div className="border-t pt-2 flex justify-between items-center">
                                 <span className="font-semibold text-lg">Total</span>

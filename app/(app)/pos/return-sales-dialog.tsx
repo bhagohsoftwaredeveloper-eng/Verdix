@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -60,14 +60,46 @@ const MOCK_RETURNABLE_SALES: Sale[] = [
 
 
 function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturnItems: (items: SaleItem[]) => void, onBack: () => void }) {
-    const [selectedItems, setSelectedItems] = useState<SaleItem[]>([]);
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+    const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
 
-    const handleItemSelect = (item: SaleItem) => {
-        setSelectedItems(prev => 
-            prev.some(i => i.product.id === item.product.id)
-                ? prev.filter(i => i.product.id !== item.product.id)
-                : [...prev, item]
-        );
+    const handleItemToggle = (item: SaleItem) => {
+        const itemId = item.product.id;
+        const newSelected = new Set(selectedItems);
+        
+        if (newSelected.has(itemId)) {
+            newSelected.delete(itemId);
+            // Cleanup quantity state
+            const newQuantities = { ...returnQuantities };
+            delete newQuantities[itemId];
+            setReturnQuantities(newQuantities);
+        } else {
+            newSelected.add(itemId);
+            // Default to max quantity
+            setReturnQuantities(prev => ({ ...prev, [itemId]: item.quantity }));
+        }
+        
+        setSelectedItems(newSelected);
+    };
+
+    const handleQuantityChange = (item: SaleItem, value: string) => {
+        const qty = parseInt(value);
+        if (isNaN(qty) || qty < 1) return;
+        
+        // Cap at sold quantity
+        const validQty = Math.min(qty, item.quantity);
+        setReturnQuantities(prev => ({ ...prev, [item.product.id]: validQty }));
+    };
+
+    const handleConfirmReturn = () => {
+        const itemsToReturn = sale.items
+            .filter(item => selectedItems.has(item.product.id))
+            .map(item => ({
+                ...item,
+                quantity: returnQuantities[item.product.id] || item.quantity
+            }));
+        
+        onReturnItems(itemsToReturn);
     };
 
     return (
@@ -91,7 +123,9 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
                         <TableRow>
                             <TableHead className="w-12"></TableHead>
                             <TableHead>Product</TableHead>
-                            <TableHead className="text-right">Quantity</TableHead>
+                            <TableHead>Unit</TableHead>
+                            <TableHead className="text-right">Sold Qty</TableHead>
+                            <TableHead className="text-right">Return Qty</TableHead>
                             <TableHead className="text-right">Price</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -100,12 +134,27 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
                             <TableRow key={index}>
                                 <TableCell>
                                     <Checkbox
-                                        checked={selectedItems.some(i => i.product.id === item.product.id)}
-                                        onCheckedChange={() => handleItemSelect(item)}
+                                        checked={selectedItems.has(item.product.id)}
+                                        onCheckedChange={() => handleItemToggle(item)}
                                     />
                                 </TableCell>
                                 <TableCell>{item.product.name}</TableCell>
+                                <TableCell>{item.product.unitOfMeasure}</TableCell>
                                 <TableCell className="text-right">{item.quantity}</TableCell>
+                                <TableCell className="text-right">
+                                    {selectedItems.has(item.product.id) ? (
+                                        <Input 
+                                            type="number" 
+                                            min="1" 
+                                            max={item.quantity}
+                                            className="w-20 ml-auto h-8 text-right"
+                                            value={returnQuantities[item.product.id] || ''}
+                                            onChange={(e) => handleQuantityChange(item, e.target.value)}
+                                        />
+                                    ) : (
+                                        <span className="text-muted-foreground">-</span>
+                                    )}
+                                </TableCell>
                                 <TableCell className="text-right">₱{item.price.toFixed(2)}</TableCell>
                             </TableRow>
                         ))}
@@ -118,11 +167,11 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
                 </Button>
                 <Button
                     variant="destructive"
-                    disabled={selectedItems.length === 0}
-                    onClick={() => onReturnItems(selectedItems)}
+                    disabled={selectedItems.size === 0}
+                    onClick={handleConfirmReturn}
                 >
                     <Undo className="mr-2 h-4 w-4" />
-                    Return Selected Items ({selectedItems.length})
+                    Return Selected Items ({selectedItems.size})
                 </Button>
             </DialogFooter>
         </>
@@ -130,183 +179,152 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
 }
 
 
+
 export function ReturnSalesDialog({
   isOpen,
   onOpenChange,
 }: ReturnSalesDialogProps) {
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
+  const [step, setStep] = useState<'loading' | 'auth' | 'input_so' | 'select_items'>('loading');
+  const [sales, setSales] = useState<Sale[]>([]); // Kept for type safety if needed, but not used for list
+  const [isLoading, setIsLoading] = useState(false);
+  const [soNumber, setSoNumber] = useState('');
+  const [searchError, setSearchError] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [itemsToReturn, setItemsToReturn] = useState<SaleItem[]>([]);
   const [posSettings, setPosSettings] = useState<any>(null);
+  const authSucceededRef = useRef(false);
 
-  useEffect(() => {
-    fetch('/api/pos-settings')
-      .then(res => res.json())
-      .then(result => {
-        if (result.success) setPosSettings(result.data);
-      })
-      .catch(err => console.error(err));
-  }, []);
-  
   useEffect(() => {
     if (isOpen) {
-        setIsLoading(true);
-
-        // Fetch fresh settings
-        fetch('/api/pos-settings')
+        authSucceededRef.current = false;
+        setStep('loading');
+        setIsLoading(false);
+        setSoNumber('');
+        setSearchError('');
+        setSelectedSale(null);
+        
+        // Fetch settings first to determine step
+        fetch(`/api/pos-settings?_t=${Date.now()}`, { cache: 'no-store' })
           .then(res => res.json())
           .then(result => {
             if (result.success) {
-                 console.log('ReturnSalesDialog: Loaded settings', result.data);
-                 setPosSettings(result.data);
+                 const settings = result.data;
+                 setPosSettings(settings);
+                 
+                 if (settings.enableReturnAuth) {
+                     setStep('auth');
+                 } else {
+                     setStep('input_so');
+                 }
+            } else {
+                setStep('input_so'); // Fallback
             }
           })
-          .catch(err => console.error(err));
-
-        // Fetch recent sales for returns
-        fetch('/api/pos/recent-sales')
-          .then(res => res.json())
-          .then(result => {
-             if (result.success) {
-                 console.log('ReturnSalesDialog: Loaded sales', result.data);
-                 setSales(result.data);
-             } else {
-                 console.error('ReturnSalesDialog: Failed to load sales', result.error);
-             }
-          })
-          .catch(err => console.error('ReturnSalesDialog: Error loading sales', err))
-          .finally(() => setIsLoading(false));
-    } else {
-        setSelectedSale(null);
-        setSearchTerm('');
+          .catch(err => {
+              console.error(err);
+              setStep('input_so');
+          });
     }
   }, [isOpen]);
   
-  const handleSelectItemsClick = (sale: Sale) => {
-    setSelectedSale(sale);
+  const handleAuthSuccess = () => {
+      authSucceededRef.current = true;
+      setStep('input_so');
+  };
+
+  const handleAuthClose = (open: boolean) => {
+      // If auth dialog is closed without success, close the whole return dialog
+      if (!open && !authSucceededRef.current) {
+          onOpenChange(false);
+      }
+      authSucceededRef.current = false;
+  };
+
+  const handleSearchSO = async () => {
+      const term = soNumber.trim();
+      if (!term) return;
+      
+      setIsLoading(true);
+      setSearchError('');
+      console.log('ReturnSalesDialog: Searching for SO:', term);
+      
+      try {
+          const response = await fetch(`/api/pos/recent-sales?query=${encodeURIComponent(term)}`);
+          const result = await response.json();
+          console.log('ReturnSalesDialog: Search result:', result);
+          
+          if (result.success && result.data && result.data.length > 0) {
+              // Find exact match preferred, or take first
+              const found = result.data.find((s: any) => String(s.orderNumber) === term || s.id === term) || result.data[0];
+              console.log('ReturnSalesDialog: Found sale:', found);
+              setSelectedSale(found);
+              setStep('select_items');
+          } else {
+              console.warn('ReturnSalesDialog: No matching transaction found.');
+              setSearchError('Transaction not found. Please check the SO Number.');
+          }
+      } catch (err) {
+          console.error('ReturnSalesDialog: Search error', err);
+          setSearchError('Error searching transaction.');
+      } finally {
+          setIsLoading(false);
+      }
   };
   
   const handleReturnItems = (items: SaleItem[]) => {
-      setItemsToReturn(items);
-
-      if (posSettings?.enableVoidReturnAuth) {
-        setIsAuthDialogOpen(true);
-      } else {
-        handleAdminAuthSuccess(items);
+      if (selectedSale && items.length > 0) {
+          console.log(`Returning ${items.length} items from sale ${selectedSale.id}...`);
+          // Logic to process return would go here
+          onOpenChange(false);
       }
   };
-  
-  const handleAdminAuthSuccess = (directItems?: SaleItem[]) => {
-    const items = directItems || itemsToReturn;
-    if (selectedSale && items.length > 0) {
-        console.log(`Returning ${items.length} items from sale ${selectedSale.id}...`);
-        
-        // In a real app, you would update the sale status or create a return record.
-        // For this mock, we'll just close the dialog.
-    }
-    setItemsToReturn([]);
-    setSelectedSale(null);
-    setIsAuthDialogOpen(false);
+
+  const handleBackToSearch = () => {
+      setStep('input_so');
+      setSelectedSale(null);
+      setSoNumber('');
   };
-
-  const handleDialogClose = (open: boolean) => {
-      if (!open) {
-          setSelectedSale(null);
-      }
-      onOpenChange(open);
-  }
-
-  const filteredSales = useMemo(() => {
-      if (!sales) return [];
-      if (!searchTerm) return sales;
-      const term = searchTerm.toLowerCase();
-      return sales.filter(sale => 
-          sale.id.toLowerCase().includes(term) ||
-          sale.customer.name.toLowerCase().includes(term)
-      );
-  }, [sales, searchTerm]);
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-        <DialogContent className="sm:max-w-3xl">
-          {selectedSale ? (
+      <Dialog open={isOpen && (step === 'input_so' || step === 'select_items')} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          {step === 'select_items' && selectedSale ? (
             <SelectItemsView 
                 sale={selectedSale} 
                 onReturnItems={handleReturnItems} 
-                onBack={() => setSelectedSale(null)} 
+                onBack={handleBackToSearch} 
             />
           ) : (
             <>
               <DialogHeader>
                 <DialogTitle>Process a Return</DialogTitle>
                 <DialogDescription>
-                    Select a transaction to view its items and select which ones to return.
+                    Enter the SO Number of the transaction you want to return items from.
                 </DialogDescription>
               </DialogHeader>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                    type="search"
-                    placeholder="Search by SO Number or customer..."
-                    className="pl-8"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              
+              <div className="py-6 space-y-4">
+                  <div className="flex gap-2">
+                      <Input
+                          placeholder="Enter SO Number (e.g. 10001)"
+                          value={soNumber}
+                          onChange={(e) => setSoNumber(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSearchSO()}
+                          autoFocus
+                      />
+                      <Button onClick={handleSearchSO} disabled={isLoading || !soNumber.trim()}>
+                          {isLoading ? 'Searching...' : 'Search'}
+                      </Button>
+                  </div>
+                  {searchError && (
+                      <p className="text-sm text-destructive">{searchError}</p>
+                  )}
               </div>
-              <ScrollArea className="h-96">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>SO Number</TableHead>
-                            <TableHead>Customer</TableHead>
-                            <TableHead>Time</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center">
-                                    Loading recent sales...
-                                </TableCell>
-                            </TableRow>
-                        ) : filteredSales.length > 0 ? (
-                            filteredSales.map((sale) => (
-                                <TableRow key={sale.id}>
-                                    <TableCell className="font-mono">{sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7)}</TableCell>
-                                    <TableCell>{sale.customer.name}</TableCell>
-                                    <TableCell>{format(new Date(sale.date || new Date()), 'p')}</TableCell>
-                                    <TableCell className="text-right">₱{sale.total.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleSelectItemsClick(sale)}
-                                        >
-                                            <ChevronsRight className="mr-2 h-4 w-4" />
-                                            Select Items
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center">
-                                    No returnable sales found.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-              </ScrollArea>
+
               <DialogFooter>
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
-                    Close
+                    Cancel
                 </Button>
               </DialogFooter>
             </>
@@ -315,15 +333,15 @@ export function ReturnSalesDialog({
       </Dialog>
       
       <AdminAuthDialog
-        isOpen={isAuthDialogOpen}
-        onOpenChange={setIsAuthDialogOpen}
-        onSuccess={() => handleAdminAuthSuccess()}
-        requiredCredentials={posSettings?.enableVoidReturnAuth ? {
-            username: posSettings.voidAuthUsername,
-            password: posSettings.voidAuthPassword
+        isOpen={isOpen && step === 'auth'}
+        onOpenChange={handleAuthClose}
+        onSuccess={handleAuthSuccess}
+        requiredCredentials={posSettings?.enableReturnAuth ? {
+            username: posSettings.returnAuthUsername,
+            password: posSettings.returnAuthPassword
         } : null}
-        title={posSettings?.enableVoidReturnAuth ? "Return Authorization" : undefined}
-        description={posSettings?.enableVoidReturnAuth ? "Enter authorized credentials to return these items." : undefined}
+        title="Return Authorization"
+        description="Enter authorized credentials to access return functions."
       />
     </>
   );
