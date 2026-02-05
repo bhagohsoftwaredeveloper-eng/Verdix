@@ -20,6 +20,7 @@ import { format } from "date-fns";
 import { Printer, Building2, MapPin, Calendar, CreditCard, Box, Package2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { useProducts, useBusinessProfile } from "@/hooks/use-api";
 // import { Logo } from "@/components/logo"; // Removed to avoid text overlap
 
 interface ViewPurchaseOrderDialogProps {
@@ -33,6 +34,9 @@ export function ViewPurchaseOrderDialog({
   onOpenChange,
   order,
 }: ViewPurchaseOrderDialogProps) {
+  const { products } = useProducts();
+  const { profile } = useBusinessProfile();
+
   if (!order) return null;
 
   const handlePrint = () => {
@@ -81,7 +85,9 @@ export function ViewPurchaseOrderDialog({
       <body>
         <div class="header">
             <h1>PURCHASE ORDER</h1>
-            <p>StockPilot Inc.</p>
+            <p>${profile?.businessName || 'StockPilot Inc.'}</p>
+            <p style="font-size: 8pt; margin-top: 2px;">${profile?.address || '123 Business Avenue, Tech District'}</p>
+            <p style="font-size: 8pt;">${profile?.contactNumber || '+63 900 000 0000'} • ${profile?.email || 'contact@stockpilot.app'}</p>
         </div>
         
         <div class="info-row">
@@ -100,7 +106,8 @@ export function ViewPurchaseOrderDialog({
         <table>
             <thead>
                 <tr>
-                    <th style="width: 50%">Description</th>
+                    <th style="width: 40%">Description</th>
+                    <th class="text-right" style="width: 10%">Rem. Qty</th>
                     <th class="text-right" style="width: 10%">Price</th>
                     <th class="text-right" style="width: 10%">Qty</th>
                     <th class="text-right" style="width: 15%">Total</th>
@@ -108,14 +115,19 @@ export function ViewPurchaseOrderDialog({
                 </tr>
             </thead>
             <tbody>
-                ${order.items.map(item => `
+                ${order.items.map(item => {
+                    const product = products.find(p => p.id === item.productId);
+                    const currentStock = product ? product.stock : (item.currentStock || 0);
+                    
+                    return `
                     <tr>
                         <td>
                             <div style="font-weight: bold; font-size: 10pt;">${item.productName}</div>
                             <div style="font-size: 8pt; color: #666;">
-                                ${item.barcode || '-'} <span style="margin-left:8px;">Stock: ${item.currentStock || 0}</span>
+                                ${item.barcode || '-'}
                             </div>
                         </td>
+                        <td class="text-right">${currentStock}</td>
                         <td class="text-right">₱${item.cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td class="text-right">${item.quantity}</td>
                         <td class="text-right">₱${(item.cost * item.quantity).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
@@ -124,7 +136,7 @@ export function ViewPurchaseOrderDialog({
                             (order.status === 'Approved' ? '0' : '-')
                         }</td>
                     </tr>
-                `).join('')}
+                `}).join('')}
             </tbody>
         </table>
         
@@ -203,11 +215,10 @@ export function ViewPurchaseOrderDialog({
                     <Building2 className="size-8" />
                 </div>
                 <div className="space-y-1">
-                    <h2 className="text-2xl font-bold tracking-tight text-foreground">StockPilot Inc.</h2>
+                    <h2 className="text-2xl font-bold tracking-tight text-foreground">{profile?.businessName || 'StockPilot Inc.'}</h2>
                     <div className="text-muted-foreground space-y-0.5 text-xs">
-                        <p>123 Business Avenue, Tech District</p>
-                        <p>Quezon City, Philippines 1100</p>
-                        <p>contact@stockpilot.app • +63 900 000 0000</p>
+                        <p>{profile?.address || '123 Business Avenue, Tech District'}</p>
+                        <p>{profile?.contactNumber || '+63 900 000 0000'} • {profile?.email || 'contact@stockpilot.app'}</p>
                     </div>
                 </div>
             </div>
@@ -270,6 +281,7 @@ export function ViewPurchaseOrderDialog({
               <TableHeader className="bg-zinc-100/80">
                 <TableRow>
                   <TableHead className="font-semibold text-zinc-700">Product Description</TableHead>
+                  <TableHead className="text-center font-semibold text-zinc-700 w-[100px]">Remaining QTY</TableHead>
                   <TableHead className="text-right font-semibold text-zinc-700 w-[120px]">Price</TableHead>
                   <TableHead className="text-right font-semibold text-zinc-700 w-[100px]">Qty</TableHead>
                   <TableHead className="text-right font-semibold text-zinc-700 w-[120px]">Total</TableHead>
@@ -277,18 +289,24 @@ export function ViewPurchaseOrderDialog({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {order.items.map((item, index) => (
+                {order.items.map((item, index) => {
+                  const product = products.find(p => p.id === item.productId);
+                  const currentStock = product ? product.stock : (item.currentStock || 0);
+
+                  return (
                   <TableRow key={index} className="hover:bg-zinc-50">
                     <TableCell>
                         <div className="flex flex-col">
                              <span className="font-medium text-sm">{item.productName}</span>
                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                  <span className="font-mono">{item.barcode || '-'}</span>
-                                 <span className={(item.currentStock || 0) <= 0 ? 'text-destructive font-bold' : ''}>
-                                     Stock: {item.currentStock || 0}
-                                 </span>
                              </div>
                         </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                        <span className={currentStock <= 0 ? 'text-destructive font-bold' : ''}>
+                            {currentStock}
+                        </span>
                     </TableCell>
                     <TableCell className="text-right">₱{item.cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</TableCell>
                     <TableCell className="text-right">{item.quantity} <span className="text-xs text-muted-foreground">pc</span></TableCell>
@@ -303,11 +321,12 @@ export function ViewPurchaseOrderDialog({
                          (order.status === 'Approved' ? '0' : '-')}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
                 {/* Minimum Rows Filler */}
                 {Array.from({ length: Math.max(0, 5 - order.items.length) }).map((_, i) => (
                     <TableRow key={`empty-${i}`} className="hover:bg-transparent">
-                        <TableCell colSpan={5} className="h-12"></TableCell>
+                        <TableCell colSpan={6} className="h-12"></TableCell>
                     </TableRow>
                 ))}
               </TableBody>

@@ -211,6 +211,11 @@ function CategorySkeleton() {
 export function ManageCategoriesDialog({ trigger, onCategoryAdded, open, onOpenChange }: { trigger?: React.ReactNode; onCategoryAdded?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const refreshCategories = async () => {
     try {

@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const warehouseId = searchParams.get('warehouseId');
     const countOnly = searchParams.get('countOnly') === 'true';
     const availability = searchParams.get('availability');
+    const supplierId = searchParams.get('supplierId');
 
     let sql = `
       SELECT
@@ -56,6 +57,11 @@ export async function GET(request: NextRequest) {
     if (availability) {
       sql += ' AND availability = ?';
       params.push(availability);
+    }
+
+    if (supplierId) {
+      sql += ' AND (products.supplier_id = ? OR EXISTS (SELECT 1 FROM supplier_product_mapping spm WHERE spm.product_id = products.id AND spm.supplier_id = ?))';
+      params.push(supplierId, supplierId);
     }
 
     if (countOnly) {
@@ -111,6 +117,11 @@ export async function GET(request: NextRequest) {
     if (availability) {
       countSql += ' AND availability = ?';
       countParams.push(availability);
+    }
+
+    if (supplierId) {
+       countSql += ' AND (supplier_id = ? OR EXISTS (SELECT 1 FROM supplier_product_mapping spm WHERE spm.product_id = products.id AND spm.supplier_id = ?))';
+       countParams.push(supplierId, supplierId);
     }
 
     const countResult = await query(countSql, countParams);

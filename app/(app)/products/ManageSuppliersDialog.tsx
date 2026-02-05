@@ -65,7 +65,6 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
   const [company, setCompany] = useState(supplier?.company || '');
   const [tin, setTin] = useState(supplier?.tin || '');
   const [paymentTerms, setPaymentTerms] = useState(supplier?.paymentTerms || 'CASH');
-  const [markupPercentage, setMarkupPercentage] = useState(supplier?.markupPercentage?.toString() || '0');
   const [orderSchedule, setOrderSchedule] = useState(supplier?.orderSchedule || '');
   
   const [availablePaymentTerms, setAvailablePaymentTerms] = useState<any[]>([]);
@@ -106,7 +105,6 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
         company,
         tin,
         paymentTerms,
-        markupPercentage: parseFloat(markupPercentage) || 0,
         orderSchedule,
       });
       // specific toast handling can be here or in parent, but component already has it. 
@@ -125,7 +123,6 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
         setCompany('');
         setTin('');
         setPaymentTerms('CASH');
-        setMarkupPercentage('0');
         setOrderSchedule('');
       }
     } catch (error) {
@@ -211,43 +208,31 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
                   placeholder="Email"
                 />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-2">
-                    <Label htmlFor="paymentTerms">Payment Terms</Label>
-                    <Select value={paymentTerms} onValueChange={setPaymentTerms}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Terms" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {availablePaymentTerms.length > 0 ? (
-                            availablePaymentTerms.map((term) => (
-                                <SelectItem key={term.id} value={term.name}>
-                                    {term.name}
-                                </SelectItem>
-                            ))
-                        ) : (
-                             // Fallback if no terms found or loading
-                             <>
-                                <SelectItem value="CASH">CASH</SelectItem>
-                                <SelectItem value="7 Days">7 Days</SelectItem>
-                                <SelectItem value="15 Days">15 Days</SelectItem>
-                                <SelectItem value="30 Days">30 Days</SelectItem>
-                                <SelectItem value="60 Days">60 Days</SelectItem>
-                             </>
-                        )}
-                    </SelectContent>
-                    </Select>
-                </div>
-                 <div className="flex flex-col gap-2">
-                    <Label htmlFor="markupPercentage">Markup (%)</Label>
-                    <Input
-                    id="markupPercentage"
-                    type="number"
-                    value={markupPercentage}
-                    onChange={(e) => setMarkupPercentage(e.target.value)}
-                    placeholder="0"
-                    />
-                </div>
+            <div className="flex flex-col gap-2">
+                <Label htmlFor="paymentTerms">Payment Terms</Label>
+                <Select value={paymentTerms} onValueChange={setPaymentTerms}>
+                <SelectTrigger>
+                    <SelectValue placeholder="Terms" />
+                </SelectTrigger>
+                <SelectContent>
+                    {availablePaymentTerms.length > 0 ? (
+                        availablePaymentTerms.map((term) => (
+                            <SelectItem key={term.id} value={term.name}>
+                                {term.name}
+                            </SelectItem>
+                        ))
+                    ) : (
+                         // Fallback if no terms found or loading
+                         <>
+                            <SelectItem value="CASH">CASH</SelectItem>
+                            <SelectItem value="7 Days">7 Days</SelectItem>
+                            <SelectItem value="15 Days">15 Days</SelectItem>
+                            <SelectItem value="30 Days">30 Days</SelectItem>
+                            <SelectItem value="60 Days">60 Days</SelectItem>
+                         </>
+                    )}
+                </SelectContent>
+                </Select>
             </div>
           </div>
 
@@ -319,7 +304,6 @@ function SupplierRow({ supplier, onUpdateSupplier, onDeleteSupplier }: { supplie
       <TableCell>{supplier.address || '-'}</TableCell>
       <TableCell>{supplier.contactNumber || supplier.mobilePhone}</TableCell>
       <TableCell>{supplier.paymentTerms || '-'}</TableCell>
-      <TableCell>{supplier.markupPercentage ? `${supplier.markupPercentage}%` : '0%'}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <SupplierFormDialog supplier={supplier} onSave={handleUpdate}>
@@ -380,6 +364,11 @@ export function ManageSuppliersDialog({
 }) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const loadSuppliers = async () => {
     try {
@@ -426,10 +415,10 @@ export function ManageSuppliersDialog({
 
   // Load suppliers when dialog opens
   React.useEffect(() => {
-    if (open) {
+    if (isOpen) {
       loadSuppliers();
     }
-  }, [open]);
+  }, [isOpen]);
 
   // Initial load if generic usage
   React.useEffect(() => {
@@ -444,7 +433,7 @@ export function ManageSuppliersDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {dialogTrigger}
       </DialogTrigger>
@@ -475,7 +464,6 @@ export function ManageSuppliersDialog({
                         <TableHead>Address</TableHead>
                         <TableHead>Contact No.</TableHead>
                         <TableHead>Payment Terms</TableHead>
-                        <TableHead>Markup</TableHead>
                         <TableHead>
                             <span className="sr-only">Actions</span>
                         </TableHead>

@@ -128,6 +128,10 @@ export function EditProductDialog({
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+
+
+
+
   
   // Guard to prevent auto-calculation on initial form reset
   const isInitialLoad = useState(true);
@@ -455,15 +459,25 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                    <div className="p-1 w-full border-b mb-1">
+                                      <ManageBrandsDialog 
+                                        onBrandAdded={() => {
+                                            getBrands().then(setBrands);
+                                        }}
+                                        trigger={
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                type="button" 
+                                                className="w-full justify-start font-normal h-8"
+                                            >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Manage Brands
+                                            </Button>
+                                        }
+                                      />
+                                    </div>
                                   {brands?.map((brand: Brand) => <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>)}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageBrandsDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage Brands
-                                          </Button>
-                                      } onBrandAdded={onOptionsRefresh} />
-                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -542,15 +556,25 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {categories?.map((cat: Category) => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageCategoriesDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage Categories
-                                          </Button>
-                                      } onCategoryAdded={onOptionsRefresh} />
+                                  <div className="p-1 w-full border-b mb-1">
+                                      <ManageCategoriesDialog 
+                                        onCategoryAdded={() => {
+                                            getCategories().then(setCategories);
+                                        }}
+                                        trigger={
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                type="button" 
+                                                className="w-full justify-start font-normal h-8"
+                                            >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Manage Categories
+                                            </Button>
+                                        }
+                                      />
                                   </div>
+                                  {categories?.map((cat: Category) => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -570,15 +594,25 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {subcategories?.map((sub: Category) => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageSubcategoriesDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage Subcategories
-                                          </Button>
-                                      } onSubcategoryAdded={onOptionsRefresh} />
+                                  <div className="p-1 w-full border-b mb-1">
+                                      <ManageSubcategoriesDialog 
+                                        onSubcategoryAdded={() => {
+                                            getSubcategories().then(setSubcategories);
+                                        }}
+                                        trigger={
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                type="button" 
+                                                className="w-full justify-start font-normal h-8"
+                                            >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Manage Subcategories
+                                            </Button>
+                                        }
+                                      />
                                   </div>
+                                  {subcategories?.map((sub: Category) => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -653,15 +687,25 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {suppliers?.map((supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageSuppliersDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage Suppliers
-                                          </Button>
-                                      } onSupplierAdded={onOptionsRefresh} />
+                                  <div className="p-1 w-full border-b mb-1">
+                                      <ManageSuppliersDialog 
+                                        onSupplierAdded={() => {
+                                            getSuppliers().then(setSuppliers);
+                                        }}
+                                        trigger={
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                type="button" 
+                                                className="w-full justify-start font-normal h-8"
+                                            >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Manage Suppliers
+                                            </Button>
+                                        }
+                                      />
                                   </div>
+                                  {suppliers?.map((supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -682,15 +726,25 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageWarehousesDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage Warehouses
-                                          </Button>
-                                      } onChange={onOptionsRefresh} />
+                                  <div className="p-1 w-full border-b mb-1">
+                                      <ManageWarehousesDialog 
+                                        onChange={() => {
+                                            getWarehouses().then(setWarehouses);
+                                        }}
+                                        trigger={
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                type="button" 
+                                                className="w-full justify-start font-normal h-8"
+                                            >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Manage Warehouses
+                                            </Button>
+                                        }
+                                      />
                                   </div>
+                                  {warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -744,19 +798,29 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                  <div className="p-1 w-full border-b mb-1">
+                                    <ManageUnitOfMeasureDialog 
+                                      onUnitAdded={() => {
+                                          getUnitsOfMeasure().then(setUnits);
+                                      }}
+                                      trigger={
+                                          <Button 
+                                              variant="ghost" 
+                                              size="sm" 
+                                              type="button" 
+                                              className="w-full justify-start font-normal h-8"
+                                          >
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Manage UOM
+                                          </Button>
+                                      }
+                                    />
+                                  </div>
                                   {units?.map((uom: UnitOfMeasure) => (
                                     <SelectItem key={uom.id} value={uom.name}>
                                       {uom.name} ({uom.abbreviation})
                                     </SelectItem>
                                   ))}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageUnitOfMeasureDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage UOM
-                                          </Button>
-                                      } onUnitAdded={onOptionsRefresh} />
-                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -781,29 +845,33 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                  <div className="p-1 w-full border-b mb-1">
+                                      <ManageAccountsDialog 
+                                        onAccountAdded={(newAccount) => {
+                                            onOptionsRefresh?.();
+                                            if (newAccount.type === 'income') {
+                                                form.setValue('incomeAccount', newAccount.id);
+                                            }
+                                        }}
+                                        onAccountUpdated={() => onOptionsRefresh?.()}
+                                        trigger={
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                type="button" 
+                                                className="w-full justify-start font-normal h-8"
+                                            >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Manage Accounts
+                                            </Button>
+                                        }
+                                      />
+                                  </div>
                                   {accounts?.filter(account => account.type === 'income').map((account: Account) => (
                                     <SelectItem key={account.id} value={account.id}>
                                       {account.name} {account.code ? `(${account.code})` : ''}
                                     </SelectItem>
                                   ))}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageAccountsDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage Accounts
-                                          </Button>
-                                      }
-                                        onAccountAdded={(newAccount) => {
-                                          onOptionsRefresh?.();
-                                          if (newAccount.type === 'income') {
-                                            form.setValue('incomeAccount', newAccount.id);
-                                          }
-                                        }}
-                                        onAccountUpdated={() => {
-                                          onOptionsRefresh?.();
-                                        }}
-                                      />
-                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -823,29 +891,33 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                  <div className="p-1 w-full border-b mb-1">
+                                      <ManageAccountsDialog 
+                                        onAccountAdded={(newAccount) => {
+                                            onOptionsRefresh?.();
+                                            if (newAccount.type === 'expense') {
+                                                form.setValue('expenseAccount', newAccount.id);
+                                            }
+                                        }}
+                                        onAccountUpdated={() => onOptionsRefresh?.()}
+                                        trigger={
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                type="button" 
+                                                className="w-full justify-start font-normal h-8"
+                                            >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Manage Accounts
+                                            </Button>
+                                        }
+                                      />
+                                  </div>
                                   {accounts?.filter(account => account.type === 'expense').map((account: Account) => (
                                     <SelectItem key={account.id} value={account.id}>
                                       {account.name} {account.code ? `(${account.code})` : ''}
                                     </SelectItem>
                                   ))}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageAccountsDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage Accounts
-                                          </Button>
-                                      }
-                                        onAccountAdded={(newAccount) => {
-                                          onOptionsRefresh?.();
-                                          if (newAccount.type === 'expense') {
-                                            form.setValue('expenseAccount', newAccount.id);
-                                          }
-                                        }}
-                                        onAccountUpdated={() => {
-                                          onOptionsRefresh?.();
-                                        }}
-                                      />
-                                  </div>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -1124,7 +1196,10 @@ export function EditProductDialog({
               )}
             </Button>
           </DialogFooter>
+
+
         </DialogContent>
+
       </Dialog>
     </TooltipProvider>
   );

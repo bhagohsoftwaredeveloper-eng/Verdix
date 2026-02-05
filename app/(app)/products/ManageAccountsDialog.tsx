@@ -227,6 +227,11 @@ function AccountSkeleton() {
 export function ManageAccountsDialog({ trigger, onAccountAdded, onAccountUpdated, open, onOpenChange }: { trigger?: React.ReactNode; onAccountAdded?: (account: Account) => void; onAccountUpdated?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const refreshAccounts = async () => {
     try {
@@ -269,7 +274,7 @@ export function ManageAccountsDialog({ trigger, onAccountAdded, onAccountUpdated
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {dialogTrigger}
       </DialogTrigger>

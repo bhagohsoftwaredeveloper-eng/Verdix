@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   Form,
   FormControl,
@@ -41,7 +42,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Loader2, Trash2, Plus, Search, ArrowRight, Wand2 } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Plus, Search, ArrowRight, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ManagePaymentMethodsDialog } from '../sales/ManagePaymentMethodsDialog';
@@ -74,7 +75,7 @@ const purchaseOrderSchema = z.object({
   reference: z.string().optional(),
   supplierId: z.string().min(1, 'Supplier is required'),
   shipping: z.coerce.number().nonnegative().optional(),
-  receiveToWarehouse: z.string().optional(),
+  receiveToWarehouse: z.string().min(1, 'Reception warehouse is required'),
   deliveryAddress: z.string().optional(),
   paymentMethod: z.string().min(1, 'Payment method is required'),
   note: z.string().optional(),
@@ -83,8 +84,8 @@ const purchaseOrderSchema = z.object({
 
 type PurchaseOrderFormValues = z.infer<typeof purchaseOrderSchema>;
 
-function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Product) => void }) {
-  const { products, loading, error } = useProducts();
+function ProductSelector({ onSelectProduct, supplierId }: { onSelectProduct: (product: Product) => void, supplierId?: string }) {
+  const { products, loading, error } = useProducts(undefined, undefined, supplierId);
   const [inputValue, setInputValue] = useState('');
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [commandSearch, setCommandSearch] = useState('');
@@ -133,7 +134,7 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
           placeholder="Scan barcode, enter SKU, or type product name"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleScanOrPunch()}
+          onKeyDown={(e) => e.key === 'Enter' && handleScanOrPunch()}
           className="pr-10 bg-white"
         />
         <Search
@@ -142,14 +143,16 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
         />
       </div>
 
-      <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Search Products</DialogTitle>
-            <DialogDescription>
-              Search and select a product to add to the purchase order.
-            </DialogDescription>
-          </DialogHeader>
+      <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} modal={false}>
+        <DraggableSearchDialogContent className="sm:max-w-md" onClose={() => setSearchDialogOpen(false)}>
+          <div data-drag-handle className="cursor-move">
+            <DialogHeader>
+              <DialogTitle>Search Products</DialogTitle>
+              <DialogDescription>
+                Search and select a product to add to the purchase order.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
           {loading ? (
             <div className="flex justify-center py-4">
               <div className="text-sm text-muted-foreground">Loading products...</div>
@@ -174,7 +177,6 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
                       value={`${product.name} ${product.sku || ''} ${product.barcode || ''}`}
                       onSelect={() => {
                         onSelectProduct(product);
-                        setSearchDialogOpen(false);
                       }}
                     >
                       <div className="flex flex-col">
@@ -189,11 +191,88 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
               </CommandList>
             </Command>
           )}
-        </DialogContent>
+        </DraggableSearchDialogContent>
       </Dialog>
     </>
   );
 }
+
+// Helper component defined outside
+function DraggableSearchDialogContent({ 
+  className, 
+  children, 
+  onClose,
+  ...props 
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { onClose?: () => void }) {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const elementStartPos = useRef({ x: 0, y: 0 });
+  
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('[data-drag-handle]')) {
+      setIsDragging(true);
+      dragStartPos.current = { x: e.clientX, y: e.clientY };
+      elementStartPos.current = { ...position };
+      e.preventDefault();
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartPos.current.x;
+      const dy = e.clientY - dragStartPos.current.y;
+      setPosition({
+        x: elementStartPos.current.x + dx,
+        y: elementStartPos.current.y + dy,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  return (
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Content
+        {...props}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onMouseDown={handleMouseDown}
+        style={{
+           position: 'fixed',
+           left: '50%',
+           top: '20%',
+           transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)`,
+           // Ensure it has high z-index to be above other dialogs
+           zIndex: 200, 
+        }}
+        className={`bg-background p-6 shadow-lg rounded-xl border w-full max-w-lg ${className}`}
+      >
+        {children}
+        <DialogPrimitive.Close 
+            onClick={onClose}
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+}
+
 
 
 
@@ -366,17 +445,22 @@ export function AddPurchaseOrderDialog({
               deliveryAddress: '',
               paymentMethod: editOrder.paymentMethod,
               note: '', 
-              items: editOrder.items.map(item => ({
-                  productId: item.productId,
-                  productName: item.productName,
-                  quantity: item.quantity,
-                  cost: item.cost,
-                  sellingPrice: 0,
-                  discount: item.discount || 0,
-                  discountType: 'amount',
-                  vatSubject: false,
-                  expirationDate: ''
-              })),
+              items: editOrder.items.map(item => {
+                  const currentProduct = products.find(p => p.id === item.productId);
+                  return {
+                      productId: item.productId,
+                      productName: item.productName,
+                      quantity: item.quantity,
+                      cost: item.cost,
+                      sellingPrice: 0,
+                      discount: item.discount || 0,
+                      discountType: 'amount',
+                      vatSubject: false,
+                      expirationDate: '',
+                      currentStock: currentProduct ? currentProduct.stock : 0,
+                      barcode: currentProduct ? currentProduct.barcode : '',
+                  };
+              }),
           });
       } else if (reorderData) {
           // Prefill for REORDER - Creates new order based on old one
@@ -392,7 +476,7 @@ export function AddPurchaseOrderDialog({
                   cost: item.cost, // Keep original cost for now, unless user wants latest cost
                   sellingPrice: currentProduct ? currentProduct.price : 0,
                   discount: item.discount || 0,
-                  discountType: 'amount',
+                  discountType: (item.discountType as 'amount' | 'percentage') || 'amount',
                   vatSubject: false,
                   expirationDate: '',
                   // CRITICAL: Update stock to current level
@@ -442,7 +526,7 @@ export function AddPurchaseOrderDialog({
     }
   }, [isOpen, editOrder, reorderData, prefillProduct, prefillSupplierId, suppliers, products]); // Added prefillSupplierId and suppliers to dependency
 
-  const handleAddProduct = (product: Product) => {
+  function handleAddProduct(product: Product) {
     const existingItemIndex = fields.findIndex(field => field.productId === product.id);
     if(existingItemIndex !== -1) {
         // Optional: Increment quantity or warn
@@ -526,6 +610,8 @@ export function AddPurchaseOrderDialog({
         reference: values.reference,
         shipping: values.shipping,
         note: values.note,
+        purchaseType: values.purchaseType,
+        receiveToWarehouse: values.receiveToWarehouse,
         orderedBy: editOrder ? editOrder.orderedBy : (user?.email || 'System'),
         deliveryDate: values.deliveryDate ? new Date(values.deliveryDate).toISOString() : null,
       };
@@ -643,7 +729,9 @@ export function AddPurchaseOrderDialog({
                                 </div>
                                 {suppliers.map(sup => <SelectItem key={sup.id} value={sup.id} className="text-xs">{sup.name}</SelectItem>)}
                               </SelectContent>
+
                             </Select>
+                            <FormMessage className="text-xs" />
                           </FormItem>
                         )}
                       />
@@ -665,6 +753,7 @@ export function AddPurchaseOrderDialog({
                                     <SelectItem value="Receive" className="text-xs">Receive</SelectItem>
                                 </SelectContent>
                                 </Select>
+                                <FormMessage className="text-xs" />
                             </FormItem>
                             )}
                         />
@@ -695,6 +784,7 @@ export function AddPurchaseOrderDialog({
                                 <FormControl>
                                 <Input type="date" className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
+                                <FormMessage className="text-xs" />
                             </FormItem>
                             )}
                         />
@@ -741,6 +831,7 @@ export function AddPurchaseOrderDialog({
                                     ))}
                                 </SelectContent>
                                 </Select>
+                                <FormMessage className="text-xs" />
                             </FormItem>
                             )}
                         />
@@ -773,6 +864,7 @@ export function AddPurchaseOrderDialog({
                                     {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
                                 </SelectContent>
                                 </Select>
+                                <FormMessage className="text-xs" />
                             </FormItem>
                             )}
                         />
@@ -823,7 +915,10 @@ export function AddPurchaseOrderDialog({
               {/* CENTER - ITEMS TABLE */}
               <div className="flex-1 flex flex-col overflow-hidden bg-muted/5 p-4 relative">
                   <div className="max-w-2xl mb-4 z-10">
-                    <ProductSelector onSelectProduct={handleAddProduct} />
+                    <ProductSelector 
+                        onSelectProduct={handleAddProduct} 
+                        supplierId={form.watch('supplierId')}
+                    />
                   </div>
                   
                   <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col relative">
@@ -831,21 +926,22 @@ export function AddPurchaseOrderDialog({
                         <table className="w-full caption-bottom text-sm text-left border-collapse">
                         <TableHeader className="sticky top-0 bg-white z-50 shadow-sm">
                             <TableRow className="hover:bg-transparent border-b">
-                            <TableHead className='w-[20%] pl-4 h-10'>Product</TableHead>
+                            <TableHead className='w-[15%] pl-4 h-10'>Product</TableHead>
+                            <TableHead className='w-[10%] text-center h-10'>Remaining QTY</TableHead>
                             <TableHead className='w-[8%] text-center h-10'>Qty</TableHead>
                             <TableHead className='w-[10%] text-right h-10'>Cost</TableHead>
                             <TableHead className='w-[10%] text-right h-10'>Sell Price</TableHead>
-                            <TableHead className='w-[14%] text-center h-10'>Discount</TableHead>
+                            <TableHead className='w-[10%] text-center h-10'>Discount</TableHead>
                             <TableHead className='w-[5%] text-center h-10'>VAT</TableHead>
                             <TableHead className='w-[12%] text-left h-10'>Expiry</TableHead>
-                            <TableHead className='w-[12%] text-right pr-4 h-10'>Total</TableHead>
+                            <TableHead className='w-[15%] text-right pr-4 h-10'>Total</TableHead>
                             <TableHead className='w-[5%] h-10'></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {fields.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={10} className="h-[300px] text-center text-muted-foreground flex flex-col items-center justify-center border-none">
+                                    <TableCell colSpan={11} className="h-[300px] text-center text-muted-foreground flex flex-col items-center justify-center border-none">
                                         <div className="bg-muted p-4 rounded-full mb-4"><Search className="h-8 w-8 opacity-20"/></div>
                                         <p className="font-medium">No items added</p>
                                         <p className="text-xs text-muted-foreground">Scan barcode or search above to add products.</p>
@@ -858,10 +954,12 @@ export function AddPurchaseOrderDialog({
                                     <div className="text-sm font-semibold">{field.productName}</div>
                                     <div className="text-xs text-muted-foreground flex items-center gap-2">
                                         <span className="font-mono">{field.barcode || '-'}</span>
-                                        <span className={(field.currentStock || 0) <= 0 ? 'text-destructive font-bold' : 'text-muted-foreground'}>
-                                            Stock: {field.currentStock || 0}
-                                        </span>
                                     </div>
+                                </TableCell>
+                                <TableCell className="py-2 text-center border-r font-mono text-xs">
+                                     <span className={(field.currentStock || 0) <= 0 ? 'text-destructive font-bold' : 'text-muted-foreground'}>
+                                        {field.currentStock || 0}
+                                    </span>
                                 </TableCell>
                                 <TableCell className="py-2 border-r">
 

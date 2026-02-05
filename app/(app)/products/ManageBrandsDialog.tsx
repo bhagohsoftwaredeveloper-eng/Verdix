@@ -210,6 +210,11 @@ function BrandSkeleton() {
 export function ManageBrandsDialog({ trigger, onBrandAdded, open, onOpenChange }: { trigger?: React.ReactNode; onBrandAdded?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const refreshBrands = async () => {
     try {

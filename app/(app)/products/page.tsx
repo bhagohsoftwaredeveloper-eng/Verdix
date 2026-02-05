@@ -27,7 +27,7 @@ import { EditProductDialog } from './edit-product-dialog';
 import { ManagePriceLevelsDialog } from './ManagePriceLevelsDialog';
 import { ManageSuppliersDialog } from './ManageSuppliersDialog';
 
-import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart } from 'lucide-react';
+import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart, MoreVertical, Edit, Eye, Copy, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, Fragment, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -141,81 +141,98 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
         <TableCell className="hidden md:table-cell text-right">
           {typeof product.price === 'number' ? `₱${product.price.toFixed(2)}` : 'N/A'}
         </TableCell>
+        <TableCell className="hidden md:table-cell text-center">
+          {product.warehouseName || '—'}
+        </TableCell>
         <TableCell className="text-right">
-          <div className="flex justify-end gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <ViewProductDialog
-                  product={product}
-                  onProductUpdated={onProductUpdated}
-                  products={products}
-                  onChildAdded={onProductDeleted}
-                />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>View product</p>
-              </TooltipContent>
-            </Tooltip>
-            <EditProductDialog 
-              product={product} 
-              onProductUpdated={onProductUpdated} 
-              productOptions={productOptions}
-              onOptionsRefresh={onOptionsRefresh}
-            />
-            
-            {/* Restock Button for Low Stock Items */}
-            {stockStatus !== 'in-stock' && (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                         <AddPurchaseOrderDialog 
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                    <ViewProductDialog
+                        product={product}
+                        onProductUpdated={onProductUpdated}
+                        products={products}
+                        onChildAdded={onProductDeleted}
+                        trigger={
+                            <div className="flex items-center w-full cursor-pointer">
+                                <Eye className="mr-2 h-4 w-4" />
+                                <span>View Details</span>
+                            </div>
+                        }
+                    />
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                   <EditProductDialog 
+                      product={product} 
+                      onProductUpdated={onProductUpdated} 
+                      productOptions={productOptions}
+                      onOptionsRefresh={onOptionsRefresh}
+                      trigger={
+                        <div className="flex items-center w-full cursor-pointer">
+                            <Edit className="mr-2 h-4 w-4" />
+                            <span>Edit Product</span>
+                        </div>
+                      }
+                    />
+              </DropdownMenuItem>
+              
+              {/* Restock Option */}
+              {stockStatus !== 'in-stock' && (
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <AddPurchaseOrderDialog 
                             trigger={
-                                <Button variant="outline" size="icon" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 border-orange-200">
-                                    <ShoppingCart className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center w-full cursor-pointer text-orange-600">
+                                    <ShoppingCart className="mr-2 h-4 w-4" />
+                                    <span>Restock</span>
+                                </div>
                             }
                             prefillProduct={product}
-                         />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Restock Product</p>
-                    </TooltipContent>
-                </Tooltip>
-            )}
+                      />
+                  </DropdownMenuItem>
+              )}
 
-            {/* Add child product button for products that can have children */}
-            {(() => {
-              const parentProduct = product.parentId
-                ? products.find(p => p.id === product.parentId)
-                : product;
-              const canAddChildren = parentProduct?.conversionFactors && parentProduct.conversionFactors.length > 0;
-              return canAddChildren ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <QuickAddChildDialog
-                      parentProduct={parentProduct}
-                      baseStock={product.parentId ? product.stock : undefined}
-                      onChildAdded={onProductDeleted || (() => { })}
-                      products={[]}
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Add child product</p>
-                  </TooltipContent>
-                </Tooltip>
-              ) : null;
-            })()}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setDeleteDialogOpen(true)}>
-                  <Trash2 className="h-4 w-4" />
-                  <span className="sr-only">Delete product</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Delete product</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
+              {/* Add child product option */}
+              {(() => {
+                const parentProduct = product.parentId
+                    ? products.find(p => p.id === product.parentId)
+                    : product;
+                const canAddChildren = parentProduct?.conversionFactors && parentProduct.conversionFactors.length > 0;
+                return canAddChildren ? (
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        <QuickAddChildDialog
+                            parentProduct={parentProduct}
+                            baseStock={product.parentId ? product.stock : undefined}
+                            onChildAdded={onProductDeleted || (() => { })}
+                            products={[]}
+                             trigger={
+                                <div className="flex items-center w-full cursor-pointer">
+                                    <Copy className="mr-2 h-4 w-4" />
+                                    <span>Add Child Unit</span>
+                                </div>
+                            }
+                        />
+                    </DropdownMenuItem>
+                ) : null;
+               })()}
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="text-red-600 focus:text-red-600"
+                onSelect={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                <span>Delete Product</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TableCell>
       </TableRow>
       {isOpen && hasChildren && product.children!.map(child => (
@@ -260,7 +277,8 @@ function ProductSkeleton() {
       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-10 mx-auto" /></TableCell>
       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-12 mx-auto" /></TableCell>
       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-      <TableCell className="text-right"><div className='flex gap-2 justify-end'><Skeleton className="h-9 w-20" /><Skeleton className="h-9 w-20" /></div></TableCell>
+      <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 mx-auto" /></TableCell>
+      <TableCell className="text-right"><div className='flex gap-2 justify-end'><Skeleton className="h-8 w-8 rounded-full" /></div></TableCell>
     </TableRow>
   );
 }
@@ -281,6 +299,21 @@ function ProductsContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const searchParams = useSearchParams();
   const filter = searchParams.get('filter');
+  
+  // Filter States (Active)
+  const [selectedBrand, setSelectedBrand] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedSupplier, setSelectedSupplier] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>(filter === 'low-stock' ? 'low-stock' : 'all');
+
+  // Pending Filters (Inside Dialog)
+  const [tempBrand, setTempBrand] = useState('all');
+  const [tempCategory, setTempCategory] = useState('all');
+  const [tempSupplier, setTempSupplier] = useState('all');
+  const [tempStatus, setTempStatus] = useState(filter === 'low-stock' ? 'low-stock' : 'all');
+
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -299,9 +332,17 @@ function ProductsContent() {
   const loadProducts = useCallback(async (page = currentPage, size = pageSize) => {
     setIsLoadingProducts(true);
     try {
+      const filters = {
+        search: searchTerm,
+        brand: selectedBrand !== 'all' ? selectedBrand : undefined,
+        category: selectedCategory !== 'all' ? selectedCategory : undefined,
+        supplier: selectedSupplier !== 'all' ? selectedSupplier : undefined,
+        status: selectedStatus !== 'all' ? selectedStatus : undefined,
+      };
+
       const [productsData, totalCount] = await Promise.all([
-        getProducts(size, (page - 1) * size),
-        getProductsCount()
+        getProducts(size, (page - 1) * size, filters),
+        getProductsCount(filters)
       ]);
       setProducts(productsData);
       setTotalProducts(totalCount);
@@ -312,7 +353,7 @@ function ProductsContent() {
     } finally {
       setIsLoadingProducts(false);
     }
-  }, [currentPage, pageSize]);
+  }, [currentPage, pageSize, searchTerm, selectedBrand, selectedCategory, selectedSupplier, selectedStatus]);
 
   useEffect(() => {
     loadProducts(currentPage, pageSize);
@@ -346,18 +387,27 @@ function ProductsContent() {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  const showLowStockOnly = filter === 'low-stock';
-
-  // Helper to check if a product is low stock
-  const isLowStock = (p: Product) => p.stock < p.reorderPoint;
+  const filtersActive = useMemo(() => {
+    return selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedStatus !== 'all' || searchTerm !== '';
+  }, [selectedBrand, selectedCategory, selectedSupplier, selectedStatus, searchTerm]);
 
   const productTree = useMemo(() => {
     if (!products) return [];
 
+    // If filters are active, show flat list
+    if (filtersActive) {
+        return products.map(p => ({ ...p, children: [] }));
+    }
+
     // Build a recursive tree structure
     const buildTree = (parentId: string | null = null, depth = 0): ProductWithChildren[] => {
       return products
-        .filter(p => p.parentId === parentId)
+        .filter(p => {
+            if (parentId === null) {
+                return p.parentId == null; // Loose equality to catch null and undefined
+            }
+            return p.parentId === parentId;
+        })
         .map(p => ({
           ...p,
           children: depth < 10 ? buildTree(p.id, depth + 1) : [], // Prevent infinite recursion, max depth 10
@@ -365,34 +415,11 @@ function ProductsContent() {
     };
 
     return buildTree();
-  }, [products]);
+  }, [products, filtersActive]);
 
   const filteredProducts = useMemo(() => {
-    if (!productTree) return [];
-
-    const term = searchTerm.toLowerCase();
-    if (!term) return productTree;
-
-    return productTree.filter(product => {
-      const parentMatch = product.name.toLowerCase().includes(term) ||
-        product.sku?.toLowerCase().includes(term) ||
-        product.brand?.toLowerCase().includes(term) ||
-        product.category?.toLowerCase().includes(term);
-
-      const childMatch = product.children?.some(
-        child => child.name.toLowerCase().includes(term) || child.sku?.toLowerCase().includes(term)
-      );
-
-      return parentMatch || childMatch;
-    }).filter(product => {
-        if (showLowStockOnly) {
-             const parentLow = isLowStock(product);
-             const childLow = product.children?.some(isLowStock);
-             return parentLow || childLow;
-        }
-        return true;
-    });
-  }, [productTree, searchTerm, showLowStockOnly]);
+    return productTree;
+  }, [productTree]);
 
   return (
     <div className="space-y-6">
@@ -401,7 +428,7 @@ function ProductsContent() {
            <h1 className="text-3xl font-bold tracking-tight text-foreground">Products</h1>
            <div className="text-muted-foreground mt-1">
              Manage your inventory, pricing, and suppliers.
-             {showLowStockOnly && <Badge variant="destructive" className="ml-2 animate-pulse">Low Stock Filter Active</Badge>}
+             {selectedStatus === 'low-stock' && <Badge variant="destructive" className="ml-2 animate-pulse">Low Stock Filter Active</Badge>}
            </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -466,12 +493,184 @@ function ProductsContent() {
                 onSupplierAdded={() => loadProducts(currentPage, pageSize)}
                 trigger={<span className="sr-only">Open Suppliers</span>}
             />
+            <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2" onClick={() => {
+                   // Sync temp with actual when opening
+                   setTempBrand(selectedBrand);
+                   setTempCategory(selectedCategory);
+                   setTempSupplier(selectedSupplier);
+                   setTempStatus(selectedStatus);
+                }}>
+                   <span className="sr-only">Open filters</span>
+                   <Settings className="h-4 w-4 mr-2" />
+                   Filter Products
+                   {(selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedStatus !== 'all') && (
+                       <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center">
+                           {
+                               [selectedBrand, selectedCategory, selectedSupplier, selectedStatus].filter(v => v !== 'all').length
+                           }
+                       </Badge>
+                   )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Filter Products</DialogTitle>
+                  <DialogDescription>
+                    Narrow down your product list using the filters below.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="brand-filter">Brand</Label>
+                    <Select value={tempBrand} onValueChange={setTempBrand}>
+                      <SelectTrigger id="brand-filter">
+                        <SelectValue placeholder="All Brands" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Brands</SelectItem>
+                        {productOptions?.brands?.map((brand: any) => (
+                          <SelectItem key={brand.id} value={brand.name}>
+                            {brand.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="category-filter">Category</Label>
+                    <Select value={tempCategory} onValueChange={setTempCategory}>
+                      <SelectTrigger id="category-filter">
+                        <SelectValue placeholder="All Categories" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {productOptions?.categories?.map((category: any) => (
+                          <SelectItem key={category.id} value={category.name}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="supplier-filter">Supplier</Label>
+                    <Select value={tempSupplier} onValueChange={setTempSupplier}>
+                      <SelectTrigger id="supplier-filter">
+                        <SelectValue placeholder="All Suppliers" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Suppliers</SelectItem>
+                        {productOptions?.suppliers?.map((supplier: any) => (
+                          <SelectItem key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="status-filter">Status</Label>
+                    <Select value={tempStatus} onValueChange={setTempStatus}>
+                      <SelectTrigger id="status-filter">
+                        <SelectValue placeholder="All Statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="in-stock">In Stock</SelectItem>
+                        <SelectItem value="low-stock">Low Stock</SelectItem>
+                        <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter className="flex justify-between sm:justify-between">
+                   <Button variant="ghost" onClick={() => {
+                       setTempBrand('all');
+                       setTempCategory('all');
+                       setTempSupplier('all');
+                       setTempStatus('all');
+                   }}>Reset</Button>
+                   <Button onClick={() => {
+                       setSelectedBrand(tempBrand);
+                       setSelectedCategory(tempCategory);
+                       setSelectedSupplier(tempSupplier);
+                       setSelectedStatus(tempStatus);
+                       setIsFilterDialogOpen(false);
+                   }}>Apply Filters</Button>
+                </DialogFooter>
+              </DialogContent>
+           </Dialog>
             <AddProductDialog 
               onProductAdded={() => loadProducts(currentPage, pageSize)} 
               productOptions={productOptions}
               onOptionsRefresh={loadProductOptions}
             />
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+
+        
+        {/* Active Filters Badges */}
+        {(selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedStatus !== 'all') && (
+            <div className="flex flex-wrap items-center gap-2">
+                 {selectedBrand !== 'all' && (
+                     <Badge variant="secondary" className="gap-1 pl-2">
+                         Brand: {selectedBrand}
+                         <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent" onClick={() => setSelectedBrand('all')}>
+                             <span className="sr-only">Remove</span>
+                             <span className="text-xs">×</span>
+                         </Button>
+                     </Badge>
+                 )}
+                 {selectedCategory !== 'all' && (
+                     <Badge variant="secondary" className="gap-1 pl-2">
+                         Category: {selectedCategory}
+                         <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent" onClick={() => setSelectedCategory('all')}>
+                             <span className="sr-only">Remove</span>
+                             <span className="text-xs">×</span>
+                         </Button>
+                     </Badge>
+                 )}
+                 {selectedSupplier !== 'all' && (
+                     <Badge variant="secondary" className="gap-1 pl-2">
+                         Supplier: {productOptions?.suppliers?.find((s:any) => s.id === selectedSupplier)?.name || 'Unknown'}
+                         <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent" onClick={() => setSelectedSupplier('all')}>
+                             <span className="sr-only">Remove</span>
+                             <span className="text-xs">×</span>
+                         </Button>
+                     </Badge>
+                 )}
+                 {selectedStatus !== 'all' && (
+                     <Badge variant="secondary" className="gap-1 pl-2">
+                         Status: {selectedStatus === 'in-stock' ? 'In Stock' : selectedStatus === 'low-stock' ? 'Low Stock' : 'Out of Stock'}
+                         <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent" onClick={() => setSelectedStatus('all')}>
+                             <span className="sr-only">Remove</span>
+                             <span className="text-xs">×</span>
+                         </Button>
+                     </Badge>
+                 )}
+
+                 <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                        setSelectedBrand('all');
+                        setSelectedCategory('all');
+                        setSelectedSupplier('all');
+                        setSelectedStatus('all');
+                    }}
+                    className="h-8 text-xs text-muted-foreground"
+                >
+                    Clear All
+                </Button>
+            </div>
+        )}
       </div>
 
       <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden">
@@ -489,8 +688,9 @@ function ProductsContent() {
                 <TableHead className="hidden md:table-cell text-center">Unit</TableHead>
                 <TableHead className="hidden md:table-cell text-center">Stock</TableHead>
                 <TableHead className="hidden md:table-cell text-right">Price</TableHead>
+                <TableHead className="hidden md:table-cell text-center">Warehouse</TableHead>
                 <TableHead>
-                  <span className="sr-only">Actions</span>
+                  Actions
                 </TableHead>
               </TableRow>
             </TableHeader>

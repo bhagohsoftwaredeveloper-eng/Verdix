@@ -15,7 +15,7 @@ export interface UseSalesInvoicesResult {
   refetch: () => void;
 }
 
-export function useProducts(search?: string, availability?: string): UseProductsResult {
+export function useProducts(search?: string, availability?: string, supplierId?: string): UseProductsResult {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +31,9 @@ export function useProducts(search?: string, availability?: string): UseProducts
       }
       if (availability) {
         params.append('availability', availability);
+      }
+      if (supplierId) {
+        params.append('supplierId', supplierId);
       }
       params.append('limit', '100'); // Get more products for search
 
@@ -80,7 +83,7 @@ export function useProducts(search?: string, availability?: string): UseProducts
 
   useEffect(() => {
     fetchProducts();
-  }, [search]);
+  }, [search, supplierId]);
 
   const refetch = () => {
     fetchProducts();
@@ -320,4 +323,58 @@ export function usePurchaseOrders(search?: string, status?: string, page: number
   };
 
   return { purchaseOrders, loading, error, refetch, pagination };
+}
+// ... existing code ...
+
+export interface BusinessProfile {
+  businessName: string;
+  address: string;
+  contactNumber: string;
+  email: string;
+  tin: string;
+  logoPath: string;
+}
+
+export interface UseBusinessProfileResult {
+  profile: BusinessProfile | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export function useBusinessProfile(): UseBusinessProfileResult {
+  const [profile, setProfile] = useState<BusinessProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch('/api/pos-settings');
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch business profile');
+      }
+
+      setProfile(result.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error fetching business profile:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const refetch = () => {
+    fetchProfile();
+  };
+
+  return { profile, loading, error, refetch };
 }

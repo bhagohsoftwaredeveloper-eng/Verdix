@@ -29,10 +29,12 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectLabel,
+  SelectGroup,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { PlusCircle, Loader2, Wand2, X } from 'lucide-react';
+import { Plus, PlusCircle, Loader2, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Category, Brand, UnitOfMeasure, Product, Supplier, Account, TaxRate, SystemSettings } from '@/lib/types';
 
@@ -53,7 +55,7 @@ import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
 import { ManageSuppliersDialog } from './ManageSuppliersDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Star, Plus } from 'lucide-react';
+import { Trash2, Star } from 'lucide-react';
 
 
 
@@ -147,6 +149,10 @@ export function AddProductDialog({
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
 
+
+
+
+
   useEffect(() => {
     fetch('/api/pos-settings')
       .then(res => res.json())
@@ -196,6 +202,9 @@ export function AddProductDialog({
   });
 
   const selectedUnitOfMeasure = form.watch('unitOfMeasure');
+  
+  // State for selected price level (for automatic price calculation)
+  const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
 
   // Use pre-loaded data from parent when available
   useEffect(() => {
@@ -286,7 +295,7 @@ export function AddProductDialog({
 
     let markup = 0;
     let source = '';
-    const priority = systemSettings.markupPriority || ["subcategory", "category", "brand", "supplier"];
+    const priority = systemSettings.markupPriority || ["subcategory", "category", "brand"];
 
     for (const type of priority) {
         if (type === 'subcategory' && subcategory && subcategory.markupPercentage && subcategory.markupPercentage > 0) {
@@ -300,10 +309,6 @@ export function AddProductDialog({
         } else if (type === 'brand' && brand && brand.markupPercentage && brand.markupPercentage > 0) {
             markup = brand.markupPercentage;
             source = 'Brand';
-            break;
-        } else if (type === 'supplier' && supplier && supplier.markupPercentage && supplier.markupPercentage > 0) {
-            markup = supplier.markupPercentage;
-            source = 'Supplier';
             break;
         }
     }
@@ -319,29 +324,39 @@ export function AddProductDialog({
       if (watchedCost && watchedCost > 0) {
           const basePrice = watchedCost * (1 + markup / 100);
           
-          // Apply to main price (which follows default price level logic or base price)
-          // Find default price level to determine what the 'main' price should be
+          // Find default price level
           const defaultLevel = priceLevels.find((l: any) => l.isDefault) || priceLevels[0];
+          
+          // Calculate main price using default level's markup on top of basePrice
+          // Exception: "Retail" level uses basePrice directly without additional markup
           let mainPrice = basePrice;
-
           if (defaultLevel && defaultLevel.percentageAdjustment) {
-             mainPrice = basePrice * (defaultLevel.percentageAdjustment / 100);
+             // Check if default level is "Retail" - if so, skip markup
+             if (defaultLevel.name?.toLowerCase() !== 'retail') {
+                mainPrice = basePrice * (1 + defaultLevel.percentageAdjustment / 100);
+             }
           }
           form.setValue('price', parseFloat(mainPrice.toFixed(2)));
 
-          // Apply to all price levels based on their specific adjustment
+          // Apply to all price levels: basePrice + level markup
+          // Exception: "Retail" level uses basePrice directly
           if (priceLevels.length > 0) {
-              // We need to update existing fields or add them
-              // Best way is to map through system priceLevels and ensure form has them
               const currentFields = form.getValues('priceLevels') || [];
               
               // Helper to find existing field index
               const getFieldIndex = (levelId: string) => currentFields.findIndex((f: any) => f.levelId === levelId);
 
               priceLevels.forEach((level: any) => {
-                  // Percentage Adjustment is now treated as Markup %
-                  const markup = level.percentageAdjustment ?? 0;
-                  const levelPrice = parseFloat((basePrice * (1 + markup / 100)).toFixed(2));
+                  // Check if this is the "Retail" level
+                  let levelPrice;
+                  if (level.name?.toLowerCase() === 'retail') {
+                      // Retail uses basePrice directly, ignoring its markup percentage
+                      levelPrice = parseFloat(basePrice.toFixed(2));
+                  } else {
+                      // Other levels apply their markup on top of basePrice
+                      const levelMarkup = level.percentageAdjustment ?? 0;
+                      levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                  }
                   
                   const index = getFieldIndex(level.id);
                   if (index >= 0) {
@@ -353,8 +368,16 @@ export function AddProductDialog({
               priceLevelFields.forEach((field, index) => {
                   const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
                   if (levelDef) {
-                      const markup = levelDef.percentageAdjustment ?? 0;
-                      const levelPrice = parseFloat((basePrice * (1 + markup / 100)).toFixed(2));
+                      // Check if this is the "Retail" level
+                      let levelPrice;
+                      if (levelDef.name?.toLowerCase() === 'retail') {
+                          // Retail uses basePrice directly
+                          levelPrice = parseFloat(basePrice.toFixed(2));
+                      } else {
+                          // Other levels apply their markup
+                          const levelMarkup = levelDef.percentageAdjustment ?? 0;
+                          levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                      }
                       form.setValue(`priceLevels.${index}.price`, levelPrice);
                   }
               });
@@ -366,73 +389,56 @@ export function AddProductDialog({
 
   }, [watchedCost, watchedCategoryName, watchedSubcategoryName, watchedBrandName, watchedSupplierId, categories, subcategories, brands, suppliers, form, priceLevels, priceLevelFields, systemSettings]);
 
-  const applySupplierMarkup = () => {
-    const cost = form.getValues('cost');
-    const supplierId = form.getValues('supplier');
-    const supplier = suppliers.find(s => s.id === supplierId);
-
-    if (!cost) {
-      toast({
-        variant: 'destructive',
-        title: 'Cost Required',
-        description: 'Please enter the cost before applying markup.',
-      });
-      return;
-    }
-
-    if (!supplier || supplier.markupPercentage === undefined) {
-      toast({
-        variant: 'destructive',
-        title: 'Supplier Markup Not Found',
-        description: 'The selected supplier does not have a markup percentage defined.',
-      });
-      return;
-    }
-
-    const markup = supplier.markupPercentage / 100;
-    const basePrice = cost * (1 + markup);
-    
-    // Apply to price levels
-    // We expect price levels to be available from external options or initialized
-    let firstLevelPrice = basePrice;
-    
-    if (priceLevels.length > 0) {
-      // Clear existing fields to rebuild them properly or update them?
-      // Better to update existing or append if missing.
-      
-      // We will iterate through ALL available price level definitions (from settings)
-      // and populate the form fields.
-      
-      priceLevels.forEach((level) => {
-        const markup = level.percentageAdjustment ?? 0;
-        // Calculate price based on Cost + Level Markup
-        const levelPrice = parseFloat((cost * (1 + markup / 100)).toFixed(2));
-        
-        // If this is the default level, it sets the main price
-        if (level.isDefault) {
-            firstLevelPrice = levelPrice;
+  // Auto-update main price when a price level is selected
+  useEffect(() => {
+    if (selectedPriceLevelId) {
+      const selectedLevel = priceLevels.find((l: any) => l.id === selectedPriceLevelId);
+      if (selectedLevel) {
+        const cost = form.getValues('cost');
+        if (cost && cost > 0) {
+          // Get category/brand markup
+          const category = categories.find(c => c.name === form.getValues('category'));
+          const subcategory = subcategories.find(s => s.name === form.getValues('subcategory'));
+          const brand = brands.find(b => b.name === form.getValues('brand'));
+          
+          let markup = 0;
+          const priority = systemSettings?.markupPriority || ["subcategory", "category", "brand"];
+          
+          for (const type of priority) {
+            if (type === 'subcategory' && subcategory?.markupPercentage && subcategory.markupPercentage > 0) {
+              markup = subcategory.markupPercentage;
+              break;
+            } else if (type === 'category' && category?.markupPercentage && category.markupPercentage > 0) {
+              markup = category.markupPercentage;
+              break;
+            } else if (type === 'brand' && brand?.markupPercentage && brand.markupPercentage > 0) {
+              markup = brand.markupPercentage;
+              break;
+            }
+          }
+          
+          if (!markup && systemSettings?.defaultMarkupPercentage && systemSettings.defaultMarkupPercentage > 0) {
+            markup = systemSettings.defaultMarkupPercentage;
+          }
+          
+          const basePrice = cost * (1 + markup / 100);
+          
+          // Calculate price based on selected level
+          let finalPrice;
+          if (selectedLevel.name?.toLowerCase() === 'retail') {
+            finalPrice = basePrice;
+          } else {
+            const levelMarkup = selectedLevel.percentageAdjustment ?? 0;
+            finalPrice = basePrice * (1 + levelMarkup / 100);
+          }
+          
+          form.setValue('price', parseFloat(finalPrice.toFixed(2)));
         }
-
-        const fieldIndex = priceLevelFields.findIndex(f => (f as any).levelId === level.id);
-        if (fieldIndex > -1) {
-          form.setValue(`priceLevels.${fieldIndex}.price`, levelPrice);
-        } else {
-          appendPriceLevel({ levelId: level.id, price: levelPrice });
-        }
-      });
-    } else {
-        // Fallback if no price levels defined in system
-        form.setValue('price', parseFloat(basePrice.toFixed(2)));
+      }
     }
+  }, [selectedPriceLevelId, priceLevels, form, categories, subcategories, brands, systemSettings]);
 
-    // Always sync the main price to the default level's price (or the calculated one)
-    form.setValue('price', firstLevelPrice);
 
-    toast({
-      title: 'Markup Applied',
-      description: `Calculated prices based on ${supplier.name}'s ${supplier.markupPercentage}% markup.`,
-    });
-  };
 
   async function onSubmit(values: ProductFormValues) {
     setIsSubmitting(true);
@@ -596,28 +602,32 @@ export function AddProductDialog({
                         render={({ field }) => (
                             <FormItem className="col-span-2 sm:col-span-1">
                               <FormLabel>Brand</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a brand" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {isLoadingBrands ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    brands?.map((brand: Brand) => <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>)
-                                  )}
-                                  <div className="p-1 w-full border-t mt-1">
-                                      <ManageBrandsDialog trigger={
-                                          <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                              <Plus className="mr-2 h-4 w-4" />
-                                              Manage Brands
-                                          </Button>
-                                      } />
-                                  </div>
-                                </SelectContent>
-                              </Select>
+                              <div className="flex gap-2">
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a brand" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {isLoadingBrands ? (
+                                      <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                    ) : (
+                                      brands?.map((brand: Brand) => <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>)
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                <ManageBrandsDialog 
+                                  onBrandAdded={() => {
+                                      getBrands().then(setBrands);
+                                  }}
+                                  trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                  }
+                                />
+                              </div>
                               <FormMessage />
                             </FormItem>
                         )}
@@ -712,33 +722,32 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Category</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a category" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingCategories ? (
-                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                ) : (
-                                  categories?.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)
-                                )}
-                                <div className="p-1 w-full border-t mt-1">
-                                  <ManageCategoriesDialog 
-                                    trigger={
-                                      <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Add Category
-                                      </Button>
-                                    } 
-                                    onCategoryAdded={() => {
-                                      getCategories().then(setCategories);
-                                    }}
-                                  />
-                                </div>
-                              </SelectContent>
-                            </Select>
+                            <div className="flex gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a category" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingCategories ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    categories?.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <ManageCategoriesDialog 
+                                onCategoryAdded={() => {
+                                    getCategories().then(setCategories);
+                                }}
+                                trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                }
+                              />
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -749,33 +758,32 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Subcategory (Optional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a subcategory" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingSubcategories ? (
-                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                ) : (
-                                  subcategories?.map(sub => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)
-                                )}
-                                <div className="p-1 w-full border-t mt-1">
-                                    <ManageSubcategoriesDialog 
-                                        trigger={
-                                            <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                                <Plus className="mr-2 h-4 w-4" />
-                                                Add Subcategory
-                                            </Button>
-                                        } 
-                                        onSubcategoryAdded={() => {
-                                            getSubcategories().then(setSubcategories);
-                                        }}
-                                    />
-                                </div>
-                              </SelectContent>
-                            </Select>
+                            <div className="flex gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a subcategory" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingSubcategories ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    subcategories?.map(sub => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <ManageSubcategoriesDialog 
+                                onSubcategoryAdded={() => {
+                                    getSubcategories().then(setSubcategories);
+                                }}
+                                trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                }
+                              />
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -831,42 +839,39 @@ export function AddProductDialog({
                           </FormItem>
                         )}
                       />
-                    </div>
 
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="supplier"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-center justify-between">
-                              <FormLabel>Supplier (Optional)</FormLabel>
+                            <FormLabel>Supplier (Optional)</FormLabel>
+                            <div className="flex gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a supplier" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingSuppliers ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    suppliers?.map(supplier => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <ManageSuppliersDialog 
+                                onSupplierAdded={() => {
+                                    getSuppliers().then(setSuppliers);
+                                }}
+                                trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                }
+                              />
                             </div>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a supplier" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingSuppliers ? (
-                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                ) : (
-                                  suppliers?.map(supplier => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)
-                                )}
-                                <div className="p-1 w-full border-t mt-1">
-                                    <ManageSuppliersDialog trigger={
-                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Manage Suppliers
-                                        </Button>
-                                    } onSupplierAdded={() => {
-                                      getSuppliers().then(setSuppliers);
-                                    }} />
-                                </div>
-                              </SelectContent>
-                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -878,71 +883,73 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Warehouse (Optional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a warehouse" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingWarehouses ? (
-                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                ) : (
-                                  warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)
-                                )}
-                                <div className="p-1 w-full border-t mt-1">
-                                    <ManageWarehousesDialog trigger={
-                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Manage Warehouses
-                                        </Button>
-                                    } onChange={() => {
-                                      getWarehouses().then(setWarehouses);
-                                    }} />
-                                </div>
-                              </SelectContent>
-                            </Select>
+                            <div className="flex gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a warehouse" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingWarehouses ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <ManageWarehousesDialog 
+                                onChange={() => {
+                                    getWarehouses().then(setWarehouses);
+                                }}
+                                trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                }
+                              />
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="unitOfMeasure"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>{productType === 'parent' ? 'Base Unit of Measure' : 'Unit of Measure'}</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a unit" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingUnits ? (
-                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                ) : (
-                                  unitsOfMeasure?.map((uom: UnitOfMeasure) => (
-                                    <SelectItem key={uom.id} value={uom.name}>
-                                      {uom.name} ({uom.abbreviation})
-                                    </SelectItem>
-                                  ))
-                                )}
-                                <div className="p-1 w-full border-t mt-1">
-                                    <ManageUnitOfMeasureDialog trigger={
-                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Manage UOM
-                                        </Button>
-                                    } onUnitAdded={() => {
-                                      getUnitsOfMeasure().then(setUnitsOfMeasure);
-                                    }} />
-                                </div>
-                              </SelectContent>
-                            </Select>
+                            <div className="flex gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a unit" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingUnits ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    unitsOfMeasure?.map((uom: UnitOfMeasure) => (
+                                      <SelectItem key={uom.id} value={uom.name}>
+                                        {uom.name} ({uom.abbreviation})
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <ManageUnitOfMeasureDialog 
+                                onUnitAdded={() => {
+                                    getUnitsOfMeasure().then(setUnitsOfMeasure);
+                                }}
+                                trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                }
+                              />
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1018,42 +1025,42 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Income Account (Optional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select income account" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingAccounts ? (
-                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                ) : (
-                                  incomeAccounts?.map((account: Account) => (
-                                    <SelectItem key={account.id} value={account.id}>
-                                      {account.name} {account.code ? `(${account.code})` : ''}
-                                    </SelectItem>
-                                  ))
-                                )}
-                                <div className="p-1 w-full border-t mt-1">
-                                    <ManageAccountsDialog trigger={
-                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Manage Accounts
-                                        </Button>
-                                    }
-                                      onAccountAdded={(newAccount) => {
-                                        if (newAccount.type === 'income') {
-                                          getAccountsByType('income').then(setIncomeAccounts);
-                                          form.setValue('incomeAccount', newAccount.id);
-                                        }
-                                      }}
-                                      onAccountUpdated={() => {
+                            <div className="flex gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select income account" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingAccounts ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    incomeAccounts?.map((account: Account) => (
+                                      <SelectItem key={account.id} value={account.id}>
+                                        {account.name} {account.code ? `(${account.code})` : ''}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <ManageAccountsDialog 
+                                onAccountAdded={(newAccount) => {
+                                    if (newAccount.type === 'income') {
                                         getAccountsByType('income').then(setIncomeAccounts);
-                                      }}
-                                    />
-                                </div>
-                              </SelectContent>
-                            </Select>
+                                        form.setValue('incomeAccount', newAccount.id);
+                                    }
+                                }}
+                                onAccountUpdated={() => {
+                                    getAccountsByType('income').then(setIncomeAccounts);
+                                }}
+                                trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                }
+                              />
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1064,42 +1071,42 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Expense Account (Optional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select expense account" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isLoadingAccounts ? (
-                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                ) : (
-                                  expenseAccounts?.map((account: Account) => (
-                                    <SelectItem key={account.id} value={account.id}>
-                                      {account.name} {account.code ? `(${account.code})` : ''}
-                                    </SelectItem>
-                                  ))
-                                )}
-                                <div className="p-1 w-full border-t mt-1">
-                                    <ManageAccountsDialog trigger={
-                                        <Button variant="ghost" size="sm" type="button" className="w-full justify-start font-normal h-8">
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Manage Accounts
-                                        </Button>
-                                    }
-                                      onAccountAdded={(newAccount) => {
-                                        if (newAccount.type === 'expense') {
-                                          getAccountsByType('expense').then(setExpenseAccounts);
-                                          form.setValue('expenseAccount', newAccount.id);
-                                        }
-                                      }}
-                                      onAccountUpdated={() => {
+                            <div className="flex gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select expense account" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingAccounts ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    expenseAccounts?.map((account: Account) => (
+                                      <SelectItem key={account.id} value={account.id}>
+                                        {account.name} {account.code ? `(${account.code})` : ''}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <ManageAccountsDialog 
+                                onAccountAdded={(newAccount) => {
+                                    if (newAccount.type === 'expense') {
                                         getAccountsByType('expense').then(setExpenseAccounts);
-                                      }}
-                                    />
-                                </div>
-                              </SelectContent>
-                            </Select>
+                                        form.setValue('expenseAccount', newAccount.id);
+                                    }
+                                }}
+                                onAccountUpdated={() => {
+                                    getAccountsByType('expense').then(setExpenseAccounts);
+                                }}
+                                trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                }
+                              />
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1243,6 +1250,38 @@ export function AddProductDialog({
                   </TabsContent>
                   <TabsContent value="price-levels" className="space-y-4 p-6">
                     <div className="space-y-4">
+                      {/* Price Level Selector for Auto-Calculate */}
+                      <div className="rounded-md border p-4 bg-muted/30">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <Label htmlFor="price-level-selector" className="text-sm font-medium">
+                              Select Price Level
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Choose a level to automatically calculate the main price
+                            </p>
+                          </div>
+                          <div className="w-[200px]">
+                            <Select value={selectedPriceLevelId} onValueChange={setSelectedPriceLevelId}>
+                              <SelectTrigger id="price-level-selector">
+                                <SelectValue placeholder="Select level" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {isLoadingPriceLevels ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : (
+                                  priceLevels?.map(level => (
+                                    <SelectItem key={level.id} value={level.id}>
+                                      {level.name} ({level.percentageAdjustment}%)
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                      
                       <div className="rounded-md border p-4">
                         <div className="flex items-center justify-between mb-4">
                           <div>
@@ -1331,17 +1370,6 @@ export function AddProductDialog({
                                                 }}
                                               />
                                             </FormControl>
-                                            {/* Show apply markup button ONLY on the Price Levels tab now */}
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-primary"
-                                                title="Apply Supplier Markup"
-                                                onClick={applySupplierMarkup}
-                                            >
-                                                <Wand2 className="h-4 w-4" />
-                                            </Button>
                                           </div>
                                           <FormMessage />
                                         </FormItem>
@@ -1410,6 +1438,9 @@ export function AddProductDialog({
             )}
           </Button>
         </DialogFooter>
+
+        {/* Lifted Manage Dialogs */}
+
       </DialogContent>
     </Dialog>
   );

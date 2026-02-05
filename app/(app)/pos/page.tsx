@@ -1,6 +1,8 @@
 
 'use client';
 
+import { useTheme } from 'next-themes';
+
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -198,6 +200,26 @@ export default function POSPage() {
   // Terminal State
   const [terminals, setTerminals] = useState<any[]>([]);
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>('');
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+     const posTheme = localStorage.getItem('pos-theme');
+     // Backup current theme to admin-theme if it's not likely a POS theme artifact?
+     // For now, just apply POS theme if exists.
+     if (posTheme) {
+         setTheme(posTheme);
+     }
+     
+     // On unmount, verify if we need to restore? 
+     // For now, let's keep it simple: apply POS theme. 
+     // User can change it back in settings if stuck.
+     return () => {
+         const adminTheme = localStorage.getItem('admin-theme');
+         if (adminTheme) {
+             setTheme(adminTheme);
+         }
+     };
+  }, []);
 
   const { toast } = useToast();
 
@@ -1081,6 +1103,7 @@ export default function POSPage() {
   const showOverlay = !isPosLoggedIn || !shiftActive;
 
   return (
+
     <>
       <div className="flex h-screen w-screen bg-muted/30 font-sans overflow-hidden">
         <AdminAuthDialog 

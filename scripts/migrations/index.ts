@@ -38,6 +38,7 @@ import './036_create_supplier_product_mapping.ts';
 import './037_alter_pos_settings_add_contact_fields.ts';
 import './038_create_supplier_payments_table.ts';
 import './039_alter_suppliers_add_details.ts';
+import './040_add_unique_constraint_conversion_factors.ts';
 import './040_alter_products_add_vat_and_availability.ts';
 import './042_alter_purchase_order_items_new_fields.ts';
 import './043_alter_purchase_orders_add_tracking_fields.ts';

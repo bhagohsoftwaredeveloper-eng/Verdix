@@ -168,7 +168,8 @@ export async function POST(request: NextRequest) {
       receiveToWarehouse, 
       note,
       orderedBy,
-      vatAmount
+      vatAmount,
+      purchaseType // Add purchaseType
     } = body;
 
     if (!supplierId || !supplierName || !items || items.length === 0) {
@@ -199,7 +200,7 @@ export async function POST(request: NextRequest) {
       formattedDate,
       total || 0,
       paymentMethod || '',
-      status || 'Pending',
+      (purchaseType === 'Receive') ? 'Received' : (status || 'Pending'),
       reference || null,
       shipping || 0,
       orderedBy || null,
@@ -249,6 +250,20 @@ export async function POST(request: NextRequest) {
         `PO-${orderId}`,
         `Auto-payment for PO ${orderId}`
       ]);
+    }
+
+    // Auto-Receive Logic: Update Inventory if type is 'Receive'
+    if (purchaseType === 'Receive') {
+       const updateStockQuery = `UPDATE products SET stock = stock + ? WHERE id = ?`;
+       for (const item of items) {
+         // Update stock
+         await query(updateStockQuery, [item.quantity, item.productId]);
+         
+         // Optionally update warehouse if provided and not set? 
+         // For now, we only increment stock as requested.
+         // If a warehouse is specified, we might want to ensure the product is assigned there?
+         // Ignoring warehouse update to avoid overriding existing assignments without explicit confirmation.
+       }
     }
 
     return NextResponse.json({

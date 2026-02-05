@@ -1,6 +1,6 @@
 'use server';
 
-import { query } from '@/lib/mysql';
+import { query, withTransaction } from '@/lib/mysql';
 
 export type ProductFormData = {
   name: string;
@@ -38,7 +38,15 @@ export type ProductFormData = {
   availability?: string;
 };
 
-export async function getProducts(limit?: number, offset?: number) {
+export type ProductFilters = {
+  search?: string;
+  brand?: string;
+  category?: string;
+  supplier?: string;
+  status?: 'in-stock' | 'low-stock' | 'out-of-stock' | 'all' | string;
+};
+
+export async function getProducts(limit?: number, offset?: number, filters?: ProductFilters) {
   try {
     let sql = `
       SELECT p.*, 
@@ -52,10 +60,46 @@ export async function getProducts(limit?: number, offset?: number) {
       LEFT JOIN warehouses w ON p.warehouse_id = w.id
       LEFT JOIN supplier_product_mapping spm ON p.id = spm.product_id AND spm.is_primary = 1
       LEFT JOIN suppliers s_primary ON spm.supplier_id = s_primary.id
-      ORDER BY p.created_at DESC
     `;
 
+    const whereClauses: string[] = [];
     const params: any[] = [];
+
+    if (filters) {
+      if (filters.search) {
+        whereClauses.push(`(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)`);
+        const searchParam = `%${filters.search}%`;
+        params.push(searchParam, searchParam, searchParam);
+      }
+      if (filters.brand && filters.brand !== 'all') {
+        whereClauses.push(`p.brand = ?`);
+        params.push(filters.brand);
+      }
+      if (filters.category && filters.category !== 'all') {
+        whereClauses.push(`p.category = ?`);
+        params.push(filters.category);
+      }
+      if (filters.supplier && filters.supplier !== 'all') {
+        // Check both direct supplier link and mapping
+        whereClauses.push(`(p.supplier_id = ? OR spm.supplier_id = ?)`);
+        params.push(filters.supplier, filters.supplier);
+      }
+      if (filters.status && filters.status !== 'all') {
+        if (filters.status === 'out-of-stock') {
+          whereClauses.push(`p.stock <= 0`);
+        } else if (filters.status === 'low-stock') {
+          whereClauses.push(`p.stock > 0 AND p.stock < p.reorder_point`);
+        } else if (filters.status === 'in-stock') {
+           whereClauses.push(`p.stock >= p.reorder_point`);
+        }
+      }
+    }
+
+    if (whereClauses.length > 0) {
+      sql += ` WHERE ${whereClauses.join(' AND ')}`;
+    }
+
+    sql += ` ORDER BY p.created_at DESC`;
 
     if (limit !== undefined && offset !== undefined) {
       sql += ` LIMIT ? OFFSET ?`;
@@ -117,6 +161,7 @@ export async function getProducts(limit?: number, offset?: number) {
       supplier: product.primary_supplier_id || product.supplier_id, // Use primary mapped supplier if available
       supplierName: product.primary_supplier_name || product.legacy_supplier_name,
       warehouse: product.warehouse_id,
+      warehouseName: product.warehouse_name,
 
       priceLevels: plMap.get(product.id) || [],
       vatStatus: product.vat_status,
@@ -130,10 +175,51 @@ export async function getProducts(limit?: number, offset?: number) {
   }
 }
 
-export async function getProductsCount() {
+export async function getProductsCount(filters?: ProductFilters) {
   try {
-    const sql = `SELECT COUNT(*) as count FROM products`;
-    const result = await query(sql);
+    let sql = `
+        SELECT COUNT(*) as count 
+        FROM products p
+        LEFT JOIN supplier_product_mapping spm ON p.id = spm.product_id AND spm.is_primary = 1
+    `;
+    
+    const whereClauses: string[] = [];
+    const params: any[] = [];
+
+    if (filters) {
+       if (filters.search) {
+        whereClauses.push(`(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)`);
+        const searchParam = `%${filters.search}%`;
+        params.push(searchParam, searchParam, searchParam);
+      }
+      if (filters.brand && filters.brand !== 'all') {
+        whereClauses.push(`p.brand = ?`);
+        params.push(filters.brand);
+      }
+      if (filters.category && filters.category !== 'all') {
+        whereClauses.push(`p.category = ?`);
+        params.push(filters.category);
+      }
+      if (filters.supplier && filters.supplier !== 'all') {
+         whereClauses.push(`(p.supplier_id = ? OR spm.supplier_id = ?)`);
+        params.push(filters.supplier, filters.supplier);
+      }
+      if (filters.status && filters.status !== 'all') {
+        if (filters.status === 'out-of-stock') {
+          whereClauses.push(`p.stock <= 0`);
+        } else if (filters.status === 'low-stock') {
+          whereClauses.push(`p.stock > 0 AND p.stock < p.reorder_point`);
+        } else if (filters.status === 'in-stock') {
+           whereClauses.push(`p.stock >= p.reorder_point`);
+        }
+      }
+    }
+
+    if (whereClauses.length > 0) {
+      sql += ` WHERE ${whereClauses.join(' AND ')}`;
+    }
+
+    const result = await query(sql, params);
     return result[0].count;
   } catch (error) {
     console.error('Error fetching products count:', error);
@@ -163,126 +249,155 @@ export async function getLowStockAlerts() {
 
 export async function addProduct(formData: ProductFormData) {
   try {
+    // Validate conversion factors for duplicates
+    if (formData.conversionFactors && formData.conversionFactors.length > 0) {
+      const units = formData.conversionFactors.map(cf => cf.unit.toLowerCase());
+      const uniqueUnits = new Set(units);
+      if (units.length !== uniqueUnits.size) {
+        return { 
+          success: false, 
+          message: 'Duplicate conversion factor units detected. Each unit must be unique.' 
+        };
+      }
+    }
+
     // Generate unique ID for the product
     const productId = `${formData.sku}-${Date.now()}`;
 
-    // Prepare product data for database insertion
-    const productData = {
-      id: productId,
-      name: formData.name,
-      description: formData.description,
-      additional_description: formData.additionalDescription || null,
-      category: formData.category,
-      brand: formData.brand,
-      subcategory: formData.subcategory || null,
-      supplier_id: formData.supplier || null,
-      warehouse_id: formData.warehouse || null,
-      stock: formData.stock || 0,
-      reorder_point: formData.reorderPoint || formData.supplierMappings?.find(m => m.isPrimary)?.rop || 0,
-      avg_daily_sales: 0, // Will be calculated later based on sales history
-      price: formData.price,
-      cost: formData.cost || null,
-      sku: formData.sku,
-      barcode: formData.barcode || null,
-      image_url: formData.image || null,
-      image_hint: formData.name.toLowerCase().replace(/\s+/g, '-'), // Generate hint from name
-      unit_of_measure: formData.unitOfMeasure,
-      parent_id: formData.parentId || null,
-      conversion_factor: formData.conversionFactor || 1,
+    // Execute all operations within a transaction
+    await withTransaction(async (connection) => {
+      // Prepare product data for database insertion
+      const productData = {
+        id: productId,
+        name: formData.name,
+        description: formData.description,
+        additional_description: formData.additionalDescription || null,
+        category: formData.category,
+        brand: formData.brand,
+        subcategory: formData.subcategory || null,
+        supplier_id: formData.supplier || null,
+        warehouse_id: formData.warehouse || null,
+        stock: formData.stock || 0,
+        reorder_point: formData.reorderPoint || formData.supplierMappings?.find(m => m.isPrimary)?.rop || 0,
+        avg_daily_sales: 0, // Will be calculated later based on sales history
+        price: formData.price,
+        cost: formData.cost || null,
+        sku: formData.sku,
+        barcode: formData.barcode || null,
+        image_url: formData.image || null,
+        image_hint: formData.name.toLowerCase().replace(/\s+/g, '-'), // Generate hint from name
+        unit_of_measure: formData.unitOfMeasure,
+        parent_id: formData.parentId || null,
+        conversion_factor: formData.conversionFactor || 1,
 
-      expense_account: formData.expenseAccount || null,
-      income_account: formData.incomeAccount || null,
-      vat_status: formData.vatStatus || 'YES (Subject to 12% VAT)',
-      availability: formData.availability || 'Available',
-    };
+        expense_account: formData.expenseAccount || null,
+        income_account: formData.incomeAccount || null,
+        vat_status: formData.vatStatus || 'YES (Subject to 12% VAT)',
+        availability: formData.availability || 'Available',
+      };
 
-    // Insert product into MySQL database
-    const sql = `
-      INSERT INTO products (
-        id, name, description, additional_description, category, brand,
-        subcategory, supplier_id, warehouse_id, stock, reorder_point, avg_daily_sales, price, cost,
-        sku, barcode, image_url, image_hint,
-        unit_of_measure, parent_id, conversion_factor, income_account, expense_account,
-        vat_status, availability
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+      // Insert product into MySQL database
+      const sql = `
+        INSERT INTO products (
+          id, name, description, additional_description, category, brand,
+          subcategory, supplier_id, warehouse_id, stock, reorder_point, avg_daily_sales, price, cost,
+          sku, barcode, image_url, image_hint,
+          unit_of_measure, parent_id, conversion_factor, income_account, expense_account,
+          vat_status, availability
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
 
-    const values_array = [
-      productData.id,
-      productData.name,
-      productData.description,
-      productData.additional_description,
-      productData.category,
-      productData.brand,
-      productData.subcategory,
-      productData.supplier_id,
-      productData.warehouse_id,
-      productData.stock,
-      productData.reorder_point,
-      productData.avg_daily_sales,
-      productData.price,
-      productData.cost,
-      productData.sku,
-      productData.barcode,
-      productData.image_url,
-      productData.image_hint,
-      productData.unit_of_measure,
-      productData.parent_id,
-      productData.conversion_factor,
-      productData.income_account,
-      productData.expense_account,
-      productData.vat_status,
-      productData.availability,
-    ];
+      const values_array = [
+        productData.id,
+        productData.name,
+        productData.description,
+        productData.additional_description,
+        productData.category,
+        productData.brand,
+        productData.subcategory,
+        productData.supplier_id,
+        productData.warehouse_id,
+        productData.stock,
+        productData.reorder_point,
+        productData.avg_daily_sales,
+        productData.price,
+        productData.cost,
+        productData.sku,
+        productData.barcode,
+        productData.image_url,
+        productData.image_hint,
+        productData.unit_of_measure,
+        productData.parent_id,
+        productData.conversion_factor,
+        productData.income_account,
+        productData.expense_account,
+        productData.vat_status,
+        productData.availability,
+      ];
 
-    await query(sql, values_array);
+      await connection.query(sql, values_array);
 
-    // Insert conversion factors if provided
-    if (formData.conversionFactors && formData.conversionFactors.length > 0) {
-      for (const cf of formData.conversionFactors) {
-        const cfId = `${productId}-cf-${cf.unit}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const cfSql = `
-          INSERT INTO conversion_factors (id, product_id, unit, factor)
-          VALUES (?, ?, ?, ?)
-        `;
-        await query(cfSql, [cfId, productId, cf.unit, cf.factor]);
-      }
-    }
-
-    // Insert price levels if provided
-    if (formData.priceLevels && formData.priceLevels.length > 0) {
-      for (const pl of formData.priceLevels) {
-        const plSql = `
-          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity)
-          VALUES (?, ?, ?, ?)
-        `;
-        await query(plSql, [productId, pl.levelId, pl.price, pl.minQuantity || 0]);
-      }
-    }
-
-    // Insert supplier mappings if provided
-    if (formData.supplierMappings && formData.supplierMappings.length > 0) {
-        for (const mapping of formData.supplierMappings) {
-            const mappingId = `${productId}-sm-${mapping.supplierId}-${Date.now()}`;
-            const smSql = `
-                INSERT INTO supplier_product_mapping (
-                    id, product_id, supplier_id, supplier_sku, 
-                    supplier_lead_time, supplier_specific_rop, 
-                    supplier_cost, is_primary
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-            await query(smSql, [
-                mappingId, productId, mapping.supplierId, mapping.supplierSku || null,
-                mapping.leadTime, mapping.rop, mapping.cost || null, mapping.isPrimary ? 1 : 0
-            ]);
+      // Insert conversion factors if provided
+      if (formData.conversionFactors && formData.conversionFactors.length > 0) {
+        for (const cf of formData.conversionFactors) {
+          const cfId = `${productId}-cf-${cf.unit}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          const cfSql = `
+            INSERT INTO conversion_factors (id, product_id, unit, factor)
+            VALUES (?, ?, ?, ?)
+          `;
+          await connection.query(cfSql, [cfId, productId, cf.unit, cf.factor]);
         }
-    }
+      }
+
+      // Insert price levels if provided
+      if (formData.priceLevels && formData.priceLevels.length > 0) {
+        for (const pl of formData.priceLevels) {
+          const plSql = `
+            INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity)
+            VALUES (?, ?, ?, ?)
+          `;
+          await connection.query(plSql, [productId, pl.levelId, pl.price, pl.minQuantity || 0]);
+        }
+      }
+
+      // Insert supplier mappings if provided
+      if (formData.supplierMappings && formData.supplierMappings.length > 0) {
+          for (const mapping of formData.supplierMappings) {
+              const mappingId = `${productId}-sm-${mapping.supplierId}-${Date.now()}`;
+              const smSql = `
+                  INSERT INTO supplier_product_mapping (
+                      id, product_id, supplier_id, supplier_sku, 
+                      supplier_lead_time, supplier_specific_rop, 
+                      supplier_cost, is_primary
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              `;
+              await connection.query(smSql, [
+                  mappingId, productId, mapping.supplierId, mapping.supplierSku || null,
+                  mapping.leadTime, mapping.rop, mapping.cost || null, mapping.isPrimary ? 1 : 0
+              ]);
+          }
+      }
+    });
 
     return { success: true, message: `${formData.name} has been added to the inventory.`, productId };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving product:', error);
-    return { success: false, message: 'There was an error saving the product. Please check your database connection and try again.' };
+    
+    // Check for duplicate key error
+    if (error.code === 'ER_DUP_ENTRY') {
+      if (error.message.includes('unique_product_unit')) {
+        return { 
+          success: false, 
+          message: 'A conversion factor with this unit already exists for this product.' 
+        };
+      }
+    }
+    
+    return { 
+      success: false, 
+      message: 'There was an error saving the product. Please check your database connection and try again.' 
+    };
   }
 }
 
@@ -363,97 +478,126 @@ type UpdateProductData = Omit<ProductFormData, 'imageFile' | 'stock'>;
 
 export async function updateProduct(id: string, formData: UpdateProductData) {
   try {
-    // Prepare product data for database update
-    const productData = {
-      name: formData.name,
-      description: formData.description,
-      additional_description: formData.additionalDescription || null,
-      category: formData.category,
-      brand: formData.brand,
-      subcategory: formData.subcategory || null,
-      supplier_id: formData.supplier || null,
-      reorder_point: formData.reorderPoint || 0,
-      price: formData.price,
-      cost: formData.cost || null,
-      barcode: formData.barcode || null,
-      unit_of_measure: formData.unitOfMeasure,
-      warehouse_id: formData.warehouse || null,
-      conversion_factor: formData.conversionFactor || 1,
-      income_account: formData.incomeAccount || null,
-
-      expense_account: formData.expenseAccount || null,
-      vat_status: formData.vatStatus || 'YES (Subject to 12% VAT)',
-      availability: formData.availability || 'Available',
-    };
-
-    // Update product in MySQL database
-    const sql = `
-      UPDATE products SET
-        name = ?, description = ?, additional_description = ?, category = ?,
-        brand = ?, subcategory = ?, supplier_id = ?, price = ?, cost = ?,
-        barcode = ?, unit_of_measure = ?, warehouse_id = ?, conversion_factor = ?,
-        income_account = ?, expense_account = ?, vat_status = ?, availability = ?, reorder_point = ?
-      WHERE id = ?
-    `;
-
-    const values_array = [
-      productData.name,
-      productData.description,
-      productData.additional_description,
-      productData.category,
-      productData.brand,
-      productData.subcategory,
-      productData.supplier_id,
-      productData.price,
-      productData.cost,
-      productData.barcode,
-      productData.unit_of_measure,
-      productData.warehouse_id,
-      productData.conversion_factor,
-      productData.income_account,
-      productData.expense_account,
-      productData.vat_status,
-      productData.availability,
-      productData.reorder_point,
-      id,
-    ];
-
-    await query(sql, values_array);
-
-    // Handle conversion factors: delete existing and insert new ones
-    const deleteCFSql = `DELETE FROM conversion_factors WHERE product_id = ?`;
-    await query(deleteCFSql, [id]);
-
+    // Validate conversion factors for duplicates
     if (formData.conversionFactors && formData.conversionFactors.length > 0) {
-      for (const cf of formData.conversionFactors) {
-        const cfId = `${id}-cf-${cf.unit}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const cfSql = `
-          INSERT INTO conversion_factors (id, product_id, unit, factor)
-          VALUES (?, ?, ?, ?)
-        `;
-        await query(cfSql, [cfId, id, cf.unit, cf.factor]);
+      const units = formData.conversionFactors.map(cf => cf.unit.toLowerCase());
+      const uniqueUnits = new Set(units);
+      if (units.length !== uniqueUnits.size) {
+        return { 
+          success: false, 
+          message: 'Duplicate conversion factor units detected. Each unit must be unique.' 
+        };
       }
     }
 
-    // Handle price levels: delete existing and insert new ones
-    const deletePLSql = `DELETE FROM product_price_levels WHERE product_id = ?`;
-    await query(deletePLSql, [id]);
+    // Execute all operations within a transaction
+    await withTransaction(async (connection) => {
+      // Prepare product data for database update
+      const productData = {
+        name: formData.name,
+        description: formData.description,
+        additional_description: formData.additionalDescription || null,
+        category: formData.category,
+        brand: formData.brand,
+        subcategory: formData.subcategory || null,
+        supplier_id: formData.supplier || null,
+        reorder_point: formData.reorderPoint || 0,
+        price: formData.price,
+        cost: formData.cost || null,
+        barcode: formData.barcode || null,
+        unit_of_measure: formData.unitOfMeasure,
+        warehouse_id: formData.warehouse || null,
+        conversion_factor: formData.conversionFactor || 1,
+        income_account: formData.incomeAccount || null,
 
-    if (formData.priceLevels && formData.priceLevels.length > 0) {
-      for (const pl of formData.priceLevels) {
-        const plSql = `
-          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity)
-          VALUES (?, ?, ?, ?)
-        `;
-        await query(plSql, [id, pl.levelId, pl.price, pl.minQuantity || 0]);
+        expense_account: formData.expenseAccount || null,
+        vat_status: formData.vatStatus || 'YES (Subject to 12% VAT)',
+        availability: formData.availability || 'Available',
+      };
+
+      // Update product in MySQL database
+      const sql = `
+        UPDATE products SET
+          name = ?, description = ?, additional_description = ?, category = ?,
+          brand = ?, subcategory = ?, supplier_id = ?, price = ?, cost = ?,
+          barcode = ?, unit_of_measure = ?, warehouse_id = ?, conversion_factor = ?,
+          income_account = ?, expense_account = ?, vat_status = ?, availability = ?, reorder_point = ?
+        WHERE id = ?
+      `;
+
+      const values_array = [
+        productData.name,
+        productData.description,
+        productData.additional_description,
+        productData.category,
+        productData.brand,
+        productData.subcategory,
+        productData.supplier_id,
+        productData.price,
+        productData.cost,
+        productData.barcode,
+        productData.unit_of_measure,
+        productData.warehouse_id,
+        productData.conversion_factor,
+        productData.income_account,
+        productData.expense_account,
+        productData.vat_status,
+        productData.availability,
+        productData.reorder_point,
+        id,
+      ];
+
+      await connection.query(sql, values_array);
+
+      // Handle conversion factors: delete existing and insert new ones
+      const deleteCFSql = `DELETE FROM conversion_factors WHERE product_id = ?`;
+      await connection.query(deleteCFSql, [id]);
+
+      if (formData.conversionFactors && formData.conversionFactors.length > 0) {
+        for (const cf of formData.conversionFactors) {
+          const cfId = `${id}-cf-${cf.unit}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          const cfSql = `
+            INSERT INTO conversion_factors (id, product_id, unit, factor)
+            VALUES (?, ?, ?, ?)
+          `;
+          await connection.query(cfSql, [cfId, id, cf.unit, cf.factor]);
+        }
       }
-    }
+
+      // Handle price levels: delete existing and insert new ones
+      const deletePLSql = `DELETE FROM product_price_levels WHERE product_id = ?`;
+      await connection.query(deletePLSql, [id]);
+
+      if (formData.priceLevels && formData.priceLevels.length > 0) {
+        for (const pl of formData.priceLevels) {
+          const plSql = `
+            INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity)
+            VALUES (?, ?, ?, ?)
+          `;
+          await connection.query(plSql, [id, pl.levelId, pl.price, pl.minQuantity || 0]);
+        }
+      }
+    });
 
     return { success: true, message: `${formData.name} has been updated.` };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating product:', error);
-    return { success: false, message: 'There was an error updating the product. Please check your database connection and try again.' };
+    
+    // Check for duplicate key error
+    if (error.code === 'ER_DUP_ENTRY') {
+      if (error.message.includes('unique_product_unit')) {
+        return { 
+          success: false, 
+          message: 'A conversion factor with this unit already exists for this product.' 
+        };
+      }
+    }
+    
+    return { 
+      success: false, 
+      message: 'There was an error updating the product. Please check your database connection and try again.' 
+    };
   }
 }
 

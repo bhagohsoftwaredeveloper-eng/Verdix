@@ -32,7 +32,7 @@ export interface Product {
   warehouseId?: string;
 
   // Parent/Child relationship
-  parentId?: string;
+  parentId?: string | null;
   conversionFactor?: number;
 
   // Conversion factors for different units

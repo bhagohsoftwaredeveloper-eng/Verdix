@@ -21,7 +21,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { PurchaseOrder, Product } from '../../../lib/types';
 import { mockProducts } from '../../../lib/data';
-import { usePurchaseOrders } from '../../../hooks/use-api';
+import { usePurchaseOrders, useProducts, useBusinessProfile } from '../../../hooks/use-api';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddPurchaseOrderDialog } from './add-purchase-order-dialog';
@@ -199,11 +199,11 @@ function PurchaseOrderRow({
         </TableCell>
         <TableCell className="px-2 py-1 font-medium text-primary whitespace-nowrap">{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</TableCell>
         <TableCell className="px-2 py-1 whitespace-nowrap">{order.orderedBy || '-'}</TableCell>
-        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{itemsSubtotal.toFixed(2)}</TableCell>
-        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.shippingFee || 0).toFixed(2)}</TableCell>
-        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.vatAmount || 0).toFixed(2)}</TableCell>
-        <TableCell className="px-2 py-1 text-right font-bold whitespace-nowrap">₱{order.total.toFixed(2)}</TableCell>
-        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.receivedTotal || 0).toFixed(2)}</TableCell>
+        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{itemsSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.shippingFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.vatAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+        <TableCell className="px-2 py-1 text-right font-bold whitespace-nowrap">₱{order.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.receivedTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
         <TableCell className="px-2 py-1 max-w-[150px] truncate" title={order.supplierName}>
             {order.supplierName}
         </TableCell>
@@ -246,6 +246,9 @@ function PurchaseOrderSkeleton() {
 }
 
 function PurchaseOrderPrintView({ order, onBack }: { order: PurchaseOrder, onBack: () => void }) {
+  const { products } = useProducts();
+  const { profile } = useBusinessProfile();
+
   return (
     <Card>
       <CardHeader>
@@ -259,9 +262,15 @@ function PurchaseOrderPrintView({ order, onBack }: { order: PurchaseOrder, onBac
             </div>
             <CardDescription>Order ID: {order.id}</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <Logo className="size-7 text-primary" />
-            <h1 className="text-xl font-semibold font-headline text-primary">StockPilot</h1>
+          <div className="text-right">
+             <div className="flex items-center justify-end gap-2">
+               <Logo className="size-7 text-primary" />
+               <h1 className="text-xl font-semibold font-headline text-primary">{profile?.businessName || 'StockPilot'}</h1>
+             </div>
+             <div className="text-xs text-muted-foreground mt-1">
+                <p>{profile?.address}</p>
+                <p>{profile?.contactNumber} {profile?.email && `• ${profile.email}`}</p>
+             </div>
           </div>
         </div>
         <div className="flex justify-between text-sm text-muted-foreground pt-4">
@@ -284,22 +293,28 @@ function PurchaseOrderPrintView({ order, onBack }: { order: PurchaseOrder, onBac
           <TableHeader>
             <TableRow>
               <TableHead>Product</TableHead>
+              <TableHead className="text-center">Remaining QTY</TableHead>
               <TableHead className="text-right">Quantity</TableHead>
               <TableHead className="text-right">Cost per Item</TableHead>
               <TableHead className="text-right">Subtotal</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {order.items.map(item => (
+            {order.items.map(item => {
+               const product = products.find(p => p.id === item.productId);
+               const currentStock = product ? product.stock : (item.currentStock || 0);
+               
+               return (
               <TableRow key={item.productId}>
                 <TableCell>{item.productName}</TableCell>
+                <TableCell className="text-center">{currentStock}</TableCell>
                 <TableCell className="text-right">{item.quantity}</TableCell>
                 <TableCell className="text-right">₱{item.cost.toFixed(2)}</TableCell>
                 <TableCell className="text-right">₱{(item.cost * item.quantity).toFixed(2)}</TableCell>
               </TableRow>
-            ))}
+            )})}
             <TableRow className="border-t-2 border-primary">
-              <TableCell colSpan={3} className="text-right font-bold text-lg">Total</TableCell>
+              <TableCell colSpan={4} className="text-right font-bold text-lg">Total</TableCell>
               <TableCell className="text-right font-bold text-lg">₱{order.total.toFixed(2)}</TableCell>
             </TableRow>
           </TableBody>

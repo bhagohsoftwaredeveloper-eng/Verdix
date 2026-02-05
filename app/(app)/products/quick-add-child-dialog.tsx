@@ -26,7 +26,7 @@ import { addChildProduct, getProducts } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Wand2 } from 'lucide-react';
 
-export function QuickAddChildDialog({ parentProduct, baseStock, onChildAdded, products }: { parentProduct?: Product, baseStock?: number, onChildAdded: () => void, products: Product[] }) {
+export function QuickAddChildDialog({ parentProduct, baseStock, onChildAdded, products, trigger }: { parentProduct?: Product, baseStock?: number, onChildAdded: () => void, products: Product[], trigger?: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [childName, setChildName] = useState('');
   const [sku, setSku] = useState('');
@@ -190,10 +190,12 @@ export function QuickAddChildDialog({ parentProduct, baseStock, onChildAdded, pr
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
+        {trigger ? trigger : (
         <Button variant="ghost" size="icon">
           <PlusCircle className="h-4 w-4" />
           <span className="sr-only">Add child product</span>
         </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>

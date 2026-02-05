@@ -50,12 +50,11 @@ function CurrencyIcon({ className }: { className?: string }) {
   );
 }
 
-function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: PriceLevel, onSave: (name: string, description: string, isDefault: boolean, percentageAdjustment: number, minQuantity: number) => Promise<boolean>, onCancel: () => void }) {
+function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: PriceLevel, onSave: (name: string, description: string, isDefault: boolean, percentageAdjustment: number) => Promise<boolean>, onCancel: () => void }) {
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [isDefault, setIsDefault] = useState(initialData?.isDefault || false);
   const [percentageAdjustment, setPercentageAdjustment] = useState(initialData?.percentageAdjustment?.toString() || '0');
-  const [minQuantity, setMinQuantity] = useState(initialData?.minQuantity?.toString() || '0');
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -69,29 +68,19 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
       return;
     }
     const adjustment = parseFloat(percentageAdjustment);
-    const minQty = parseInt(minQuantity);
 
     if (isNaN(adjustment) || adjustment < 0) {
       toast({
         variant: 'destructive',
         title: 'Validation Error',
-        description: 'Percentage adjustment must be a valid positive number.',
+        description: 'Markup percentage must be a valid positive number.',
       });
       return;
     }
 
-    if (isNaN(minQty) || minQty < 0) {
-        toast({
-          variant: 'destructive',
-          title: 'Validation Error',
-          description: 'Minimum quantity must be a valid positive number.',
-        });
-        return;
-      }
-
     setIsSaving(true);
     try {
-      const success = await onSave(name, description, isDefault, adjustment, minQty);
+      const success = await onSave(name, description, isDefault, adjustment);
       if (success) {
         toast({
           title: initialData ? 'Price Level Updated' : 'Price Level Added',
@@ -102,7 +91,6 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
           setDescription('');
           setIsDefault(false);
           setPercentageAdjustment('0');
-          setMinQuantity('0');
         }
       }
     } catch (error) {
@@ -153,20 +141,7 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
           value={percentageAdjustment}
           onChange={(e) => setPercentageAdjustment(e.target.value)}
           className="col-span-3"
-          placeholder="e.g., 20 for 20% markup on cost"
-        />
-      </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="minQuantity" className="text-right">
-          Min. Quantity
-        </Label>
-        <Input
-          id="minQuantity"
-          type="number"
-          value={minQuantity}
-          onChange={(e) => setMinQuantity(e.target.value)}
-          className="col-span-3"
-          placeholder="e.g., 10 for bulk pricing"
+          placeholder="e.g., 20 for 20% markup"
         />
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
@@ -225,7 +200,6 @@ function PriceLevelRow({ level, onUpdated, onDeleted, onEdit }: { level: PriceLe
       </TableCell>
       <TableCell className="text-muted-foreground">{level.description}</TableCell>
       <TableCell className="text-center">{level.percentageAdjustment}%</TableCell>
-      <TableCell className="text-center">{level.minQuantity || 0}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => onEdit(level)}>
@@ -278,8 +252,8 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
     refreshLevels();
   }, []);
 
-  const handleAddLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number, minQuantity: number): Promise<boolean> => {
-    const result = await addPriceLevel(name, description, isDefault, percentageAdjustment, minQuantity);
+  const handleAddLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number): Promise<boolean> => {
+    const result = await addPriceLevel(name, description, isDefault, percentageAdjustment, 0);
     if (result.success) {
       await refreshLevels();
       onLevelAdded?.();
@@ -295,9 +269,9 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
     }
   };
 
-  const handleUpdateLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number, minQuantity: number): Promise<boolean> => {
+  const handleUpdateLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number): Promise<boolean> => {
     if (!editingLevel) return false;
-    const result = await updatePriceLevel(editingLevel.id, name, description, isDefault, percentageAdjustment, minQuantity);
+    const result = await updatePriceLevel(editingLevel.id, name, description, isDefault, percentageAdjustment, 0);
     if (result.success) {
       await refreshLevels();
       setView('list');
@@ -352,8 +326,7 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
                                 <TableRow>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Description</TableHead>
-                                <TableHead>Markup</TableHead>
-                                <TableHead>Min Qty</TableHead>
+                                <TableHead className="text-center">Markup</TableHead>
                                 <TableHead>
                                     <span className="sr-only">Actions</span>
                                 </TableHead>
