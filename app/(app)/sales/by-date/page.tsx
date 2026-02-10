@@ -31,7 +31,8 @@ import {
   FileSpreadsheet, 
   ChevronDown, 
   ChevronUp, 
-  CalendarIcon 
+  CalendarIcon,
+  FileDown
 } from 'lucide-react';
 import { TerminalSelector } from '@/components/TerminalSelector';
 import {
@@ -164,6 +165,144 @@ export default function SalesByDatePage() {
     setSearchTerm('');
   };
 
+  const fetchAllSalesForExport = async () => {
+    const params = new URLSearchParams();
+    if (dateRange?.from) params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+    if (dateRange?.to) params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+    if (terminal && terminal !== 'all') params.append('terminalId', terminal);
+    if (interval) params.append('interval', interval);
+    if (paymentType && paymentType !== 'all') params.append('paymentType', paymentType);
+    params.append('limit', '1000000');
+    
+    try {
+        const response = await fetch(`/api/sales/by-date?${params.toString()}`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+            return result.data;
+        }
+        return [];
+    } catch (error) {
+        console.error("Export fetch error:", error);
+        return [];
+    }
+  };
+
+  const exportToCSV = async () => {
+    const data = await fetchAllSalesForExport();
+    
+    const headers = [
+      'Date', 'Terminal', 'OR Start', 'OR End', 'Transaction Count', 'Discount', 'Revenue', 
+      'Vatable Sales', 'VAT Amount', 'VAT Exempt', 'Zero Rated', 'Non-VAT', 'Cost', 'Profit'
+    ];
+    
+    const csvRows = data.map((item: SalesData) => [
+      formatDate(item.date) || '',
+      terminal === 'all' ? 'All' : terminal,
+      item.startOR || '',
+      item.endOR || '',
+      item.transactionCount || 0,
+      item.totalDiscount || 0,
+      item.totalRevenue || 0,
+      item.vatableSales || 0,
+      item.vatAmount || 0,
+      item.vatExemptSales || 0,
+      item.zeroRatedSales || 0,
+      item.nonVatSales || 0,
+      item.cost || 0,
+      item.profit || 0
+    ]);
+
+    const csvContent = [
+        headers.join(','), 
+        ...csvRows.map((r: any[]) => r.map(c => `"${c}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `sales_by_date_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+  };
+
+  const exportToPDF = async () => {
+     const data = await fetchAllSalesForExport();
+     const printWindow = window.open('', '_blank');
+     if (!printWindow) return;
+
+     const printContent = `
+       <html>
+         <head>
+           <title>Sales by Date Report</title>
+           <style>
+             body { font-family: sans-serif; font-size: 10px; }
+             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+             th, td { border: 1px solid #ddd; padding: 4px; text-align: left; }
+             th { background-color: #f2f2f2; font-weight: bold; }
+             .text-right { text-align: right; }
+             .summary-row { font-weight: bold; background-color: #f9f9f9; }
+             h2 { margin-bottom: 10px; }
+             p { margin: 5px 0; }
+           </style>
+         </head>
+         <body>
+           <h2>Sales by Date Report</h2>
+           <p>Generated: ${format(new Date(), 'PPpp')}</p>
+           <p>Interval: ${interval.charAt(0).toUpperCase() + interval.slice(1)}</p>
+           <table>
+             <thead>
+               <tr>
+                 <th>Date</th>
+                 <th>OR Range</th>
+                 <th class="text-right">Discount</th>
+                 <th class="text-right">Revenue</th>
+                 <th class="text-right">Vatable</th>
+                 <th class="text-right">VAT</th>
+                 <th class="text-right">Exempt</th>
+                 <th class="text-right">Zero</th>
+                 <th class="text-right">Non-VAT</th>
+                 <th class="text-right">Cost</th>
+                 <th class="text-right">Profit</th>
+               </tr>
+             </thead>
+             <tbody>
+               ${data.map((item: SalesData) => `
+                 <tr>
+                   <td>${formatDate(item.date) || ''}</td>
+                   <td>${item.startOR && item.endOR ? `${item.startOR} - ${item.endOR}` : '-'}</td>
+                   <td class="text-right">${formatCurrency(item.totalDiscount)}</td>
+                   <td class="text-right">${formatCurrency(item.totalRevenue)}</td>
+                   <td class="text-right">${formatCurrency(item.vatableSales)}</td>
+                   <td class="text-right">${formatCurrency(item.vatAmount)}</td>
+                   <td class="text-right">${formatCurrency(item.vatExemptSales)}</td>
+                   <td class="text-right">${formatCurrency(item.zeroRatedSales)}</td>
+                   <td class="text-right">${formatCurrency(item.nonVatSales)}</td>
+                   <td class="text-right">${formatCurrency(item.cost)}</td>
+                   <td class="text-right">${formatCurrency(item.profit)}</td>
+                 </tr>
+               `).join('')}
+               <tr class="summary-row">
+                 <td colspan="2">TOTAL</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.totalDiscount, 0))}</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.totalRevenue, 0))}</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.vatableSales, 0))}</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.vatAmount, 0))}</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.vatExemptSales, 0))}</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.zeroRatedSales, 0))}</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.nonVatSales, 0))}</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.cost, 0))}</td>
+                 <td class="text-right">${formatCurrency(data.reduce((sum: number, item: SalesData) => sum + item.profit, 0))}</td>
+               </tr>
+             </tbody>
+           </table>
+         </body>
+       </html>
+     `;
+     
+     printWindow.document.write(printContent);
+     printWindow.document.close();
+     setTimeout(() => printWindow.print(), 500);
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
@@ -284,6 +423,24 @@ export default function SalesByDatePage() {
              </div>
 
              <div className="flex items-center gap-2">
+                {/* Export Dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8">
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={exportToCSV}>
+                      Export to CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={exportToPDF}>
+                      Export to PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 {/* Date Range Popover */}
                  <Popover>
                   <PopoverTrigger asChild>

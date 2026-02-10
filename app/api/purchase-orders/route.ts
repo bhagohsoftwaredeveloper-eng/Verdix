@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../lib/mysql';
+import { getExternalApiConfig } from '../../../lib/external-api-config';
+import { syncPurchaseTransaction } from '../../../lib/services/external-accounting-api';
 
 export async function GET(request: NextRequest) {
   try {
@@ -264,6 +266,36 @@ export async function POST(request: NextRequest) {
          // If a warehouse is specified, we might want to ensure the product is assigned there?
          // Ignoring warehouse update to avoid overriding existing assignments without explicit confirmation.
        }
+    }
+
+    // Sync to external accounting API (non-blocking)
+    try {
+      const apiConfig = await getExternalApiConfig();
+      if (apiConfig.enabled) {
+        const purchaseOrderData = {
+          id: orderId,
+          supplierId,
+          supplierName,
+          date: formattedDate,
+          deliveryDate: body.deliveryDate || null,
+          total: total || 0,
+          vatAmount: vatAmount || 0,
+          shippingFee: shipping || 0,
+          paymentMethod: paymentMethod || '',
+          status: (purchaseType === 'Receive') ? 'Received' : (status || 'Pending'),
+          orderedBy: orderedBy || '',
+          referenceNumber: reference || '',
+          items,
+        };
+        
+        // Fire and forget - don't wait for external API
+        syncPurchaseTransaction(orderId, purchaseOrderData, apiConfig).catch(err => {
+          console.error('External API sync failed (non-blocking):', err);
+        });
+      }
+    } catch (error) {
+      // Log but don't fail the purchase order creation
+      console.error('Error triggering external API sync:', error);
     }
 
     return NextResponse.json({

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../../lib/mysql';
+import { query, withTransaction } from '../../../../lib/mysql';
+import { getExternalApiConfig } from '../../../../lib/external-api-config';
+import { syncPurchaseTransaction, syncAccountsPayable } from '../../../../lib/services/external-accounting-api';
 
 export async function PATCH(
   request: NextRequest,
@@ -22,85 +24,72 @@ export async function PATCH(
       // Status update only fields
       status, 
       receivedTotal,
-      vatAmount 
+      vatAmount,
+      receivedItems // New field for partial/full receipt
     } = body;
 
-    // Build dynamic update query
-    let sql = 'UPDATE purchase_orders SET ';
-    const paramsUpdate = [];
-    const updates = [];
+    return await withTransaction(async (connection) => {
+      // 1. Build and execute dynamic update query for the purchase order
+      let sql = 'UPDATE purchase_orders SET ';
+      const paramsUpdate = [];
+      const updates = [];
 
-    // 1. Partial updates (Status/Received Total)
-    if (status) {
-      updates.push('status = ?');
-      paramsUpdate.push(status);
-    }
-    if (receivedTotal !== undefined) {
-      updates.push('received_total = ?');
-      paramsUpdate.push(receivedTotal);
-    }
-
-    // 2. Full Update Fields (Edit Mode)
-    if (supplierId) {
+      if (status) {
+        updates.push('status = ?');
+        paramsUpdate.push(status);
+      }
+      if (receivedTotal !== undefined) {
+        updates.push('received_total = ?');
+        paramsUpdate.push(receivedTotal);
+      }
+      if (supplierId) {
         updates.push('supplier_id = ?');
         paramsUpdate.push(supplierId);
-    }
-    if (supplierName) {
+      }
+      if (supplierName) {
         updates.push('supplier_name = ?');
         paramsUpdate.push(supplierName);
-    }
-    if (date) {
-        // Format date for MySQL
+      }
+      if (date) {
         const formattedDate = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
         updates.push('date = ?');
         paramsUpdate.push(formattedDate);
-    }
-    if (deliveryDate !== undefined) { // Allow null/empty
+      }
+      if (deliveryDate !== undefined) {
         updates.push('delivery_date = ?');
         paramsUpdate.push(deliveryDate || null);
-    }
-    if (total !== undefined) {
+      }
+      if (total !== undefined) {
         updates.push('total = ?');
         paramsUpdate.push(total);
-    }
-    if (shipping !== undefined) {
+      }
+      if (shipping !== undefined) {
         updates.push('shipping_fee = ?');
         paramsUpdate.push(shipping);
-    }
-     if (reference !== undefined) {
+      }
+      if (reference !== undefined) {
         updates.push('reference_number = ?');
         paramsUpdate.push(reference);
-    }
-    if (paymentMethod) {
+      }
+      if (paymentMethod) {
         updates.push('payment_method = ?');
         paramsUpdate.push(paymentMethod);
-    }
-    if (vatAmount !== undefined) {
+      }
+      if (vatAmount !== undefined) {
         updates.push('vat_amount = ?');
         paramsUpdate.push(vatAmount);
-    }
-    // Note field isn't in DB schema based on previous read but was in form. 
-    // If it's not in DB, we skip it or assume it might be added. 
-    // Checking schema from previous read: purchase_orders fields were id, supplier_id, supplier_name, date, total, payment_method, status, created_at, updated_at, ordered_by, shipping_fee, vat_amount, delivery_date, received_total, reference_number.
-    // 'note' seems missing from schema column list in previous read. I will skip adding it to update for now to avoid errors, or check if I should add it. 
-    // The previous POST didn't insert 'note' either? 
-    // Wait, POST handler :
-    // const insertOrderQuery = `INSERT INTO purchase_orders ...` 
-    // It did NOT include 'note'. So I will skip 'note' in SQL update too.
+      }
 
-    if (updates.length > 0) {
+      if (updates.length > 0) {
         sql += updates.join(', ');
         sql += ' WHERE id = ?';
         paramsUpdate.push(id);
-        await query(sql, paramsUpdate);
-    }
+        await connection.query(sql, paramsUpdate);
+      }
 
-    // 3. Handle Items Update (Full Replace Strategy)
-    if (items && Array.isArray(items)) {
-        // Delete existing items
-        await query('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [id]);
-
-        // Insert new items
+      // 2. Handle Items Update if provided (Full Replace Strategy)
+      if (items && Array.isArray(items)) {
+        await connection.query('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [id]);
         const insertItemQuery = `
           INSERT INTO purchase_order_items (
             id, purchase_order_id, product_id, product_name, quantity, cost,
@@ -110,7 +99,7 @@ export async function PATCH(
 
         for (const item of items) {
           const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          await query(insertItemQuery, [
+          await connection.query(insertItemQuery, [
             itemId,
             id,
             item.productId,
@@ -123,11 +112,87 @@ export async function PATCH(
             item.vatSubject ? 1 : 0
           ]);
         }
-    }
+      }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Order updated successfully'
+      // 3. Handle Receipt Side Effects (Stock Update & Movements)
+      if (status === 'Received' && receivedItems && Array.isArray(receivedItems)) {
+        for (const item of receivedItems) {
+          // Get current stock and product details
+          const [productResult]: any = await connection.query(
+            'SELECT name, stock FROM products WHERE id = ?',
+            [item.productId]
+          );
+
+          if (productResult && productResult.length > 0) {
+            const product = productResult[0];
+            const previousStock = parseFloat(product.stock || '0');
+            const quantityAdded = parseFloat(item.quantity || '0');
+            const newStock = previousStock + quantityAdded;
+
+            // Update product stock
+            await connection.query(
+              'UPDATE products SET stock = ?, updated_at = NOW() WHERE id = ?',
+              [newStock, item.productId]
+            );
+
+            // Record stock movement
+            const movementId = `MOV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            await connection.query(`
+              INSERT INTO stock_movements (
+                id, product_id, product_name, movement_type, 
+                quantity_change, previous_stock, new_stock, 
+                reference_id, reference_type, notes, created_at, updated_at
+              ) VALUES (?, ?, ?, 'purchase', ?, ?, ?, ?, 'purchase', ?, NOW(), NOW())
+            `, [
+              movementId,
+              item.productId,
+              product.name,
+              quantityAdded,
+              previousStock,
+              newStock,
+              id,
+              `Received Purchase Order: ${id}`
+            ]);
+          }
+        }
+      }
+
+      // 4. Trigger External API Sync (if enabled)
+      try {
+        const apiConfig = await getExternalApiConfig();
+        if (apiConfig.enabled) {
+          // Fetch the updated PO for sync
+          const [updatedPO]: any = await connection.query('SELECT * FROM purchase_orders WHERE id = ?', [id]);
+          const [poItems]: any = await connection.query('SELECT * FROM purchase_order_items WHERE purchase_order_id = ?', [id]);
+          
+          if (updatedPO && updatedPO.length > 0) {
+            const poData = {
+              ...updatedPO[0],
+              items: poItems.map((pi: any) => ({
+                productId: pi.product_id,
+                productName: pi.product_name,
+                quantity: pi.quantity,
+                cost: pi.cost,
+                discount: pi.discount,
+                discountType: pi.discount_type,
+                vatSubject: pi.vat_subject === 1
+              }))
+            };
+
+            // Fire and forget sync calls
+            syncPurchaseTransaction(id, poData, apiConfig).catch(console.error);
+            syncAccountsPayable(poData.supplier_id, apiConfig).catch(console.error);
+          }
+        }
+      } catch (syncError) {
+        console.error('Error during external sync trigger:', syncError);
+        // We don't fail the transaction if sync fails
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Order updated successfully'
+      });
     });
   } catch (error) {
     console.error('Error updating purchase order:', error);
@@ -137,6 +202,7 @@ export async function PATCH(
     );
   }
 }
+
 
 export async function DELETE(
   request: NextRequest,

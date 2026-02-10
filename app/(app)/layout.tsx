@@ -84,7 +84,7 @@ const salesNavItems = [
   { href: '/sales/orders', label: 'Sales Order' },
   { href: '/sales/invoices', label: 'Sales Invoice/Delivery' },
   { href: '/sales/returns', label: 'Merchandise Credits' },
-  { href: '/sales/voids', label: 'Voided Sales' },
+  { href: '/sales/voids', label: 'Post Void' },
   { href: '/sales/z-reading', label: 'POS Z-Reading' },
   { href: '/sales/x-reading', label: 'POS X-Reading' },
   { href: '/sales/analysis', label: 'Sales Analysis' },
@@ -104,12 +104,15 @@ const suppliersNavItems = [
 ];
 
 const otherNavItems = [
-  { href: '/purchases', icon: ShoppingCart, label: 'Purchases', permission: 'manage_purchases' },
   { href: '/reports', icon: BarChart3, label: 'Reports', permission: 'view_reports' },
-  { href: '/restock', icon: Lightbulb, label: 'Restock AI', permission: 'use_ai_features' },
   // Suppliers moved to own section
   { href: '/user-management', icon: Users, label: 'User Management', permission: 'manage_users' },
   { href: '/settings', icon: Settings, label: 'Settings', permission: 'manage_settings' },
+];
+
+const purchasesNavItems = [
+  { href: '/purchases', label: 'Purchase Orders' },
+  { href: '/purchases/bad-orders', label: 'Bad Orders' },
 ];
 
 
@@ -177,6 +180,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isSalesPage = pathname.startsWith('/sales');
   const isInventoryPage = pathname.startsWith('/inventory');
   const isCustomerPage = pathname.startsWith('/customer');
+  const isSuppliersPage = pathname.startsWith('/suppliers');
+  const isPurchasesPage = pathname.startsWith('/purchases');
 
   const getInitials = (email?: string | null) => {
     if (!email) return '..';
@@ -188,21 +193,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <Sidebar className="non-printable border-r-0" collapsible="icon">
-        <SidebarHeader className="h-16 border-b border-sidebar-border/50 sticky top-0 bg-sidebar/95 backdrop-blur z-10 px-6 justify-center">
-          <div className="flex items-center gap-3 transition-all duration-200 group-data-[collapsible=icon]:justify-center">
-            <div className="p-1.5 bg-primary/10 rounded-lg group-data-[collapsible=icon]:p-1">
-              <Package2 className="size-6 text-primary" />
+      <Sidebar className="non-printable border-r" collapsible="icon">
+        <SidebarHeader className="h-20 border-b border-sidebar-border sticky top-0 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl z-10 px-6 justify-center shadow-sm">
+          <div className="flex items-center gap-4 transition-all duration-300 group-data-[collapsible=icon]:justify-center">
+            <div className="p-2.5 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl shadow-sm ring-1 ring-primary/20 group-data-[collapsible=icon]:p-2">
+              <Package2 className="size-7 text-primary group-data-[collapsible=icon]:size-5" />
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-               <h1 className="text-lg font-bold font-headline tracking-tight text-sidebar-foreground">StockPilot</h1>
-               <span className="text-[10px] uppercase font-medium text-muted-foreground tracking-wider">Enterprise</span>
+               <h1 className="text-xl font-bold font-headline tracking-tight text-sidebar-foreground">StockPilot</h1>
+               <span className="text-[10px] uppercase font-semibold text-primary/70 tracking-[0.15em] mt-0.5">Enterprise</span>
             </div>
           </div>
         </SidebarHeader>
-        <SidebarContent className="px-2 py-4 gap-4 overflow-y-auto flex-1">
+        <SidebarContent className="px-3 py-6 gap-6 overflow-y-auto flex-1">
           <SidebarGroup>
-            <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 px-4 mb-2">Platform</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Platform</SidebarGroupLabel>
             <SidebarMenu>
               {filteredNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
@@ -210,10 +215,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       tooltip={{ children: item.label }}
-                      className="gap-3 px-4 font-medium"
+                      className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                     >
-                      <item.icon className="bg-transparent" />
-                      <span>{item.label}</span>
+                      <item.icon className="size-[18px]" />
+                      <span className="text-[14px]">{item.label}</span>
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
@@ -222,7 +227,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarGroup>
 
           <SidebarGroup>
-            <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 px-4 mb-2">Operations</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Operations</SidebarGroupLabel>
             <SidebarMenu>
               {hasPermission('manage_inventory') && (
                 <SidebarMenuItem>
@@ -231,20 +236,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       <SidebarMenuButton
                         isActive={isInventoryPage}
                         tooltip={{ children: "Inventory" }}
-                        className="justify-between gap-3 px-4 font-medium"
+                        className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                         <div className="flex items-center gap-3">
-                          <Warehouse className="size-4" />
-                          <span>Inventory</span>
+                          <Warehouse className="size-[18px]" />
+                          <span className="text-[14px]">Inventory</span>
                         </div>
-                        <ChevronDown className="size-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                        <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 border-l border-sidebar-border/50 pl-2 my-1 space-y-0.5">
+                      <SidebarMenuSub className="ml-5 border-l-2 border-sidebar-border/40 pl-3 my-2 space-y-1">
                         {inventoryNavItems.map((item) => (
                           <SidebarMenuItem key={item.href}>
-                            <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-8">
+                            <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-9 rounded-md hover:bg-sidebar-accent/50 transition-colors duration-200">
                               <Link href={item.href}>{item.label}</Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuItem>
@@ -262,20 +267,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       <SidebarMenuButton
                         isActive={isSalesPage}
                         tooltip={{ children: "Sales" }}
-                        className="justify-between gap-3 px-4 font-medium"
+                        className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                          <div className="flex items-center gap-3">
-                          <Receipt className="size-4" />
-                          <span>Sales</span>
+                          <Receipt className="size-[18px]" />
+                          <span className="text-[14px]">Sales</span>
                         </div>
-                        <ChevronDown className="size-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                        <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 border-l border-sidebar-border/50 pl-2 my-1 space-y-0.5">
+                      <SidebarMenuSub className="ml-5 border-l-2 border-sidebar-border/40 pl-3 my-2 space-y-1">
                         {salesNavItems.map((item) => (
                           <SidebarMenuItem key={item.href}>
-                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-8">
+                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-9 rounded-md hover:bg-sidebar-accent/50 transition-colors duration-200">
                               <Link href={item.href}>{item.label}</Link>
                              </SidebarMenuSubButton>
                           </SidebarMenuItem>
@@ -293,20 +298,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       <SidebarMenuButton
                         isActive={isCustomerPage}
                         tooltip={{ children: "Customers" }}
-                        className="justify-between gap-3 px-4 font-medium"
+                        className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                         <div className="flex items-center gap-3">
-                          <UserIcon className="size-4" />
-                          <span>Customers</span>
+                          <UserIcon className="size-[18px]" />
+                          <span className="text-[14px]">Customers</span>
                         </div>
-                        <ChevronDown className="size-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                        <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                      <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 border-l border-sidebar-border/50 pl-2 my-1 space-y-0.5">
+                      <SidebarMenuSub className="ml-5 border-l-2 border-sidebar-border/40 pl-3 my-2 space-y-1">
                         {customerNavItems.map((item) => (
                            <SidebarMenuItem key={item.href}>
-                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-8">
+                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-9 rounded-md hover:bg-sidebar-accent/50 transition-colors duration-200">
                               <Link href={item.href}>{item.label}</Link>
                              </SidebarMenuSubButton>
                           </SidebarMenuItem>
@@ -319,24 +324,56 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                {hasPermission('manage_purchases') && (
                 <SidebarMenuItem>
-                  <Collapsible defaultOpen={true} className="group/collapsible">
+                  <Collapsible defaultOpen={isPurchasesPage} className="group/collapsible">
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
-                        tooltip={{ children: "Suppliers" }}
-                         className="justify-between gap-3 px-4 font-medium"
+                        isActive={isPurchasesPage}
+                        tooltip={{ children: "Purchases" }}
+                         className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                          <div className="flex items-center gap-3">
-                          <Users className="size-4" />
-                          <span>Suppliers</span>
+                          <ShoppingCart className="size-[18px]" />
+                          <span className="text-[14px]">Purchases</span>
                         </div>
-                        <ChevronDown className="size-3 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                        <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub className="ml-4 border-l border-sidebar-border/50 pl-2 my-1 space-y-0.5">
+                      <SidebarMenuSub className="ml-5 border-l-2 border-sidebar-border/40 pl-3 my-2 space-y-1">
+                         {purchasesNavItems.map((item) => (
+                          <SidebarMenuItem key={item.href}>
+                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-9 rounded-md hover:bg-sidebar-accent/50 transition-colors duration-200">
+                              <Link href={item.href}>{item.label}</Link>
+                             </SidebarMenuSubButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarMenuItem>
+              )}
+
+               {hasPermission('manage_purchases') && (
+                <SidebarMenuItem>
+                  <Collapsible defaultOpen={isSuppliersPage} className="group/collapsible">
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isSuppliersPage}
+                        tooltip={{ children: "Suppliers" }}
+                         className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
+                      >
+                         <div className="flex items-center gap-3">
+                          <Users className="size-[18px]" />
+                          <span className="text-[14px]">Suppliers</span>
+                        </div>
+                        <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="ml-5 border-l-2 border-sidebar-border/40 pl-3 my-2 space-y-1">
                          {suppliersNavItems.map((item) => (
                           <SidebarMenuItem key={item.href}>
-                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-8">
+                             <SidebarMenuSubButton asChild isActive={pathname === item.href} className="text-[13px] h-9 rounded-md hover:bg-sidebar-accent/50 transition-colors duration-200">
                               <Link href={item.href}>{item.label}</Link>
                              </SidebarMenuSubButton>
                           </SidebarMenuItem>
@@ -350,7 +387,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarGroup>
 
            <SidebarGroup className="mt-auto">
-             <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70 px-4 mb-2">Management</SidebarGroupLabel>
+             <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Management</SidebarGroupLabel>
             <SidebarMenu>
               {filteredOtherNavItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
@@ -358,10 +395,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       tooltip={{ children: item.label }}
-                       className="gap-3 px-4 font-medium"
+                       className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                     >
-                      <item.icon />
-                      <span>{item.label}</span>
+                      <item.icon className="size-[18px]" />
+                      <span className="text-[14px]">{item.label}</span>
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
@@ -369,19 +406,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter className="sticky bottom-0 bg-sidebar/95 backdrop-blur border-t border-sidebar-border/50 mt-auto">
+        <SidebarFooter className="sticky bottom-0 bg-gradient-to-t from-sidebar to-sidebar/95 backdrop-blur-xl border-t border-sidebar-border mt-auto shadow-lg">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm text-sidebar-foreground outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2">
-                <Avatar className="size-7">
-                  <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground border border-sidebar-border">
+              <button className="flex w-full items-center gap-3 overflow-hidden rounded-lg p-3 text-left text-sm text-sidebar-foreground outline-none ring-sidebar-ring transition-all duration-200 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground focus-visible:ring-2 hover:shadow-sm">
+                <Avatar className="size-9 ring-2 ring-sidebar-border shadow-sm">
+                  <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold border border-primary/20">
                     {getInitials(user.email)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col truncate">
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-semibold">
                     {user.email || 'Anonymous'}
                   </span>
+                  <span className="text-[11px] text-muted-foreground">View Profile</span>
                 </div>
               </button>
             </DropdownMenuTrigger>

@@ -30,6 +30,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 interface ReturnSalesDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  currentUser?: any;
+  terminalId?: string;
 }
 
 const MOCK_RETURNABLE_SALES: Sale[] = [
@@ -180,11 +182,87 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
 
 
 
+const ReturnSuccessView = ({ 
+    returnedTotal, 
+    saleId, 
+    onClose,
+    onPrint
+}: { 
+    returnedTotal: number, 
+    saleId: string, 
+    onClose: () => void,
+    onPrint?: () => void
+}) => {
+    return (
+        <>
+            <DialogHeader>
+                <div className="flex flex-col items-center justify-center space-y-2 mb-4">
+                    <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                        <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            width="24" 
+                            height="24" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            strokeWidth="2" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round" 
+                            className="text-green-600"
+                        >
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                    </div>
+                    <DialogTitle className="text-xl text-center">Return Successful</DialogTitle>
+                    <DialogDescription className="text-center">
+                        Items have been returned to inventory.
+                    </DialogDescription>
+                </div>
+            </DialogHeader>
+
+            <div className="py-6 space-y-6">
+                <div className="bg-muted p-4 rounded-lg space-y-3">
+                    <p className="text-sm text-center text-muted-foreground font-medium uppercase tracking-wider">
+                        Merchandise Credit Issued
+                    </p>
+                    <p className="text-4xl font-bold text-center text-primary">
+                        ₱{returnedTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                </div>
+                
+                <div className="text-center text-sm text-muted-foreground">
+                    <p>Reference Transaction: <span className="font-mono font-medium text-foreground">{saleId}</span></p>
+                </div>
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+                <Button 
+                    className="w-full sm:w-auto" 
+                    variant="outline" 
+                    onClick={onPrint}
+                >
+                    <Search className="mr-2 h-4 w-4" /> {/* Using Search as generic icon placeholders if Printer not avail, but Printer is imported */}
+                    Print Credit Slip
+                </Button>
+                <Button 
+                    className="w-full sm:w-auto" 
+                    onClick={onClose}
+                >
+                    Close
+                </Button>
+            </DialogFooter>
+        </>
+    );
+};
+
 export function ReturnSalesDialog({
   isOpen,
   onOpenChange,
+  currentUser,
+  terminalId,
 }: ReturnSalesDialogProps) {
-  const [step, setStep] = useState<'loading' | 'auth' | 'input_so' | 'select_items'>('loading');
+  const [step, setStep] = useState<'loading' | 'auth' | 'input_so' | 'select_items' | 'success'>('loading');
   const [sales, setSales] = useState<Sale[]>([]); // Kept for type safety if needed, but not used for list
   const [isLoading, setIsLoading] = useState(false);
   const [soNumber, setSoNumber] = useState('');
@@ -192,6 +270,7 @@ export function ReturnSalesDialog({
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [itemsToReturn, setItemsToReturn] = useState<SaleItem[]>([]);
   const [posSettings, setPosSettings] = useState<any>(null);
+  const [returnedTotal, setReturnedTotal] = useState(0);
   const authSucceededRef = useRef(false);
 
   useEffect(() => {
@@ -202,6 +281,7 @@ export function ReturnSalesDialog({
         setSoNumber('');
         setSearchError('');
         setSelectedSale(null);
+        setReturnedTotal(0);
         
         // Fetch settings first to determine step
         fetch(`/api/pos-settings?_t=${Date.now()}`, { cache: 'no-store' })
@@ -271,11 +351,43 @@ export function ReturnSalesDialog({
       }
   };
   
-  const handleReturnItems = (items: SaleItem[]) => {
+  const handleReturnItems = async (items: SaleItem[]) => {
       if (selectedSale && items.length > 0) {
-          console.log(`Returning ${items.length} items from sale ${selectedSale.id}...`);
-          // Logic to process return would go here
-          onOpenChange(false);
+          setIsLoading(true);
+          try {
+              const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+              
+              const response = await fetch('/api/sales/returns', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      saleId: selectedSale.id,
+                      items: items.map(item => ({
+                          productId: item.product.id,
+                          productName: item.product.name,
+                          quantity: item.quantity,
+                          price: item.price
+                      })),
+                      terminalId: terminalId || posSettings?.terminalId, 
+                      userId: currentUser?.uid || currentUser?.id || null,
+                      reason: 'POS Return',
+                      totalAmount
+                  })
+              });
+
+              const result = await response.json();
+              if (result.success) {
+                  setReturnedTotal(totalAmount);
+                  setStep('success');
+              } else {
+                  setSearchError(result.error || 'Failed to process return');
+              }
+          } catch (err) {
+              console.error('Error processing return:', err);
+              setSearchError('Error processing return. Please try again.');
+          } finally {
+              setIsLoading(false);
+          }
       }
   };
 
@@ -285,11 +397,28 @@ export function ReturnSalesDialog({
       setSoNumber('');
   };
 
+  const handleCloseSuccess = () => {
+      onOpenChange(false);
+  }
+
+  // Fallback print function - ideally this reuses the printer logic
+  const handlePrintCredit = () => {
+      // Logic for printing credit slip would go here
+      window.print();
+  }
+
   return (
     <>
-      <Dialog open={isOpen && (step === 'input_so' || step === 'select_items')} onOpenChange={onOpenChange}>
+      <Dialog open={isOpen && (step === 'input_so' || step === 'select_items' || step === 'success')} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
-          {step === 'select_items' && selectedSale ? (
+          {step === 'success' ? (
+              <ReturnSuccessView 
+                returnedTotal={returnedTotal} 
+                saleId={String(selectedSale?.orderNumber || selectedSale?.id || '')} 
+                onClose={handleCloseSuccess}
+                onPrint={handlePrintCredit}
+              />
+          ) : step === 'select_items' && selectedSale ? (
             <SelectItemsView 
                 sale={selectedSale} 
                 onReturnItems={handleReturnItems} 

@@ -150,6 +150,34 @@ export interface PurchaseOrder {
   referenceNumber?: string;
 }
 
+export interface BadOrder {
+  id: string;
+  purchaseOrderId: string;
+  supplierId: string;
+  supplierName: string;
+  reportedBy?: string;
+  reportDate: string;
+  status: 'Reported' | 'Return Requested' | 'Replaced' | 'Credited' | 'Resolved';
+  totalAffectedValue: number;
+  notes?: string;
+  resolutionNotes?: string;
+  items: BadOrderItem[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BadOrderItem {
+  id: string;
+  badOrderId: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  cost: number;
+  reason: 'Damaged' | 'Defective' | 'Expired' | 'Wrong Item' | 'Missing' | 'Other';
+  description?: string;
+  createdAt?: string;
+}
+
 
 export interface Category {
   id: string;

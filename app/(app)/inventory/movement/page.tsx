@@ -23,9 +23,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { fetchStockMovements } from './actions';
-import { mockProducts } from '@/lib/data';
+import { getProducts } from '../../products/actions';
 import type { Product, StockMovement } from '@/lib/types';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
@@ -73,8 +73,7 @@ function MovementSkeleton() {
   );
 }
 
-function ProductFilter({ selectedProduct, onSelectProduct }: { selectedProduct: Product | null, onSelectProduct: (product: Product | null) => void }) {
-    const products = mockProducts;
+function ProductFilter({ products, selectedProduct, onSelectProduct }: { products: Product[], selectedProduct: Product | null, onSelectProduct: (product: Product | null) => void }) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -111,25 +110,30 @@ function ProductFilter({ selectedProduct, onSelectProduct }: { selectedProduct: 
     );
 }
 
-// Mock adjustments for demonstration
-const mockAdjustments = [
-  {
-    id: '1',
-    product: mockProducts[0],
-    quantity: 10,
-    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    newStock: 160,
-  },
-];
+
 
 export default function StockMovementPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [movementType, setMovementType] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Fetch products for filter
+  useEffect(() => {
+    const fetchProductsData = async () => {
+      try {
+        const data = await getProducts();
+        setProducts(data);
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+      }
+    };
+    fetchProductsData();
+  }, []);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -178,6 +182,87 @@ export default function StockMovementPage() {
   const endIndex = startIndex + itemsPerPage;
   const currentMovements = movements.slice(startIndex, endIndex);
 
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              isActive={currentPage === i}
+              onClick={() => setCurrentPage(i)}
+              className="cursor-pointer"
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+    } else {
+      // Always show first page
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink
+            isActive={currentPage === 1}
+            onClick={() => setCurrentPage(1)}
+            className="cursor-pointer"
+          >
+            1
+          </PaginationLink>
+        </PaginationItem>
+      );
+
+      if (currentPage > 3) {
+        items.push(
+          <PaginationItem key="ellipsis-start">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+
+      for (let i = start; i <= end; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              isActive={currentPage === i}
+              onClick={() => setCurrentPage(i)}
+              className="cursor-pointer"
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+
+      if (currentPage < totalPages - 2) {
+        items.push(
+          <PaginationItem key="ellipsis-end">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+
+      // Always show last page
+      items.push(
+        <PaginationItem key={totalPages}>
+          <PaginationLink
+            isActive={currentPage === totalPages}
+            onClick={() => setCurrentPage(totalPages)}
+            className="cursor-pointer"
+          >
+            {totalPages}
+          </PaginationLink>
+        </PaginationItem>
+      );
+    }
+    return items;
+  };
+
   const resetFilters = () => {
     setSelectedProduct(null);
     setMovementType('all');
@@ -195,7 +280,7 @@ export default function StockMovementPage() {
         </CardDescription>
         <div className="flex items-center justify-between gap-4 pt-4">
           <div className="flex items-center gap-2">
-            <ProductFilter selectedProduct={selectedProduct} onSelectProduct={setSelectedProduct} />
+            <ProductFilter products={products} selectedProduct={selectedProduct} onSelectProduct={setSelectedProduct} />
             <Select value={movementType} onValueChange={setMovementType}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by type" />
@@ -289,17 +374,7 @@ export default function StockMovementPage() {
                     className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <PaginationItem key={page}>
-                    <PaginationLink
-                      onClick={() => setCurrentPage(page)}
-                      isActive={currentPage === page}
-                      className="cursor-pointer"
-                    >
-                      {page}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
+                {renderPaginationItems()}
                 <PaginationItem>
                   <PaginationNext
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}

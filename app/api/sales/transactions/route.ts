@@ -36,12 +36,17 @@ export async function GET(request: NextRequest) {
         st.customer_id,
         c.name as customer_name,
         c.contact_number as customer_contact,
-        st.status as sale_status
+        st.status as sale_status,
+        orig_pt.order_number as original_order_number,
+        orig_pt.transaction_time as original_transaction_time,
+        orig_u.display_name as original_cashier_name
       FROM pos_transactions pt
       LEFT JOIN users u ON pt.user_id = u.uid
       LEFT JOIN pos_terminals term ON pt.terminal_id = term.id
       LEFT JOIN sales_transactions st ON pt.sale_id = st.id
       LEFT JOIN customers c ON st.customer_id = c.id
+      LEFT JOIN pos_transactions orig_pt ON (pt.transaction_type = 'return' AND pt.sale_id = orig_pt.sale_id AND orig_pt.transaction_type = 'sale')
+      LEFT JOIN users orig_u ON orig_pt.user_id = orig_u.uid
       WHERE 1=1
     `;
 
@@ -208,7 +213,11 @@ export async function GET(request: NextRequest) {
         },
         cashier: row.cashier_name || 'N/A',
         terminal: row.terminal_name || 'N/A',
-        items: items // Attach items
+        items: items, // Attach items
+        // Original sale information (for returns)
+        originalOrderNumber: row.original_order_number || null,
+        originalTransactionTime: row.original_transaction_time || null,
+        originalCashierName: row.original_cashier_name || null
       };
     });
 

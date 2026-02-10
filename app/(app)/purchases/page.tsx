@@ -356,7 +356,7 @@ export default function PurchasesPage() {
   // Use the real API hook
   const { purchaseOrders, loading, refetch, pagination } = usePurchaseOrders(searchTerm, undefined, currentPage, pageSize);
 
-  const updatePurchaseOrder = async (id: string, updates: Partial<PurchaseOrder>) => {
+  const updatePurchaseOrder = async (id: string, updates: any) => {
     try {
       const response = await fetch(`/api/purchase-orders/${id}`, {
         method: 'PATCH',
@@ -382,19 +382,13 @@ export default function PurchasesPage() {
     }
   };
 
-  const handleReceiveConfirm = async (receivedItems: { productId: string; quantity: number }[]) => {
+  const handleReceiveConfirm = async (
+    receivedItems: { productId: string; quantity: number }[],
+    badItems?: { productId: string; productName: string; quantity: number; cost: number; reason: string; description: string }[]
+  ) => {
     if (!orderToReceive) return;
 
     try {
-      // Update stocks
-      await Promise.all(receivedItems.map(item =>
-        fetch(`/api/products/${item.productId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stockIncrement: item.quantity }),
-        })
-      ));
-
       // Calculate received total value
       const receivedTotalValue = receivedItems.reduce((acc, receivedItem) => {
         const originalItem = orderToReceive.items.find(i => i.productId === receivedItem.productId);
@@ -402,13 +396,43 @@ export default function PurchasesPage() {
         return acc + (cost * receivedItem.quantity);
       }, 0);
 
-      // Update purchase order status and total
+      // 1. Update purchase order status and total (stock update, movements, AP sync handled by backend)
       await updatePurchaseOrder(orderToReceive.id, { 
         status: 'Received',
-        receivedTotal: receivedTotalValue
+        receivedTotal: receivedTotalValue,
+        receivedItems: receivedItems as any 
       });
 
-      toast({ title: "Stock Received", description: "Inventory has been updated successfully." });
+      // 2. Create bad order record if there are bad items
+      if (badItems && badItems.length > 0) {
+        const badOrderResponse = await fetch('/api/bad-orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            purchaseOrderId: orderToReceive.id,
+            supplierId: orderToReceive.supplierId,
+            supplierName: orderToReceive.supplierName,
+            reportedBy: localStorage.getItem('mock-user-session') ? JSON.parse(localStorage.getItem('mock-user-session')!).email : 'System',
+            reportDate: new Date().toISOString(),
+            status: 'Reported',
+            items: badItems,
+            notes: `Automatically created during receipt of PO #${orderToReceive.referenceNumber || orderToReceive.id}`,
+          }),
+        });
+
+        if (!badOrderResponse.ok) {
+          console.error('Failed to create bad order record');
+        }
+      }
+
+      toast({ 
+        title: "Stock Received", 
+        description: badItems && badItems.length > 0 
+          ? `Inventory updated and ${badItems.length} bad items recorded.`
+          : "Inventory has been updated successfully." 
+      });
       setIsReceiveDialogOpen(false);
       setOrderToReceive(null);
       refetch();

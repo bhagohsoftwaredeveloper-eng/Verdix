@@ -433,10 +433,28 @@ export function AddProductDialog({
           }
           
           form.setValue('price', parseFloat(finalPrice.toFixed(2)));
+          
+          // ALSO update all price level fields automatically
+          if (priceLevelFields.length > 0) {
+            priceLevelFields.forEach((field, index) => {
+              const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
+              if (levelDef) {
+                // Calculate price for each level
+                let levelPrice;
+                if (levelDef.name?.toLowerCase() === 'retail') {
+                  levelPrice = parseFloat(basePrice.toFixed(2));
+                } else {
+                  const levelMarkup = levelDef.percentageAdjustment ?? 0;
+                  levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                }
+                form.setValue(`priceLevels.${index}.price`, levelPrice);
+              }
+            });
+          }
         }
       }
     }
-  }, [selectedPriceLevelId, priceLevels, form, categories, subcategories, brands, systemSettings]);
+  }, [selectedPriceLevelId, priceLevels, priceLevelFields, form, categories, subcategories, brands, systemSettings]);
 
 
 

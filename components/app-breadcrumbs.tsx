@@ -25,7 +25,15 @@ export function AppBreadcrumbs() {
         {segments.map((segment, index) => {
           const href = `/${segments.slice(0, index + 1).join('/')}`;
           const isLast = index === segments.length - 1;
-          const label = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+          
+          // Custom label mappings
+          const labelMap: Record<string, string> = {
+            'returns': 'Merchandise Credits',
+            'voids': 'Post Void'
+          };
+          
+          const defaultLabel = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+          const label = labelMap[segment] || defaultLabel;
 
           return (
             <Fragment key={href}>

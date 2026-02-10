@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       FROM sales_transactions st
       JOIN pos_transactions pt ON st.id = pt.sale_id
       LEFT JOIN customers c ON st.customer_id = c.id
-      WHERE st.status != 'voided'
+      WHERE LOWER(st.status) NOT IN ('voided', 'returned')
     `;
 
     const params: any[] = [];
@@ -47,26 +47,39 @@ export async function GET(request: NextRequest) {
     
     // Only limit if not searching, to ensure we find specific transactions
     if (!queryParam) {
-        salesQuery += ' LIMIT 20';
+        salesQuery += ' LIMIT 50';
     }
 
-    const sales = await query(salesQuery, params);
+    const rawSales = await query(salesQuery, params);
+    
+    // Deduplicate sales by ID
+    const uniqueSalesMap = new Map();
+    rawSales.forEach((sale: any) => {
+        if (!uniqueSalesMap.has(sale.id)) {
+            uniqueSalesMap.set(sale.id, sale);
+        }
+    });
+
+    // Take the first 20 unique sales
+    const sales = Array.from(uniqueSalesMap.values()).slice(0, 20);
 
     // 2. Fetch items for each sale
     const salesWithItems = await Promise.all(
       sales.map(async (sale: any) => {
         const itemsQuery = `
           SELECT
-            si.id,
+            MIN(si.id) as id,
             si.product_id,
             si.product_name,
-            si.quantity,
+            SUM(si.quantity) as quantity,
             si.price,
             p.sku,
             p.barcode
           FROM sale_items si
           LEFT JOIN products p ON si.product_id = p.id
           WHERE si.sale_id = ?
+          GROUP BY si.product_id, si.product_name, si.price, p.sku, p.barcode
+          HAVING SUM(si.quantity) > 0
         `;
         const items = await query(itemsQuery, [sale.id]);
 
@@ -91,6 +104,7 @@ export async function GET(request: NextRequest) {
               sku: item.sku || '',
               barcode: item.barcode || '',
               price: parseFloat(item.price),
+              unitOfMeasure: item.unit_of_measure || ''
             },
             quantity: item.quantity,
             price: parseFloat(item.price),
@@ -106,7 +120,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Error fetching recent sales:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch recent sales' },
+      { success: false, error: error?.message || 'Failed to fetch recent sales' },
       { status: 500 }
     );
   }

@@ -241,8 +241,8 @@ function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) 
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sale.items.map(item => (
-                    <TableRow key={item.product.id}>
+                  {sale.items.map((item, index) => (
+                    <TableRow key={index}>
                       <TableCell>{item.product.name}</TableCell>
                       <TableCell>{item.product.unitOfMeasure}</TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
@@ -309,16 +309,20 @@ export function RecentSalesDialog({
               console.error(err);
               setStep('list');
           });
+    }
+  }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && step === 'list') {
         const fetchRecentSales = async () => {
             try {
-                const response = await fetch(`/api/pos/recent-sales`);
+                const response = await fetch(`/api/pos/recent-sales?_t=${Date.now()}`, { cache: 'no-store' });
                 const result = await response.json();
                 
                 if (result.success) {
-                setRecentSales(result.data);
+                    setRecentSales(result.data);
                 } else {
-                console.error('Failed to fetch recent sales:', result.error);
+                    console.error('Failed to fetch recent sales:', result.error);
                 }
             } catch (error) {
                 console.error('Error fetching recent sales:', error);
@@ -326,9 +330,13 @@ export function RecentSalesDialog({
                 setIsLoading(false);
             }
         };
+
         fetchRecentSales();
+        // Poll every 3 seconds to keep data real-time
+        const interval = setInterval(fetchRecentSales, 3000);
+        return () => clearInterval(interval);
     }
-  }, [isOpen]);
+  }, [isOpen, step]);
   
   const handleAuthSuccess = () => {
       authSucceededRef.current = true;

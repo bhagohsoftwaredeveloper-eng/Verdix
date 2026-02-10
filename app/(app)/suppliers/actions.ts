@@ -103,6 +103,43 @@ export async function addSupplierPayment(data: {
       data.notes || null,
     ]);
 
+    // Sync to external accounting API (non-blocking)
+    try {
+      const { getExternalApiConfig } = await import('@/lib/external-api-config');
+      const { syncPaymentTransaction, syncAccountsPayable } = await import('@/lib/services/external-accounting-api');
+      
+      const apiConfig = await getExternalApiConfig();
+      if (apiConfig.enabled) {
+        // Get supplier name for the payload
+        const supplierQuery = await query('SELECT name FROM suppliers WHERE id = ?', [data.supplierId]);
+        const supplierName = supplierQuery[0]?.name || '';
+
+        const paymentData = {
+          id: paymentId,
+          supplierId: data.supplierId,
+          supplierName,
+          amount: data.amount,
+          date: data.date,
+          paymentMethod: data.paymentMethod,
+          reference: data.reference,
+          notes: data.notes,
+        };
+
+        // Fire and forget - sync payment transaction
+        syncPaymentTransaction(paymentId, paymentData, apiConfig).catch(err => {
+          console.error('External API payment sync failed (non-blocking):', err);
+        });
+
+        // Also sync updated accounts payable balance
+        syncAccountsPayable(data.supplierId, apiConfig).catch(err => {
+          console.error('External API accounts payable sync failed (non-blocking):', err);
+        });
+      }
+    } catch (error) {
+      // Log but don't fail the payment recording
+      console.error('Error triggering external API sync:', error);
+    }
+
     revalidatePath('/purchases/suppliers');
     return { success: true, message: 'Payment recorded successfully' };
   } catch (error) {

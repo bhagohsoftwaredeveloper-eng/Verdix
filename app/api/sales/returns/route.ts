@@ -1,0 +1,129 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { query, withTransaction } from '@/lib/mysql';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      saleId,
+      items, // Array of { productId, productName, quantity, price }
+      terminalId,
+      userId,
+      reason,
+      totalAmount
+    } = body;
+
+    if (!saleId || !items || items.length === 0) {
+      return NextResponse.json({ success: false, error: 'Sale ID and items are required' }, { status: 400 });
+    }
+
+    return await withTransaction(async (connection) => {
+      // Find a valid user ID if none provided (last resort to avoid FK error)
+      let finalUserId = userId;
+      if (!finalUserId) {
+        const [userResult]: any = await connection.query('SELECT uid FROM users LIMIT 1');
+        finalUserId = userResult?.[0]?.uid || 'system'; // 'system' might still fail if not in users
+      }
+
+      const posTransId = `RTN-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      // 1. Insert into pos_transactions
+      const insertPosTransSql = `
+        INSERT INTO pos_transactions (
+          id, sale_id, user_id, terminal_id, transaction_type,
+          subtotal, tax_amount, discount_amount, total_amount, payment_method, 
+          payment_status, notes, transaction_time, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'return', ?, 0, 0, ?, 'Return', 'completed', ?, NOW(), NOW(), NOW())
+      `;
+      
+      await connection.query(insertPosTransSql, [
+        posTransId,
+        saleId,
+        finalUserId,
+        terminalId || null,
+        -totalAmount, // Negative since it's a return/outflow of money from business
+        -totalAmount,
+        reason || 'Sales Return'
+      ]);
+
+      const insertItemSql = `
+        INSERT INTO pos_transaction_items (
+          id, pos_transaction_id, sale_item_id, product_id, product_name, 
+          quantity, unit_price, line_total, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      `;
+
+      // First, create sale_items for this return transaction
+      const insertSaleItemSql = `
+        INSERT INTO sale_items (
+          id, sale_id, product_id, product_name, quantity, price, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+      `;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const saleItemId = `${posTransId}-ITEM-${i + 1}`;
+        const posItemId = `${posTransId}-DETAIL-${i + 1}`;
+
+        // Create sale_item entry
+        await connection.query(insertSaleItemSql, [
+          saleItemId,
+          saleId,
+          item.productId,
+          item.productName,
+          -item.quantity, // Negative for returns
+          item.price
+        ]);
+
+        // Create pos_transaction_item entry referencing the sale_item
+        await connection.query(insertItemSql, [
+          posItemId,
+          posTransId,
+          saleItemId, // Reference the sale_item we just created
+          item.productId,
+          item.productName,
+          -item.quantity, // Negative quantity
+          item.price,
+          -(item.quantity * item.price)
+        ]);
+
+        // Stock Increment Logic
+        // Fetch current stock
+        const [prodResult]: any = await connection.query('SELECT stock, name FROM products WHERE id = ?', [item.productId]);
+        if (prodResult && prodResult.length > 0) {
+            const currentStock = prodResult[0].stock;
+            const newStock = currentStock + item.quantity; // Increment stock on return
+            
+            // Record movement
+            const movementId = `MOV-${Date.now()}-${i}-RTN`;
+            await connection.query(`
+                INSERT INTO stock_movements (
+                    id, product_id, product_name, movement_type, 
+                    quantity_change, previous_stock, new_stock, 
+                    reference_id, reference_type, notes, created_at, updated_at
+                ) VALUES (?, ?, ?, 'return', ?, ?, ?, ?, 'return', ?, NOW(), NOW())
+            `, [movementId, item.productId, prodResult[0].name, item.quantity, currentStock, newStock, posTransId, `Return for Sale: ${saleId}`]);
+
+            // Update product
+            await connection.query('UPDATE products SET stock = ? WHERE id = ?', [newStock, item.productId]);
+        }
+      }
+
+      // 3. Update original sale status if needed (Optional: could mark as 'Returned' or keep it as 'Paid' but has return links)
+      // For now, let's keep it simple and just record the return transaction.
+      // The returns page looks for transaction_type = 'return'.
+
+      return NextResponse.json({
+        success: true,
+        data: { posTransId },
+        message: 'Return processed successfully'
+      });
+    });
+
+  } catch (error: any) {
+    console.error('Error processing return:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to process return' },
+      { status: 500 }
+    );
+  }
+}

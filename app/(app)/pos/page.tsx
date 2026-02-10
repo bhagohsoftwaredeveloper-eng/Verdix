@@ -1513,7 +1513,12 @@ export default function POSPage() {
       />
       <RecentSalesDialog isOpen={isRecentSalesOpen} onOpenChange={setIsRecentSalesOpen} />
       <VoidSalesDialog isOpen={isVoidSalesOpen} onOpenChange={setIsVoidSalesOpen} />
-      <ReturnSalesDialog isOpen={isReturnSalesOpen} onOpenChange={setIsReturnSalesOpen} />
+      <ReturnSalesDialog 
+        isOpen={isReturnSalesOpen} 
+        onOpenChange={setIsReturnSalesOpen} 
+        currentUser={currentUser}
+        terminalId={selectedTerminalId}
+      />
       <PriceInquiryDialog isOpen={isPriceInquiryOpen} onOpenChange={setIsPriceInquiryOpen} />
       <ZReadingDialog isOpen={isZReadingOpen} onOpenChange={setIsZReadingOpen} />
       

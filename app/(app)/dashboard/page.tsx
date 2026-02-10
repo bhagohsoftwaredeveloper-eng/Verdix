@@ -22,7 +22,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, ShoppingCart, AlertCircle, Boxes, TrendingUp, DollarSign } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, Boxes, TrendingUp } from 'lucide-react';
 import type { ChartConfig } from '@/components/ui/chart';
 import { Product, Sale } from '@/lib/types';
 import { mockProducts, mockSales } from '@/lib/data';
@@ -41,7 +41,11 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 function CurrencyIcon({ className }: { className?: string }) {
-    return <DollarSign className={className} />
+    return (
+        <span className={`font-bold ${className}`} style={{ fontSize: '1em', lineHeight: 1 }}>
+            ₱
+        </span>
+    )
 }
 
 export default function DashboardPage() {

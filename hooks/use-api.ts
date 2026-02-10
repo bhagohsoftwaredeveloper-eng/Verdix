@@ -378,3 +378,123 @@ export function useBusinessProfile(): UseBusinessProfileResult {
 
   return { profile, loading, error, refetch };
 }
+
+export interface UseBadOrdersResult {
+  badOrders: any[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
+
+export function useBadOrders(search?: string, status?: string, page: number = 1, limit: number = 10): UseBadOrdersResult {
+  const [badOrders, setBadOrders] = useState<any[]>([]);
+  const [pagination, setPagination] = useState({ total: 0, limit: 10, offset: 0, hasMore: false });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchBadOrders = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const offset = (page - 1) * limit;
+      const params = new URLSearchParams();
+      if (search) {
+        params.append('search', search);
+      }
+      if (status) {
+        params.append('status', status);
+      }
+      params.append('limit', limit.toString());
+      params.append('offset', offset.toString());
+
+      const response = await fetch(`/api/bad-orders?${params.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch bad orders');
+      }
+
+      setBadOrders(result.data || []);
+      if (result.pagination) {
+        setPagination(result.pagination);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error fetching bad orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBadOrders();
+  }, [search, status, page, limit]);
+
+  const refetch = () => {
+    fetchBadOrders();
+  };
+
+  return { badOrders, loading, error, refetch, pagination };
+}
+
+export interface BadOrderStatsData {
+  totalOpenCases: number;
+  totalValueAtRisk: number;
+  actionRequired: number;
+  topSuppliers: {
+    supplierId: string;
+    supplierName: string;
+    openCount: number;
+    totalValue: number;
+  }[];
+}
+
+export function useBadOrderStats() {
+  const [stats, setStats] = useState<BadOrderStatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/bad-orders/stats');
+      const result = await response.json();
+      if (result.success) {
+        setStats(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+    
+    // Listen for updates
+    const handleUpdate = () => fetchStats();
+    window.addEventListener('bad-orders-updated', handleUpdate);
+    // Listen for stock updates too as they might trigger bad order creation
+    window.addEventListener('stock-updated', handleUpdate);
+    
+    return () => {
+      window.removeEventListener('bad-orders-updated', handleUpdate);
+      window.removeEventListener('stock-updated', handleUpdate);
+    };
+  }, []);
+
+  return { stats, loading, refetch: fetchStats };
+}

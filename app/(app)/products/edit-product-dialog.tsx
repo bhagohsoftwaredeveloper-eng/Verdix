@@ -43,6 +43,7 @@ import { ManageUnitOfMeasureDialog } from './ManageUnitOfMeasureDialog';
 import { ManageSuppliersDialog } from './ManageSuppliersDialog';
 import { ManageAccountsDialog } from './ManageAccountsDialog';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -107,12 +108,14 @@ export function EditProductDialog({
   product, 
   onProductUpdated,
   productOptions: externalProductOptions,
-  onOptionsRefresh
+  onOptionsRefresh,
+  trigger
 }: { 
   product: Product; 
   onProductUpdated?: () => void;
   productOptions?: any;
   onOptionsRefresh?: () => void;
+  trigger?: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -197,6 +200,13 @@ export function EditProductDialog({
   const selectedSupplierId = form.watch('supplier');
   const selectedUnitOfMeasure = form.watch('unitOfMeasure');
   const costValue = form.watch('cost');
+  const watchedCost = form.watch('cost');
+  const watchedCategoryName = form.watch('category');
+  const watchedSubcategoryName = form.watch('subcategory');
+  const watchedBrandName = form.watch('brand');
+  
+  // State for selected price level (for automatic price calculation)
+  const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
 
   useEffect(() => {
     if (product && isOpen) {
@@ -245,14 +255,14 @@ export function EditProductDialog({
         return;
     }
 
-    const category = categories.find(c => c.name === form.getValues('category'));
-    const subcategory = subcategories.find(s => s.name === form.getValues('subcategory'));
-    const brand = brands.find(b => b.name === form.getValues('brand'));
-    const supplier = suppliers.find(s => s.id === form.getValues('supplier'));
+    const category = categories.find(c => c.name === watchedCategoryName);
+    const subcategory = subcategories.find(s => s.name === watchedSubcategoryName);
+    const brand = brands.find(b => b.name === watchedBrandName);
+    const supplier = suppliers.find(s => s.id === selectedSupplierId);
 
     let markup = 0;
     let source = '';
-    const priority = systemSettings.markupPriority || ["subcategory", "category", "brand", "supplier"];
+    const priority = systemSettings.markupPriority || ["subcategory", "category", "brand"];
 
     for (const type of priority) {
         if (type === 'subcategory' && subcategory && subcategory.markupPercentage && subcategory.markupPercentage > 0) {
@@ -267,14 +277,10 @@ export function EditProductDialog({
             markup = brand.markupPercentage;
             source = 'Brand';
             break;
-        } else if (type === 'supplier' && supplier && supplier.markupPercentage && supplier.markupPercentage > 0) {
-            markup = supplier.markupPercentage;
-            source = 'Supplier';
-            break;
         }
     }
 
-    // Fallback to global default
+    // Fallback to global default if no specific markup found
     if (!source && systemSettings.defaultMarkupPercentage && systemSettings.defaultMarkupPercentage > 0) {
         markup = systemSettings.defaultMarkupPercentage;
         source = 'Global Default';
@@ -282,37 +288,64 @@ export function EditProductDialog({
 
     if (source) {
       setMarkupSource(`Calculated from ${source} Markup (${markup}%)`);
-      const currentCost = form.getValues('cost') || 0;
-      
-      if (currentCost > 0) {
-          const basePrice = currentCost * (1 + markup / 100);
+      if (watchedCost && watchedCost > 0) {
+          const basePrice = watchedCost * (1 + markup / 100);
           
+          // Find default price level
           const defaultLevel = priceLevels.find((l: any) => l.isDefault) || priceLevels[0];
-          let mainPrice = basePrice;
-
-          if (defaultLevel && defaultLevel.percentageAdjustment) {
-             mainPrice = basePrice * (defaultLevel.percentageAdjustment / 100);
-          }
           
-          // Only update if the calculated price is different (avoid infinite loops/unnecessary renders)
-          // Actually setValue trigger re-renders, so we should be careful.
-          // But since we are reacting to cost/category/etc changes, it's fine.
+          // Calculate main price using default level's markup on top of basePrice
+          // Exception: "Retail" level uses basePrice directly without additional markup
+          let mainPrice = basePrice;
+          if (defaultLevel && defaultLevel.percentageAdjustment) {
+             // Check if default level is "Retail" - if so, skip markup
+             if (defaultLevel.name?.toLowerCase() !== 'retail') {
+                mainPrice = basePrice * (1 + defaultLevel.percentageAdjustment / 100);
+             }
+          }
           form.setValue('price', parseFloat(mainPrice.toFixed(2)));
 
+          // Apply to all price levels: basePrice + level markup
+          // Exception: "Retail" level uses basePrice directly
           if (priceLevels.length > 0) {
               const currentFields = form.getValues('priceLevels') || [];
+              
+              // Helper to find existing field index
               const getFieldIndex = (levelId: string) => currentFields.findIndex((f: any) => f.levelId === levelId);
 
               priceLevels.forEach((level: any) => {
-                  const markup = level.percentageAdjustment ?? 0;
-                  // Use currentCost as base, ignoring the calculated basePrice which includes default/system markup
-                  const levelPrice = parseFloat((currentCost * (1 + markup / 100)).toFixed(2));
+                  // Check if this is the "Retail" level
+                  let levelPrice;
+                  if (level.name?.toLowerCase() === 'retail') {
+                      // Retail uses basePrice directly, ignoring its markup percentage
+                      levelPrice = parseFloat(basePrice.toFixed(2));
+                  } else {
+                      // Other levels apply their markup on top of basePrice
+                      const levelMarkup = level.percentageAdjustment ?? 0;
+                      levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                  }
                   
                   const index = getFieldIndex(level.id);
                   if (index >= 0) {
                       form.setValue(`priceLevels.${index}.price`, levelPrice);
-                  } else {
-                      appendPriceLevel({ levelId: level.id, price: levelPrice });
+                  }
+              });
+              
+              // AUTO-POPULATE: Update all fields that exist in the form
+              priceLevelFields.forEach((field, index) => {
+                  const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
+                  if (levelDef) {
+                      // Check if this is the "Retail" level
+                      let levelPrice;
+                      if (levelDef.name?.toLowerCase() === 'retail') {
+                          // Retail uses basePrice directly
+                          levelPrice = parseFloat(basePrice.toFixed(2));
+                      } else {
+                          // Other levels apply their markup
+                          const levelMarkup = levelDef.percentageAdjustment ?? 0;
+                          levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                      }
+                      form.setValue(`priceLevels.${index}.price`, levelPrice);
                   }
               });
           }
@@ -321,8 +354,75 @@ export function EditProductDialog({
       setMarkupSource(null);
     }
 
-  }, [costValue, selectedUnitOfMeasure, selectedSupplierId, form.watch('category'), form.watch('subcategory'), form.watch('brand'), isInitialized, systemSettings, categories, subcategories, brands, suppliers, priceLevels]);
+  }, [watchedCost, watchedCategoryName, watchedSubcategoryName, watchedBrandName, selectedSupplierId, categories, subcategories, brands, suppliers, form, priceLevels, priceLevelFields, systemSettings, isInitialized]);
 
+
+  // Auto-update main price when a price level is selected
+  useEffect(() => {
+    if (selectedPriceLevelId) {
+      const selectedLevel = priceLevels.find((l: any) => l.id === selectedPriceLevelId);
+      if (selectedLevel) {
+        const cost = form.getValues('cost');
+        if (cost && cost > 0) {
+          // Get category/brand markup
+          const category = categories.find(c => c.name === form.getValues('category'));
+          const subcategory = subcategories.find(s => s.name === form.getValues('subcategory'));
+          const brand = brands.find(b => b.name === form.getValues('brand'));
+          
+          let markup = 0;
+          const priority = systemSettings?.markupPriority || ["subcategory", "category", "brand"];
+          
+          for (const type of priority) {
+            if (type === 'subcategory' && subcategory?.markupPercentage && subcategory.markupPercentage > 0) {
+              markup = subcategory.markupPercentage;
+              break;
+            } else if (type === 'category' && category?.markupPercentage && category.markupPercentage > 0) {
+              markup = category.markupPercentage;
+              break;
+            } else if (type === 'brand' && brand?.markupPercentage && brand.markupPercentage > 0) {
+              markup = brand.markupPercentage;
+              break;
+            }
+          }
+          
+          if (!markup && systemSettings?.defaultMarkupPercentage && systemSettings.defaultMarkupPercentage > 0) {
+            markup = systemSettings.defaultMarkupPercentage;
+          }
+          
+          const basePrice = cost * (1 + markup / 100);
+          
+          // Calculate price based on selected level
+          let finalPrice;
+          if (selectedLevel.name?.toLowerCase() === 'retail') {
+            finalPrice = basePrice;
+          } else {
+            const levelMarkup = selectedLevel.percentageAdjustment ?? 0;
+            finalPrice = basePrice * (1 + levelMarkup / 100);
+          }
+          
+          form.setValue('price', parseFloat(finalPrice.toFixed(2)));
+          
+          // ALSO update all price level fields automatically
+          if (priceLevelFields.length > 0) {
+            priceLevelFields.forEach((field, index) => {
+              const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
+              if (levelDef) {
+                // Calculate price for each level
+                let levelPrice;
+                if (levelDef.name?.toLowerCase() === 'retail') {
+                  levelPrice = parseFloat(basePrice.toFixed(2));
+                } else {
+                  const levelMarkup = levelDef.percentageAdjustment ?? 0;
+                  levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                }
+                form.setValue(`priceLevels.${index}.price`, levelPrice);
+              }
+            });
+          }
+        }
+      }
+    }
+  }, [selectedPriceLevelId, priceLevels, priceLevelFields, form, categories, subcategories, brands, systemSettings]);
 
   const saveChanges = async (values: ProductFormValues) => {
     console.log('EditProductDialog saveChanges called with values:', values);
@@ -369,19 +469,25 @@ export function EditProductDialog({
   return (
     <TooltipProvider>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
-                <Pencil className="h-4 w-4" />
-                <span className="sr-only">Edit product</span>
-              </Button>
-            </DialogTrigger>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Edit this product</p>
-          </TooltipContent>
-        </Tooltip>
+        {trigger ? (
+          <DialogTrigger asChild>
+            {trigger}
+          </DialogTrigger>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                  <Pencil className="h-4 w-4" />
+                  <span className="sr-only">Edit product</span>
+                </Button>
+              </DialogTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Edit this product</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
         <DialogContent className="sm:max-w-3xl h-[85vh] flex flex-col overflow-hidden !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>Edit Product</DialogTitle>
@@ -1047,6 +1153,38 @@ export function EditProductDialog({
                     </TabsContent>
                     <TabsContent value="price-levels" className="space-y-4 p-6">
                     <div className="space-y-4">
+                      {/* Price Level Selector for Auto-Calculate */}
+                      <div className="rounded-md border p-4 bg-muted/30">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <Label htmlFor="price-level-selector" className="text-sm font-medium">
+                              Select Price Level
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Choose a level to automatically calculate the main price
+                            </p>
+                          </div>
+                          <div className="w-[200px]">
+                            <Select value={selectedPriceLevelId} onValueChange={setSelectedPriceLevelId}>
+                              <SelectTrigger id="price-level-selector">
+                                <SelectValue placeholder="Select level" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {isLoadingPriceLevels ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : (
+                                  priceLevels?.map(level => (
+                                    <SelectItem key={level.id} value={level.id}>
+                                      {level.name} ({level.percentageAdjustment}%)
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                      
                       <div className="rounded-md border p-4">
                         <div className="flex items-center justify-between mb-4">
                           <div>
@@ -1112,28 +1250,29 @@ export function EditProductDialog({
                                       render={({ field }) => (
                                         <FormItem>
                                           <FormLabel className="text-xs">Price (₱)</FormLabel>
-                                           <div className="flex gap-2 items-center">
+                                          <div className="flex gap-2 items-center">
                                             <FormControl>
-                                              <Input 
-                                                type="number" 
-                                                step="0.01" 
-                                                placeholder="0.00" 
-                                                value={field.value} 
+                                              <Input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="0.00"
+                                                value={field.value}
                                                 onChange={(e) => {
                                                   const newVal = parseFloat(e.target.value) || 0;
                                                   field.onChange(newVal);
-                                                  
+
                                                   // Sync with main price if this is the default level
+                                                  // We need to check if the FULL level object corresponds to a default level
                                                   const currentLevelId = form.getValues(`priceLevels.${index}.levelId`);
                                                   const levelDef = priceLevels.find(l => l.id === currentLevelId);
-                                                  
+
+                                                  // If it's the default level OR if there's only one level text and it matches
                                                   if (levelDef?.isDefault || priceLevels.length === 1) {
                                                       form.setValue('price', newVal);
                                                   }
-                                                }} 
+                                                }}
                                               />
                                             </FormControl>
-
                                           </div>
                                           <FormMessage />
                                         </FormItem>
@@ -1185,6 +1324,12 @@ export function EditProductDialog({
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
             </Button>
+            {markupSource && (
+              <span className="text-xs text-muted-foreground mr-auto ml-2 flex items-center">
+                <Wand2 className="mr-1 h-3 w-3" />
+                {markupSource}
+              </span>
+            )}
             <Button type="submit" form="edit-product-form" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>

@@ -1,0 +1,263 @@
+/**
+ * External Accounting API Service
+ * Handles communication with external accounting server
+ */
+
+import { ExternalApiConfig } from '../external-api-config';
+import { logApiSync } from './api-sync-logger';
+
+// Payload Types
+export type AccountsPayablePayload = {
+  supplierId: string;
+  supplierName: string;
+  totalPurchases: number;
+  totalPayments: number;
+  balance: number;
+  currency: string;
+  lastUpdated: string;
+  transactions: Array<{
+    type: 'PURCHASE' | 'PAYMENT';
+    id: string;
+    date: string;
+    amount: number;
+    reference?: string;
+    status?: string;
+  }>;
+};
+
+export type PurchaseTransactionPayload = {
+  transactionType: 'PURCHASE_ORDER';
+  orderId: string;
+  referenceNumber: string;
+  supplierId: string;
+  supplierName: string;
+  date: string;
+  dueDate?: string;
+  total: number;
+  vatAmount: number;
+  shippingFee: number;
+  paymentMethod: string;
+  status: string;
+  orderedBy: string;
+  lineItems: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitCost: number;
+    discount: number;
+    discountType: 'amount' | 'percentage';
+    vatSubject: boolean;
+    subtotal: number;
+  }>;
+};
+
+export type PaymentTransactionPayload = {
+  transactionType: 'SUPPLIER_PAYMENT';
+  paymentId: string;
+  supplierId: string;
+  supplierName: string;
+  amount: number;
+  date: string;
+  paymentMethod: string;
+  reference?: string;
+  notes?: string;
+};
+
+/**
+ * Send HTTP request to external API with retry logic
+ */
+async function sendToExternalApi(
+  endpoint: string,
+  payload: any,
+  config: ExternalApiConfig,
+  transactionType: string,
+  transactionId: string
+): Promise<{ success: boolean; error?: string; response?: any }> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= config.retryAttempts; attempt++) {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add authentication headers
+      if (config.authType === 'api_key' && config.apiKey) {
+        headers['X-API-Key'] = config.apiKey;
+      } else if (config.authType === 'bearer_token' && config.bearerToken) {
+        headers['Authorization'] = `Bearer ${config.bearerToken}`;
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(config.timeout),
+      });
+
+      const responseData = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        // Success - log it
+        await logApiSync({
+          transactionType,
+          transactionId,
+          endpoint,
+          payload: JSON.stringify(payload),
+          response: JSON.stringify(responseData),
+          status: 'success',
+          retryCount: attempt,
+        });
+
+        return { success: true, response: responseData };
+      } else {
+        throw new Error(`HTTP ${response.status}: ${responseData.message || response.statusText}`);
+      }
+    } catch (error) {
+      lastError = error as Error;
+      
+      // If this isn't the last attempt, wait before retrying
+      if (attempt < config.retryAttempts) {
+        await new Promise(resolve => setTimeout(resolve, config.retryDelay));
+      }
+    }
+  }
+
+  // All retries failed - log the failure
+  const errorMessage = lastError?.message || 'Unknown error';
+  
+  await logApiSync({
+    transactionType,
+    transactionId,
+    endpoint,
+    payload: JSON.stringify(payload),
+    response: null,
+    status: 'failed',
+    errorMessage,
+    retryCount: config.retryAttempts,
+  });
+
+  return { success: false, error: errorMessage };
+}
+
+/**
+ * Sync accounts payable data for a supplier
+ */
+export async function syncAccountsPayable(
+  supplierId: string,
+  config: ExternalApiConfig
+): Promise<{ success: boolean; error?: string }> {
+  if (!config.enabled) {
+    return { success: true }; // Skip if disabled
+  }
+
+  try {
+    // Fetch supplier data with balance
+    const response = await fetch(`/api/suppliers/${supplierId}/balance`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch supplier balance');
+    }
+
+    const supplierData = await response.json();
+
+    const payload: AccountsPayablePayload = {
+      supplierId: supplierData.id,
+      supplierName: supplierData.name,
+      totalPurchases: supplierData.totalPurchases,
+      totalPayments: supplierData.totalPayments,
+      balance: supplierData.balance,
+      currency: 'PHP',
+      lastUpdated: new Date().toISOString(),
+      transactions: supplierData.transactions || [],
+    };
+
+    const endpoint = `${config.apiEndpoint}/accounts-payable`;
+    return await sendToExternalApi(endpoint, payload, config, 'ACCOUNTS_PAYABLE', supplierId);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error syncing accounts payable:', errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Sync purchase transaction data
+ */
+export async function syncPurchaseTransaction(
+  purchaseOrderId: string,
+  purchaseOrderData: any,
+  config: ExternalApiConfig
+): Promise<{ success: boolean; error?: string }> {
+  if (!config.enabled) {
+    return { success: true }; // Skip if disabled
+  }
+
+  try {
+    const payload: PurchaseTransactionPayload = {
+      transactionType: 'PURCHASE_ORDER',
+      orderId: purchaseOrderData.id || purchaseOrderId,
+      referenceNumber: purchaseOrderData.referenceNumber || '',
+      supplierId: purchaseOrderData.supplierId,
+      supplierName: purchaseOrderData.supplierName,
+      date: purchaseOrderData.date,
+      dueDate: purchaseOrderData.deliveryDate,
+      total: purchaseOrderData.total,
+      vatAmount: purchaseOrderData.vatAmount || 0,
+      shippingFee: purchaseOrderData.shippingFee || 0,
+      paymentMethod: purchaseOrderData.paymentMethod,
+      status: purchaseOrderData.status,
+      orderedBy: purchaseOrderData.orderedBy || '',
+      lineItems: purchaseOrderData.items.map((item: any) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        unitCost: item.cost,
+        discount: item.discount || 0,
+        discountType: item.discountType || 'amount',
+        vatSubject: item.vatSubject || false,
+        subtotal: item.quantity * item.cost - (item.discount || 0),
+      })),
+    };
+
+    const endpoint = `${config.apiEndpoint}/purchase-transactions`;
+    return await sendToExternalApi(endpoint, payload, config, 'PURCHASE_ORDER', purchaseOrderId);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error syncing purchase transaction:', errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Sync payment transaction data
+ */
+export async function syncPaymentTransaction(
+  paymentId: string,
+  paymentData: any,
+  config: ExternalApiConfig
+): Promise<{ success: boolean; error?: string }> {
+  if (!config.enabled) {
+    return { success: true }; // Skip if disabled
+  }
+
+  try {
+    const payload: PaymentTransactionPayload = {
+      transactionType: 'SUPPLIER_PAYMENT',
+      paymentId: paymentData.id || paymentId,
+      supplierId: paymentData.supplierId,
+      supplierName: paymentData.supplierName || '',
+      amount: paymentData.amount,
+      date: paymentData.date,
+      paymentMethod: paymentData.paymentMethod,
+      reference: paymentData.reference,
+      notes: paymentData.notes,
+    };
+
+    const endpoint = `${config.apiEndpoint}/payment-transactions`;
+    return await sendToExternalApi(endpoint, payload, config, 'SUPPLIER_PAYMENT', paymentId);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error syncing payment transaction:', errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
