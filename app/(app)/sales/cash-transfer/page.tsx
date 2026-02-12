@@ -1,0 +1,250 @@
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { format } from 'date-fns';
+import { CalendarIcon, Loader2, RefreshCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { DateRange } from 'react-day-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { TerminalSelector } from '@/components/TerminalSelector';
+
+interface CashTransfer {
+  id: string;
+  date: string;
+  amount: number;
+  type: 'deposit' | 'pickup';
+  note: string;
+  cashier_name: string;
+  terminal_name: string;
+  user_id: string;
+  terminal_id: string;
+}
+
+export default function CashTransferPage() {
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: new Date()
+  });
+  const [terminalId, setTerminalId] = useState<string>('all');
+  const [cashierId, setCashierId] = useState<string>('all');
+  const [type, setType] = useState<string>('all');
+  
+  const [data, setData] = useState<CashTransfer[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [summary, setSummary] = useState({ totalCashIn: 0, totalCashOut: 0 });
+  const [cashiers, setCashiers] = useState<{uid: string, display_name: string, username: string}[]>([]);
+
+  // Fetch cashiers (users)
+  useEffect(() => {
+    const fetchCashiers = async () => {
+        try {
+            const res = await fetch('/api/users');
+            const data = await res.json();
+            
+            // The API returns an array directly, or an error object
+            if (Array.isArray(data)) {
+                setCashiers(data.map((user: any) => ({
+                    uid: user.uid,
+                    display_name: user.displayName, // Map displayName to display_name
+                    username: user.email // Map email (which is username in API) to username
+                })));
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+    fetchCashiers();
+  }, []);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+        const params = new URLSearchParams();
+        if (dateRange?.from) params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+        if (dateRange?.to) params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+        if (terminalId && terminalId !== 'all') params.append('terminalId', terminalId);
+        if (cashierId && cashierId !== 'all') params.append('cashierId', cashierId);
+        if (type && type !== 'all') params.append('type', type);
+
+        const res = await fetch(`/api/pos/cash-transfer?${params.toString()}`);
+        const json = await res.json();
+        if (json.success) {
+            setData(json.data);
+            setSummary(json.summary || { totalCashIn: 0, totalCashOut: 0 });
+        }
+    } catch (e) {
+        console.error(e);
+        setData([]);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [dateRange, terminalId, cashierId, type]);
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: 2
+    }).format(val || 0);
+  };
+
+  return (
+    <div className="flex-1 space-y-4 p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">POS Cash Transfer</h2>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Cash In</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">+{formatCurrency(summary.totalCashIn)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Cash Out</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">-{formatCurrency(summary.totalCashOut)}</div>
+            </CardContent>
+          </Card>
+      </div>
+
+      <Card>
+         <CardHeader>
+            <CardTitle>Transfer History</CardTitle>
+            <CardDescription>Records of all cash deposits and pickups.</CardDescription>
+         </CardHeader>
+         <CardContent>
+            <div className="flex flex-col gap-4">
+                {/* Filters */}
+                <div className="flex flex-wrap gap-2 items-center">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button variant={"outline"} className={cn("w-[240px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange?.from ? (
+                            dateRange.to ? (
+                                <>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>
+                            ) : (
+                                format(dateRange.from, "LLL dd, y")
+                            )
+                            ) : (
+                            <span>Pick a date range</span>
+                            )}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={dateRange?.from}
+                            selected={dateRange}
+                            onSelect={setDateRange}
+                            numberOfMonths={2}
+                        />
+                        </PopoverContent>
+                    </Popover>
+
+                    <TerminalSelector terminalId={terminalId} onTerminalChange={setTerminalId} showAllOption={true} />
+                    
+                    <Select value={cashierId} onValueChange={setCashierId}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="All Cashiers" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Cashiers</SelectItem>
+                            {cashiers.map(c => (
+                                <SelectItem key={c.uid} value={c.uid}>{c.display_name || c.username || c.uid}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={type} onValueChange={setType}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="All Types" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Types</SelectItem>
+                            <SelectItem value="deposit">Cash In (Deposit)</SelectItem>
+                            <SelectItem value="pickup">Cash Out (Pickup)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    
+                    <Button variant="ghost" size="icon" onClick={fetchData} title="Refresh">
+                        <RefreshCcw className="h-4 w-4" />
+                    </Button>
+                </div>
+
+                {/* Table */}
+                <div className="rounded-md border">
+                    <Table>
+                    <TableHeader className="bg-muted/50">
+                        <TableRow>
+                            <TableHead className="w-[180px]">Date</TableHead>
+                            <TableHead>Terminal</TableHead>
+                            <TableHead>Cashier</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Note</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading ? (
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center h-24">
+                                    <div className="flex justify-center items-center gap-2">
+                                        <Loader2 className="h-6 w-6 animate-spin" />
+                                        <span>Loading data...</span>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : data.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
+                                    No records found for the selected criteria.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            data.map((row) => (
+                                <TableRow key={row.id}>
+                                    <TableCell className="font-medium">{format(new Date(row.date), 'PP p')}</TableCell>
+                                    <TableCell>{row.terminal_name || row.terminal_id || '-'}</TableCell>
+                                    <TableCell>{row.cashier_name || 'Unknown'}</TableCell>
+                                    <TableCell className={cn("font-bold", row.type === 'deposit' ? 'text-green-600' : 'text-red-600')}>
+                                         {row.type === 'deposit' ? '+' : '-'}{formatCurrency(row.amount)}
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className={cn(
+                                            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize",
+                                            row.type === 'deposit' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                                        )}>
+                                            {row.type === 'deposit' ? 'Cash In' : 'Cash Out'}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="max-w-[200px] truncate" title={row.note}>{row.note || '-'}</TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                    </Table>
+                </div>
+            </div>
+         </CardContent>
+      </Card>
+    </div>
+  );
+}

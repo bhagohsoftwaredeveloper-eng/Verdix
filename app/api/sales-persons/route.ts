@@ -39,12 +39,9 @@ async function ensureSalesPersonsTable() {
   }
 }
 
-// GET endpoint to fetch sales persons
+// GET endpoint to fetch sales persons (users)
 export async function GET(request: NextRequest) {
   try {
-    // Ensure table exists and has default data
-    await ensureSalesPersonsTable();
-
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -53,23 +50,23 @@ export async function GET(request: NextRequest) {
 
     let sql = `
       SELECT
-        id,
-        name,
-        contact_number,
-        is_active AS isActive,
-        created_at AS createdAt
-      FROM sales_persons
+        uid as id,
+        COALESCE(display_name, username) as name,
+        username as contactNumber,
+        NOT disabled as isActive,
+        creation_time as createdAt
+      FROM users
       WHERE 1=1
     `;
     const params: any[] = [];
 
     if (activeOnly) {
-      sql += ' AND is_active = ?';
-      params.push(true);
+      sql += ' AND disabled = ?';
+      params.push(false);
     }
 
     if (search) {
-      sql += ' AND (name LIKE ? OR contact_number LIKE ?)';
+      sql += ' AND (display_name LIKE ? OR username LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 
@@ -79,16 +76,16 @@ export async function GET(request: NextRequest) {
     const salesPersons = await query(sql, params);
 
     // Get total count for pagination
-    let countSql = 'SELECT COUNT(*) as total FROM sales_persons WHERE 1=1';
+    let countSql = 'SELECT COUNT(*) as total FROM users WHERE 1=1';
     const countParams: any[] = [];
 
     if (activeOnly) {
-      countSql += ' AND is_active = ?';
-      countParams.push(true);
+      countSql += ' AND disabled = ?';
+      countParams.push(false);
     }
 
     if (search) {
-      countSql += ' AND (name LIKE ? OR contact_number LIKE ?)';
+      countSql += ' AND (display_name LIKE ? OR username LIKE ?)';
       countParams.push(`%${search}%`, `%${search}%`);
     }
 
@@ -97,7 +94,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: salesPersons,
+      data: salesPersons.map((sp: any) => ({
+        ...sp,
+        isActive: !!sp.isActive // Ensure boolean
+      })),
       pagination: {
         total,
         limit,

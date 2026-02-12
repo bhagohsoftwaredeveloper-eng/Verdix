@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { TrendingUp, Loader2 } from "lucide-react"
-import { Bar, BarChart, XAxis, YAxis, Cell } from "recharts"
+import { Bar, BarChart, XAxis, YAxis, LabelList, Cell, CartesianGrid } from "recharts"
 
 import {
   Card,
@@ -19,28 +19,49 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 
-export const description = "A mixed bar chart"
+export const description = "A bar chart with custom labels"
 
 type ProductData = {
   name: string
-  quantity: number
-  totalRevenue: number
-  fill: string
+  sales: number // revenue
+  fill?: string
 }
 
-export function TopSellingProductsChart() {
-  const [data, setData] = useState<ProductData[]>([])
-  const [loading, setLoading] = useState(true)
+const chartConfig = {
+  sales: {
+    label: "Sales",
+    color: "hsl(var(--chart-1))",
+  },
+  label: {
+    color: "hsl(var(--foreground))",
+  },
+} satisfies ChartConfig
+
+export function TopSellingProductsChart({ data: initialData }: { data?: any[] }) {
+  const [data, setData] = useState<ProductData[]>(initialData || [])
+  const [loading, setLoading] = useState(!initialData)
 
   useEffect(() => {
+    if (initialData) {
+        // Add colors if not present
+        const dataWithColors = initialData.map((item, index) => ({
+            ...item,
+            fill: item.fill || `hsl(var(--chart-${(index % 5) + 1}))`,
+            sales: item.sales || item.totalRevenue || 0 // Handle different data shapes
+        }));
+        setData(dataWithColors)
+        setLoading(false)
+        return;
+    }
+
     async function fetchData() {
         try {
             const res = await fetch('/api/sales/top-products')
             const result = await res.json()
             if (result.success) {
-                // Map data to include chart colors
                 const dataWithColors = result.data.map((item: any, index: number) => ({
-                    ...item,
+                    name: item.name,
+                    sales: item.quantity, // Default to quantity if standalone? Or revenue? User said "top selling", usually revenue. Let's stick to what passed data uses.
                     fill: `hsl(var(--chart-${(index % 5) + 1}))`
                 }));
                 setData(dataWithColors)
@@ -52,20 +73,7 @@ export function TopSellingProductsChart() {
         }
     }
     fetchData()
-  }, [])
-
-  const chartConfig = {
-    quantity: {
-      label: "Quantity Sold",
-    },
-    ...data.reduce((acc, item, index) => {
-        acc[item.name] = {
-            label: item.name,
-            color: item.fill,
-        }
-        return acc
-    }, {} as Record<string, { label: string; color: string }>)
-  } satisfies ChartConfig
+  }, [initialData])
 
   if (loading) {
      return (
@@ -75,63 +83,79 @@ export function TopSellingProductsChart() {
      )
   }
 
-  if (data.length === 0) {
-      return (
-        <Card className="glass-card border-none shadow-sm h-[350px]">
-             <CardHeader>
-                <CardTitle>Top Selling Products</CardTitle>
-                <CardDescription>No sales data available yet.</CardDescription>
-            </CardHeader>
-        </Card>
-      )
-  }
+  // Slice to top 5 if needed
+  const displayData = data.slice(0, 6);
 
   return (
     <Card className="glass-card border-none shadow-sm h-full">
       <CardHeader>
         <CardTitle>Top Selling Products</CardTitle>
-        <CardDescription>Top 5 products by quantity sold</CardDescription>
+        <CardDescription>Best performers by revenue</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig}>
           <BarChart
             accessibilityLayer
-            data={data}
+            data={displayData}
             layout="vertical"
             margin={{
-              left: 0,
+              left: 12,
+              right: 60,
             }}
           >
+            <CartesianGrid horizontal={false} />
             <YAxis
               dataKey="name"
               type="category"
               tickLine={false}
               tickMargin={10}
               axisLine={false}
-              width={100} 
-              tickFormatter={(value) => value.length > 15 ? value.slice(0, 15) + '...' : value}
+              tickFormatter={(value) => value.slice(0, 3)}
+              hide
             />
-            <XAxis dataKey="quantity" type="number" hide />
+            <XAxis dataKey="sales" type="number" hide />
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent hideLabel />}
+              content={<ChartTooltipContent indicator="line" />}
             />
-            <Bar dataKey="quantity" layout="vertical" radius={5}>
-                {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
+            <Bar
+              dataKey="sales"
+              layout="vertical"
+              radius={4}
+            >
+              {displayData.map((entry, index) => (
+                 <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+              <LabelList
+                dataKey="name"
+                position="insideLeft"
+                offset={8}
+                fill="white"
+                fontSize={13}
+                fontWeight="500"
+              />
+              <LabelList
+                dataKey="sales"
+                position="right"
+                offset={8}
+                fill="hsl(var(--foreground))"
+                fontSize={13}
+                fontWeight="600"
+                formatter={(value: number) => `₱${value.toLocaleString()}`}
+              />
             </Bar>
           </BarChart>
         </ChartContainer>
       </CardContent>
       <CardFooter className="flex-col items-start gap-2 text-sm">
         <div className="flex gap-2 leading-none font-medium">
-          Top product makes up {Math.round((data[0]?.quantity / data.reduce((a,b)=>a+b.quantity, 0)) * 100)}% of these sales <TrendingUp className="h-4 w-4" />
+          Trending products <TrendingUp className="h-4 w-4" />
         </div>
         <div className="text-muted-foreground leading-none">
-          Showing top 5 best selling items
+          Showing top revenue generators
         </div>
       </CardFooter>
     </Card>
   )
 }
+

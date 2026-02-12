@@ -47,6 +47,33 @@ export async function GET(request: NextRequest) {
         `;
         const salesByCategoryData = await query(salesByCategoryQuery) as any[];
 
+        // 4. Dashboard Summary Metrics
+        // Total Revenue (All time or this month? Dashboard says "Total Revenue", usually implies broad or specific period. Let's do current month for "trends" or all time? 
+        // The mock data implied "Total Revenue" and "+20.1% from last month". 
+        // Let's fetch metrics for:
+        // - Total Revenue (This Month)
+        // - Total Sales Count (This Month)
+        // - Products Sold (This Month)
+        // - Low Stock Items (Current)
+        // - Total Items (Current)
+
+        const currentMonthStart = new Date();
+        currentMonthStart.setDate(1);
+        const currentMonthStartStr = currentMonthStart.toISOString().split('T')[0];
+
+        const summaryQuery = `
+            SELECT 
+                (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid') as total_revenue_all_time,
+                (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ?) as total_revenue_month,
+                (SELECT COUNT(*) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ?) as total_sales_month,
+                (SELECT COALESCE(SUM(si.quantity), 0) FROM sale_items si JOIN sales_transactions st ON si.sale_id = st.id WHERE st.status = 'Paid' AND st.invoice_date >= ?) as products_sold_month,
+                (SELECT COUNT(*) FROM products WHERE stock <= reorder_point) as low_stock_items,
+                (SELECT COUNT(*) FROM products) as total_items
+        `;
+        
+        const [summaryData] = await query(summaryQuery, [currentMonthStartStr, currentMonthStartStr, currentMonthStartStr]) as any[];
+
+
          // Transform Sales By Day for Chart (Recharts expects specific format)
         const formattedSalesByDay = salesByDayData.map((row: any) => ({
             date: new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -70,7 +97,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             salesByDay: formattedSalesByDay,
             topProducts: formattedTopProducts,
-            salesByCategory: formattedSalesByCategory
+            salesByCategory: formattedSalesByCategory,
+            summary: {
+                totalRevenueAllTime: parseFloat(summaryData.total_revenue_all_time),
+                totalRevenueMonth: parseFloat(summaryData.total_revenue_month),
+                totalSalesMonth: parseInt(summaryData.total_sales_month),
+                productsSoldMonth: parseInt(summaryData.products_sold_month),
+                lowStockItems: parseInt(summaryData.low_stock_items),
+                totalItems: parseInt(summaryData.total_items)
+            }
         });
 
     } catch (error) {

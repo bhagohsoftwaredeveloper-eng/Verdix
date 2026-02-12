@@ -101,7 +101,20 @@ export function CustomerSelectionField({
       name={name}
       render={({ field }) => (
         <FormItem>
-          {label && <FormLabel className={labelClassName}>{label}</FormLabel>}
+          <div className="flex items-center justify-between h-5">
+              {label && <FormLabel className={labelClassName}>{label}</FormLabel>}
+              <Button
+                    variant="link"
+                    className="h-auto p-0 text-xs text-primary"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowAddDialog(true);
+                    }}
+                    type="button"
+                  >
+                    Manage
+                  </Button>
+          </div>
 
           <Select onValueChange={(value) => {
               const customer = customerList?.find(c => c.id === value);
@@ -115,19 +128,6 @@ export function CustomerSelectionField({
               </SelectTrigger>
             </FormControl>
             <SelectContent>
-               <div className="p-2 border-b sticky top-0 bg-popover z-10">
-                  <Button
-                    variant="secondary"
-                    className="w-full justify-start h-8 px-2 text-sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setShowAddDialog(true);
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Customer
-                  </Button>
-               </div>
                {customerList?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>

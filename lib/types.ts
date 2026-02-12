@@ -21,6 +21,7 @@ export interface Product {
   vatStatus?: string;
   availability?: string;
   taxType?: 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT';
+  earnsPoints?: boolean;
 
   // Accounting
   incomeAccount?: string;

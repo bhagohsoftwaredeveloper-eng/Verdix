@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Truck, Calendar, ShoppingCart, CheckCircle2 } from 'lucide-react';
+import { Truck, Calendar, ShoppingCart, CheckCircle2, Loader2 } from 'lucide-react';
 import { getSuppliers } from '../products/actions';
 import { AddPurchaseOrderDialog } from '../purchases/add-purchase-order-dialog';
 import { Supplier } from '@/lib/types';
@@ -62,7 +62,16 @@ export function SupplierScheduleCard() {
     fetchAndFilter();
   }, []);
 
-  if (loading || scheduledSuppliers.length === 0) return null;
+  if (loading) {
+    return (
+       <Card className="glass-card border-l-4 border-l-blue-500 shadow-sm relative overflow-hidden h-full flex items-center justify-center min-h-[150px]">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+       </Card>
+    )
+  }
+
+  // if (scheduledSuppliers.length === 0) return null; // Removed early return
+
 
   return (
     <>
@@ -81,26 +90,36 @@ export function SupplierScheduleCard() {
       </CardHeader>
       <CardContent>
         <div className="space-y-3 mt-2">
-          {scheduledSuppliers.map(s => (
-            <div key={s.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg hover:bg-muted/60 transition-colors">
-               <div className="flex flex-col">
-                  <span className="font-semibold text-sm">{s.name}</span>
-                  <span className="text-xs text-muted-foreground">{s.orderSchedule}</span>
-               </div>
-               <Button 
-                 size="sm" 
-                 variant="secondary" 
-                 className="h-8 text-xs"
-                 onClick={() => {
-                     setSelectedSupplierId(s.id);
-                     setIsOrderDialogOpen(true);
-                 }}
-               >
-                 <ShoppingCart className="w-3 h-3 mr-1" />
-                 Order
-               </Button>
-            </div>
-          ))}
+        <div className="space-y-3 mt-2">
+          {scheduledSuppliers.length === 0 ? (
+             <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground">
+                <CheckCircle2 className="w-12 h-12 mb-2 text-green-500/50" />
+                <p>No supplier orders scheduled for today.</p>
+                <p className="text-xs">You're all caught up!</p>
+             </div>
+          ) : (
+            scheduledSuppliers.map(s => (
+                <div key={s.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg hover:bg-muted/60 transition-colors">
+                <div className="flex flex-col">
+                    <span className="font-semibold text-sm">{s.name}</span>
+                    <span className="text-xs text-muted-foreground">{s.orderSchedule}</span>
+                </div>
+                <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    className="h-8 text-xs"
+                    onClick={() => {
+                        setSelectedSupplierId(s.id);
+                        setIsOrderDialogOpen(true);
+                    }}
+                >
+                    <ShoppingCart className="w-3 h-3 mr-1" />
+                    Order
+                </Button>
+                </div>
+            ))
+          )}
+        </div>
         </div>
       </CardContent>
     </Card>

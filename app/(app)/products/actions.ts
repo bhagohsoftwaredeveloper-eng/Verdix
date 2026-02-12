@@ -36,6 +36,7 @@ export type ProductFormData = {
   }[];
   vatStatus?: string;
   availability?: string;
+  earnsPoints?: boolean;
 };
 
 export type ProductFilters = {
@@ -166,6 +167,7 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
       priceLevels: plMap.get(product.id) || [],
       vatStatus: product.vat_status,
       availability: product.availability,
+      earnsPoints: product.earns_points === 1,
       createdAt: product.created_at,
       updatedAt: product.updated_at,
     }));
@@ -294,6 +296,7 @@ export async function addProduct(formData: ProductFormData) {
         income_account: formData.incomeAccount || null,
         vat_status: formData.vatStatus || 'YES (Subject to 12% VAT)',
         availability: formData.availability || 'Available',
+        earns_points: formData.earnsPoints !== false, // Default to true if undefined
       };
 
       // Insert product into MySQL database
@@ -303,8 +306,8 @@ export async function addProduct(formData: ProductFormData) {
           subcategory, supplier_id, warehouse_id, stock, reorder_point, avg_daily_sales, price, cost,
           sku, barcode, image_url, image_hint,
           unit_of_measure, parent_id, conversion_factor, income_account, expense_account,
-          vat_status, availability
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          vat_status, availability, earns_points
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const values_array = [
@@ -333,6 +336,7 @@ export async function addProduct(formData: ProductFormData) {
         productData.expense_account,
         productData.vat_status,
         productData.availability,
+        productData.earns_points,
       ];
 
       await connection.query(sql, values_array);
@@ -513,6 +517,7 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
         expense_account: formData.expenseAccount || null,
         vat_status: formData.vatStatus || 'YES (Subject to 12% VAT)',
         availability: formData.availability || 'Available',
+        earns_points: formData.earnsPoints !== false,
       };
 
       // Update product in MySQL database
@@ -521,7 +526,7 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
           name = ?, description = ?, additional_description = ?, category = ?,
           brand = ?, subcategory = ?, supplier_id = ?, price = ?, cost = ?,
           barcode = ?, unit_of_measure = ?, warehouse_id = ?, conversion_factor = ?,
-          income_account = ?, expense_account = ?, vat_status = ?, availability = ?, reorder_point = ?
+          income_account = ?, expense_account = ?, vat_status = ?, availability = ?, earns_points = ?, reorder_point = ?
         WHERE id = ?
       `;
 
@@ -543,6 +548,7 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
         productData.expense_account,
         productData.vat_status,
         productData.availability,
+        productData.earns_points,
         productData.reorder_point,
         id,
       ];

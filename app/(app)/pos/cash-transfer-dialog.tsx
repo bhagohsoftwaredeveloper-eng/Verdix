@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, Minus, Plus } from 'lucide-react';
 import { AdminAuthDialog } from './admin-auth-dialog';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 const transferSchema = z.object({
   amount: z.coerce.number().positive('Amount must be a positive number.'),
@@ -37,11 +38,15 @@ type TransferFormValues = z.infer<typeof transferSchema>;
 interface CashTransferDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  shiftId: string | null;
+  terminalId: string;
+  userId: string;
 }
 
-export function CashTransferDialog({ isOpen, onOpenChange }: CashTransferDialogProps) {
+export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, userId }: CashTransferDialogProps) {
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [transferType, setTransferType] = useState<'pickup' | 'deposit'>('pickup');
+  const { toast } = useToast();
 
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
@@ -66,15 +71,44 @@ export function CashTransferDialog({ isOpen, onOpenChange }: CashTransferDialogP
   };
 
   async function onSubmit(values: TransferFormValues) {
-    console.log('Mock cash transfer submitted:', {
-      transferType,
-      ...values,
-    });
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    onOpenChange(false);
+    try {
+        const response = await fetch('/api/pos/cash-transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                shiftId,
+                terminalId,
+                userId,
+                amount: values.amount,
+                type: transferType,
+                reason: values.reason
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            toast({
+                title: "Transfer Recorded",
+                description: `Successfully recorded cash ${transferType}.`,
+            });
+            onOpenChange(false);
+        } else {
+             toast({
+                title: "Transfer Failed",
+                description: result.error || "Failed to record transfer.",
+                variant: 'destructive'
+            });
+        }
+
+    } catch (error) {
+        console.error("Transfer error:", error);
+         toast({
+            title: "Transfer Failed",
+            description: "An unexpected error occurred.",
+            variant: 'destructive'
+        });
+    }
   }
 
   return (

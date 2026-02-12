@@ -85,6 +85,20 @@ export function StartShiftDialog({ isOpen, onShiftStart }: StartShiftDialogProps
   const handleStartShift = () => {
     onShiftStart(totalCash);
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        handleStartShift();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleStartShift]);
   
   useEffect(() => {
     // Reset counts when dialog opens

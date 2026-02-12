@@ -23,6 +23,8 @@ interface EndShiftDialogProps {
   onShiftEnd: (data: { actualCash: number; cashDifference: number; notes: string; cashDenominations: any[] }) => void;
   startingCash: number;
   cashSales: number;
+  cashIn?: number;
+  cashOut?: number;
 }
 
 const billDenominations = [
@@ -92,7 +94,7 @@ const DenominationInput = memo(({
 
 DenominationInput.displayName = 'DenominationInput';
 
-export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash, cashSales }: EndShiftDialogProps) {
+export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash, cashSales, cashIn = 0, cashOut = 0 }: EndShiftDialogProps) {
   const [counts, setCounts] = useState<Record<number, number>>({});
   
   const countedCash = useMemo(() => {
@@ -101,7 +103,7 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
     }, 0);
   }, [counts]);
 
-  const expectedCash = useMemo(() => startingCash + cashSales, [startingCash, cashSales]);
+  const expectedCash = useMemo(() => startingCash + cashSales + (cashIn || 0) - (cashOut || 0), [startingCash, cashSales, cashIn, cashOut]);
   const variance = useMemo(() => countedCash - expectedCash, [countedCash, expectedCash]);
   
   const handleCountChange = (value: number, count: string) => {
@@ -206,6 +208,18 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
                             <span className="text-slate-500 text-sm">Cash Sales</span>
                             <span className="font-mono font-medium text-emerald-600">+₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashSales)}</span>
                         </div>
+                        {(cashIn > 0 || cashOut > 0) && (
+                            <>
+                                <div className="flex justify-between items-center group">
+                                    <span className="text-slate-500 text-sm">Cash Deposits (In)</span>
+                                    <span className="font-mono font-medium text-emerald-600">+₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashIn)}</span>
+                                </div>
+                                <div className="flex justify-between items-center group">
+                                    <span className="text-slate-500 text-sm">Cash Pickups (Out)</span>
+                                    <span className="font-mono font-medium text-red-600">-₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashOut)}</span>
+                                </div>
+                            </>
+                        )}
                         
                         <Separator className="bg-slate-100" />
                         

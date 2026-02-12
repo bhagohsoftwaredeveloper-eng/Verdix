@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { getSuppliersWithBalance, SupplierWithBalance } from '../actions';
 import { addSupplier, updateSupplier, deleteSupplier } from '../../products/actions';
 import { MakePaymentDialog } from '../payment-dialog';
@@ -29,11 +29,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function SuppliersListPage() {
   const [suppliers, setSuppliers] = useState<SupplierWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const { toast } = useToast();
 
   const loadSuppliers = async () => {
@@ -109,6 +118,17 @@ export default function SuppliersListPage() {
     }
   };
 
+  // Pagination Logic
+  const totalPages = Math.ceil(suppliers.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedSuppliers = suppliers.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
@@ -152,25 +172,25 @@ export default function SuppliersListPage() {
                 <TableHead>Company</TableHead>
                 <TableHead>TIN</TableHead>
                 <TableHead>Payment Terms</TableHead>
-                <TableHead>Markup</TableHead>
+                {/* Removed Markup Column */}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                  <TableRow>
-                   <TableCell colSpan={8} className="text-center py-10">
+                   <TableCell colSpan={7} className="text-center py-10">
                      Loading...
                    </TableCell>
                  </TableRow>
-              ) : suppliers.length === 0 ? (
+              ) : paginatedSuppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                     No suppliers found.
                   </TableCell>
                 </TableRow>
               ) : (
-                suppliers.map((supplier) => (
+                paginatedSuppliers.map((supplier) => (
                   <TableRow key={supplier.id}>
                     <TableCell>
                         <div className="flex flex-col">
@@ -204,7 +224,7 @@ export default function SuppliersListPage() {
                             <span className="text-muted-foreground text-xs">-</span>
                         )}
                     </TableCell>
-                    <TableCell>{supplier.markupPercentage ? `${supplier.markupPercentage}%` : '0%'}</TableCell>
+                    {/* Removed Markup Column Cell */}
                     <TableCell className="text-right">
                        <div className="flex justify-end gap-2">
                             <SupplierFormDialog 
@@ -251,6 +271,87 @@ export default function SuppliersListPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination Controls */}
+          {suppliers.length > 0 && (
+            <div className="flex items-center justify-between px-2 py-4">
+              <div className="flex items-center gap-2">
+                 <span className="text-sm text-muted-foreground">
+                   Showing {startIndex + 1} to {Math.min(endIndex, suppliers.length)} of {suppliers.length} entries
+                 </span>
+              </div>
+              
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Rows per page:</span>
+                  <Select
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[70px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  <div className="flex items-center gap-1 px-2">
+                    <span className="text-sm font-medium">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

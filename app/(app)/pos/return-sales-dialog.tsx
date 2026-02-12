@@ -26,6 +26,7 @@ import type { Sale, SaleItem } from '@/lib/types';
 import { format, subMinutes } from 'date-fns';
 import { AdminAuthDialog } from './admin-auth-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { printCreditSlip } from './print-credit-slip';
 
 interface ReturnSalesDialogProps {
   isOpen: boolean;
@@ -269,6 +270,7 @@ export function ReturnSalesDialog({
   const [searchError, setSearchError] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [itemsToReturn, setItemsToReturn] = useState<SaleItem[]>([]);
+  const [returnedItems, setReturnedItems] = useState<SaleItem[]>([]);
   const [posSettings, setPosSettings] = useState<any>(null);
   const [returnedTotal, setReturnedTotal] = useState(0);
   const authSucceededRef = useRef(false);
@@ -282,6 +284,7 @@ export function ReturnSalesDialog({
         setSearchError('');
         setSelectedSale(null);
         setReturnedTotal(0);
+        setReturnedItems([]);
         
         // Fetch settings first to determine step
         fetch(`/api/pos-settings?_t=${Date.now()}`, { cache: 'no-store' })
@@ -378,6 +381,7 @@ export function ReturnSalesDialog({
               const result = await response.json();
               if (result.success) {
                   setReturnedTotal(totalAmount);
+                  setReturnedItems(items);
                   setStep('success');
               } else {
                   setSearchError(result.error || 'Failed to process return');
@@ -401,10 +405,28 @@ export function ReturnSalesDialog({
       onOpenChange(false);
   }
 
-  // Fallback print function - ideally this reuses the printer logic
   const handlePrintCredit = () => {
-      // Logic for printing credit slip would go here
-      window.print();
+      if (!selectedSale || returnedItems.length === 0) return;
+
+      printCreditSlip({
+          originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
+          customerName: selectedSale.customer?.name || 'Walk-in Customer',
+          date: new Date().toISOString(),
+          cashierName: currentUser?.name || currentUser?.displayName || currentUser?.username || 'Cashier',
+          items: returnedItems.map(item => ({
+              name: item.product.name,
+              quantity: item.quantity,
+              unitOfMeasure: item.product.unitOfMeasure,
+              price: item.price,
+              total: item.quantity * item.price
+          })),
+          totalAmount: returnedTotal
+      }, {
+           businessName: posSettings?.businessName,
+           address: posSettings?.address,
+           contactNumber: posSettings?.contactNumber,
+           tin: posSettings?.tin
+      });
   }
 
   return (

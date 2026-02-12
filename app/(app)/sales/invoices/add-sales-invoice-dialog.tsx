@@ -430,7 +430,20 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                         name="salesPerson"
                         render={({ field }) => (
                           <FormItem className="space-y-1">
-                            <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
+                            <div className="flex justify-between items-center w-full h-5">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
+                                <Button
+                                    variant="link"
+                                    className="h-auto p-0 text-xs text-primary"
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setShowSalesPersonDialog(true);
+                                    }}
+                                >
+                                    Manage
+                                </Button>
+                            </div>
                             <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger className="h-8 bg-white text-xs">
@@ -438,20 +451,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <div className="p-1 w-full border-b border-border mb-1">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setShowSalesPersonDialog(true);
-                                        }}
-                                      >
-                                        <Plus className="mr-2 h-3 w-3" /> Add Sales Person
-                                      </Button>
-                                   </div>
+
                                   {salesPersons?.map(person => (
                                     <SelectItem key={person.id} value={person.id.toString()} className="text-xs">
                                       {person.name}
@@ -477,7 +477,9 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             name="invoiceDate"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Invoice Date</FormLabel>
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Invoice Date</FormLabel>
+                                </div>
                                 <FormControl>
                                 <Input type="date" className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
@@ -489,7 +491,9 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             name="dueDate"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
+                                </div>
                                 <FormControl>
                                 <Input type="date" className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
@@ -502,7 +506,20 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             name="warehouse"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
+                                <div className="flex justify-between items-center w-full h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
+                                    <Button
+                                        variant="link"
+                                        className="h-auto p-0 text-xs text-primary"
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowWarehouseDialog(true);
+                                        }}
+                                    >
+                                        Manage
+                                    </Button>
+                                </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                     <SelectTrigger className="h-8 bg-white text-xs">
@@ -510,20 +527,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <div className="p-1 w-full border-b border-border mb-1">
-                                      <Button
-                                        variant="ghost" 
-                                        size="sm"
-                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setShowWarehouseDialog(true);
-                                        }}
-                                      >
-                                        <Plus className="mr-2 h-3 w-3"/> Add Warehouse
-                                      </Button>
-                                    </div>
+
                                     {warehouses?.map(warehouse => (
                                     <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
                                         {warehouse.name}
@@ -548,7 +552,20 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             name="paymentMethod"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                <div className="flex justify-between items-center w-full h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                    <Button
+                                        variant="link"
+                                        className="h-auto p-0 text-xs text-primary"
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowPaymentMethodDialog(true);
+                                        }}
+                                    >
+                                        Manage
+                                    </Button>
+                                </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                     <SelectTrigger className="h-8 bg-white text-xs">
@@ -556,21 +573,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <div className="p-1 w-full border-b border-border mb-1">
-                                     <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          setShowPaymentMethodDialog(true);
-                                        }}
-                                      >
-                                        <Plus className="mr-2 h-3 w-3" />
-                                        Manage Methods
-                                      </Button>
-                                    </div>
+
                                     {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
                                 </SelectContent>
                                 </Select>
@@ -588,7 +591,9 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                 name="shipping"
                                 render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
+                                    <div className="flex items-center justify-between h-5">
+                                        <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
+                                    </div>
                                     <FormControl>
                                     <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
                                     </FormControl>
@@ -600,7 +605,9 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                 name="depositAccount"
                                 render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Deposit Acc</FormLabel>
+                                    <div className="flex items-center justify-between h-5">
+                                        <FormLabel className="text-xs font-semibold text-muted-foreground">Deposit Acc</FormLabel>
+                                    </div>
                                     <FormControl>
                                       <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl>
@@ -628,7 +635,9 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             name="deliveryAddress"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                                </div>
                                 <FormControl>
                                 <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
                                 </FormControl>
@@ -640,7 +649,9 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                           name="note"
                           render={({ field }) => (
                             <FormItem className="space-y-1">
-                              <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                                </div>
                               <FormControl>
                                 <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
                               </FormControl>

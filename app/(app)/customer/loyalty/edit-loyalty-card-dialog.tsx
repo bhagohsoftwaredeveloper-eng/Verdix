@@ -62,16 +62,17 @@ const editLoyaltyCardSchema = z.object({
 
 type EditLoyaltyCardFormValues = z.infer<typeof editLoyaltyCardSchema>;
 
-const POINT_SETTINGS = [
-  'None (0 points)',
-  'Basic (100 points)',
-  'Silver (250 points)',
-  'Gold (500 points)',
-  'Platinum (1000 points)',
-];
+interface LoyaltySetting {
+  id: string;
+  description: string;
+  base: string;
+  amount: number;
+  equivalent: number;
+}
 
 export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: CustomerWithLoyalty, onSuccess?: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySetting[]>([]);
   const { toast } = useToast();
 
   const form = useForm<EditLoyaltyCardFormValues>({
@@ -79,17 +80,32 @@ export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: Custo
     defaultValues: {
       rfidCode: customer.rfid_code || '',
       expiryDate: customer.expiry_date ? new Date(customer.expiry_date) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      pointSetting: customer.point_setting || 'Basic (100 points)',
+      pointSetting: customer.point_setting || '',
     },
   });
 
   // Update form when customer changes or dialog opens
   useEffect(() => {
     if (isOpen) {
+      // Fetch loyalty settings
+      const fetchSettings = async () => {
+        try {
+          const response = await fetch('/api/loyalty-settings');
+          if (response.ok) {
+            const result = await response.json();
+            setLoyaltySettings(result.data || []);
+          }
+        } catch (error) {
+          console.error('Failed to fetch loyalty settings:', error);
+        }
+      };
+      
+      fetchSettings();
+
       form.reset({
         rfidCode: customer.rfid_code || '',
         expiryDate: customer.expiry_date ? new Date(customer.expiry_date) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        pointSetting: customer.point_setting || 'Basic (100 points)',
+        pointSetting: customer.point_setting || '',
       });
     }
   }, [isOpen, customer, form]);
@@ -215,18 +231,22 @@ export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: Custo
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Point Setting</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select Point Setting" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {POINT_SETTINGS.map((setting) => (
-                        <SelectItem key={setting} value={setting}>
-                          {setting}
-                        </SelectItem>
-                      ))}
+                      {loyaltySettings.length > 0 ? (
+                        loyaltySettings.map((setting) => (
+                          <SelectItem key={setting.id} value={setting.description}>
+                            {setting.description} ({setting.amount} pts / {setting.equivalent})
+                          </SelectItem>
+                        ))
+                      ) : (
+                         <SelectItem value="none" disabled>No settings available</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />

@@ -1,0 +1,609 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { CalendarIcon, FileDown, Package2, TrendingUp, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import jsPDF from 'jspdf';
+
+interface ProductSale {
+  product: {
+    id: string;
+    name: string;
+    sku: string;
+    category: string;
+    brand: string;
+    unitOfMeasure: string;
+  };
+  unitsSold: number;
+  totalRevenue: number;
+  totalDiscount: number;
+  totalCost: number;
+  totalProfit: number;
+  numberOfSales: number;
+  avgPricePerUnit: number;
+}
+
+export default function SalesByProductPage() {
+  const [fromDate, setFromDate] = useState<Date | undefined>(startOfMonth(new Date()));
+  const [toDate, setToDate] = useState<Date | undefined>(endOfMonth(new Date()));
+  const [records, setRecords] = useState<ProductSale[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const { toast } = useToast();
+
+  const totals = {
+    unitsSold: records.reduce((sum, r) => sum + r.unitsSold, 0),
+    revenue: records.reduce((sum, r) => sum + r.totalRevenue, 0),
+    cost: records.reduce((sum, r) => sum + r.totalCost, 0),
+    profit: records.reduce((sum, r) => sum + r.totalProfit, 0),
+    products: records.length,
+    avgPrice: records.length > 0 ? records.reduce((sum, r) => sum + r.avgPricePerUnit, 0) / records.length : 0,
+  };
+
+  const fetchReport = async () => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (fromDate) {
+        params.append('startDate', format(fromDate, 'yyyy-MM-dd'));
+      }
+      if (toDate) {
+        params.append('endDate', format(toDate, 'yyyy-MM-dd'));
+      }
+      params.append('page', currentPage.toString());
+      params.append('limit', '1000'); // Get all for now
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+
+      const response = await fetch(`/api/sales/by-product?${params.toString()}`);
+      const result = await response.json();
+      if (result.success) {
+        setRecords(result.data || []);
+        setTotalItems(result.pagination?.totalItems || result.data?.length || 0);
+      }
+    } catch (error) {
+      console.error("Error fetching sales by product:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch product sales data. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReport();
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Client-side filtering and pagination
+  const filteredRecords = records.filter(record => {
+    if (!searchTerm.trim()) return true;
+    const search = searchTerm.toLowerCase();
+    return (
+      record.product.name?.toLowerCase().includes(search) ||
+      record.product.sku?.toLowerCase().includes(search) ||
+      record.product.category?.toLowerCase().includes(search) ||
+      record.product.brand?.toLowerCase().includes(search)
+    );
+  });
+
+  const totalPages = Math.ceil(filteredRecords.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedRecords = filteredRecords.slice(startIndex, endIndex);
+
+  const exportToPDF = () => {
+    if (records.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No records to export. Please fetch the report first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 10;
+      let yPos = margin;
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Sales by Product Report', pageWidth / 2, yPos, { align: 'center' });
+      yPos += 8;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      const dateRangeText = `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
+      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
+      yPos += 10;
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Total Products: ${totals.products}`, margin, yPos);
+      doc.text(`Total Units Sold: ${totals.unitsSold}`, margin + 60, yPos);
+      doc.text(`Total Revenue: ₱${totals.revenue.toFixed(2)}`, margin + 120, yPos);
+      yPos += 6;
+      doc.text(`Total Profit: ₱${totals.profit.toFixed(2)}`, margin, yPos);
+      doc.text(`Avg Price/Unit: ₱${totals.avgPrice.toFixed(2)}`, margin + 60, yPos);
+      yPos += 10;
+
+      const headers = ['Product', 'SKU', 'Category', 'Brand', 'Units Sold', 'UOM', 'Revenue', 'Cost', 'Profit', 'Margin %', '# Sales'];
+      const colWidths = [35, 20, 25, 25, 18, 15, 22, 20, 20, 18, 15];
+      
+      doc.setFillColor(34, 197, 94);
+      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
+      
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+      
+      let xPos = margin;
+      headers.forEach((header, i) => {
+        doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
+        xPos += colWidths[i];
+      });
+      yPos += 6;
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+
+      records.forEach((record, rowIndex) => {
+        if (yPos > pageHeight - 20) {
+          doc.addPage();
+          yPos = margin;
+          
+          doc.setFillColor(34, 197, 94);
+          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(255, 255, 255);
+          xPos = margin;
+          headers.forEach((header, i) => {
+            doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
+            xPos += colWidths[i];
+          });
+          yPos += 6;
+          doc.setTextColor(0, 0, 0);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(6);
+        }
+
+        if (rowIndex % 2 === 0) {
+          doc.setFillColor(245, 245, 245);
+          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
+        }
+
+        const profitMargin = record.totalRevenue > 0 ? ((record.totalProfit / record.totalRevenue) * 100) : 0;
+
+        xPos = margin;
+        const rowData = [
+          record.product.name || 'N/A',
+          record.product.sku || '-',
+          record.product.category || '-',
+          record.product.brand || '-',
+          record.unitsSold.toString(),
+          record.product.unitOfMeasure || '-',
+          record.totalRevenue.toFixed(2),
+          record.totalCost.toFixed(2),
+          record.totalProfit.toFixed(2),
+          profitMargin.toFixed(1) + '%',
+          record.numberOfSales.toString(),
+        ];
+
+        rowData.forEach((cell, i) => {
+          doc.text(String(cell), xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
+          xPos += colWidths[i];
+        });
+        yPos += 6;
+      });
+
+      yPos += 4;
+      doc.setFillColor(200, 200, 200);
+      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+
+      xPos = margin;
+      colWidths.forEach((width, i) => {
+        if (i === 0) doc.text('TOTALS', xPos + 1, yPos);
+        else if (i === 4) doc.text(totals.unitsSold.toString(), xPos + 1, yPos);
+        else if (i === 6) doc.text(totals.revenue.toFixed(2), xPos + 1, yPos);
+        else if (i === 7) doc.text(totals.cost.toFixed(2), xPos + 1, yPos);
+        else if (i === 8) doc.text(totals.profit.toFixed(2), xPos + 1, yPos);
+        xPos += width;
+      });
+
+      const fileName = `Sales_By_Product_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
+      doc.save(fileName);
+
+      toast({
+        title: "PDF Exported",
+        description: `Report saved as ${fileName}`,
+      });
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return `₱${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Package2 className="h-5 w-5 text-green-600" />
+                Sales by Product Report
+              </CardTitle>
+              <CardDescription>
+                Product performance analysis with sales metrics
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="text-sm border-green-600 text-green-600">
+              {records.length} Product{records.length !== 1 ? 's' : ''}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">From Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[180px] justify-start text-left font-normal",
+                      !fromDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {fromDate ? format(fromDate, "PPP") : "Select date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={fromDate}
+                    onSelect={setFromDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">To Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[180px] justify-start text-left font-normal",
+                      !toDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {toDate ? format(toDate, "PPP") : "Select date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={toDate}
+                    onSelect={setToDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <Button 
+              onClick={fetchReport} 
+              disabled={isLoading}
+            >
+              {isLoading ? 'Loading...' : 'Show Report'}
+            </Button>
+
+            <Button 
+              onClick={exportToPDF} 
+              disabled={isLoading || records.length === 0}
+              variant="outline"
+              className="border-green-600 text-green-600 hover:bg-green-50"
+            >
+              <FileDown className="mr-2 h-4 w-4" />
+              Export to PDF
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Units Sold</CardTitle>
+            <Package2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{totals.unitsSold.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Across all products</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <div className="h-4 w-4 flex items-center justify-center text-muted-foreground font-semibold text-base">₱</div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{formatCurrency(totals.revenue)}</div>
+            <p className="text-xs text-muted-foreground">Total product sales</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">{totals.products}</div>
+            <p className="text-xs text-muted-foreground">Products sold</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Profit</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={cn("text-2xl font-bold", totals.profit >= 0 ? "text-green-600" : "text-red-600")}>
+              {formatCurrency(totals.profit)}
+            </div>
+            <p className="text-xs text-muted-foreground">Revenue minus cost</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Data Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Product Sales Details</CardTitle>
+              <CardDescription>
+                Detailed breakdown of sales by product
+              </CardDescription>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 w-[250px]"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table className="w-full text-sm">
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="py-2 px-3">Product Name</TableHead>
+                <TableHead className="py-2 px-2">SKU</TableHead>
+                <TableHead className="py-2 px-2">Category</TableHead>
+                <TableHead className="py-2 px-2">Brand</TableHead>
+                <TableHead className="py-2 px-2 text-right">Units Sold</TableHead>
+                <TableHead className="py-2 px-2">UOM</TableHead>
+                <TableHead className="py-2 px-2 text-right">Revenue</TableHead>
+                <TableHead className="py-2 px-2 text-right">Cost</TableHead>
+                <TableHead className="py-2 px-2 text-right">Profit</TableHead>
+                <TableHead className="py-2 px-2 text-right">Margin %</TableHead>
+                <TableHead className="py-2 px-2 text-right"># Sales</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedRecords.length > 0 ? (
+                paginatedRecords.map((record, index) => {
+                  const profitMargin = record.totalRevenue > 0 ? ((record.totalProfit / record.totalRevenue) * 100) : 0;
+                  return (
+                    <TableRow 
+                      key={index}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors text-xs"
+                    >
+                      <TableCell className="py-2 px-3 font-medium">{record.product.name}</TableCell>
+                      <TableCell className="py-2 px-2 text-muted-foreground">{record.product.sku || '-'}</TableCell>
+                      <TableCell className="py-2 px-2">{record.product.category || '-'}</TableCell>
+                      <TableCell className="py-2 px-2">{record.product.brand || '-'}</TableCell>
+                      <TableCell className="py-2 px-2 text-right font-mono font-semibold">
+                        {record.unitsSold}
+                      </TableCell>
+                      <TableCell className="py-2 px-2">{record.product.unitOfMeasure || '-'}</TableCell>
+                      <TableCell className="py-2 px-2 text-right font-mono text-blue-600">
+                        {record.totalRevenue.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-right font-mono text-muted-foreground">
+                        {record.totalCost.toFixed(2)}
+                      </TableCell>
+                      <TableCell className={cn(
+                        "py-2 px-2 text-right font-mono",
+                        record.totalProfit >= 0 ? "text-green-600" : "text-red-600"
+                      )}>
+                        {record.totalProfit.toFixed(2)}
+                      </TableCell>
+                      <TableCell className={cn(
+                        "py-2 px-2 text-right font-mono font-semibold",
+                        profitMargin >= 30 ? "text-green-600" : profitMargin >= 15 ? "text-yellow-600" : "text-red-600"
+                      )}>
+                        {profitMargin.toFixed(1)}%
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-right font-mono">
+                        {record.numberOfSales}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={11} className="h-24 text-center">
+                    {isLoading ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                        Loading...
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        No product sales found for the selected date range.
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          
+          {/* Pagination Controls */}
+          {filteredRecords.length > 0 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredRecords.length)} of {filteredRecords.length} entries
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Rows per page:</span>
+                  <Select
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[70px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  <div className="flex items-center gap-1 px-2">
+                    <span className="text-sm font-medium">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

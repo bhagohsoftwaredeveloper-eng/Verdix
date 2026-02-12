@@ -55,7 +55,7 @@ interface CustomerWithLoyalty {
   updated_at: string;
 }
 
-function CustomerRow({ customer, onRefresh }: { customer: CustomerWithLoyalty; onRefresh: () => void }) {
+function CustomerRow({ customer, onRefresh }: { customer: CustomerWithLoyalty; onRefresh: (silent?: boolean) => void }) {
     const getInitials = (name: string) => {
         if (!name) return '??';
         const names = name.split(' ');
@@ -85,6 +85,9 @@ function CustomerRow({ customer, onRefresh }: { customer: CustomerWithLoyalty; o
             </div>
         </div>
       </TableCell>
+      <TableCell className="text-center text-sm font-mono text-muted-foreground">
+        {customer.rfid_code || '-'}
+      </TableCell>
       <TableCell className="text-center font-semibold text-lg text-primary">
         {customer.loyaltyPoints}
       </TableCell>
@@ -94,8 +97,8 @@ function CustomerRow({ customer, onRefresh }: { customer: CustomerWithLoyalty; o
       </TableCell>
       <TableCell className="text-right">
         <div className="flex gap-2 justify-end">
-          <EditLoyaltyCardDialog customer={customer} onSuccess={onRefresh} />
-          <AdjustPointsDialog customer={mappedCustomerForAdjust} onFinished={onRefresh} />
+          <EditLoyaltyCardDialog customer={customer} onSuccess={() => onRefresh()} />
+          <AdjustPointsDialog customer={mappedCustomerForAdjust} onFinished={() => onRefresh(true)} />
           <PointsHistoryDialog customerLoyaltyId={customer.id} customerName={customer.name} />
           <DeleteLoyaltyCardDialog customer={customer} onSuccess={onRefresh} />
         </div>
@@ -132,9 +135,9 @@ export default function CustomerLoyaltyPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10; // Show 10 customers per page
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const response = await fetch('/api/customer-loyalty');
       if (response.ok) {
         const result = await response.json();
@@ -153,7 +156,7 @@ export default function CustomerLoyaltyPage() {
       console.error('Error fetching customer loyalty data:', error);
       setCustomers([]);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -208,6 +211,7 @@ export default function CustomerLoyaltyPage() {
             <TableRow>
               <TableHead>Code</TableHead>
               <TableHead>Customer Name</TableHead>
+              <TableHead className="text-center">RFID Code</TableHead>
               <TableHead className="text-center">Total Points</TableHead>
               <TableHead className="text-center">Point Setting</TableHead>
               <TableHead className="text-center">Expiry Date</TableHead>
@@ -222,7 +226,7 @@ export default function CustomerLoyaltyPage() {
                 ))
             ) : !isLoading && (
                 <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                         No customers found.
                     </TableCell>
                 </TableRow>

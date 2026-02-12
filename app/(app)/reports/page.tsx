@@ -3,183 +3,155 @@
 
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@/components/ui/chart';
-import { Bar, BarChart, CartesianGrid, XAxis, Pie, PieChart, Line, LineChart } from 'recharts';
-import type { ChartConfig } from '@/components/ui/chart';
-import { useMemo, useState, useEffect } from 'react';
-
-const salesChartConfig = {
-  sales: {
-    label: 'Sales',
-    color: 'hsl(var(--primary))',
-  },
-} satisfies ChartConfig;
-
-const topProductsChartConfig = {
-  sales: {
-    label: 'Sales',
-    color: 'hsl(var(--accent))',
-  },
-} satisfies ChartConfig;
-
-const categoryChartConfig = {
-  value: {
-    label: 'Sales',
-  },
-  electronics: {
-    label: 'Electronics',
-    color: 'hsl(var(--chart-1))',
-  },
-  audio: {
-    label: 'Audio',
-    color: 'hsl(var(--chart-2))',
-  },
-  computers: {
-    label: 'Computers',
-    color: 'hsl(var(--chart-3))',
-  },
-  gaming: {
-    label: 'Gaming',
-    color: 'hsl(var(--chart-4))',
-  },
-  storage: {
-    label: 'Storage',
-    color: 'hsl(var(--chart-5))',
-  },
-} satisfies ChartConfig;
-
+import Link from 'next/link';
+import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users } from 'lucide-react';
 
 export default function ReportsPage() {
-  const [data, setData] = useState<{
-    salesByDay: any[];
-    topProducts: any[];
-    salesByCategory: any[];
-  }>({ salesByDay: [], topProducts: [], salesByCategory: [] });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch('/api/reports/stats');
-        const result = await res.json();
-        if (result.salesByDay) {
-           // Apply colors for category chart
-           const salesByCategoryWithColors = result.salesByCategory.map((item: any) => ({
-              ...item,
-              fill: `hsl(var(--chart-${Object.keys(categoryChartConfig).indexOf(item.name.toLowerCase()) + 1}))`
-           }));
-           
-           setData({
-               ...result,
-               salesByCategory: salesByCategoryWithColors
-           });
-        }
-      } catch (error) {
-        console.error("Failed to fetch reports data:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
-
-  const { salesByDay, topProducts, salesByCategory } = data;
-
-
-
   return (
     <div className="grid gap-6 auto-rows-max">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Sales Over Time</CardTitle>
-            <CardDescription>Track your revenue stream daily.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={salesChartConfig} className="h-[250px] w-full">
-              <LineChart accessibilityLayer data={salesByDay} margin={{ left: 12, right: 12 }}>
-                <CartesianGrid vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent indicator="line" />}
-                />
-                <Line
-                  dataKey="sales"
-                  type="natural"
-                  stroke="var(--color-sales)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Selling Products</CardTitle>
-            <CardDescription>Your best performers this month.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={topProductsChartConfig} className="h-[250px] w-full">
-              <BarChart accessibilityLayer data={topProducts} layout="vertical" margin={{ left: 10 }}>
-                <CartesianGrid horizontal={false} />
-                <XAxis type="number" hide />
-                <XAxis
-                  dataKey="name"
-                  type="category"
-                  tickLine={false}
-                  tickMargin={10}
-                  axisLine={false}
-                  hide
-                />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent indicator="dot" />}
-                />
-                <Bar dataKey="sales" layout="vertical" fill="var(--color-sales)" radius={5} />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
+      {/* Inventory Reports Section */}
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold tracking-tight">Inventory Reports</h2>
+        <p className="text-muted-foreground">
+          Comprehensive inventory tracking, stock levels, and movement analysis.
+        </p>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Sales by Category</CardTitle>
-          <CardDescription>Breakdown of sales across different product categories.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center">
-          <ChartContainer config={categoryChartConfig} className="h-[350px] w-full max-w-lg">
-            <PieChart accessibilityLayer>
-              <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent hideLabel />}
-              />
-              <Pie
-                data={salesByCategory}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={60}
-                strokeWidth={5}
-              />
-            </PieChart>
-          </ChartContainer>
-        </CardContent>
-      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Link href="/reports/inventory">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Stock on Hand & Valuation
+                </CardTitle>
+                <CardDescription>Current inventory levels and total value (Avg Cost).</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/movements">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ArrowLeftRight className="h-5 w-5" />
+                  Stock Movement
+                </CardTitle>
+                <CardDescription>History of stock changes with date filtering.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/low-stock">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-500" />
+                  Low Stock Report
+                </CardTitle>
+                <CardDescription>Products below reorder point.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/velocity">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Fast & Slow Moving
+                </CardTitle>
+                <CardDescription>Product sales velocity analysis.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/adjustments">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Adjustment Report
+                </CardTitle>
+                <CardDescription>Log of damaged, lost, or corrected stock.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+      </div>
+
+      {/* Sales Reports Section */}
+      <div className="space-y-2 mt-8">
+        <h2 className="text-2xl font-bold tracking-tight">Sales Reports</h2>
+        <p className="text-muted-foreground">
+          Comprehensive sales analysis, revenue tracking, and customer insights.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Link href="/reports/sales/summary">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-blue-600" />
+                  Sales Summary
+                </CardTitle>
+                <CardDescription>Overall sales transactions with revenue, profit, and tax analysis.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/by-product">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package2 className="h-5 w-5 text-green-600" />
+                  Sales by Product
+                </CardTitle>
+                <CardDescription>Product performance analysis with units sold and revenue breakdown.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/profit-margin">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Percent className="h-5 w-5 text-purple-600" />
+                  Profit Margin Report
+                </CardTitle>
+                <CardDescription>Profitability analysis with margin percentages and ROI metrics.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/returns">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Undo className="h-5 w-5 text-orange-600" />
+                  Sales Returns
+                </CardTitle>
+                <CardDescription>Merchandise credit report with returned items and refund tracking.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/by-customer">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-indigo-600" />
+                  Sales by Customer
+                </CardTitle>
+                <CardDescription>Customer purchase history with credit sales and outstanding balances.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+      </div>
     </div>
   );
 }

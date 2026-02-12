@@ -107,6 +107,7 @@ const productSchema = z.object({
   })).optional(),
   vatStatus: z.string().default('YES (Subject to 12% VAT)'),
   availability: z.string().default('Available'),
+  earnsPoints: z.boolean().default(true),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -188,6 +189,7 @@ export function AddProductDialog({
       conversionFactor: 1,
       conversionFactors: [],
       priceLevels: [],
+      earnsPoints: true,
     },
   });
 
@@ -594,6 +596,12 @@ export function AddProductDialog({
                     >
                       Conversion
                     </TabsTrigger>
+                    <TabsTrigger 
+                      value="loyalty"
+                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
+                    >
+                      Loyalty
+                    </TabsTrigger>
                   </TabsList>
                   <TabsContent value="basic" className="space-y-4 p-6">
                     {/* Buttons and Child Product Logic Removed as requested */}
@@ -601,6 +609,7 @@ export function AddProductDialog({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Row 1: Name and Brand */}
                       {/* Row 1: Name, Brand, VAT and Availability */}
+
                       <FormField
                         control={form.control}
                         name="name"
@@ -1428,6 +1437,32 @@ export function AddProductDialog({
                           </div>
                         )}
                       </div>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="loyalty" className="space-y-4 p-6">
+                    <div className="space-y-4">
+                      <FormField
+                          control={form.control}
+                          name="earnsPoints"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 col-span-2">
+                              <div className="space-y-0.5">
+                                <FormLabel className="text-base">
+                                  Earns Loyalty Points
+                                </FormLabel>
+                                <FormDescription>
+                                  Disable this if this product should not earn points. (Note: Products in categories with 5% markup are automatically excluded).
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <Switch
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
                     </div>
                   </TabsContent>
                 </Tabs>

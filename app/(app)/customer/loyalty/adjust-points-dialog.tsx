@@ -176,6 +176,11 @@ function AdjustPointsForm({
           description: `${customer.name}'s new balance is ${newPoints} points.`,
         });
 
+        // Trigger parent update if available
+        if (onFinished) {
+          onFinished();
+        }
+
         // Optional: Stay on view or go back to menu? 
         // Usually better to go back to menu or close.
         // Let's go back to menu to see the updated balance or perform another action.
@@ -359,8 +364,13 @@ function AdjustPointsForm({
         </div>
         <DialogDescription>
           {view === 'add' ? 'Grant bonus points to this customer.' : 'Deduct points from this customer for rewards.'}
-          {customer && <span className="block mt-1 font-semibold text-primary">Customer: {customer.name}</span>}
         </DialogDescription>
+        {customer && (
+          <div className="mt-2 flex items-center justify-between p-3 bg-slate-50 rounded-lg border">
+            <span className="font-semibold text-primary">{customer.name}</span>
+            <span className="text-sm font-medium text-slate-500">Current Balance: <span className="text-slate-900 font-bold">{customer.loyaltyPoints}</span></span>
+          </div>
+        )}
       </DialogHeader>
 
       <Form {...pointsForm}>
@@ -439,7 +449,10 @@ export function AdjustPointsDialog({ customer, onFinished }: { customer: Custome
   const [isOpen, setIsOpen] = useState(false);
   
   const handleDialogFinished = () => {
-    setIsOpen(false);
+    // If we want to autoclose, we can uncomment this
+    // setIsOpen(false); 
+    
+    // Instead, we just trigger the refresh callback but keep dialog open as per user flow in form
     if (onFinished) {
       onFinished();
     }

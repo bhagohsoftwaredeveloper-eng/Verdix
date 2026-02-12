@@ -1054,13 +1054,38 @@ export default function POSPage() {
 
 
 
-  const handleOpenEndShift = () => {
+  const [cashDeposits, setCashDeposits] = useState(0);
+  const [cashPickups, setCashPickups] = useState(0);
+
+  const fetchShiftData = async () => {
+    if (!currentShiftId) return;
+    try {
+        const response = await fetch(`/api/pos/shifts?shiftId=${currentShiftId}`);
+        const result = await response.json();
+        if (result.success && result.data) {
+            setStartingCash(result.data.startingCash);
+            setCashSales(result.data.cashSales); // Update local cash sales with server truth
+            setCashDeposits(result.data.cashDeposits);
+            setCashPickups(result.data.cashPickups);
+        }
+    } catch (error) {
+        console.error("Failed to fetch shift data", error);
+    }
+  };
+
+  const handleOpenEndShift = async () => {
+    if (currentShiftId) {
+        await fetchShiftData();
+    }
+
     if (enableCashCountAuth) {
         setIsCashCountAuthOpen(true);
     } else {
         setIsEndShiftOpen(true);
     }
   };
+
+
 
   const headerActions = [
     { icon: Pencil, label: 'Edit Item', fKey: 'F1', action: handleOpenEditDialog, className: "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100 hover:border-blue-200" },
@@ -1495,11 +1520,16 @@ export default function POSPage() {
         onOpenChange={setIsEndShiftOpen}
         startingCash={startingCash}
         cashSales={cashSales}
+        cashIn={cashDeposits}
+        cashOut={cashPickups}
         onShiftEnd={handleConfirmEndShift}
       />
       <CashTransferDialog
         isOpen={isCashTransferOpen}
         onOpenChange={setIsCashTransferOpen}
+        shiftId={currentShiftId}
+        terminalId={selectedTerminalId}
+        userId={currentUser?.uid || currentUser?.id || ''}
       />
       <SelectCustomerDialog
         isOpen={isCustomerSelectOpen}

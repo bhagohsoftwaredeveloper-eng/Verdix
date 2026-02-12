@@ -531,7 +531,21 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                         name="salesPerson"
                         render={({ field }) => (
                           <FormItem className="space-y-1">
-                            <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
+                            <div className="flex items-center justify-between">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
+                                 <Button
+                                    variant="link"
+                                    size="sm"
+                                    className="h-auto p-0 text-xs text-primary"
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setShowAddSalesPersonDialog(true);
+                                    }}
+                                  >
+                                    Manage
+                                  </Button>
+                            </div>
                             <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                   <SelectTrigger className="h-8 bg-white text-xs">
@@ -539,20 +553,6 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <div className="p-1 w-full border-b border-border mb-1">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setShowAddSalesPersonDialog(true);
-                                        }}
-                                      >
-                                        <Plus className="mr-2 h-3 w-3" /> Add Sales Person
-                                      </Button>
-                                   </div>
                                   {salesPersons?.map(person => (
                                     <SelectItem key={person.id} value={person.id.toString()} className="text-xs">
                                       {person.name}
@@ -605,7 +605,21 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                             name="warehouse"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
+                                    <Button
+                                        variant="link"
+                                        size="sm"
+                                        className="h-auto p-0 text-xs text-primary"
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowAddWarehouseDialog(true);
+                                        }}
+                                      >
+                                        Manage
+                                      </Button>
+                                </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                     <SelectTrigger className="h-8 bg-white text-xs">
@@ -613,20 +627,6 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <div className="p-1 w-full border-b border-border mb-1">
-                                      <Button
-                                        variant="ghost" 
-                                        size="sm"
-                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setShowAddWarehouseDialog(true);
-                                        }}
-                                      >
-                                        <Plus className="mr-2 h-3 w-3"/> Add Warehouse
-                                      </Button>
-                                    </div>
                                     {warehouses?.map(warehouse => (
                                     <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
                                         {warehouse.name}
@@ -653,7 +653,21 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                             name="paymentMethod"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                     <Button
+                                        variant="link"
+                                        size="sm"
+                                        className="h-auto p-0 text-xs text-primary"
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setShowPaymentMethodDialog(true);
+                                        }}
+                                      >
+                                        Manage
+                                      </Button>
+                                </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                     <SelectTrigger className="h-8 bg-white text-xs">
@@ -661,21 +675,6 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <div className="p-1 w-full border-b border-border mb-1">
-                                     <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="w-full justify-start font-normal px-2 h-7 text-xs"
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          setShowPaymentMethodDialog(true);
-                                        }}
-                                      >
-                                        <Plus className="mr-2 h-3 w-3" />
-                                        Manage Methods
-                                      </Button>
-                                    </div>
                                     {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
                                 </SelectContent>
                                 </Select>

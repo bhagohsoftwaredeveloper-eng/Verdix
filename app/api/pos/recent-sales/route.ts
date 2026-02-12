@@ -74,11 +74,12 @@ export async function GET(request: NextRequest) {
             SUM(si.quantity) as quantity,
             si.price,
             p.sku,
-            p.barcode
+            p.barcode,
+            p.unit_of_measure
           FROM sale_items si
           LEFT JOIN products p ON si.product_id = p.id
           WHERE si.sale_id = ?
-          GROUP BY si.product_id, si.product_name, si.price, p.sku, p.barcode
+          GROUP BY si.product_id, si.product_name, si.price, p.sku, p.barcode, p.unit_of_measure
           HAVING SUM(si.quantity) > 0
         `;
         const items = await query(itemsQuery, [sale.id]);

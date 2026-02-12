@@ -14,7 +14,7 @@ import { Fragment } from 'react';
 
 export function AppBreadcrumbs() {
   const pathname = usePathname();
-  const segments = pathname.split('/').filter(Boolean);
+  const segments = pathname.split('/').filter(Boolean).filter(segment => segment !== 'sales');
 
   return (
     <Breadcrumb>
@@ -29,7 +29,11 @@ export function AppBreadcrumbs() {
           // Custom label mappings
           const labelMap: Record<string, string> = {
             'returns': 'Merchandise Credits',
-            'voids': 'Post Void'
+            'voids': 'Post Void',
+            'by-product': 'Sales by Product',
+            'profit-margin': 'Profit Margin',
+            'by-customer': 'Sales by Customer',
+            'summary': 'Sales Summary',
           };
           
           const defaultLabel = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');

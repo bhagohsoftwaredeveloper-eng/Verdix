@@ -1,5 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction } from '@/lib/mysql';
+import { withTransaction, query } from '@/lib/mysql';
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const shiftId = searchParams.get('shiftId');
+
+    if (!shiftId) {
+      return NextResponse.json(
+        { success: false, error: 'Shift ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // 1. Get Shift Details
+    const shiftResult = await query(
+      `SELECT starting_cash, status FROM shifts WHERE id = ?`,
+      [shiftId]
+    );
+
+    if (shiftResult.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Shift not found' },
+        { status: 404 }
+      );
+    }
+
+    const startingCash = parseFloat(shiftResult[0].starting_cash || 0);
+
+    // 2. Get Cash Sales (Total Amount where payment_method = 'CASH' and type = 'sale' - 'void' - 'return'?)
+    // Simplified: Sum of total_amount for sales (positive) vs voids/returns (negative or separate)
+    // Assuming pos_transactions stores final amount. If voided, is it deleted or marked void?
+    // Looking at schema: transaction_type ENUM('sale', 'void', 'return', 'refund')
+    // For now, let's sum 'sale' where payment_method is CASH.
+    // Note: Payment method might be stored in a related payments table if multiple payments allowed, 
+    // but schema has `payment_method` column in `pos_transactions`.
+
+    const salesResult = await query(
+      `SELECT 
+         SUM(CASE WHEN transaction_type = 'sale' THEN total_amount ELSE 0 END) as total_sales,
+         SUM(CASE WHEN transaction_type IN ('void', 'return', 'refund') THEN total_amount ELSE 0 END) as total_refunds
+       FROM pos_transactions 
+       WHERE shift_id = ? AND payment_method = 'CASH'`,
+      [shiftId]
+    );
+
+    const totalCashSales = (parseFloat(salesResult[0].total_sales || 0) - parseFloat(salesResult[0].total_refunds || 0));
+
+
+    // 3. Get Cash Transfers
+    const transfersResult = await query(
+      `SELECT 
+         SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) as total_deposits,
+         SUM(CASE WHEN type = 'pickup' THEN amount ELSE 0 END) as total_pickups
+       FROM cash_transfers 
+       WHERE shift_id = ?`,
+      [shiftId]
+    );
+
+    const totalDeposits = parseFloat(transfersResult[0].total_deposits || 0);
+    const totalPickups = parseFloat(transfersResult[0].total_pickups || 0);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        startingCash,
+        cashSales: totalCashSales,
+        cashDeposits: totalDeposits,
+        cashPickups: totalPickups,
+        expectedCash: startingCash + totalCashSales + totalDeposits - totalPickups
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Error fetching shift details:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to fetch shift details' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {

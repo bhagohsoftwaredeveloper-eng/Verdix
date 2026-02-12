@@ -49,6 +49,7 @@ import './047_alter_sales_transactions_add_voided_status.ts';
 import './048_alter_pos_settings_add_return_auth.ts';
 import './049_alter_pos_settings_add_recent_sales_auth.ts';
 import './050_create_bad_orders_table.ts';
+import './051_create_cash_transfers_table.ts';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';
