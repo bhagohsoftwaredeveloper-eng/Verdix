@@ -345,6 +345,16 @@ export default function POSPage() {
     return items.find(item => item.id === selectedItemId) || null;
   }, [items, selectedItemId]);
 
+  // Scroll to selected item
+  useEffect(() => {
+    if (selectedItemId) {
+      const element = document.getElementById(`pos-item-${selectedItemId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [selectedItemId]);
+
   // Fetch initial data
   useEffect(() => {
     // Fetch price levels
@@ -457,8 +467,10 @@ export default function POSPage() {
   // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent browser default function key actions if needed
-      if (e.key.startsWith('F')) {
+      // Check if any dialog is open to prevent background interactions
+      const isDialogOpen = document.querySelector('[role="dialog"]') !== null;
+
+      if (e.key && e.key.startsWith('F')) {
         // e.preventDefault(); // Un-comment if you want to block F1 (Help), F3 (Search), etc.
       }
 
@@ -479,10 +491,60 @@ export default function POSPage() {
         case 'F6': handleOpenQuantityDialog(); break;
         case 'F7': handleRequestPriceEdit(); break;
         case 'F8': setIsShutdownConfirmOpen(true); break;
+        case '+':
+          {
+            const isInputFocused = document.activeElement === inputRef.current;
+            const isInputEmpty = inputRef.current ? inputRef.current.value === '' : true;
+            
+            if (selectedItemId && (!isInputFocused || isInputEmpty) && !isDialogOpen) {
+                e.preventDefault();
+                const item = items.find(i => i.id === selectedItemId);
+                if (item) updateQuantity(selectedItemId, item.quantity + 1);
+            }
+          }
+          break;
+        case '-':
+          {
+            const isInputFocused = document.activeElement === inputRef.current;
+            const isInputEmpty = inputRef.current ? inputRef.current.value === '' : true;
+            
+            if (selectedItemId && (!isInputFocused || isInputEmpty) && !isDialogOpen) {
+                e.preventDefault();
+                const item = items.find(i => i.id === selectedItemId);
+                if (item) updateQuantity(selectedItemId, item.quantity - 1);
+            }
+          }
+          break;
+        case 'ArrowUp':
+          {
+            const isInputFocused = document.activeElement === inputRef.current;
+            const isInputEmpty = inputRef.current ? inputRef.current.value === '' : true;
+            
+            if (items.length > 0 && (!isInputFocused || isInputEmpty) && !isDialogOpen) {
+                e.preventDefault();
+                const currentIndex = items.findIndex(i => i.id === selectedItemId);
+                const prevIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+                setSelectedItemId(items[prevIndex].id);
+            }
+          }
+          break;
+        case 'ArrowDown':
+          {
+            const isInputFocused = document.activeElement === inputRef.current;
+            const isInputEmpty = inputRef.current ? inputRef.current.value === '' : true;
+            
+            if (items.length > 0 && (!isInputFocused || isInputEmpty) && !isDialogOpen) {
+                e.preventDefault();
+                const currentIndex = items.findIndex(i => i.id === selectedItemId);
+                const nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
+                setSelectedItemId(items[nextIndex].id);
+            }
+          }
+          break;
         // Payment method shortcuts
         case 'F9': 
              e.preventDefault();
-             setIsProductSearchOpen(true); 
+             setIsProductSearchOpen(prev => !prev); 
              break;
         case 'F10': handleOpenTender('CREDIT_CARD'); break;
         case 'F11': handleOpenTender('E_WALLET'); break;
@@ -1240,9 +1302,9 @@ export default function POSPage() {
 
              {/* Items Table */}
              <div className="flex-1 bg-background rounded-xl border shadow-sm flex flex-col overflow-hidden">
-                <div className="overflow-y-auto flex-1">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-muted/50 backdrop-blur z-10 shadow-sm">
+                <div className="overflow-y-auto flex-1 scroll-pt-12">
+                  <table className="w-full caption-bottom text-sm">
+                    <TableHeader className="sticky top-0 bg-muted z-20 shadow-sm">
                       <TableRow className="hover:bg-transparent border-b-border/50">
                         <TableHead className="w-10 pl-4"></TableHead>
                         <TableHead className="w-[40%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</TableHead>
@@ -1266,12 +1328,16 @@ export default function POSPage() {
                         ) : (
                             items.map((item) => (
                                 <TableRow 
-                                    key={item.id} 
+                                    key={item.id}
+                                    id={`pos-item-${item.id}`}
                                     className={`
                                         cursor-pointer transition-colors border-b-border/40 last:border-0
                                         ${selectedItemId === item.id ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/30'}
                                     `}
-                                    onClick={() => setSelectedItemId(item.id)}
+                                    onClick={() => {
+                                        setSelectedItemId(item.id);
+                                        inputRef.current?.focus();
+                                    }}
                                 >
                                     <TableCell className="pl-4">
                                         <div className={`w-2 h-2 rounded-full ${selectedItemId === item.id ? 'bg-primary' : 'bg-transparent border border-muted-foreground/30'}`} />
@@ -1300,7 +1366,7 @@ export default function POSPage() {
                             ))
                         )}
                     </TableBody>
-                  </Table>
+                  </table>
                 </div>
                 
                 {/* Summary Strip Removed - Moved to Sidebar */}

@@ -93,8 +93,8 @@ export async function PATCH(
         const insertItemQuery = `
           INSERT INTO purchase_order_items (
             id, purchase_order_id, product_id, product_name, quantity, cost,
-            selling_price, discount, discount_type, vat_subject
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            selling_price, discount, discount_type, vat_subject, expiration_date
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         for (const item of items) {
@@ -109,7 +109,8 @@ export async function PATCH(
             item.sellingPrice || null,
             item.discount || 0,
             item.discountType || 'amount',
-            item.vatSubject ? 1 : 0
+            item.vatSubject ? 1 : 0,
+            item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null
           ]);
         }
       }
@@ -129,10 +130,10 @@ export async function PATCH(
             const quantityAdded = parseFloat(item.quantity || '0');
             const newStock = previousStock + quantityAdded;
 
-            // Update product stock
+            // Update product stock and expiration date
             await connection.query(
-              'UPDATE products SET stock = ?, updated_at = NOW() WHERE id = ?',
-              [newStock, item.productId]
+              'UPDATE products SET stock = ?, expiration_date = ?, updated_at = NOW() WHERE id = ?',
+              [newStock, item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null, item.productId]
             );
 
             // Record stock movement
@@ -141,8 +142,8 @@ export async function PATCH(
               INSERT INTO stock_movements (
                 id, product_id, product_name, movement_type, 
                 quantity_change, previous_stock, new_stock, 
-                reference_id, reference_type, notes, created_at, updated_at
-              ) VALUES (?, ?, ?, 'purchase', ?, ?, ?, ?, 'purchase', ?, NOW(), NOW())
+                reference_id, reference_type, notes, expiration_date, created_at, updated_at
+              ) VALUES (?, ?, ?, 'purchase', ?, ?, ?, ?, 'purchase', ?, ?, NOW(), NOW())
             `, [
               movementId,
               item.productId,
@@ -151,7 +152,8 @@ export async function PATCH(
               previousStock,
               newStock,
               id,
-              `Received Purchase Order: ${id}`
+              `Received Purchase Order: ${id}`,
+              item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null
             ]);
           }
         }

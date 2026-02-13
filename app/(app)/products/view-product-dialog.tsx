@@ -87,6 +87,7 @@ export function ViewProductDialog({ product, onProductUpdated, products, onChild
                             {product.parentId && <DetailItem label="Parent Product" value="Child Unit" />}
                             <DetailItem label="Avg. Daily Sales" value={product.avgDailySales || 0} />
                             {product.warehouseName && <DetailItem label="Warehouse" value={product.warehouseName} />}
+                            {product.expirationDate && <DetailItem label="Expiration Date" value={<span className="text-orange-600">{new Date(product.expirationDate).toLocaleDateString()}</span>} />}
                             {product.createdAt && <DetailItem label="Created" value={new Date(product.createdAt).toLocaleDateString()} />}
                             {product.updatedAt && <DetailItem label="Last Updated" value={new Date(product.updatedAt).toLocaleDateString()} />}
                         </div>

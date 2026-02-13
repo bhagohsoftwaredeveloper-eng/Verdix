@@ -22,6 +22,7 @@ export interface Product {
   availability?: string;
   taxType?: 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT';
   earnsPoints?: boolean;
+  expirationDate?: string;
 
   // Accounting
   incomeAccount?: string;
@@ -111,6 +112,7 @@ export interface Sale {
   reference?: string;
   deliveryAddress?: string;
   salesPerson?: string;
+  salesPersonId?: string;
   items: SaleItem[];
   total: number;
   formattedTotal?: string;
@@ -195,6 +197,7 @@ export interface Brand {
 export interface PaymentMethod {
   id: string;
   name: string;
+  isReferenceRequired?: boolean;
 }
 
 export interface Warehouse {

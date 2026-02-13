@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
         COALESCE(uom.abbreviation, products.unit_of_measure) as unitOfMeasure,
         products.reorder_point as reorderPoint,
         products.avg_daily_sales as avgDailySales,
+        products.expiration_date as expirationDate,
         products.created_at,
         products.updated_at
       FROM products
@@ -40,22 +41,22 @@ export async function GET(request: NextRequest) {
     const params: any[] = [];
 
     if (category) {
-      sql += ' AND category = ?';
+      sql += ' AND products.category = ?';
       params.push(category);
     }
 
     if (search) {
-      sql += ' AND (name LIKE ? OR sku LIKE ? OR barcode LIKE ?)';
+      sql += ' AND (products.name LIKE ? OR products.sku LIKE ? OR products.barcode LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     if (warehouseId) {
-      sql += ' AND warehouse_id = ?';
+      sql += ' AND products.warehouse_id = ?';
       params.push(warehouseId);
     }
 
     if (availability) {
-      sql += ' AND availability = ?';
+      sql += ' AND products.availability = ?';
       params.push(availability);
     }
 
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    sql += ' ORDER BY products.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const products = await query(sql, params);

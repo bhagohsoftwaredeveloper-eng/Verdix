@@ -77,6 +77,22 @@ export async function POST(request: NextRequest) {
             item.price,
           ]);
 
+          // --- Inventory Check Logic ---
+          // Fetch POS settings to see if negative inventory is allowed
+          const [settingsResult]: any = await connection.query('SELECT enable_negative_inventory FROM pos_settings LIMIT 1');
+          const enableNegativeInventory = settingsResult.length > 0 ? !!settingsResult[0].enable_negative_inventory : false;
+
+          if (!enableNegativeInventory) {
+              // Check stock for the item
+              const [stockResult]: any = await connection.query('SELECT stock, name FROM products WHERE id = ?', [item.product.id]);
+              if (stockResult && stockResult.length > 0) {
+                  const currentStock = stockResult[0].stock;
+                  if (currentStock < item.quantity) {
+                       throw new Error(`Insufficient stock for product: ${stockResult[0].name}. Current stock: ${currentStock}, Requested: ${item.quantity}`);
+                  }
+              }
+          }
+
           // --- Anchor-Based Inventory Deduction & Sync ---
           // Fetch sold product details to identify family
           const [soldProdResult]: any = await connection.query('SELECT id, parent_id, unit_of_measure, name, stock FROM products WHERE id = ?', [item.product.id]);
@@ -157,8 +173,14 @@ export async function POST(request: NextRequest) {
           timestamp: new Date().toISOString()
         });
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating sales invoice:', error);
+      if (error.message && error.message.includes('Insufficient stock')) {
+        return NextResponse.json(
+            { success: false, error: error.message },
+            { status: 400 }
+        );
+      }
       return NextResponse.json(
         { success: false, error: `Failed to create sales invoice: ${error instanceof Error ? error.message : String(error)}` },
         { status: 500 }

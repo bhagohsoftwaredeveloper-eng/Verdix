@@ -40,6 +40,7 @@ import {
   Users,
   Settings,
   Package2,
+  ChartNoAxesCombined,
 } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
@@ -271,7 +272,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                          <div className="flex items-center gap-3">
-                          <Receipt className="size-[18px]" />
+                          <ChartNoAxesCombined className="size-[18px]" />
                           <span className="text-[14px]">Sales</span>
                         </div>
                         <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />

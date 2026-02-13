@@ -126,6 +126,12 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
         <TableCell className="font-medium">
           {product.name}
           {product.parentId && <div className="text-xs text-muted-foreground">Child Unit</div>}
+          {product.expirationDate && (
+            <div className="text-[10px] text-orange-600 font-medium flex items-center gap-1 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-600" />
+              Exp: {new Date(product.expirationDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </div>
+          )}
         </TableCell>
         <TableCell className="hidden md:table-cell">{product.sku}</TableCell>
         <TableCell className="hidden lg:table-cell">{product.barcode}</TableCell>
@@ -426,10 +432,9 @@ function ProductsContent() {
       <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
         <div>
            <h1 className="text-3xl font-bold tracking-tight text-foreground">Products</h1>
-           <div className="text-muted-foreground mt-1">
-             Manage your inventory, pricing, and suppliers.
-             {selectedStatus === 'low-stock' && <Badge variant="destructive" className="ml-2 animate-pulse">Low Stock Filter Active</Badge>}
-           </div>
+             <div className="text-muted-foreground mt-1">
+               Manage your inventory, pricing, and suppliers.
+             </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <div className="relative group">
@@ -679,7 +684,7 @@ function ProductsContent() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12"><span className="sr-only">Expand</span></TableHead>
+                <TableHead className="w-12 hidden sm:table-cell"><span className="sr-only">Expand</span></TableHead>
                 <TableHead className="w-[80px]">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="hidden md:table-cell">SKU</TableHead>

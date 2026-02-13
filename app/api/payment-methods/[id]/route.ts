@@ -50,7 +50,7 @@ export async function PUT(
   try {
     const { id: paymentMethodId } = await params;
     const body = await request.json();
-    const { name, isActive } = body;
+    const { name, isActive, isReferenceRequired } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json(
@@ -62,13 +62,15 @@ export async function PUT(
     const sql = `
       UPDATE payment_methods SET
         name = ?,
-        is_active = ?
+        is_active = ?,
+        require_reference = ?
       WHERE id = ?
     `;
 
     const result = await query(sql, [
       name.trim(),
       isActive ?? true,
+      isReferenceRequired ?? false,
       paymentMethodId
     ]);
 
@@ -82,7 +84,7 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       message: 'Payment method updated successfully',
-      data: { id: paymentMethodId, name: name.trim(), isActive: isActive ?? true },
+      data: { id: paymentMethodId, name: name.trim(), isActive: isActive ?? true, isReferenceRequired: isReferenceRequired ?? false },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {

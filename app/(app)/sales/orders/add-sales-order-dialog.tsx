@@ -48,7 +48,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ManageCustomersDialog } from '../ManageCustomersDialog';
 import { ManagePaymentMethodsDialog } from '../ManagePaymentMethodsDialog';
 import { ManageWarehousesDialog, WarehouseDialog as AddWarehouseDialog } from '../ManageWarehousesDialog';
-import { ManageSalesPersonsDialog, SalesPersonDialog as AddSalesPersonDialog } from '../ManageSalesPersonsDialog';
+import { ManageSalesPersonsDialog } from '../ManageSalesPersonsDialog';
 import { CustomerSelectionField } from '../invoices/customer-selection-field';
 
 import { useProducts, useCustomers } from '@/hooks/use-api';
@@ -229,37 +229,57 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
 
     // Populate form if initialData provided (Edit Mode)
     useEffect(() => {
-        if (initialData && isOpen) {
-            form.reset({
-                customer: initialData.customer,
-                orderDate: initialData.orderDate ? new Date(initialData.orderDate).toISOString().split('T')[0] : '',
-                deliveryDate: initialData.deliveryDate ? new Date(initialData.deliveryDate).toISOString().split('T')[0] : '',
-                reference: initialData.reference,
-                deliveryAddress: initialData.deliveryAddress,
-                paymentMethod: initialData.paymentMethod,
-                // shipping not in Sale type directly but in API response, assume it maps if available. 
-                // Since Sale type might be incomplete locally vs API full response, we guard.
-                shipping: (initialData as any).shipping || 0, 
-                warehouse: (initialData as any).warehouse_id, 
-                salesPerson: (initialData as any).sales_person_id,
-                note: initialData.notes,
-                items: initialData.items.map(item => ({
-                    product: item.product,
-                    quantity: item.quantity,
-                    price: item.price
-                }))
-            });
-             // Trigger fetchers
-            fetchWarehouses();
-            fetchPaymentMethods();
-            fetchSalesPersons();
-        } else if (isOpen && !initialData) {
-            // New Mode - generate ref if empty
-             const autoReference = generateReference();
-             form.setValue('reference', autoReference);
-             fetchWarehouses();
-             fetchPaymentMethods();
-             fetchSalesPersons();
+        const initializeForm = async () => {
+             // Always fetch latest data first
+             const [warehousesData, paymentMethodsData, salesPersonsData] = await Promise.all([
+                 fetchWarehouses(),
+                 fetchPaymentMethods(),
+                 fetchSalesPersons()
+             ]);
+
+            if (initialData && isOpen) {
+                // Check if salesPersonId is actually a name (legacy data fix)
+                let salesPersonId = initialData.salesPersonId || (initialData as any).sales_person_id;
+                
+                // If the current ID is NOT in the list of IDs, check if it matches a name
+                if (salesPersonsData && salesPersonId) {
+                     const exists = salesPersonsData.some(sp => sp.id.toString() === salesPersonId);
+                     if (!exists) {
+                         const foundByName = salesPersonsData.find(sp => sp.name.toLowerCase() === salesPersonId.toLowerCase());
+                         if (foundByName) {
+                             salesPersonId = foundByName.id.toString();
+                         }
+                     }
+                }
+
+                form.reset({
+                    customer: initialData.customer,
+                    orderDate: initialData.orderDate ? new Date(initialData.orderDate).toISOString().split('T')[0] : '',
+                    deliveryDate: initialData.deliveryDate ? new Date(initialData.deliveryDate).toISOString().split('T')[0] : '',
+                    reference: initialData.reference,
+                    deliveryAddress: initialData.deliveryAddress,
+                    paymentMethod: initialData.paymentMethod,
+                    // shipping not in Sale type directly but in API response, assume it maps if available. 
+                    // Since Sale type might be incomplete locally vs API full response, we guard.
+                    shipping: (initialData as any).shipping || 0, 
+                    warehouse: (initialData as any).warehouse_id, 
+                    salesPerson: salesPersonId,
+                    note: initialData.notes,
+                    items: initialData.items.map(item => ({
+                        product: item.product,
+                        quantity: item.quantity,
+                        price: item.price
+                    }))
+                });
+            } else if (isOpen && !initialData) {
+                // New Mode - generate ref if empty
+                 const autoReference = generateReference();
+                 form.setValue('reference', autoReference);
+            }
+        };
+
+        if (isOpen) {
+            initializeForm();
         }
     }, [initialData, isOpen, form]);
 
@@ -301,11 +321,14 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
 
       if (result.success) {
         setWarehouses(result.data);
+        return result.data;
       } else {
         console.error('Failed to fetch warehouses:', result.error);
+        return [];
       }
     } catch (error) {
       console.error('Error fetching warehouses:', error);
+      return [];
     } finally {
       setIsLoadingWarehouses(false);
     }
@@ -348,11 +371,14 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
 
       if (result.success) {
         setPaymentMethods(result.data);
+        return result.data;
       } else {
         console.error('Failed to fetch payment methods:', result.error);
+        return [];
       }
     } catch (error) {
       console.error('Error fetching payment methods:', error);
+      return [];
     } finally {
       setIsLoadingPaymentMethods(false);
     }
@@ -367,54 +393,22 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
 
       if (result.success) {
         setSalesPersons(result.data);
+        return result.data as SalesPerson[];
       } else {
         console.error('Failed to fetch sales persons:', result.error);
+        return [] as SalesPerson[];
       }
     } catch (error) {
       console.error('Error fetching sales persons:', error);
+      return [] as SalesPerson[];
     } finally {
       setIsLoadingSalesPersons(false);
     }
   };
 
-  const handleAddSalesPerson = async (name: string, contactNumber?: string) => {
-    try {
-      const response = await fetch('/api/sales-persons', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, contactNumber }),
-      });
 
-      const result = await response.json();
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to add sales person');
-      }
 
-      await fetchSalesPersons();
-    } catch (error) {
-      console.error('Error adding sales person:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to add sales person.',
-      });
-      throw error;
-    }
-  };
-
-  // Auto-generate reference when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      const autoReference = generateReference();
-      form.setValue('reference', autoReference);
-      fetchWarehouses();
-      fetchPaymentMethods();
-      fetchSalesPersons();
-    }
-  }, [isOpen, form]);
 
   const handleAddProduct = (product: Product) => {
     const existingItemIndex = fields.findIndex(field => field.product.id === product.id);
@@ -560,13 +554,11 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                   ))}
                                 </SelectContent>
                             </Select>
-                             <AddSalesPersonDialog
+                            <ManageSalesPersonsDialog
                                 open={showAddSalesPersonDialog}
                                 onOpenChange={setShowAddSalesPersonDialog}
-                                onSave={handleAddSalesPerson}
-                              >
-                                <div />
-                              </AddSalesPersonDialog>
+                                onChange={fetchSalesPersons}
+                            />
                           </FormItem>
                         )}
                       />

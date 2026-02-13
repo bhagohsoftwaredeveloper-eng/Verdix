@@ -701,38 +701,36 @@ export function AddPurchaseOrderDialog({
                         control={form.control}
                         name="supplierId"
                         render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger className="h-8 bg-white text-xs">
-                                  <SelectValue placeholder="Select supplier" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <div className="p-1 w-full border-b border-border mb-1">
-                                  <SupplierFormDialog 
-                                    onSave={async (data) => {
-                                        const result = await addSupplier(data);
-                                        if (result.success) {
-                                            const newSuppliers = await import('../products/actions').then(mod => mod.getSuppliers());
-                                            setSuppliers(newSuppliers);
-                                        } else {
-                                            throw new Error(result.message);
-                                        }
-                                    }}
-                                  >
-                                      <Button variant="ghost" size="sm" className="w-full justify-start font-normal px-2 h-7 text-xs" type="button">
-                                        <Plus className="mr-2 h-3 w-3"/> Add Supplier
-                                      </Button>
-                                  </SupplierFormDialog>
+                            <FormItem className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier</FormLabel>
+                                    <SupplierFormDialog 
+                                        onSave={async (data) => {
+                                            const result = await addSupplier(data);
+                                            if (result.success) {
+                                                const newSuppliers = await import('../products/actions').then(mod => mod.getSuppliers());
+                                                setSuppliers(newSuppliers);
+                                            } else {
+                                                throw new Error(result.message);
+                                            }
+                                        }}
+                                    >
+                                        <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
+                                    </SupplierFormDialog>
                                 </div>
-                                {suppliers.map(sup => <SelectItem key={sup.id} value={sup.id} className="text-xs">{sup.name}</SelectItem>)}
-                              </SelectContent>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                    <SelectValue placeholder="Select supplier" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {suppliers.map(sup => <SelectItem key={sup.id} value={sup.id} className="text-xs">{sup.name}</SelectItem>)}
+                                </SelectContent>
 
-                            </Select>
-                            <FormMessage className="text-xs" />
-                          </FormItem>
+                                </Select>
+                                <FormMessage className="text-xs" />
+                            </FormItem>
                         )}
                       />
                       <div className="grid grid-cols-2 gap-2">
@@ -741,7 +739,9 @@ export function AddPurchaseOrderDialog({
                             name="purchaseType"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Type</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Type</FormLabel>
+                                </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                     <SelectTrigger className="h-8 bg-white text-xs">
@@ -762,7 +762,9 @@ export function AddPurchaseOrderDialog({
                             name="reference"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Ref #</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Ref #</FormLabel>
+                                </div>
                                 <FormControl>
                                 <Input className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
@@ -780,7 +782,9 @@ export function AddPurchaseOrderDialog({
                             name="issueDate"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Issue Date</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Issue Date</FormLabel>
+                                </div>
                                 <FormControl>
                                 <Input type="date" className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
@@ -793,7 +797,9 @@ export function AddPurchaseOrderDialog({
                             name="deliveryDate"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
+                                </div>
                                 <FormControl>
                                 <Input type="date" className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
@@ -806,7 +812,15 @@ export function AddPurchaseOrderDialog({
                             name="receiveToWarehouse"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Receive To</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Receive To</FormLabel>
+                                    <ManageWarehousesDialog
+                                        trigger={
+                                            <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
+                                        }
+                                        onChange={fetchWarehouses}
+                                    />
+                                </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                     <SelectTrigger className="h-8 bg-white text-xs">
@@ -814,16 +828,6 @@ export function AddPurchaseOrderDialog({
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <div className="p-1 w-full border-b border-border mb-1">
-                                    <ManageWarehousesDialog
-                                        trigger={
-                                        <Button variant="ghost" size="sm" className="w-full justify-start font-normal px-2 h-7 text-xs" type="button">
-                                            <Plus className="mr-2 h-3 w-3"/> Manage
-                                        </Button>
-                                        }
-                                        onChange={fetchWarehouses}
-                                    />
-                                    </div>
                                     {warehouses?.map(warehouse => (
                                     <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
                                         {warehouse.name}
@@ -844,7 +848,14 @@ export function AddPurchaseOrderDialog({
                             name="paymentMethod"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                    <ManagePaymentMethodsDialog 
+                                        trigger={
+                                            <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
+                                        } 
+                                    />
+                                </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
                                     <SelectTrigger className="h-8 bg-white text-xs">
@@ -852,15 +863,6 @@ export function AddPurchaseOrderDialog({
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <div className="p-1 w-full border-b border-border mb-1">
-                                    <ManagePaymentMethodsDialog 
-                                        trigger={
-                                        <Button variant="ghost" size="sm" className="w-full justify-start font-normal px-2 h-7 text-xs" type="button">
-                                            <Plus className="mr-2 h-3 w-3"/> Manage
-                                        </Button>
-                                        } 
-                                    />
-                                    </div>
                                     {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
                                 </SelectContent>
                                 </Select>
@@ -873,7 +875,9 @@ export function AddPurchaseOrderDialog({
                             name="shipping"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping Cost</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping Cost</FormLabel>
+                                </div>
                                 <FormControl>
                                 <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
@@ -889,7 +893,9 @@ export function AddPurchaseOrderDialog({
                             name="deliveryAddress"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                                </div>
                                 <FormControl>
                                 <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
                                 </FormControl>
@@ -901,7 +907,9 @@ export function AddPurchaseOrderDialog({
                           name="note"
                           render={({ field }) => (
                             <FormItem className="space-y-1">
-                              <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                                <div className="flex items-center justify-between">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                                </div>
                               <FormControl>
                                 <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
                               </FormControl>

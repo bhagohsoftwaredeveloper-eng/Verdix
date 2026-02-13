@@ -50,23 +50,23 @@ export async function GET(request: NextRequest) {
 
     let sql = `
       SELECT
-        uid as id,
-        COALESCE(display_name, username) as name,
-        username as contactNumber,
-        NOT disabled as isActive,
-        creation_time as createdAt
-      FROM users
+        id,
+        name,
+        contact_number as contactNumber,
+        is_active as isActive,
+        created_at as createdAt
+      FROM sales_persons
       WHERE 1=1
     `;
     const params: any[] = [];
 
     if (activeOnly) {
-      sql += ' AND disabled = ?';
-      params.push(false);
+      sql += ' AND is_active = ?';
+      params.push(1); // MySQL boolean true is 1
     }
 
     if (search) {
-      sql += ' AND (display_name LIKE ? OR username LIKE ?)';
+      sql += ' AND (name LIKE ? OR contact_number LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 
@@ -76,16 +76,16 @@ export async function GET(request: NextRequest) {
     const salesPersons = await query(sql, params);
 
     // Get total count for pagination
-    let countSql = 'SELECT COUNT(*) as total FROM users WHERE 1=1';
+    let countSql = 'SELECT COUNT(*) as total FROM sales_persons WHERE 1=1';
     const countParams: any[] = [];
 
     if (activeOnly) {
-      countSql += ' AND disabled = ?';
-      countParams.push(false);
+      countSql += ' AND is_active = ?';
+      countParams.push(1);
     }
 
     if (search) {
-      countSql += ' AND (display_name LIKE ? OR username LIKE ?)';
+      countSql += ' AND (name LIKE ? OR contact_number LIKE ?)';
       countParams.push(`%${search}%`, `%${search}%`);
     }
 

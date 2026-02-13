@@ -39,7 +39,7 @@ interface TenderDialogProps {
     onSuccess: (paymentMethod: string, amount: number) => void;
     shiftId: string | null;
     terminalId: string;
-    paymentMethods: { id: string; name: string }[];
+    paymentMethods: { id: string; name: string; isReferenceRequired?: boolean }[];
 }
 
 const printReceipt = (saleDetails: any, paperSize: '58mm' | '80mm' = '58mm') => {
@@ -170,6 +170,12 @@ const printReceipt = (saleDetails: any, paperSize: '58mm' | '80mm' = '58mm') => 
                         <div class="flex">
                             <span>Change:</span>
                             <span>${formatCurrency(change)}</span>
+                        </div>
+                     ` : ''}
+                     ${(saleDetails as any).pointsEarned > 0 ? `
+                        <div class="flex" style="margin-top: 4px;">
+                            <span>Points Earned:</span>
+                            <span>${(saleDetails as any).pointsEarned}</span>
                         </div>
                      ` : ''}
                 </div>
@@ -363,6 +369,7 @@ export function TenderDialog({
     }, [isCashPayment, totalDue]);
 
     const [amountTendered, setAmountTendered] = useState('');
+    const [referenceInput, setReferenceInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [view, setView] = useState<'tender' | 'receipt'>('tender');
     const [completedSale, setCompletedSale] = useState<any>(null);
@@ -391,6 +398,13 @@ export function TenderDialog({
 
     const amountTenderedNum = useMemo(() => parseFloat(amountTendered) || 0, [amountTendered]);
     const change = useMemo(() => amountTenderedNum - totalDue, [amountTenderedNum, totalDue]);
+
+    const isReferenceRequired = useMemo(() => {
+        if (!selectedMethod) return false;
+        if (selectedMethod.toUpperCase() === 'CASH') return false; // Never require for cash
+        const method = paymentMethods.find(pm => pm.name === selectedMethod);
+        return method?.isReferenceRequired || false;
+    }, [selectedMethod, paymentMethods]);
 
     const handleConnectPrinter = async () => {
         if ('serial' in navigator) {
@@ -457,13 +471,38 @@ export function TenderDialog({
     };
 
     const handleConfirmPayment = async () => {
-        const finalAmountTendered = isCashPayment ? amountTenderedNum : totalDue;
+        // Parse amount
+        const amountTenderedNum = parseFloat(amountTendered); 
+        
+        // Strict Point Validation
+        if (selectedMethod === 'POINTS') {
+            const currentPoints = (customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0;
+            if (amountTenderedNum > currentPoints) {
+                toast({
+                    title: "Insufficient Points",
+                    description: `Customer only has ${currentPoints} points.`,
+                    variant: "destructive"
+                });
+                return;
+            }
+        }
 
-        if (finalAmountTendered < totalDue) {
-            toast({
+        const finalAmountTendered = selectedMethod === 'CASH' ? amountTenderedNum : totalDue;
+
+        if (selectedMethod === 'CASH' && finalAmountTendered < totalDue) {
+             toast({
                 title: "Insufficient Amount",
-                description: "The amount tendered is less than the total due.",
-                variant: "destructive",
+                description: "Amount tendered must be greater than or equal to total due.",
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        if (isReferenceRequired && !referenceInput.trim()) {
+             toast({
+                title: "Reference Required",
+                description: "Please enter a reference number for this payment method.",
+                variant: 'destructive'
             });
             return;
         }
@@ -478,18 +517,33 @@ export function TenderDialog({
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    items,
-                    customer,
-                    paymentMethod: selectedMethod,
-                    totalDue,
-                    subtotal: items.reduce((acc, item) => acc + item.price * item.quantity, 0),
-                    discountAmount: items.reduce((acc, item) => acc + (item.price * item.quantity * item.discount) / 100, 0),
-                    taxAmount: (totalDue / 1.12) * 0.12, // Assuming 12% VAT included
-                    userId: currentUser?.uid || currentUser?.id,
+                    transactionDate: new Date(), // Use server time preferably, but this is for reference
+                    totalDue: totalDue,
+                    subTotal: items.reduce((acc, item) => acc + (item.price * item.quantity), 0),
+                    discount: items.reduce((acc, item) => acc + (item.price * item.quantity * (item.discount / 100)), 0),
+                    taxAmount: items.reduce((acc, item) => acc + (item.price * item.quantity * 0.12), 0), // Rough estimate, backend recalculates
                     amountTendered: finalAmountTendered,
                     change: finalAmountTendered - totalDue,
-                    shiftId: shiftId, // Use prop
-                    terminalId: terminalId
+                    paymentMethod: selectedMethod, // Use state: selectedMethod
+                    items: items.map(item => ({
+                        id: item.id,
+                        name: item.name,
+                        quantity: item.quantity,
+                        price: item.price,
+                        discount: item.discount,
+                        cost: item.cost 
+                    })),
+                    customer: customer || { id: 'walk-in', name: 'Walk-in Customer' },
+                    status: 'completed',
+                    paymentDetails: {
+                        pointsUsed: selectedMethod === 'POINTS' ? finalAmountTendered : 0, // 1 Point = 1 Peso
+                        pointsConversionRate: selectedMethod === 'POINTS' ? 1 : 0,
+                        gatewayReference: isReferenceRequired ? referenceInput : undefined
+                    },
+                    currentUser: { ...currentUser, id: currentUser?.id || 'admin' }, // Ensure ID exists
+                    userId: currentUser?.id || currentUser?.uid || 'admin',
+                    shiftId,
+                    terminalId
                 }),
             });
 
@@ -502,24 +556,39 @@ export function TenderDialog({
             // Success feedback
             toast({ 
                 title: "Payment Successful", 
-                description: "Transaction saved. Generating receipt...",
+                description: "Transaction saved. Printing receipt...",
                 duration: 2000
             });
 
-            setCompletedSale({
+            const saleDetails = {
                 items,
                 customer,
                 totalDue,
                 change: finalAmountTendered - totalDue,
                 paymentMethod: selectedMethod,
-                orderNumber: result.data.orderNumber 
-            });
+                orderNumber: result.data.orderNumber,
+                amountTendered: finalAmountTendered, // Ensure this is available for receipt
+                pointsEarned: result.data.pointsEarned || 0,
+                transactionId: result.data.posTransId // Add transaction ID if needed
+            };
 
-            // Switch view FIRST
-            setView('receipt');
-            
-            // Then clear items in background
-            onSuccess(selectedMethod, totalDue); 
+            console.log('Final Sale Details for Receipt:', saleDetails);
+            console.log('Points Earned from API:', result.data.pointsEarned);
+
+            setCompletedSale(saleDetails);
+
+            // Auto-print
+            if (printMode === 'escpos' && serialPort) {
+                 await handleEscPosPrint(saleDetails);
+            } else {
+                 printReceipt(saleDetails, paperSize);
+            }
+
+            // Small delay to ensure print command is sent before closing/clearing
+            setTimeout(() => {
+                onSuccess(selectedMethod, totalDue);
+                onOpenChange(false);
+            }, 1000);
 
         } catch (error: any) {
             console.error('Error saving payment:', error);
@@ -576,6 +645,7 @@ export function TenderDialog({
             setCompletedSale(null);
             setIsProcessing(false);
             setAmountTendered('');
+            setReferenceInput('');
             // Auto-confirm removed to allow amount entry for all methods
         }
     }, [isOpen]);
@@ -606,6 +676,16 @@ export function TenderDialog({
         return Array.from(amounts).filter(a => a >= total).sort((a, b) => a - b).slice(0, 4);
     }
 
+    // Parse for display comparison - defined at top of handleConfirmPayment now (for logic), but we need it for render.
+    // Actually, handleConfirmPayment has its own scope.
+    // But getQuickAmounts is outside.
+    // The lint error said: 'Cannot redeclare block-scoped variable'. 
+    // Wait, earlier I added `const amountTenderedNum` inside `handleConfirmPayment`.
+    // And also `const amountTenderedNum` in the component body?
+    // Let's check line 659.
+    
+    const amountTenderedFloat = parseFloat(amountTendered) || 0;
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
@@ -634,24 +714,16 @@ export function TenderDialog({
                                                 {method.name}
                                             </SelectItem>
                                         ))}
-                                        {/* Fallback if list is empty */}
-                                        {paymentMethods.length === 0 && (
-                                           <>
-                                             <SelectItem value="CASH">CASH</SelectItem>
-                                             <SelectItem value="CREDIT_CARD">CREDIT CARD</SelectItem>
-                                             <SelectItem value="E_WALLET">E-WALLET</SelectItem>
-                                           </>
-                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
 
                             <div className="text-center">
                                 <p className="text-sm text-muted-foreground">Total Amount Due</p>
-                                <p className="text-5xl font-bold text-primary">₱{totalDue.toFixed(2)}</p>
+                                <p className="text-5xl font-bold text-primary">₱{totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
 
-                            {/* Allow input for ALL methods, not just Cash */}
+                            {/* Allow input for ALL methods */}
                             <div className="space-y-2">
                                 <Label htmlFor="amountTendered" className="text-base">Amount Tendered</Label>
                                 <Input
@@ -660,7 +732,6 @@ export function TenderDialog({
                                     inputMode="decimal"
                                     value={amountTendered}
                                     onChange={(e) => {
-                                        // Only allow numbers and decimal point
                                         const value = e.target.value;
                                         if (value === '' || /^\d*\.?\d*$/.test(value)) {
                                             setAmountTendered(value);
@@ -673,15 +744,70 @@ export function TenderDialog({
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             e.preventDefault();
-                                            if (!isProcessing && amountTenderedNum >= totalDue) {
-                                                handleConfirmPayment();
+                                            if (!isProcessing) {
+                                                const val = parseFloat(amountTendered) || 0;
+                                                // Allow submit if val >= total OR distinct method
+                                                if (selectedMethod === 'POINTS' && val <= ((customer as any)?.current_points || 0)) {
+                                                    // Reference check handled in handleConfirmPayment
+                                                    handleConfirmPayment();
+                                                } else if (selectedMethod !== 'POINTS' && val >= totalDue) {
+                                                    // Reference check handled in handleConfirmPayment
+                                                    handleConfirmPayment();
+                                                }
                                             }
                                         }
                                     }}
                                 />
                             </div>
 
-                            {totalDue > 0 && (
+                            {/* Reference Input */}
+                            {isReferenceRequired && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="referenceInput" className="text-base text-red-600 font-bold">
+                                        Reference Number *
+                                    </Label>
+                                    <Input
+                                        id="referenceInput"
+                                        type="text"
+                                        value={referenceInput}
+                                        onChange={(e) => setReferenceInput(e.target.value)}
+                                        placeholder="Enter reference # (e.g. Check No., Trans ID)"
+                                        className="h-12 text-lg"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleConfirmPayment();
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Points UI */}
+                            {selectedMethod === 'POINTS' && customer && (
+                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-blue-800">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-sm font-semibold">Available Points:</span>
+                                        <span className="font-mono text-lg font-bold">{(customer as any).current_points || (customer as any).loyaltyPoints || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs">Conversion Rate:</span>
+                                        <span className="text-xs font-mono">1 Point = ₱1.00</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-t border-blue-200 pt-2">
+                                        <span className="text-sm font-semibold">Max Redeemable:</span>
+                                        <span className="font-mono text-lg font-bold">₱{((customer as any).current_points || (customer as any).loyaltyPoints || 0).toFixed(2)}</span>
+                                    </div>
+                                    
+                                    {amountTenderedFloat > 0 && amountTenderedFloat > ((customer as any).current_points || (customer as any).loyaltyPoints || 0) && (
+                                        <div className="mt-2 text-xs text-red-600 font-bold bg-red-50 p-2 rounded border border-red-200 flex items-center gap-1">
+                                            <span>⚠️ Insufficient Points</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {totalDue > 0 && selectedMethod === 'CASH' && (
                                 <div className="grid grid-cols-4 gap-2">
                                     {getQuickAmounts(totalDue).map(amount => (
                                         <Button key={amount} variant="outline" onClick={() => handleQuickAmount(amount)}>₱{amount}</Button>
@@ -689,43 +815,42 @@ export function TenderDialog({
                                 </div>
                             )}
 
-                            {amountTenderedNum > 0 && (
-                                <div className="text-center">
-                                    <p className="text-sm text-muted-foreground">Change</p>
-                                    <p className={`text-4xl font-bold ${change < 0 ? 'text-destructive' : 'text-green-600'}`}>
-                                        ₱{change.toFixed(2)}
-                                    </p>
-                                </div>
-                            )}
-
+                            <DialogFooter className="mt-6 sm:justify-between gap-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => onOpenChange(false)}
+                                    disabled={isProcessing}
+                                    className="w-full sm:w-auto text-muted-foreground hover:text-foreground"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    onClick={handleConfirmPayment}
+                                    disabled={
+                                        isProcessing || 
+                                        !amountTendered || 
+                                        (selectedMethod === 'CASH' && parseFloat(amountTendered) < totalDue) ||
+                                        (selectedMethod === 'POINTS' && parseFloat(amountTendered) > ((customer as any)?.current_points || 0)) ||
+                                        (isReferenceRequired && !referenceInput.trim())
+                                    }
+                                    className="w-full sm:w-auto min-w-[140px] font-bold text-lg h-12 shadow-md shadow-primary/20"
+                                >
+                                    {isProcessing ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            Confirm Payment
+                                        </>
+                                    )}
+                                </Button>
+                            </DialogFooter>
                         </div>
-                        
-                        <DialogFooter className="flex-col gap-2 sm:flex-row">
-                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                                Cancel
-                            </Button>
-                            
-                            {/* Printer Mode Button Removed */}
-
-                            <Button
-                                type="button"
-                                onClick={handleConfirmPayment}
-                                disabled={isProcessing || amountTenderedNum < totalDue}
-                                className="w-48"
-                            >
-                                {isProcessing ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Processing...
-                                    </>
-                                ) : (
-                                    'Confirm Payment'
-                                )}
-                            </Button>
-                        </DialogFooter>
                     </>
                 )}
             </DialogContent>
         </Dialog>
     );
-}
+};

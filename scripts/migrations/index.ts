@@ -50,6 +50,8 @@ import './048_alter_pos_settings_add_return_auth.ts';
 import './049_alter_pos_settings_add_recent_sales_auth.ts';
 import './050_create_bad_orders_table.ts';
 import './051_create_cash_transfers_table.ts';
+import './052_add_expiration_date_fields.ts';
+import './053_alter_payment_methods_add_require_reference.ts';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

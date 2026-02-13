@@ -105,6 +105,8 @@ export async function POST(request: NextRequest) {
           
           if (!isExcluded) {
              eligiblePointsAmount += item.price * item.quantity;
+          } else {
+             console.log(`Item ${item.name} excluded from points. Markup: ${soldProd.markup_percentage}, Earns: ${soldProd.earns_points}`);
           }
           
           const rootId = soldProd.parent_id || soldProd.id;
@@ -370,6 +372,7 @@ export async function POST(request: NextRequest) {
       ]);
 
       // 7. Loyalty Points Awarding
+      let totalPointsEarned = 0;
       if (
         loyaltySettings && 
         loyaltySettings.length > 0 && 
@@ -382,11 +385,51 @@ export async function POST(request: NextRequest) {
           // Defaulting to 0 if settings are missing to avoid NaN
           const threshold = parseFloat(settings.amount) || 0;
           const equivalent = parseFloat(settings.equivalent) || 0;
+          
+          console.log('Loyalty Debug:', { eligiblePointsAmount, threshold, equivalent, settings });
 
           if (threshold > 0 && equivalent > 0) {
               const pointsEarned = Math.floor(eligiblePointsAmount / threshold) * equivalent;
+              console.log('Points Earned Calculated:', pointsEarned);
 
+             // 5. Update Loyalty Points (Earning)
+      // Check for earning BEFORE deduction to prevent using just-earned points? 
+      // Usually redemption uses existing points.
+      // Logic: If redeeming, maybe don't earn on the redeemed part? 
+      // For now, keep simple: Earn on total, Deduct used.
+      
+      let pointsToDeduct = 0;
+      if (paymentMethod === 'POINTS' && paymentDetails?.pointsUsed > 0) {
+          pointsToDeduct = parseFloat(paymentDetails.pointsUsed);
+          
+          // Verify balance again
+          const [custRows] = await connection.query<any[]>(
+             'SELECT current_points FROM customer_loyalty WHERE customer_id = ?', 
+             [customer.id]
+          );
+          
+          const currentPoints = custRows.length > 0 ? parseFloat(custRows[0].current_points) : 0;
+          
+          if (currentPoints < pointsToDeduct) {
+             throw new Error(`Insufficient points. Available: ${currentPoints}, Required: ${pointsToDeduct}`);
+          }
+          
+          // Deduct
+          await connection.query(
+             'UPDATE customer_loyalty SET current_points = current_points - ?, total_redeemed = total_redeemed + ?, last_redeemed_at = NOW() WHERE customer_id = ?',
+             [pointsToDeduct, pointsToDeduct, customer.id]
+          );
+          
+          // Log History (Redemption)
+          await connection.query(
+             'INSERT INTO point_history (id, customer_id, points_change, transaction_type, reference_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+             [crypto.randomUUID(), customer.id, -pointsToDeduct, 'redemption', posTransId]
+          );
+      }
+
+      // Calculate Earning (Existing Logic)
               if (pointsEarned > 0) {
+                  totalPointsEarned = pointsEarned;
                   // Check for existing loyalty record
                   const [loyaltyRecord]: any = await connection.query(
                       'SELECT id, current_points FROM customer_loyalty WHERE customer_id = ? LIMIT 1',
@@ -456,7 +499,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber },
+        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber, pointsEarned: totalPointsEarned },
         message: 'Transaction saved successfully'
       });
     });

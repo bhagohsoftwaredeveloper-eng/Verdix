@@ -1,38 +1,43 @@
-import { query } from '@/lib/mysql';
 import { NextResponse } from 'next/server';
 
-const EXTERNAL_API_URL = 'http://192.168.1.13:3000/api/accounts';
+const API_URL = process.env.API_URL || 'http://192.168.1.246:3000/api/accounts';
 
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const type = searchParams.get('type');
+        
+        const response = await fetch(API_URL, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store'
+        });
 
-        // Fetch data from local database
-        let sql = 'SELECT * FROM accounts ORDER BY name ASC';
-        const params: any[] = [];
-
-        if (type) {
-            sql = 'SELECT * FROM accounts WHERE type = ? ORDER BY name ASC';
-            params.push(type);
+        if (!response.ok) {
+             return NextResponse.json({ error: 'External API Error' }, { status: response.status });
         }
 
-        const accounts = await query(sql, params);
+        const accounts = await response.json();
+        
+        let filteredAccounts = accounts;
+        if (type) {
+            filteredAccounts = accounts.filter((a: any) => (a.type || '').toLowerCase() === type.toLowerCase());
+        }
 
-        // Map database fields to API response format
-        const formattedAccounts = accounts.map((account: any) => ({
-            id: account.id,
-            name: account.name,
-            code: account.code,
-            category: account.type === 'income' ? 'Income' : 'Expense',
-            type: account.type,
-            created_at: account.created_at,
-            updated_at: account.updated_at,
+        // Map to expected format if needed, or pass through
+        const formattedAccounts = filteredAccounts.map((account: any) => ({
+            id: account.id || account.Id || account.accountId,
+            name: account.name || account.Name || account.accountName || 'Unknown',
+            code: account.code || account.Code || '',
+            category: (account.type === 'income' || account.type === 'Income') ? 'Income' : 'Expense',
+            type: (account.type || '').toLowerCase(),
+            created_at: account.created_at || account.date_created,
+            updated_at: account.updated_at || account.last_updated_at,
         }));
 
         return NextResponse.json(formattedAccounts);
     } catch (error) {
-        console.error('Error fetching accounts from database:', error);
+        console.error('Error fetching accounts from external API:', error);
         return NextResponse.json({ error: 'Error fetching accounts' }, { status: 500 });
     }
 }
@@ -40,18 +45,18 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { name, type, code } = body;
+        
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
 
-        if (!name || !type) {
-            return NextResponse.json({ error: 'Name and type are required' }, { status: 400 });
+        if (!response.ok) {
+            return NextResponse.json({ error: 'Failed to add account to external API' }, { status: response.status });
         }
 
-        const accountId = `account_${Date.now()}`;
-        const sql = `INSERT INTO accounts (id, name, type, code) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), type = VALUES(type), code = VALUES(code)`;
-
-        await query(sql, [accountId, name, type, code || null]);
-
-        const newAccount = { id: accountId, name, type, code };
+        const newAccount = await response.json();
         return NextResponse.json({ success: true, account: newAccount }, { status: 201 });
     } catch (error) {
         console.error('Error adding account:', error);

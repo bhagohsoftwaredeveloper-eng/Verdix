@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
         id,
         name,
         is_active AS isActive,
+        require_reference AS isReferenceRequired,
         created_at AS createdAt
       FROM payment_methods
       WHERE 1=1
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, isActive = true } = body;
+    const { name, isActive = true, isReferenceRequired = false } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json(
@@ -90,16 +91,16 @@ export async function POST(request: NextRequest) {
     const id = `pm_${Date.now()}`;
 
     const sql = `
-      INSERT INTO payment_methods (id, name, is_active)
-      VALUES (?, ?, ?)
+      INSERT INTO payment_methods (id, name, is_active, require_reference)
+      VALUES (?, ?, ?, ?)
     `;
 
-    await query(sql, [id, name.trim(), isActive]);
+    await query(sql, [id, name.trim(), isActive, isReferenceRequired]);
 
     return NextResponse.json({
       success: true,
       message: 'Payment method created successfully',
-      data: { id, name: name.trim(), isActive },
+      data: { id, name: name.trim(), isActive, isReferenceRequired },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {

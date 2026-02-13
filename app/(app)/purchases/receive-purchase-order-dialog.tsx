@@ -52,6 +52,7 @@ export function ReceivePurchaseOrderDialog({
 }: ReceivePurchaseOrderDialogProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [badItems, setBadItems] = useState<Record<string, BadItemInput>>({});
+  const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -69,6 +70,13 @@ export function ReceivePurchaseOrderDialog({
         return acc;
       }, {} as Record<string, BadItemInput>);
       setBadItems(initialBadItems);
+
+      // Initialize expiry dates
+      const initialExpiryDates = order.items.reduce((acc, item) => {
+        acc[item.productId] = '';
+        return acc;
+      }, {} as Record<string, string>);
+      setExpiryDates(initialExpiryDates);
     }
   }, [open, order]);
 
@@ -77,6 +85,13 @@ export function ReceivePurchaseOrderDialog({
     setQuantities((prev) => ({
       ...prev,
       [productId]: isNaN(numValue) ? 0 : numValue,
+    }));
+  };
+
+  const handleExpiryDateChange = (productId: string, value: string) => {
+    setExpiryDates((prev) => ({
+      ...prev,
+      [productId]: value,
     }));
   };
 
@@ -117,6 +132,7 @@ export function ReceivePurchaseOrderDialog({
       const receivedItems = Object.entries(quantities).map(([productId, quantity]) => ({
         productId,
         quantity,
+        expirationDate: expiryDates[productId] || undefined,
       }));
 
       const reportedBadItems = Object.entries(badItems)
@@ -159,6 +175,7 @@ export function ReceivePurchaseOrderDialog({
                 <TableHead className="w-[200px]">Product</TableHead>
                 <TableHead className="text-right w-[100px]">Ordered</TableHead>
                 <TableHead className="text-right w-[120px]">Good Qty</TableHead>
+                <TableHead className="w-[150px]">Expiry Date</TableHead>
                 <TableHead className="text-right w-[120px]">Bad Qty</TableHead>
                 <TableHead className="w-[150px]">Reason</TableHead>
                 <TableHead>Issue Description</TableHead>
@@ -181,6 +198,14 @@ export function ReceivePurchaseOrderDialog({
                       className="text-right h-8 text-xs"
                       value={quantities[item.productId] ?? ''}
                       onChange={(e) => handleQuantityChange(item.productId, e.target.value)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="date"
+                      className="h-8 text-xs"
+                      value={expiryDates[item.productId] || ''}
+                      onChange={(e) => handleExpiryDateChange(item.productId, e.target.value)}
                     />
                   </TableCell>
                   <TableCell>

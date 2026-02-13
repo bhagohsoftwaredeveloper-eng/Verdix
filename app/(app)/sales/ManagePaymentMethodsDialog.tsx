@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
 } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -61,13 +62,14 @@ function DataExistDialog({ isOpen, onClose }: { isOpen: boolean, onClose: () => 
   );
 }
 
-export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }: { onSave: (name: string) => Promise<void>, children: React.ReactNode, open?: boolean, onOpenChange?: (open: boolean) => void }) {
+export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }: { onSave: (name: string, isReferenceRequired: boolean) => Promise<void>, children: React.ReactNode, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalOpen;
   const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const [name, setName] = useState('');
+  const [isReferenceRequired, setIsReferenceRequired] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDataExistOpen, setIsDataExistOpen] = useState(false);
   const { toast } = useToast();
@@ -83,13 +85,14 @@ export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }:
     }
     setIsSaving(true);
     try {
-      await onSave(name);
+      await onSave(name, isReferenceRequired);
       toast({
         title: 'Payment Method Added',
         description: `Payment method "${name}" has been successfully saved.`,
       });
       setIsOpen(false);
       setName(''); // Reset for new entry
+      setIsReferenceRequired(false);
     } catch (error: any) {
       if (error.message === 'Payment method already exists') {
         setIsDataExistOpen(true);
@@ -130,6 +133,21 @@ export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }:
                 placeholder="e.g., Credit Card"
               />
             </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-ref-req" className="text-right">
+                Ref. Required
+              </Label>
+              <div className="flex items-center space-x-2 col-span-3">
+                <Switch
+                    id="add-ref-req"
+                    checked={isReferenceRequired}
+                    onCheckedChange={setIsReferenceRequired}
+                />
+                <Label htmlFor="add-ref-req" className="font-normal text-muted-foreground">
+                    Require reference number input
+                </Label>
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
@@ -145,11 +163,20 @@ export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }:
   );
 }
 
-function PaymentMethodDialog({ paymentMethod, onSave, children, disabled }: { paymentMethod?: PaymentMethod, onSave: (name: string) => Promise<void>, children: React.ReactNode, disabled?: boolean }) {
+function PaymentMethodDialog({ paymentMethod, onSave, children, disabled }: { paymentMethod?: PaymentMethod, onSave: (name: string, isReferenceRequired: boolean) => Promise<void>, children: React.ReactNode, disabled?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState(paymentMethod?.name || '');
+  const [isReferenceRequired, setIsReferenceRequired] = useState(paymentMethod?.isReferenceRequired || false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+
+  // Reset state when dialog opens or paymentMethod changes
+  useEffect(() => {
+    if (isOpen) {
+        setName(paymentMethod?.name || '');
+        setIsReferenceRequired(paymentMethod?.isReferenceRequired || false);
+    }
+  }, [isOpen, paymentMethod]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -162,13 +189,16 @@ function PaymentMethodDialog({ paymentMethod, onSave, children, disabled }: { pa
     }
     setIsSaving(true);
     try {
-      await onSave(name);
+      await onSave(name, isReferenceRequired);
       toast({
         title: paymentMethod ? 'Payment Method Updated' : 'Payment Method Added',
         description: `Payment method "${name}" has been successfully saved.`,
       });
       setIsOpen(false);
-      if (!paymentMethod) setName(''); // Reset for new entry
+      if (!paymentMethod) {
+          setName(''); // Reset for new entry
+          setIsReferenceRequired(false);
+      }
     } catch (error) {
       console.error('Failed to save payment method', error);
       toast({
@@ -204,6 +234,21 @@ function PaymentMethodDialog({ paymentMethod, onSave, children, disabled }: { pa
               placeholder="e.g., Credit Card"
             />
           </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="ref-req" className="text-right">
+                Ref. Required
+            </Label>
+            <div className="flex items-center space-x-2 col-span-3">
+                <Switch
+                    id="ref-req"
+                    checked={isReferenceRequired}
+                    onCheckedChange={setIsReferenceRequired}
+                />
+                <Label htmlFor="ref-req" className="font-normal text-muted-foreground">
+                    Require reference number input
+                </Label>
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
@@ -221,7 +266,7 @@ function PaymentMethodRow({ paymentMethod, onUpdate, onDelete, paymentMethods }:
   const { toast } = useToast();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const handleUpdate = async (name: string) => {
+  const handleUpdate = async (name: string, isReferenceRequired: boolean) => {
     // Check if another payment method with same name already exists (excluding current one)
     const existingMethod = paymentMethods.find(method =>
       method.id !== paymentMethod.id && method.name.toLowerCase() === name.toLowerCase()
@@ -242,7 +287,7 @@ function PaymentMethodRow({ paymentMethod, onUpdate, onDelete, paymentMethods }:
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, isReferenceRequired }),
       });
 
       const result = await response.json();
@@ -296,7 +341,16 @@ function PaymentMethodRow({ paymentMethod, onUpdate, onDelete, paymentMethods }:
 
   return (
     <TableRow>
-      <TableCell className="font-medium">{paymentMethod.name}</TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+            {paymentMethod.name}
+            {paymentMethod.isReferenceRequired && (
+                <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200 font-mono">
+                    REF REQ
+                </span>
+            )}
+        </div>
+      </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <PaymentMethodDialog paymentMethod={paymentMethod} onSave={handleUpdate}>
@@ -394,7 +448,7 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
     }
   }, [isOpen]);
 
-  const handleAddMethod = async (name: string) => {
+  const handleAddMethod = async (name: string, isReferenceRequired: boolean) => {
     // Check if payment method with same name already exists
     const existingMethod = paymentMethods.find(method =>
       method.name.toLowerCase() === name.toLowerCase()
@@ -415,7 +469,7 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, isReferenceRequired }),
       });
 
       const result = await response.json();

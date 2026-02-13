@@ -24,6 +24,8 @@ import { Button } from '@/components/ui/button';
 import type { Product } from '@/lib/types';
 import Image from 'next/image';
 import { useProducts } from '@/hooks/use-api';
+import { useDebounce } from '@/hooks/use-debounce';
+import { Loader2 } from 'lucide-react';
 
 interface ProductSearchDialogProps {
   onSelectProduct: (product: Product) => void;
@@ -34,7 +36,16 @@ interface ProductSearchDialogProps {
 
 export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenChange }: ProductSearchDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const { products, loading, error } = useProducts(searchTerm, 'Available');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const { products, loading, error } = useProducts(debouncedSearchTerm, 'Available');
+  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
+
+  // Update displayed products only when not loading or when loading starts to keep previous results
+  useEffect(() => {
+    if (!loading && !error) {
+      setDisplayedProducts(products);
+    }
+  }, [products, loading, error]);
 
   useEffect(() => {
     if (isOpen) {
@@ -42,8 +53,23 @@ export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenC
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'F9') {
+          e.preventDefault();
+          e.stopPropagation();
+          onOpenChange(false);
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, onOpenChange]);
+
   const handleSelect = (productId: string) => {
-    const product = products.find(p => p.id === productId);
+    const product = displayedProducts.find(p => p.id === productId);
     if (product) {
       onSelectProduct(product);
       onOpenChange(false);
@@ -53,7 +79,7 @@ export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenC
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Search Product</DialogTitle>
           <DialogDescription>
@@ -61,44 +87,54 @@ export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenC
           </DialogDescription>
         </DialogHeader>
         <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Type a product name or Barcode..."
-            value={searchTerm}
-            onValueChange={setSearchTerm}
-          />
-          <CommandList>
-            {loading && <div className="p-4 text-center text-muted-foreground">Loading products...</div>}
-            {error && <div className="p-4 text-center text-destructive">{error}</div>}
-            {!loading && !error && (
-              <>
-                <CommandEmpty>No products found.</CommandEmpty>
-                <CommandGroup>
-                  {products.map((product) => (
-                    <CommandItem
-                      key={product.id}
-                      value={`${product.name} ${product.barcode || ''} ${product.sku}`}
-                      onSelect={() => handleSelect(product.id)}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-4">
-                        <Image
-                          src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
-                          alt={product.name}
-                          width={40}
-                          height={40}
-                          className="rounded-md object-cover"
-                        />
-                        <div>
-                          <p className="font-medium">{product.name}</p>
-                          <p className="text-sm text-muted-foreground">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
-                        </div>
-                      </div>
-                      <p className="font-mono">₱{product.price.toFixed(2)}</p>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </>
+          <div className="relative">
+            <CommandInput
+              placeholder="Type a product name or Barcode..."
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+            />
+            {loading && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
             )}
+          </div>
+          <CommandList className="h-[400px] overflow-y-auto">
+            {error && <div className="p-4 text-center text-destructive">{error}</div>}
+            
+            <div className={loading ? "opacity-50 transition-opacity" : "transition-opacity"}>
+              {displayedProducts.length === 0 && !loading && !error && (
+                <CommandEmpty className="flex h-[400px] items-center justify-center text-muted-foreground">
+                  No products found.
+                </CommandEmpty>
+              )}
+              
+              <CommandGroup>
+                {displayedProducts.map((product) => (
+                  <CommandItem
+                    key={product.id}
+                    value={`${product.name} ${product.barcode || ''} ${product.sku}`}
+                    onSelect={() => handleSelect(product.id)}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-4">
+                      <Image
+                        src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
+                        alt={product.name}
+                        width={40}
+                        height={40}
+                        className="rounded-md object-cover"
+                      />
+                      <div>
+                        <p className="font-medium">{product.name}</p>
+                        <p className="text-sm text-muted-foreground">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
+                      </div>
+                    </div>
+                    <p className="font-mono">₱{product.price.toFixed(2)}</p>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </div>
           </CommandList>
         </Command>
         <DialogFooter>
