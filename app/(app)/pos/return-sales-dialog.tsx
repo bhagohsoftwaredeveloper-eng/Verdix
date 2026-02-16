@@ -26,13 +26,16 @@ import type { Sale, SaleItem } from '@/lib/types';
 import { format, subMinutes } from 'date-fns';
 import { AdminAuthDialog } from './admin-auth-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { printCreditSlip } from './print-credit-slip';
+import { usePrinter } from '@/lib/use-printer';
+import { CreditSlipGenerator, CreditSlipData } from '@/lib/credit-slip-generator';
+import { useToast } from '@/hooks/use-toast';
 
 interface ReturnSalesDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   currentUser?: any;
   terminalId?: string;
+  printMode: 'browser' | 'escpos' | 'usb';
 }
 
 const MOCK_RETURNABLE_SALES: Sale[] = [
@@ -262,6 +265,7 @@ export function ReturnSalesDialog({
   onOpenChange,
   currentUser,
   terminalId,
+  printMode
 }: ReturnSalesDialogProps) {
   const [step, setStep] = useState<'loading' | 'auth' | 'input_so' | 'select_items' | 'success'>('loading');
   const [sales, setSales] = useState<Sale[]>([]); // Kept for type safety if needed, but not used for list
@@ -273,6 +277,8 @@ export function ReturnSalesDialog({
   const [returnedItems, setReturnedItems] = useState<SaleItem[]>([]);
   const [posSettings, setPosSettings] = useState<any>(null);
   const [returnedTotal, setReturnedTotal] = useState(0);
+  const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
+  const { toast } = useToast();
   const authSucceededRef = useRef(false);
 
   useEffect(() => {
@@ -405,28 +411,51 @@ export function ReturnSalesDialog({
       onOpenChange(false);
   }
 
-  const handlePrintCredit = () => {
+  const handlePrintCredit = async () => {
       if (!selectedSale || returnedItems.length === 0) return;
 
-      printCreditSlip({
-          originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
-          customerName: selectedSale.customer?.name || 'Walk-in Customer',
-          date: new Date().toISOString(),
-          cashierName: currentUser?.name || currentUser?.displayName || currentUser?.username || 'Cashier',
-          items: returnedItems.map(item => ({
-              name: item.product.name,
-              quantity: item.quantity,
-              unitOfMeasure: item.product.unitOfMeasure,
-              price: item.price,
-              total: item.quantity * item.price
-          })),
-          totalAmount: returnedTotal
-      }, {
-           businessName: posSettings?.businessName,
-           address: posSettings?.address,
-           contactNumber: posSettings?.contactNumber,
-           tin: posSettings?.tin
-      });
+      if (printMode === 'browser') {
+           // Fallback or legacy helper if we really want to keep it? 
+           // But actually we want all Direct Print to be unified.
+           toast({ title: "Browser Print", description: "Use the system print dialog." });
+           return;
+      }
+
+      if (!isConnected) {
+          const success = await connect();
+          if (!success) return;
+      }
+
+      try {
+          const generator = new CreditSlipGenerator();
+          const slipData: CreditSlipData = {
+              originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
+              customerName: selectedSale.customer?.name || 'Walk-in Customer',
+              date: new Date().toISOString(),
+              cashierName: currentUser?.name || currentUser?.displayName || currentUser?.username || 'Cashier',
+              items: returnedItems.map(item => ({
+                  name: item.product.name,
+                  quantity: item.quantity,
+                  unitOfMeasure: item.product.unitOfMeasure,
+                  price: item.price,
+                  total: item.quantity * item.price
+              })),
+              totalAmount: returnedTotal,
+              businessSettings: {
+                   businessName: posSettings?.businessName,
+                   address: posSettings?.address,
+                   contactNumber: posSettings?.contactNumber,
+                   tin: posSettings?.tin
+              }
+          };
+
+          const bytes = generator.generate(slipData);
+          await print(bytes);
+          toast({ title: "Success", description: "Credit slip sent to printer." });
+      } catch (err) {
+          console.error("Print error", err);
+          toast({ title: "Print Failed", description: "Could not send data to printer.", variant: "destructive" });
+      }
   }
 
   return (

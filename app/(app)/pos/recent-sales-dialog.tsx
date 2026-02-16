@@ -26,187 +26,37 @@ import { format } from 'date-fns';
 import { Logo } from '@/components/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { AdminAuthDialog } from './admin-auth-dialog';
+import { usePrinter } from '@/lib/use-printer';
+import { ReceiptGenerator } from '@/lib/receipt-generator';
+import { useToast } from '@/hooks/use-toast';
 
 
 interface RecentSalesDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  printMode: 'browser' | 'escpos' | 'usb';
 }
 
 
-// ... (existing printReceipt, formatCurrency, ReceiptPrintView helper functions preserved)
-const printReceipt = (sale: Sale) => {
-    // Adapter to match tender-dialog structure
-    const items = sale.items.map(item => ({
-        name: item.product.name,
-        price: item.price,
-        quantity: item.quantity,
-        unitOfMeasure: item.product.unitOfMeasure,
-        discount: 0 // Default to 0 if not stored
-    }));
-
-    const totalDue = sale.total;
-    // Recalculate if needed, or rely on sale.total
-    const subTotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-    const totalDiscount = 0; // Assuming no discount stored in simple history for now, or calculate if available
-    const vatAmount = (totalDue / 1.12) * 0.12;
-    // Change calculation (Recents might not allow knowing exact tendered if not stored, tender dialog used state)
-    // For reprint, we usually just show Total if payment details aren't granular.
-    // However, if we want "Change", we'd need amountTendered stored in Sale.
-    // If not available, we can omit Change or show 0.
-    const change = 0; 
-    const paymentMethod = sale.paymentMethod;
-    const orderNumber = sale.orderNumber || sale.id; // Use SO number
-
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow?.document;
-    if (!doc) return;
-
-    const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    const receiptContent = `
-        <html>
-        <head>
-            <title>Receipt</title>
-            <style>
-                @page {
-                    margin: 0;
-                    size: 58mm auto;
-                }
-                html, body {
-                    margin: 0;
-                    padding: 0;
-                    width: 100%;
-                }
-                body {
-                    font-family: 'Arial', 'Helvetica', sans-serif;
-                    font-size: 10px;
-                    color: #000000 !important;
-                    font-weight: 600;
-                    -webkit-font-smoothing: antialiased;
-                    -webkit-print-color-adjust: exact;
-                    text-rendering: optimizeLegibility;
-                }
-                .receipt-container {
-                    width: 48mm; /* Strictly enforce 48mm printable area */
-                    margin: 0 auto;
-                    padding: 4px 0;
-                    box-sizing: border-box;
-                }
-                .text-center { text-align: center; }
-                .text-right { text-align: right; }
-                .font-bold { font-weight: 800; }
-                .mb-1 { margin-bottom: 4px; }
-                .mb-2 { margin-bottom: 8px; }
-                .mb-4 { margin-bottom: 16px; }
-                .border-b { border-bottom: 1.5px dashed black; }
-                .border-t { border-top: 1.5px dashed black; }
-                .flex { display: flex; justify-content: space-between; }
-                .item-row { display: flex; align-items: flex-start; margin-bottom: 2px; }
-                .item-row { display: flex; align-items: flex-start; margin-bottom: 2px; }
-                .qty { width: 32px; text-align: left; flex-shrink: 0; white-space: nowrap; font-size: 9px; }
-                .name { flex-grow: 1; white-space: normal; overflow-wrap: break-word; padding-right: 4px; text-align: left; }
-                .price { width: 35px; text-align: right; flex-shrink: 0; }
-                .text-sm { font-size: 12px; }
-            </style>
-        </head>
-        <body>
-            <div class="receipt-container">
-                <div class="text-center mb-4">
-                    <div class="font-bold" style="font-size: 14px;">STOCK PILOT</div>
-                    <div>General Merchandise</div>
-                    <div>${format(new Date(sale.date || new Date()), 'PP p')}</div>
-                </div>
-
-                <div class="mb-2 border-b pb-2">
-                    <div>Sale Details</div>
-                    <div class="font-bold">Order #: ${orderNumber}</div>
-                    <div>Cust: ${sale.customer.name}</div>
-                    <div>Cashier: Admin</div>
-                </div>
-
-                <div class="mb-2">
-                    <div class="item-row font-bold border-b mb-1">
-                        <span class="qty">Qty</span>
-                        <span class="name">Item</span>
-                        <span class="price">Amt</span>
-                    </div>
-                    ${items.map((item: any) => `
-                        <div class="item-row">
-                            <span class="qty">${item.quantity} ${item.unitOfMeasure || ''}</span>
-                            <span class="name">
-                                <div>${item.name}</div>
-                                <div style="font-size: 9px;">@ ${formatCurrency(item.price)}</div>
-                            </span>
-                            <span class="price">${formatCurrency(item.price * item.quantity)}</span>
-                        </div>
-                    `).join('')}
-                </div>
-
-                <div class="border-t pt-2 mb-2">
-                    <div class="flex">
-                        <span>Subtotal:</span>
-                        <span>${formatCurrency(subTotal)}</span>
-                    </div>
-                    ${totalDiscount > 0 ? `
-                        <div class="flex">
-                            <span>Discount:</span>
-                            <span>-${formatCurrency(totalDiscount)}</span>
-                        </div>
-                    ` : ''}
-                    <div class="flex font-bold text-sm mt-2">
-                        <span>TOTAL:</span>
-                        <span>${formatCurrency(totalDue)}</span>
-                    </div>
-                    <div class="flex" style="font-size: 9px;">
-                        <span>VAT (12%):</span>
-                        <span>${formatCurrency(vatAmount)}</span>
-                    </div>
-                </div>
-
-                <div class="border-t pt-2 mb-2">
-                     <div class="flex font-bold">
-                        <span>${paymentMethod}:</span>
-                        <span>${formatCurrency(totalDue)}</span>
-                    </div>
-                </div>
-
-                <div class="text-center mt-6">
-                    <div>Thank you for your purchase!</div>
-                    <div style="font-size: 9px;">Pos System by Bhagoh</div>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
-
-    doc.open();
-    doc.write(receiptContent);
-    doc.close();
-
-    // Use sequential flow instead of onload to avoid double filtering
-    setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-            document.body.removeChild(iframe);
-        }, 1000);
-    }, 500);
-};
-
+// ... (existing formatCurrency, ReceiptPrintView helper functions preserved)
 const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) {
+function ReceiptPrintView({ 
+    sale, 
+    onBack,
+    onPrint 
+}: { 
+    sale: Sale; 
+    onBack: () => void;
+    onPrint: () => void;
+}) {
     return (
         <div className="printable-area">
             <CardHeader className="pr-10">
                 <div className="flex justify-between items-start flex-wrap gap-4">
                     <div className="flex-1 min-w-[200px]">
                         <div className="flex items-center gap-2 mb-2">
-                             <Button variant="outline" size="icon" onClick={onBack} className="non-printable shrink-0">
+                             <Button variant="outline" size="icon" onClick={onBack} className="non-printable shrink-0 print:hidden">
                                 <ArrowLeft className="h-4 w-4" />
                             </Button>
                             <CardTitle>Sale Receipt</CardTitle>
@@ -261,7 +111,7 @@ function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) 
               </div>
           </CardContent>
           <div className="flex justify-end mt-4 p-6 pt-0 non-printable">
-              <Button onClick={() => printReceipt(sale)}>
+              <Button onClick={onPrint}>
                   <Printer className="mr-2 h-4 w-4" />
                   Print Receipt
               </Button>
@@ -273,12 +123,15 @@ function ReceiptPrintView({ sale, onBack }: { sale: Sale; onBack: () => void }) 
 export function RecentSalesDialog({
   isOpen,
   onOpenChange,
+  printMode
 }: RecentSalesDialogProps) {
   const [step, setStep] = useState<'loading' | 'auth' | 'list'>('loading');
   const [saleToPrint, setSaleToPrint] = useState<Sale | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [posSettings, setPosSettings] = useState<any>(null);
+  const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
+  const { toast } = useToast();
   const authSucceededRef = useRef(false);
 
   useEffect(() => {
@@ -350,6 +203,56 @@ export function RecentSalesDialog({
       authSucceededRef.current = false;
   };
 
+  const handlePrintReceiptAction = async (sale: Sale) => {
+    if (printMode === 'browser') {
+        try {
+            const { printReactComponent } = await import('@/app/lib/print-utils');
+            printReactComponent(
+                <ReceiptPrintView 
+                    sale={sale} 
+                    onBack={() => {}} 
+                    onPrint={() => {}} 
+                />,
+                '80mm'
+            );
+            return;
+        } catch (e) {
+            console.error('Browser print error:', e);
+            window.print();
+            return;
+        }
+    }
+
+    if (!isConnected) {
+        const success = await connect();
+        if (!success) return;
+    }
+
+    try {
+        const generator = new ReceiptGenerator();
+        // Adapter to match expected items structure
+        const receiptData = {
+            items: sale.items.map(item => ({
+                ...item.product,
+                price: item.price,
+                quantity: item.quantity,
+                discount: 0
+            })),
+            totalDue: sale.total,
+            change: 0,
+            paymentMethod: sale.paymentMethod,
+            orderNumber: String(sale.orderNumber || sale.id),
+            customer: sale.customer
+        };
+        const bytes = generator.generateReceipt(receiptData);
+        await print(bytes);
+        toast({ title: "Re-printed", description: "Receipt sent to printer." });
+    } catch (e) {
+        console.error("Reprint error", e);
+        toast({ title: "Print Failed", description: "Could not send data to printer.", variant: "destructive" });
+    }
+  };
+  
   const handlePrintReceipt = (sale: Sale) => {
     setSaleToPrint(sale);
   };
@@ -370,7 +273,11 @@ export function RecentSalesDialog({
     <Dialog open={isOpen && (step === 'list')} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         {saleToPrint ? (
-            <ReceiptPrintView sale={saleToPrint} onBack={handleBackToList} />
+            <ReceiptPrintView 
+                sale={saleToPrint} 
+                onBack={handleBackToList} 
+                onPrint={() => handlePrintReceiptAction(saleToPrint)}
+            />
         ) : (
         <>
             <DialogHeader>

@@ -42,11 +42,12 @@ interface PosSettings {
   recentSalesAuthUsername?: string | null;
   recentSalesAuthPassword?: string | null;
   paperSize?: '58mm' | '80mm';
-  printMode?: 'browser' | 'escpos';
+  printMode?: 'browser' | 'escpos' | 'usb';
   enableNegativeInventory?: boolean;
   enableCashCountAuth?: boolean;
   cashCountAuthUsername?: string | null;
   cashCountAuthPassword?: string | null;
+  showQuantityInSearch?: boolean;
 }
 
 export default function PosSetupPage() {
@@ -78,7 +79,8 @@ export default function PosSetupPage() {
     enableNegativeInventory: false,
     enableCashCountAuth: false,
     cashCountAuthUsername: '',
-    cashCountAuthPassword: ''
+    cashCountAuthPassword: '',
+    showQuantityInSearch: true
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -351,7 +353,7 @@ export default function PosSetupPage() {
           <CardDescription>Enable or disable advanced POS features</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div className="space-y-0.5">
               <Label htmlFor="advancedInventory">Advanced Inventory</Label>
               <p className="text-sm text-muted-foreground">
@@ -362,6 +364,19 @@ export default function PosSetupPage() {
               id="advancedInventory"
               checked={settings.enableAdvancedInventory}
               onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableAdvancedInventory: checked }))}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="showQuantityInSearch">Show Quantity in Search Product</Label>
+              <p className="text-sm text-muted-foreground">
+                Display product quantity in the POS product search dialog
+              </p>
+            </div>
+            <Switch
+              id="showQuantityInSearch"
+              checked={!!settings.showQuantityInSearch}
+              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, showQuantityInSearch: checked }))}
             />
           </div>
         </CardContent>
@@ -666,16 +681,22 @@ export default function PosSetupPage() {
                 Choose how receipts are sent to the printer
               </p>
             </div>
-             <div className="w-[200px]">
+             <div className="w-[300px]">
                 <select
                     id="printMode"
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     value={settings.printMode || 'browser'}
                     onChange={(e) => setSettings(prev => ({ ...prev, printMode: e.target.value as any }))}
                 >
-                    <option value="browser">Browser Print (System Dialog)</option>
-                    <option value="escpos">Direct Serial (ESC/POS)</option>
+                    <option value="browser">Use Installed Driver (Browser Print)</option>
+                    <option value="escpos">Direct Serial (Use if no driver)</option>
+                    <option value="usb">Direct USB (WinUSB/Zadig Only)</option>
                 </select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                    * If you installed a printer driver (e.g., XPrinter, Epson), choose "Use Installed Driver".
+                    <br/>
+                    * "Direct USB" requires replacing your driver with WinUSB via Zadig.
+                </p>
              </div>
           </div>
         </CardContent>

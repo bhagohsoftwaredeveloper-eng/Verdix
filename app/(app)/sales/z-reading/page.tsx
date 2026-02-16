@@ -30,23 +30,7 @@ import jsPDF from 'jspdf';
 import { ZReadingPreview } from './z-reading-preview';
 import { TerminalSelector } from '@/components/TerminalSelector';
 
-type ZReadingData = {
-  id: string;
-  date: string;
-  reportDate: Date;
-  grossSales: number;
-  returns: number;
-  discounts: number;
-  netSales: number;
-  vatAmount: number;
-  paymentMethods: Array<{ name: string; amount: number }>;
-  transactionCount: number;
-  startingCash: number;
-  cashSales: number;
-  cashInDrawer: number;
-  cashierName?: string;
-  terminalId?: string;
-};
+import { ZReadingData } from './z-reading-preview';
 
 type PrinterFormat = '58mm' | '80mm';
 

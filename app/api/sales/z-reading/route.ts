@@ -366,10 +366,13 @@ export async function POST(request: NextRequest) {
         ${terminalCondition}
         `;
 
+
         const salesSql = `
         SELECT 
             SUM(st.total) as gross_sales,
             COUNT(*) as transaction_count,
+            MIN(st.id) as min_sale_id,
+            MAX(st.id) as max_sale_id,
             SUM(pt.discount_amount) as total_discounts
         ${salesBaseSql}
         `;
@@ -427,6 +430,8 @@ export async function POST(request: NextRequest) {
         const rawNetSales = parseFloat(salesResult?.gross_sales || 0);
         const discounts = parseFloat(salesResult?.total_discounts || 0);
         const returns = parseFloat(returnsResult?.total_returns || 0);
+        const minSaleId = salesResult?.min_sale_id || '';
+        const maxSaleId = salesResult?.max_sale_id || '';
         
         const adjustedGrossSales = rawNetSales + discounts;
         const finalNetSales = rawNetSales; 
@@ -513,30 +518,51 @@ export async function POST(request: NextRequest) {
             previousReading = parseFloat(prevResult?.previous_total || 0);
         }
 
+
+        const safeParseFloat = (val: any) => {
+             if (val === null || val === undefined) return 0;
+             return parseFloat(val);
+        }
+
+        const safeInt = (val: any) => {
+             if (val === null || val === undefined) return 0;
+             // Handle BigInt
+             if (typeof val === 'bigint') return Number(val);
+             return parseInt(val);
+        }
+
+
+
+
         const generatedReading = {
-            id: readingNumber,
-            date: endDate,
+            id: String(readingNumber),
+            date: String(endDate),
             reportDate: new Date(endDate),
-            businessName,
-            address: businessAddress,
-            grossSales: adjustedGrossSales,
-            returns: returns,
-            discounts: discounts,
-            netSales: finalNetSales,
-            vatSales: finalNetSales / 1.12,
-            vatAmount: vatAmount,
+            businessName: String(businessName),
+            address: String(businessAddress),
+            grossSales: safeParseFloat(adjustedGrossSales),
+            returns: safeParseFloat(returns),
+            discounts: safeParseFloat(discounts),
+            netSales: safeParseFloat(finalNetSales),
+            vatSales: safeParseFloat(finalNetSales / 1.12),
+            vatAmount: safeParseFloat(vatAmount),
             vatExempt: 0,
             zeroRated: 0,
             nonVat: 0,
-            paymentMethods: paymentMethods,
-            transactionCount: parseInt(salesResult?.transaction_count || 0),
-            startingCash: startingCash,
-            cashSales: cashSales,
-            cashInDrawer: cashInDrawer,
-            cashierName: cashierName,
-            terminalId: terminalId,
-            previousReading: previousReading,
-            runningTotal: previousReading + finalNetSales
+            paymentMethods: paymentMethods.map((pm: any) => ({
+                name: String(pm.name),
+                amount: safeParseFloat(pm.amount)
+            })),
+            transactionCount: safeInt(salesResult?.transaction_count),
+            startingCash: safeParseFloat(startingCash),
+            cashSales: safeParseFloat(cashSales),
+            cashInDrawer: safeParseFloat(cashInDrawer),
+            cashierName: String(cashierName),
+            terminalId: String(terminalId),
+            minSaleId: minSaleId ? String(minSaleId) : '',
+            maxSaleId: maxSaleId ? String(maxSaleId) : '',
+            previousReading: safeParseFloat(previousReading),
+            runningTotal: safeParseFloat(previousReading + finalNetSales)
         };
 
         return NextResponse.json({ success: true, data: [generatedReading] });

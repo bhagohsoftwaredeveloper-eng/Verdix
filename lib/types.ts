@@ -383,6 +383,7 @@ export interface SupplierProductMapping {
   updatedAt?: string;
 }
 
+
 export interface TaxRate {
   id: string;
   name: string;
@@ -391,4 +392,71 @@ export interface TaxRate {
   isDefault: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+
+export interface POSSaleItem extends Product {
+    quantity: number;
+    discount: number;
+    name: string;
+    taxType?: 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT';
+}
+
+export interface ZReadingData {
+  id: string;
+  date: string;
+  reportDate: Date;
+  grossSales: number;
+  returns: number;
+  discounts: number;
+  netSales: number;
+  vatSales: number;
+  vatAmount: number;
+  vatExempt: number;
+  zeroRated: number;
+  nonVat: number;
+  paymentMethods: Array<{ name: string; amount: number; count?: number }>;
+  transactionCount: number;
+  startingCash: number;
+  cashSales: number;
+  cashInDrawer: number;
+  cashierName?: string;
+  terminalId?: string;
+  minSaleId?: string;
+  maxSaleId?: string;
+  previousReading?: number;
+  runningTotal?: number;
+}
+
+export interface XReadingData {
+  id: string;
+  date: string;
+  reportDate: string;
+  shiftStart: string | null;
+  shiftEnd: string | null;
+  grossSales: number;
+  returns: number;
+  discounts: number;
+  netSales: number;
+  vatAmount: number;
+  paymentMethods: Array<{ name: string; amount: number; count?: number }>;
+  transactionCount: number;
+  startingCash: number;
+  cashSales: number;
+  cashInDrawer: number;
+  cashierName: string;
+  cashierId: string;
+  terminalId: string;
+  shiftStatus: string;
+  cashCountId?: string;
+  cashDenominations?: Array<{
+    amount: number;
+    qty: number;
+    total: number;
+  }>;
+  cashDeposit?: number;
+  cashPickup?: number;
+  cashCountTotal?: number;
+  overShort?: number;
+  readingNumber?: string;
 }

@@ -41,7 +41,8 @@ export async function GET(request: NextRequest) {
         enable_negative_inventory AS enableNegativeInventory,
         enable_cash_count_auth AS enableCashCountAuth,
         cash_count_auth_username AS cashCountAuthUsername,
-        cash_count_auth_password AS cashCountAuthPassword
+        cash_count_auth_password AS cashCountAuthPassword,
+        show_quantity_in_search AS showQuantityInSearch
       FROM pos_settings
       LIMIT 1
     `;
@@ -51,8 +52,8 @@ export async function GET(request: NextRequest) {
     if (result.length === 0) {
       // Create default settings if none exist
       const insertSQL = `
-        INSERT INTO pos_settings (id, business_name, enable_advanced_inventory, transaction_prefix, currency_symbol, currency_code, timezone, date_format, enable_automatic_markup, default_markup_percentage, markup_priority)
-        VALUES ('pos_settings_1', 'My Business', FALSE, 'TXN', '$', 'USD', 'UTC', 'MM/DD/YYYY', TRUE, 0.00, '["subcategory", "category", "brand", "supplier"]')
+        INSERT INTO pos_settings (id, business_name, enable_advanced_inventory, transaction_prefix, currency_symbol, currency_code, timezone, date_format, enable_automatic_markup, default_markup_percentage, markup_priority, show_quantity_in_search)
+        VALUES ('pos_settings_1', 'My Business', FALSE, 'TXN', '$', 'USD', 'UTC', 'MM/DD/YYYY', TRUE, 0.00, '["subcategory", "category", "brand", "supplier"]', TRUE)
       `;
       await query(insertSQL);
       
@@ -101,7 +102,8 @@ export async function POST(request: NextRequest) {
         enableRecentSalesAuth, recentSalesAuthUsername, recentSalesAuthPassword,
         paperSize, printMode,
         enableNegativeInventory,
-        enableCashCountAuth, cashCountAuthUsername, cashCountAuthPassword
+        enableCashCountAuth, cashCountAuthUsername, cashCountAuthPassword,
+        showQuantityInSearch
       } = body;
 
       const insertSQL = `
@@ -115,9 +117,10 @@ export async function POST(request: NextRequest) {
           enable_return_auth, return_auth_username, return_auth_password,
           enable_recent_sales_auth, recent_sales_auth_username, recent_sales_auth_password,
           paper_size, print_mode, enable_negative_inventory,
-          enable_cash_count_auth, cash_count_auth_username, cash_count_auth_password
+          enable_cash_count_auth, cash_count_auth_username, cash_count_auth_password,
+          show_quantity_in_search
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
@@ -152,7 +155,8 @@ export async function POST(request: NextRequest) {
         enableNegativeInventory ?? false,
         enableCashCountAuth ?? false,
         cashCountAuthUsername || null,
-        cashCountAuthPassword || null
+        cashCountAuthPassword || null,
+        showQuantityInSearch ?? true
       ]);
     } else {
       // Update existing settings - Dynamic Update
@@ -189,7 +193,8 @@ export async function POST(request: NextRequest) {
         enableNegativeInventory: 'enable_negative_inventory',
         enableCashCountAuth: 'enable_cash_count_auth',
         cashCountAuthUsername: 'cash_count_auth_username',
-        cashCountAuthPassword: 'cash_count_auth_password'
+        cashCountAuthPassword: 'cash_count_auth_password',
+        showQuantityInSearch: 'show_quantity_in_search'
       };
 
       const updates: string[] = [];

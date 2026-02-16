@@ -2,7 +2,7 @@
 
 import { format } from 'date-fns';
 
-type ZReadingData = {
+export type ZReadingData = {
   id: string;
   date: string;
   reportDate: Date;
@@ -10,7 +10,11 @@ type ZReadingData = {
   returns: number;
   discounts: number;
   netSales: number;
+  vatSales: number;
   vatAmount: number;
+  vatExempt: number;
+  zeroRated: number;
+  nonVat: number;
   paymentMethods: Array<{ name: string; amount: number }>;
   transactionCount: number;
   startingCash: number;
@@ -18,15 +22,21 @@ type ZReadingData = {
   cashInDrawer: number;
   cashierName?: string;
   terminalId?: string;
+  minSaleId?: string;
+  maxSaleId?: string;
+  previousReading?: number;
+  runningTotal?: number;
 };
 
 type PrinterFormat = '58mm' | '80mm';
 
-type BusinessSettings = {
+
+export type BusinessSettings = {
   businessName: string;
   address: string;
   contactNumber: string;
   tin: string;
+  logoPath?: string;
 };
 
 interface ZReadingPreviewProps {
@@ -38,10 +48,12 @@ interface ZReadingPreviewProps {
 export function ZReadingPreview({ data, printerFormat, businessSettings }: ZReadingPreviewProps) {
   const is58mm = printerFormat === '58mm';
   
-  // Tailwind doesn't support mm widths by default, but we can use style or closest px. 
-  // 80mm is approx 300px, 58mm is approx 220px. 
-  const widthClass = is58mm ? 'w-[220px]' : 'w-[300px]';
-  const fontSize = 'text-[10px]'; // Standard small thermal font
+
+
+  // 80mm is approx 300px (safety margin -> 290px), 58mm is approx 219px.
+  // We reduce 58mm to 190px to account for potentially large printer margins (approx 50mm printable area).
+  const widthClass = is58mm ? 'w-[190px]' : 'w-[290px]'; 
+  const fontSize = 'text-[11px]'; 
   const headerSize = 'text-[12px]';
 
   // Helper for dashed line
@@ -52,119 +64,296 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
   const formatCurrency = (amount: number) => 
     amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const reportDate = new Date(data.reportDate);
+  const startTime = new Date(data.reportDate); 
+  // In a real scenario, start time would be the end time of previous Z-Reading or shift start. 
+  // For now we use reportDate set to 00:00 or similar if available, or just same day 
+  startTime.setHours(9, 0, 0, 0); // Mock 9 AM start
+  
+  const minSi = data.minSaleId || '0000000000001';
+  const maxSi = data.maxSaleId || '0000000000001';
+
   return (
-    <div className={`${widthClass} mx-auto bg-white text-black font-mono leading-tight p-2`} style={{ fontFamily: '"Courier New", Courier, monospace' }}>
+    <div 
+        className={`${widthClass} mx-auto bg-white text-black font-mono leading-tight p-2`} 
+        style={{ 
+            fontFamily: '"Courier New", Courier, monospace',
+            color: 'black', 
+            backgroundColor: 'white',
+            border: process.env.NODE_ENV === 'development' ? '1px dotted lightgray' : 'none' // Debug visual
+        }}
+    >
       {/* Business Header */}
-      <div className="text-center mb-4 uppercase">
-        <h1 className={`${headerSize} font-bold`}>{businessSettings?.businessName || 'BUSINESS NAME'}</h1>
-        <p className={fontSize}>{businessSettings?.address || 'Address not set'}</p>
-        {businessSettings?.contactNumber && <p className={fontSize}>Tel: {businessSettings.contactNumber}</p>}
-        {businessSettings?.tin && <p className={fontSize}>TIN: {businessSettings.tin}</p>}
+      <div className="text-center mb-4 font-bold">
+        <div className={`${headerSize} uppercase`}>{businessSettings?.businessName || 'NICOLE\'S SUPERMARKET'}</div>
+        <div className={fontSize}>Operated by: Facunla Enterprise Inc.</div>
+        <div className={fontSize}>{businessSettings?.address || 'Ground Floor Jade Bldg., Jennalyn Ave., Brgy. Abogado, Paniqui, Tarlac'}</div>
+        <div className={fontSize}>VAT REG TIN: {businessSettings?.tin || '123-456-789-00000'}</div>
+        <div className={fontSize}>MIN: 1234567890</div>
+        <div className={fontSize}>S/N: 0987654321-11</div>
       </div>
 
-      {/* Info Line */}
-      <div className={`${fontSize} flex justify-between uppercase mb-1`}>
-        <span>Terminal:{data.terminalId || 'Counter 1'}</span>
-        <span>Date:{format(new Date(data.reportDate), 'MM/dd/yyyy')}</span>
+      <div className="text-center mb-2 font-bold">
+        <div className={headerSize}>Z-READING REPORT</div>
       </div>
 
-      {/* Transaction Summary Line */}
-      <div className={`${fontSize} uppercase mb-1`}>
-        <div>Transaction summary:</div>
-        <div>00000000000-00000000000</div>
+      <div className={`${fontSize} mb-2`}>
+        <div className="flex justify-between">
+          <span>Report Date:</span>
+          <span>{format(reportDate, 'MMMM d, yyyy')}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Report Time:</span>
+          <span>{format(reportDate, 'h:mm a')}</span>
+        </div>
+        <br/>
+        <div className="flex justify-between">
+          <span>Start Date & Time:</span>
+          <span>{format(startTime, 'MM/dd/yy h:mm a')}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>End Date & Time:</span>
+          <span>{format(reportDate, 'MM/dd/yy h:mm a')}</span>
+        </div>
+      </div>
+
+      <div className={`${fontSize} mb-2`}>
+        <div className="flex justify-between">
+          <span>Beg. SI #:</span>
+          <span>{minSi}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>End. SI #:</span>
+          <span>{maxSi}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Beg. VOID #:</span>
+          <span>0000000000001</span>
+        </div>
+         <div className="flex justify-between">
+          <span>End. VOID #:</span>
+          <span>0000000000001</span>
+        </div>
+         <div className="flex justify-between">
+          <span>Beg. RETURN #:</span>
+          <span>0000000000000</span>
+        </div>
+         <div className="flex justify-between">
+          <span>End. RETURN #:</span>
+          <span>0000000000000</span>
+        </div>
+        <br />
+         <div className="flex justify-between">
+          <span>Reset Counter No.</span>
+          <span>0</span>
+        </div>
+         <div className="flex justify-between">
+          <span>Z Counter No. :</span>
+          <span>1</span>
+        </div>
       </div>
 
       <DashedLine />
 
-      {/* Sales Breakdown */}
-      <div className={`${fontSize} space-y-1 uppercase`}>
+      <div className={`${fontSize} mb-1`}>
         <div className="flex justify-between">
-          <span>GROSS SALES</span>
-          <span>{formatCurrency(data.grossSales)}</span>
+          <span>Present Accumulated Sales:</span>
+          <span>{formatCurrency(data.netSales)}</span> 
         </div>
-        <div className="flex justify-between">
-          <span>RETURNS</span>
-          <span>{formatCurrency(data.returns)}</span>
+         <div className="flex justify-between">
+          <span>Previous Accumulated Sales:</span>
+          <span>{formatCurrency(data.previousReading || 0)}</span>
         </div>
-        <div className="flex justify-between">
-          <span>REGULAR DISCOUNT</span>
-          <span>{formatCurrency(data.discounts)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>SENIOR DISCOUNT</span>
-          <span>0.00</span>
-        </div>
-        <div className="flex justify-between">
-          <span>PWD DISCOUNT</span>
-          <span>0.00</span>
-        </div>
-        
-        <div className="my-1"></div>
-
-        <div className="flex justify-between">
-          <span>NET SALES</span>
+         <div className="flex justify-between font-bold">
+          <span>Sales for the Day:</span>
           <span>{formatCurrency(data.netSales)}</span>
         </div>
+      </div>
 
-        <div className="my-1"></div>
+      <DashedLine />
 
-        <div className="flex justify-between">
-          <span>VAT SALES</span>
-          {/* Assuming Net Sales is VAT Sales if all vatable, or need separation. Using Net Sales for now or 0 if not calculated */}
-          <span>{formatCurrency(data.netSales - data.vatAmount)}</span> 
+      <div className="text-center mb-1 font-bold">
+        <div className={fontSize}>BREAKDOWN OF SALES</div>
+      </div>
+
+      <div className={`${fontSize} mb-1`}>
+         <div className="flex justify-between">
+          <span>VATABLE SALES :</span>
+          <span>{formatCurrency(data.vatSales)}</span>
         </div>
-        <div className="flex justify-between">
-          <span>12% VAT</span>
+         <div className="flex justify-between">
+          <span>VAT AMOUNT:</span>
           <span>{formatCurrency(data.vatAmount)}</span>
         </div>
-        <div className="flex justify-between">
-          <span>VAT-EXEMPT SALES</span>
+         <div className="flex justify-between">
+          <span>VAT EXEMPT SALES:</span>
+          <span>{formatCurrency(data.vatExempt)}</span>
+        </div>
+         <div className="flex justify-between">
+          <span>ZERO RATED SALES:</span>
+          <span>{formatCurrency(data.zeroRated)}</span>
+        </div>
+      </div>
+
+      <DashedLine />
+
+      <div className={`${fontSize} mb-1`}>
+         <div className="flex justify-between">
+          <span>Gross Amount:</span>
+          <span>{formatCurrency(data.grossSales)}</span>
+        </div>
+         <div className="flex justify-between">
+          <span>Less Discount:</span>
+          <span>{formatCurrency(data.discounts)}</span>
+        </div>
+         <div className="flex justify-between">
+          <span>Less Return:</span>
+          <span>{formatCurrency(data.returns)}</span>
+        </div>
+         <div className="flex justify-between">
+          <span>Less Void:</span>
           <span>0.00</span>
         </div>
          <div className="flex justify-between">
-          <span>ZERO-RATED SALES</span>
+          <span>Less VAT Adjustment:</span>
           <span>0.00</span>
         </div>
-        <div className="flex justify-between">
-          <span>NON-VAT SALES</span>
+         <div className="flex justify-between font-bold mt-1">
+          <span>Net Amount:</span>
+          <span>{formatCurrency(data.netSales)}</span>
+        </div>
+      </div>
+
+       <DashedLine />
+
+       <div className="text-center mb-1">
+        <div className={fontSize}>DISCOUNT SUMMARY</div>
+      </div>
+      
+       <div className={`${fontSize} mb-1`}>
+         <div className="flex justify-between">
+          <span>SC Disc. :</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>PWD Disc. :</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>NAAC Disc. :</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>Solo Parent Disc. :</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>Other Disc. :</span>
+          <span>{formatCurrency(data.discounts)}</span>
+        </div>
+      </div>
+
+      <DashedLine />
+
+       <div className="text-center mb-1">
+        <div className={fontSize}>SALES ADJUSTMENT</div>
+      </div>
+
+       <div className={`${fontSize} mb-1`}>
+         <div className="flex justify-between">
+          <span>VOID :</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>RETURN :</span>
+          <span>{formatCurrency(data.returns)}</span>
+        </div>
+      </div>
+
+      <DashedLine />
+
+      <div className="text-center mb-1">
+        <div className={fontSize}>VAT ADJUSTMENT</div>
+      </div>
+
+      <div className={`${fontSize} mb-1`}>
+         <div className="flex justify-between">
+          <span>SC TRANS. :</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>PWD TRANS :</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>REG.Disc. TRANS :</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>ZERO-RATED TRANS.:</span>
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>VAT on Return:</span>
+          {/* Approximate VAT on Return if known, otherwise placeholders */}
+          <span>0.00</span>
+        </div>
+         <div className="flex justify-between">
+          <span>Other VAT Adjustments</span>
           <span>0.00</span>
         </div>
       </div>
 
-      <div className="my-2">
-         <DashedLine />
-         <div className={`text-center ${headerSize} py-1 uppercase`}>TERMINAL CASH POSITION</div>
-         <DashedLine />
-         <div className={`text-center ${headerSize} py-1 uppercase`}>CASHIERS CASH POSITION</div>
-      </div>
-      
-      {/* Cashier Stats */}
-      <div className={`${fontSize} space-y-1 uppercase`}>
-        <div className="flex justify-between">
-          <span>NO. OF TRANSACTIONS</span>
-          <span>{data.transactionCount.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>PREVIOUS READING</span>
-          <span>0.00</span> 
-        </div>
-        <div className="flex justify-between">
-          <span>NET SALES</span>
-          <span>{formatCurrency(data.netSales)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>RUNNING TOTAL</span>
-          {/* Previous + Net */}
-          <span>{formatCurrency(data.netSales)}</span>
-        </div>
-      </div>
-      
-      <div className="mt-8 mb-4 text-center">
-        <div className={fontSize}>Bhagoh Business Software Provider</div>
-        <div className={fontSize}>Tagum City</div>
-      </div>
-      
       <DashedLine />
+
+      <div className="text-center mb-1">
+        <div className={fontSize}>TRANSACTION SUMMARY</div>
+      </div>
+      
+       <div className={`${fontSize} mb-1`}>
+         {(data.paymentMethods || []).map(method => (
+             <div key={method.name} className="flex justify-between">
+              <span className="uppercase">{method.name}:</span>
+              <span>{formatCurrency(method.amount)}</span>
+            </div>
+         ))}
+         
+         <div className="flex justify-between">
+            <span>Opening Fund:</span>
+            <span>{formatCurrency(data.startingCash)}</span>
+         </div>
+          <div className="flex justify-between">
+            <span>Less Withdrawal:</span>
+            <span>0.00</span>
+         </div>
+          <div className="flex justify-between font-bold mt-1">
+             <span>Payments Received:</span>
+             {/* Total Payments */}
+            <span>{formatCurrency((data.paymentMethods || []).reduce((acc, m) => acc + m.amount, 0))}</span>
+         </div>
+      </div>
+
+      <DashedLine />
+      
+       <div className={`${fontSize} mb-1`}>
+         <div className="flex justify-between">
+          <span>SHORT/OVER:</span>
+          <span>0.00</span>
+        </div>
+      </div>
+
+      <DashedLine />
+      
+      <div className="mt-8 mb-8 text-center">
+        <div className={fontSize}>This Receipt shall be valid for</div>
+        <div className={fontSize}>five (5) years from the date of</div>
+        <div className={fontSize}>the permit to use.</div>
+      </div>
+    
+      <div className="text-center font-bold">
+         <div className={fontSize}>THIS IS NOT AN OFFICIAL RECEIPT</div>
+      </div>
+
     </div>
   );
 }

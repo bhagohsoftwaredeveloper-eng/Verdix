@@ -31,4 +31,6 @@ const nextConfig: NextConfig = {
   },
 };
 
+
 export default nextConfig;
+// Forced update

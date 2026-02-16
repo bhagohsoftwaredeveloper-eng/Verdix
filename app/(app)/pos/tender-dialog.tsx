@@ -1,6 +1,4 @@
 
-'use client';
-
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
     Dialog,
@@ -27,6 +25,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { format } from 'date-fns';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
+import { usePrinter } from '@/lib/use-printer';
+import { ReceiptGenerator } from '@/lib/receipt-generator';
 
 interface TenderDialogProps {
     isOpen: boolean;
@@ -40,169 +40,11 @@ interface TenderDialogProps {
     shiftId: string | null;
     terminalId: string;
     paymentMethods: { id: string; name: string; isReferenceRequired?: boolean }[];
+    printMode: 'browser' | 'escpos' | 'usb';
 }
 
-const printReceipt = (saleDetails: any, paperSize: '58mm' | '80mm' = '58mm') => {
-    const { items, customer, totalDue, change, paymentMethod, orderNumber } = saleDetails;
-    const subTotal = items.reduce((acc: any, item: any) => acc + item.price * item.quantity, 0);
-    const totalDiscount = items.reduce((acc: any, item: any) => acc + (item.price * item.quantity * item.discount) / 100, 0);
-    const vatAmount = (totalDue / 1.12) * 0.12;
 
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
 
-    const doc = iframe.contentWindow?.document;
-    if (!doc) return;
-
-    const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    const pageSize = paperSize === '80mm' ? '80mm' : '58mm';
-    const containerWidth = paperSize === '80mm' ? '68mm' : '42mm';
-    const fontSize = paperSize === '80mm' ? '12px' : '10px';
-
-    const receiptContent = `
-        <html>
-        <head>
-            <title>Receipt</title>
-            <style>
-                @page {
-                    margin: 0;
-                    size: ${pageSize} auto;
-                }
-                html, body {
-                    margin: 0;
-                    padding: 0;
-                    width: 100%;
-                }
-                body {
-                    font-family: 'Arial', 'Helvetica', sans-serif;
-                    font-size: ${fontSize};
-                    color: #000000 !important;
-                    font-weight: 600;
-                    -webkit-font-smoothing: antialiased;
-                    -webkit-print-color-adjust: exact;
-                    text-rendering: optimizeLegibility;
-                }
-                .receipt-container {
-                    width: 100%;
-                    max-width: ${containerWidth};
-                    margin: 0;
-                    padding: 4px 2px;
-                    box-sizing: border-box;
-                }
-                .text-center { text-align: center; }
-                .text-right { text-align: right; }
-                .font-bold { font-weight: 800; }
-                .mb-1 { margin-bottom: 4px; }
-                .mb-2 { margin-bottom: 8px; }
-                .mb-4 { margin-bottom: 16px; }
-                .border-b { border-bottom: 1.5px dashed black; }
-                .border-t { border-top: 1.5px dashed black; }
-                .flex { display: flex; justify-content: space-between; }
-                .item-row { display: flex; align-items: flex-start; margin-bottom: 2px; }
-                .qty { width: 32px; text-align: left; flex-shrink: 0; white-space: nowrap; font-size: 9px; }
-                .name { flex-grow: 1; white-space: normal; overflow-wrap: break-word; padding-right: 4px; text-align: left; }
-                .price { width: 35px; text-align: right; flex-shrink: 0; }
-                .text-sm { font-size: 12px; }
-            </style>
-        </head>
-        <body>
-            <div class="receipt-container">
-                <div class="text-center mb-4">
-                    <div class="font-bold" style="font-size: 14px;">STOCK PILOT</div>
-                    <div>General Merchandise</div>
-                    <div>${format(new Date(), 'PP p')}</div>
-                </div>
-
-                <div class="mb-2 border-b pb-2">
-                    <div>Sale Details</div>
-                    <div class="font-bold">Order #: ${orderNumber || 'N/A'}</div>
-                    <div>Cust: ${customer?.name || 'Walk-in'}</div>
-                    <div>Cashier: Admin</div>
-                </div>
-
-                <div class="mb-2">
-                    <div class="item-row font-bold border-b mb-1">
-                        <span class="qty">Qty</span>
-                        <span class="name">Item</span>
-                        <span class="price">Amt</span>
-                    </div>
-                    ${items.map((item: any) => `
-                        <div class="item-row">
-                            <span class="qty">${item.quantity} ${item.unitOfMeasure || ''}</span>
-                            <span class="name">
-                                <div>${item.name}</div>
-                                <div style="font-size: 9px;">@ ${formatCurrency(item.price)}</div>
-                            </span>
-                            <span class="price">${formatCurrency(item.price * item.quantity)}</span>
-                        </div>
-                    `).join('')}
-                </div>
-
-                <div class="border-t pt-2 mb-2">
-                    <div class="flex">
-                        <span>Subtotal:</span>
-                        <span>${formatCurrency(subTotal)}</span>
-                    </div>
-                    ${totalDiscount > 0 ? `
-                        <div class="flex">
-                            <span>Discount:</span>
-                            <span>-${formatCurrency(totalDiscount)}</span>
-                        </div>
-                    ` : ''}
-                    <div class="flex font-bold text-sm mt-2">
-                        <span>TOTAL:</span>
-                        <span>${formatCurrency(totalDue)}</span>
-                    </div>
-                    <div class="flex" style="font-size: 9px;">
-                        <span>VAT (12%):</span>
-                        <span>${formatCurrency(vatAmount)}</span>
-                    </div>
-                </div>
-
-                <div class="border-t pt-2 mb-2">
-                     <div class="flex font-bold">
-                        <span>${paymentMethod}:</span>
-                        <span>${paymentMethod === 'CASH' ? formatCurrency((saleDetails as any).amountTendered || (totalDue + change)) : formatCurrency(totalDue)}</span>
-                    </div>
-                     ${paymentMethod === 'CASH' ? `
-                        <div class="flex">
-                            <span>Change:</span>
-                            <span>${formatCurrency(change)}</span>
-                        </div>
-                     ` : ''}
-                     ${(saleDetails as any).pointsEarned > 0 ? `
-                        <div class="flex" style="margin-top: 4px;">
-                            <span>Points Earned:</span>
-                            <span>${(saleDetails as any).pointsEarned}</span>
-                        </div>
-                     ` : ''}
-                </div>
-
-                <div class="text-center mt-6">
-                    <div>Thank you for your purchase!</div>
-                    <div style="font-size: 9px;">Pos System by Bhagoh</div>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
-
-    doc.open();
-    doc.write(receiptContent);
-    doc.close();
-
-    // Use sequential flow instead of onload to avoid double filtering
-    setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        // Remove iframe after printing (give it some time to process)
-        setTimeout(() => {
-            document.body.removeChild(iframe);
-        }, 1000);
-    }, 500);
-};
 
 function ReceiptView({
     saleDetails,
@@ -216,6 +58,7 @@ function ReceiptView({
         change: number,
         paymentMethod: string,
         orderNumber?: string,
+        amountTendered?: number,
     };
     onNewSale: () => void;
     onPrint: () => void;
@@ -224,105 +67,107 @@ function ReceiptView({
     const subTotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
     const totalDiscount = items.reduce((acc, item) => acc + (item.price * item.quantity * item.discount) / 100, 0);
     const vatAmount = (totalDue / 1.12) * 0.12;
-
     const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
+    
+    // Auto-print effect
     const hasPrinted = useRef(false);
-
     useEffect(() => {
         if (!hasPrinted.current) {
             onPrint();
             hasPrinted.current = true;
         }
-    }, []);
+    }, [onPrint]);
 
     return (
-        <div className="flex flex-col h-full">
-            {/* Screen Preview */}
-            <div className="printable-area max-w-[300px] mx-auto bg-white text-black p-4 text-xs font-mono border shadow-sm my-4">
-                <div className="text-center mb-4">
-                    <div className="font-bold text-lg mb-1">STOCK PILOT</div>
-                    <div>General Merchandise</div>
-                    <div className="text-[10px]">{format(new Date(), 'PP p')}</div>
-                </div>
-
-                <div className="mb-2 border-b border-dashed border-black pb-2">
-                    <div>Sale Details</div>
-                    <div className="font-bold">Order #: {saleDetails.orderNumber || 'N/A'}</div>
-                    <div>Cust: {customer?.name || 'Walk-in'}</div>
-                    <div>Cashier: Admin</div>
-                </div>
-
-                <div className="mb-2">
-                    <div className="flex justify-between font-bold border-b border-black mb-1 text-[10px]">
-                        <span className="w-12 text-left">Qty</span>
-                        <span className="flex-1 text-left">Item</span>
-                        <span className="w-12 text-right">Amt</span>
+        <div className="flex flex-col h-full bg-gray-50 p-4">
+             <div className="flex-1 overflow-auto flex justify-center">
+                <div className="printable-area w-[300px] bg-white text-black p-4 text-xs font-mono border shadow-sm my-4 h-fit">
+                    <div className="text-center mb-4">
+                        <div className="font-bold text-lg mb-1">STOCK PILOT</div>
+                        <div>General Merchandise</div>
+                        <div className="text-[10px]">{format(new Date(), 'PP p')}</div>
                     </div>
-                    {items.map(item => (
-                        <div key={item.id} className="flex justify-between mb-1 items-start text-[10px]">
-                            <span className="w-12 text-left">{item.quantity} {item.unitOfMeasure || ''}</span>
-                            <span className="flex-1 text-left px-1">
-                                <div>{item.name}</div>
-                                <div className="text-muted-foreground">@ {formatCurrency(item.price)}</div>
-                            </span>
-                            <span className="w-12 text-right">{formatCurrency(item.price * item.quantity)}</span>
+
+                    <div className="mb-2 border-b border-dashed border-black pb-2">
+                        <div>Sale Details</div>
+                        <div className="font-bold">Order #: {saleDetails.orderNumber || 'N/A'}</div>
+                        <div>Cust: {customer?.name || 'Walk-in'}</div>
+                        <div>Cashier: Admin</div>
+                    </div>
+
+                    <div className="mb-2">
+                        <div className="flex justify-between font-bold border-b border-black mb-1 text-[10px]">
+                            <span className="w-8 text-left">Qty</span>
+                            <span className="flex-1 text-left">Item</span>
+                            <span className="w-12 text-right">Amt</span>
                         </div>
-                    ))}
-                </div>
-
-                <div className="border-t border-dashed border-black pt-2 space-y-1">
-                    <div className="flex justify-between">
-                        <span>Subtotal:</span>
-                        <span>{formatCurrency(subTotal)}</span>
+                        {items.map(item => (
+                            <div key={item.id} className="flex justify-between mb-1 items-start text-[10px]">
+                                <span className="w-8 text-left">{item.quantity}</span>
+                                <span className="flex-1 text-left px-1">
+                                    <div>{item.name}</div>
+                                    <div className="text-muted-foreground">@ {formatCurrency(item.price)}</div>
+                                </span>
+                                <span className="w-12 text-right">{formatCurrency(item.price * item.quantity)}</span>
+                            </div>
+                        ))}
                     </div>
-                    {totalDiscount > 0 && (
+
+                    <div className="border-t border-dashed border-black pt-2 space-y-1">
                         <div className="flex justify-between">
-                           <span>Discount:</span>
-                           <span>-{formatCurrency(totalDiscount)}</span>
-                       </div>
-                    )}
-                    <div className="flex justify-between font-bold text-sm mt-2">
-                        <span>TOTAL:</span>
-                        <span>{formatCurrency(totalDue)}</span>
-                    </div>
-                    <div className="flex justify-between text-[10px]">
-                        <span>VAT (12%):</span>
-                        <span>{formatCurrency(vatAmount)}</span>
-                    </div>
-                </div>
-
-                <div className="border-t border-black my-2"></div>
-
-                <div className="space-y-1">
-                     <div className="flex justify-between font-bold">
-                        <span>{paymentMethod}:</span>
-                        <span>{paymentMethod === 'CASH' ? formatCurrency((saleDetails as any).amountTendered || (totalDue + change)) : formatCurrency(totalDue)}</span>
-                    </div>
-                     {paymentMethod === 'CASH' && (
-                        <div className="flex justify-between">
-                            <span>Change:</span>
-                            <span>{formatCurrency(change)}</span>
+                            <span>Subtotal:</span>
+                            <span>{formatCurrency(subTotal)}</span>
                         </div>
-                     )}
-                </div>
+                        {totalDiscount > 0 && (
+                            <div className="flex justify-between">
+                            <span>Discount:</span>
+                            <span>-{formatCurrency(totalDiscount)}</span>
+                        </div>
+                        )}
+                        <div className="flex justify-between font-bold text-sm mt-2">
+                            <span>TOTAL:</span>
+                            <span>{formatCurrency(totalDue)}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px]">
+                            <span>VAT (12%):</span>
+                            <span>{formatCurrency(vatAmount)}</span>
+                        </div>
+                    </div>
 
-                <div className="text-center mt-6 mb-2">
-                    <div>Thank you for your purchase!</div>
-                    <div className="text-[10px]">Pos System by Bhagoh</div>
+                    <div className="border-t border-black my-2"></div>
+
+                    <div className="space-y-1">
+                        <div className="flex justify-between font-bold">
+                            <span>{paymentMethod}:</span>
+                            <span>{paymentMethod === 'CASH' ? formatCurrency(saleDetails.amountTendered || (totalDue + change)) : formatCurrency(totalDue)}</span>
+                        </div>
+                        {paymentMethod === 'CASH' && (
+                             <div className="flex justify-between">
+                                <span>Change:</span>
+                                <span>{formatCurrency(change)}</span>
+                            </div>
+                        )}
+                    </div>
+                     <div className="text-center mt-6">
+                        <div>Thank you for your purchase!</div>
+                        <div style={{fontSize: '9px'}}>Pos System by Bhagoh</div>
+                    </div>
                 </div>
             </div>
-
-            <DialogFooter className="mt-auto">
-                <Button variant="outline" onClick={onNewSale}>New Sale</Button>
-                <Button onClick={onPrint}>
+            <div className="mt-4 flex justify-center gap-4 print:hidden">
+                 <Button onClick={onPrint} size="lg" className="w-40">
                     <Printer className="mr-2 h-4 w-4" />
-                    Print Again
+                    Reprint
                 </Button>
-            </DialogFooter>
+                <Button onClick={onNewSale} size="lg" className="w-40" variant="secondary">
+                    New Sale
+                </Button>
+            </div>
         </div>
     );
 }
+
+
 
 
 export function TenderDialog({
@@ -337,9 +182,17 @@ export function TenderDialog({
     shiftId,
     terminalId,
     paymentMethods = [],
+    printMode,
 }: TenderDialogProps) {
     const [selectedMethod, setSelectedMethod] = useState(paymentMethod);
-    
+    const [amountTendered, setAmountTendered] = useState('');
+    const [referenceInput, setReferenceInput] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [view, setView] = useState<'tender' | 'receipt' | 'change'>('tender');
+    const [completedSale, setCompletedSale] = useState<any>(null);
+    const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
+    const { toast } = useToast();
+
     // Sync local state when prop changes (dialog opens)
     useEffect(() => {
         if (isOpen && paymentMethod) {
@@ -368,34 +221,6 @@ export function TenderDialog({
         }
     }, [isCashPayment, totalDue]);
 
-    const [amountTendered, setAmountTendered] = useState('');
-    const [referenceInput, setReferenceInput] = useState('');
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [view, setView] = useState<'tender' | 'receipt'>('tender');
-    const [completedSale, setCompletedSale] = useState<any>(null);
-    const { toast } = useToast();
-    const [printMode, setPrintMode] = useState<'driver' | 'escpos'>('driver');
-    const [paperSize, setPaperSize] = useState<'58mm' | '80mm'>('58mm');
-    const [serialPort, setSerialPort] = useState<any>(null);
-
-    useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const response = await fetch('/api/pos-settings');
-                const result = await response.json();
-                if (result.success && result.data) {
-                    if (result.data.paperSize) setPaperSize(result.data.paperSize);
-                    if (result.data.printMode) setPrintMode(result.data.printMode);
-                }
-            } catch (error) {
-                console.error('Failed to fetch POS settings:', error);
-            }
-        };
-        fetchSettings();
-    }, []);
-
-
-
     const amountTenderedNum = useMemo(() => parseFloat(amountTendered) || 0, [amountTendered]);
     const change = useMemo(() => amountTenderedNum - totalDue, [amountTenderedNum, totalDue]);
 
@@ -406,73 +231,54 @@ export function TenderDialog({
         return method?.isReferenceRequired || false;
     }, [selectedMethod, paymentMethods]);
 
-    const handleConnectPrinter = async () => {
-        if ('serial' in navigator) {
-            try {
-                const port = await (navigator as any).serial.requestPort();
-                await port.open({ baudRate: 9600 }); // Common baud rate for thermal printers
-                setSerialPort(port);
-                toast({ title: "Printer Connected", description: "Serial printer connected successfully." });
-                setPrintMode('escpos');
-            } catch (err: any) {
-                 console.error('Error connecting to printer:', err);
-                 toast({ title: "Connection Failed", description: "Could not connect to printer.", variant: "destructive" });
-            }
-        } else {
-             toast({ title: "Not Supported", description: "WebSerial is not supported in this browser.", variant: "destructive" });
-        }
+
+
+
+    const handlePrintReceipt = async (dataToPrint?: any) => {
+         const details = dataToPrint || completedSale;
+         if (!details) return;
+
+         if (printMode === 'browser') {
+             try {
+                 const { printReactComponent } = await import('@/app/lib/print-utils');
+                 printReactComponent(
+                     <ReceiptView 
+                         saleDetails={details} 
+                         onNewSale={() => {}} 
+                         onPrint={() => {}} 
+                     />,
+                     '80mm'
+                 );
+                 return;
+             } catch (e) {
+                 console.error('Browser print error:', e);
+                 window.print();
+                 return;
+             }
+         }
+
+         if (!isConnected) {
+             const connected = await connect();
+             if (!connected) return;
+         }
+
+         try {
+             const { ReceiptGenerator } = await import('@/lib/receipt-generator');
+             const generator = new ReceiptGenerator();
+             const bytes = generator.generateReceipt(details);
+             await print(bytes);
+         } catch (e) {
+             console.error("Printing error", e);
+             toast({
+                 title: "Print Failed",
+                 description: "Could not send data to printer.",
+                 variant: "destructive"
+             });
+         }
     };
 
-    const isPrintingRef = useRef(false);
-
-    const handleEscPosPrint = async (saleDetails: any) => {
-        if (!serialPort) {
-             toast({ title: "No Printer", description: "Please connect a printer first.", variant: "destructive" });
-             return;
-        }
-
-        // Prevent duplicate prints
-        if (isPrintingRef.current) {
-            console.log('Print already in progress, skipping...');
-            return;
-        }
-
-        // Check if writable stream is locked
-        if (serialPort.writable?.locked) {
-            console.log('Printer stream is locked, waiting...');
-            toast({ title: "Printer Busy", description: "Please wait for the current print to complete.", variant: "default" });
-            return;
-        }
-
-        isPrintingRef.current = true;
-
-        try {
-            const { ReceiptGenerator } = await import('@/lib/receipt-generator');
-            const generator = new ReceiptGenerator();
-            // Ensure amountTendered is present in saleDetails for the generator
-            const detailsWithTender = {
-                ...saleDetails,
-                amountTendered: isCashPayment ? amountTenderedNum : saleDetails.totalDue
-            };
-            const bytes = generator.generateReceipt(detailsWithTender);
-
-            const writer = serialPort.writable.getWriter();
-            try {
-                await writer.write(bytes);
-            } finally {
-                writer.releaseLock();
-            }
-        } catch (err: any) {
-             console.error('Printing error:', err);
-             toast({ title: "Print Failed", description: "Failed to send data to printer.", variant: "destructive" });
-        } finally {
-            isPrintingRef.current = false;
-        }
-    };
 
     const handleConfirmPayment = async () => {
-        // Parse amount
-        const amountTenderedNum = parseFloat(amountTendered); 
         
         // Strict Point Validation
         if (selectedMethod === 'POINTS') {
@@ -487,9 +293,9 @@ export function TenderDialog({
             }
         }
 
-        const finalAmountTendered = selectedMethod === 'CASH' ? amountTenderedNum : totalDue;
+        const finalAmountTendered = isCashPayment ? amountTenderedNum : totalDue;
 
-        if (selectedMethod === 'CASH' && finalAmountTendered < totalDue) {
+        if (isCashPayment && finalAmountTendered < totalDue) {
              toast({
                 title: "Insufficient Amount",
                 description: "Amount tendered must be greater than or equal to total due.",
@@ -577,18 +383,25 @@ export function TenderDialog({
 
             setCompletedSale(saleDetails);
 
-            // Auto-print
-            if (printMode === 'escpos' && serialPort) {
-                 await handleEscPosPrint(saleDetails);
-            } else {
-                 printReceipt(saleDetails, paperSize);
-            }
 
-            // Small delay to ensure print command is sent before closing/clearing
-            setTimeout(() => {
-                onSuccess(selectedMethod, totalDue);
-                onOpenChange(false);
-            }, 1000);
+            // Auto-print logic moved or handled here based on flow
+            
+            // If Cash and Change > 0, show Change View, do NOT close/print yet (unless we want to background print)
+            // User requested: Enter Amount -> Dialog Change -> Print
+            if (isCashPayment && (finalAmountTendered - totalDue) > 0) {
+                 setView('change');
+                 // We don't print or close yet. We wait for user interaction in Change View.
+            } else {
+                 // Standard flow for non-cash or exact cash
+                 // Auto-print immediately
+                 handlePrintReceipt(saleDetails);
+
+                 // Small delay to ensure print command is sent before closing/clearing
+                 setTimeout(() => {
+                     onSuccess(selectedMethod, totalDue);
+                     onOpenChange(false);
+                 }, 2000);
+            }
 
         } catch (error: any) {
             console.error('Error saving payment:', error);
@@ -601,42 +414,25 @@ export function TenderDialog({
             setIsProcessing(false);
         }
     };
+
+
+    const handleCompleteChange = async () => {
+        if (!completedSale) return;
+
+        // Print using new handler
+        await handlePrintReceipt(completedSale);
+
+        // Close
+        setTimeout(() => {
+            onSuccess(selectedMethod, totalDue);
+            onOpenChange(false);
+        }, 1000);
+    }
     
     const handleSmartPrint = () => {
         if (completedSale) {
-             if (printMode === 'escpos') {
-                 if (serialPort) {
-                     handleEscPosPrint(completedSale);
-                     } else {
-                         toast({ 
-                             title: "Printer Not Connected", 
-                             description: "Switching to standard print dialog.", 
-                             variant: "default" 
-                         });
-                         printReceipt(completedSale, paperSize);
-                     }
-                 } else {
-                     printReceipt(completedSale, paperSize);
-                 }
+             handlePrintReceipt(completedSale);
         }
-    };
-
-
-
-    // Load print mode preference - DISABLED to focus on Driver Mode as default
-    /*
-    useEffect(() => {
-        const savedMode = localStorage.getItem('pos_print_mode');
-        if (savedMode === 'driver' || savedMode === 'escpos') {
-            setPrintMode(savedMode);
-        }
-    }, []);
-    */
-
-    // Save print mode preference
-    const handleSetPrintMode = (mode: 'driver' | 'escpos') => {
-        setPrintMode(mode);
-        // localStorage.setItem('pos_print_mode', mode); // Persistance disabled
     };
 
     useEffect(() => {
@@ -688,9 +484,25 @@ export function TenderDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
                 {view === 'receipt' && completedSale ? (
                     <ReceiptView saleDetails={completedSale} onNewSale={handleNewSale} onPrint={handleSmartPrint} />
+                ) : view === 'change' && completedSale ? (
+                    <div className="flex flex-col items-center justify-center p-6 space-y-8 animate-in zoom-in-95 duration-200">
+                        <div className="text-center space-y-2">
+                            <h2 className="text-2xl font-bold uppercase tracking-widest text-muted-foreground">Change Due</h2>
+                            <div className="text-7xl font-black text-primary tabular-nums tracking-tight">
+                                ₱{completedSale.change.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        </div>
+                        
+                        <div className="w-full">
+                            <Button size="lg" className="w-full h-16 text-xl font-bold" onClick={handleCompleteChange} autoFocus>
+                                <Printer className="mr-2 h-6 w-6" />
+                                Print & Next
+                            </Button>
+                        </div>
+                    </div>
                 ) : (
                     <>
                         <DialogHeader>
@@ -759,6 +571,8 @@ export function TenderDialog({
                                     }}
                                 />
                             </div>
+
+                            {/* Inline Change Display REMOVED - Moved to separate view */}
 
                             {/* Reference Input */}
                             {isReferenceRequired && (

@@ -73,7 +73,8 @@ import { useToast } from '@/hooks/use-toast';
 import { InsufficientStockDialog } from './insufficient-stock-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 
-import { BusinessSettings } from '../sales/x-reading/x-reading-preview';
+
+import { BusinessSettings } from '../sales/z-reading/z-reading-preview';
 
 const MOCK_PRODUCTS: Product[] = [
   {
@@ -289,6 +290,8 @@ export default function POSPage() {
   // Payment Methods
   const [paymentMethods, setPaymentMethods] = useState<{id: string; name: string; isActive: boolean}[]>([]);
   
+  const [showQuantityInSearch, setShowQuantityInSearch] = useState(true);
+  
   // Sticky Focus Logic
   useEffect(() => {
     const isAnyDialogOpen = 
@@ -391,6 +394,7 @@ export default function POSPage() {
                     username: result.data.lineVoidAuthUsername,
                     password: result.data.lineVoidAuthPassword
                 });
+                setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
                 setBusinessSettings(result.data);
             }
         } catch (error) {
@@ -965,22 +969,22 @@ export default function POSPage() {
           
           if (result.success) {
               // 1. Fetch X-Reading Data for this ended shift
-              try {
-                  const xReadingRes = await fetch(`/api/sales/x-reading?shiftId=${currentShiftId}&limit=1`);
-                  const xReadingResult = await xReadingRes.json();
+              // try {
+              //     const xReadingRes = await fetch(`/api/sales/x-reading?shiftId=${currentShiftId}&limit=1`);
+              //     const xReadingResult = await xReadingRes.json();
                   
-                  if (xReadingResult.success && xReadingResult.data.length > 0) {
-                      // 2. Print X-Reading
-                      const printUtils = await import('./print-x-reading');
-                      printUtils.printXReading(xReadingResult.data[0], businessSettings);
-                      toast({ title: "Printing Report", description: "X-Reading is being printed..." });
-                  } else {
-                      console.warn("Could not fetch X-Reading for printing");
-                  }
-              } catch (printError) {
-                  console.error("Error printing X-Reading:", printError);
-                  // Don't fail the whole end shift process just because print failed
-              }
+              //     if (xReadingResult.success && xReadingResult.data.length > 0) {
+              //         // 2. Print X-Reading
+              //         const printUtils = await import('./print-x-reading');
+              //         printUtils.printXReading(xReadingResult.data[0], businessSettings);
+              //         toast({ title: "Printing Report", description: "X-Reading is being printed..." });
+              //     } else {
+              //         console.warn("Could not fetch X-Reading for printing");
+              //     }
+              // } catch (printError) {
+              //     console.error("Error printing X-Reading:", printError);
+              //     // Don't fail the whole end shift process just because print failed
+              // }
 
               setLastEndedShiftId(currentShiftId);
               localStorage.removeItem('pos_current_shift_id');
@@ -993,8 +997,9 @@ export default function POSPage() {
               setHeldTransactions([]);
               setSelectedCustomer(WALK_IN_CUSTOMER);
               
-              // No longer needed if we print automatically, but can keep for manual view?
-              // setShowEndShiftReport(true); 
+
+              // Show the report dialog which has the print button
+              setShowEndShiftReport(true); 
               
               toast({ title: "Shift Ended", description: "Shift closed successfully." });
           } else {
@@ -1225,7 +1230,7 @@ export default function POSPage() {
                   >
                     <Icon className="w-4 h-4 mb-0.5" />
                     <span className="text-[10px] leading-none font-medium text-center">{label}</span>
-                    <span className="text-[9px] text-muted-foreground leading-none font-mono opacity-70">{fKey}</span>
+                    <span className="text-[9px] text-black leading-none font-mono opacity-100">{fKey}</span>
                     {label === 'Hold Trans' && heldTransactions.length > 0 && (
                       <span className="absolute top-1 right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
                         {heldTransactions.length}
@@ -1390,7 +1395,7 @@ export default function POSPage() {
                     >
                         <Icon className="w-5 h-5 opacity-80" />
                         <span className="leading-tight text-center px-1">{label}</span>
-                        {shortcut && <span className="text-[9px] text-muted-foreground/70 font-mono">{shortcut}</span>}
+                        {shortcut && <span className="text-[9px] text-black font-mono">{shortcut}</span>}
                     </Button>
                 ))}
             </div>
@@ -1402,7 +1407,18 @@ export default function POSPage() {
         <div className="w-96 bg-background border-l shadow-2xl z-20 flex flex-col h-full">
             {/* Cashier Profile */}
             <div className="p-6 border-b flex flex-col items-center gap-2 bg-muted/10">
-                 <Logo className="size-10 text-primary mb-2" />
+                 {businessSettings?.logoPath ? (
+                     <div className="relative w-20 h-20 mb-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                            src={businessSettings.logoPath} 
+                            alt="Business Logo" 
+                            className="w-full h-full object-contain"
+                        />
+                     </div>
+                 ) : (
+                    <Logo className="size-10 text-primary mb-2" enableLink={false} />
+                 )}
                  <div className="text-center">
                     <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>
                     <p className="text-xs text-muted-foreground mt-1 font-mono">{currentTerminalName}</p>
@@ -1530,6 +1546,7 @@ export default function POSPage() {
         shiftId={currentShiftId}
         terminalId={selectedTerminalId}
         paymentMethods={paymentMethods}
+        printMode={businessSettings?.printMode || 'browser'}
       />
       <EditItemDialog
         isOpen={isEditItemOpen}
@@ -1537,6 +1554,13 @@ export default function POSPage() {
         item={selectedItem}
         onUpdate={handleUpdateItem}
         mode={editDialogMode}
+      />
+       {/* Product Search Dialog */}
+      <ProductSearchDialog
+        isOpen={isProductSearchOpen}
+        onOpenChange={setIsProductSearchOpen}
+        onSelectProduct={handleAddItem}
+        showQuantityInSearch={showQuantityInSearch}
       />
       <AdjustQuantityDialog
         isOpen={isQuantityDialogOpen}
@@ -1607,22 +1631,32 @@ export default function POSPage() {
         onOpenChange={setIsLoyaltyOpen} 
         customer={selectedCustomer} 
       />
-      <RecentSalesDialog isOpen={isRecentSalesOpen} onOpenChange={setIsRecentSalesOpen} />
+      <RecentSalesDialog 
+        isOpen={isRecentSalesOpen} 
+        onOpenChange={setIsRecentSalesOpen} 
+        printMode={businessSettings?.printMode || 'browser'}
+      />
       <VoidSalesDialog isOpen={isVoidSalesOpen} onOpenChange={setIsVoidSalesOpen} />
       <ReturnSalesDialog 
         isOpen={isReturnSalesOpen} 
         onOpenChange={setIsReturnSalesOpen} 
         currentUser={currentUser}
         terminalId={selectedTerminalId}
+        printMode={businessSettings?.printMode || 'browser'}
       />
       <PriceInquiryDialog isOpen={isPriceInquiryOpen} onOpenChange={setIsPriceInquiryOpen} />
-      <ZReadingDialog isOpen={isZReadingOpen} onOpenChange={setIsZReadingOpen} />
+      <ZReadingDialog 
+        isOpen={isZReadingOpen} 
+        onOpenChange={setIsZReadingOpen} 
+        printMode={businessSettings?.printMode || 'browser'}
+      />
       
       <XReadingDialog 
         isOpen={showEndShiftReport} 
         onOpenChange={setShowEndShiftReport}
         shiftId={lastEndedShiftId}
         autoShow={true}
+        printMode={businessSettings?.printMode || 'browser'}
       />
       <ShutdownConfirmationDialog 
         open={isShutdownConfirmOpen} 

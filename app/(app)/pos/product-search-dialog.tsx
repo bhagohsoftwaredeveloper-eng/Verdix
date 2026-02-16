@@ -32,9 +32,10 @@ interface ProductSearchDialogProps {
   children?: React.ReactNode;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  showQuantityInSearch?: boolean;
 }
 
-export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenChange }: ProductSearchDialogProps) {
+export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenChange, showQuantityInSearch = true }: ProductSearchDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const { products, loading, error } = useProducts(debouncedSearchTerm, 'Available');
@@ -130,7 +131,14 @@ export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenC
                         <p className="text-sm text-muted-foreground">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
                       </div>
                     </div>
-                    <p className="font-mono">₱{product.price.toFixed(2)}</p>
+                    <div className="flex items-center gap-4">
+                        {!!showQuantityInSearch && (
+                            <div className={`text-sm ${product.stock <= 0 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                                {product.stock} {product.unitOfMeasure}
+                            </div>
+                        )}
+                        <p className="font-mono">₱{product.price.toFixed(2)}</p>
+                    </div>
                   </CommandItem>
                 ))}
               </CommandGroup>
