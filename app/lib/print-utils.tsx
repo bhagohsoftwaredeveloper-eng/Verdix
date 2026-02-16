@@ -15,8 +15,8 @@ export const printReactComponent = (component: React.ReactNode, paperSize: '58mm
     iframe.style.position = 'absolute';
     iframe.style.top = '-10000px';
     iframe.style.left = '-10000px';
-    iframe.style.width = paperSize === '80mm' ? '80mm' : '58mm';
-    iframe.style.height = '100vh'; // Ensure enough height for content
+    iframe.style.width = paperSize === '80mm' ? '80mm' : '58mm'; 
+    iframe.style.height = '100vh'; 
     iframe.style.border = 'none';
     
     document.body.appendChild(iframe);
@@ -24,36 +24,50 @@ export const printReactComponent = (component: React.ReactNode, paperSize: '58mm
     const doc = iframe.contentWindow?.document;
     if (!doc) return;
 
-    // Set base href to ensure relative links work
+    // Initialize document cleanly
+    doc.open();
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <style>
+                    /* Base Reset */
+                    body, html { margin: 0; padding: 0; background: white; color: black; }
+                    /* Print specific adjustments */
+                    @media print {
+                        @page { margin: 0; size: ${paperSize} auto; }
+                        body { margin: 0; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div id="print-root"></div>
+            </body>
+        </html>
+    `);
+    doc.close();
+
+    // Set base href
     const base = doc.createElement('base');
     base.href = window.location.origin;
     doc.head.appendChild(base);
 
-    // Copy styles from main document
-    // We prioritize <link rel="stylesheet"> and <style> tags
+    // Copy styles from main document manually to ensure they apply
     const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
     styles.forEach(node => {
         const clone = node.cloneNode(true) as HTMLElement;
         if (clone.tagName === 'LINK' && (clone as HTMLLinkElement).href) {
-            // Absolute URL is safer for iframes
-            (clone as HTMLLinkElement).href = new URL((node as HTMLLinkElement).href, window.location.href).href;
+             try {
+                (clone as HTMLLinkElement).href = new URL((node as HTMLLinkElement).href, window.location.href).href;
+            } catch (e) {
+                // ignore invalid urls
+            }
         }
         doc.head.appendChild(clone);
     });
 
-    // Add specific print styles
-    const style = doc.createElement('style');
-    style.textContent = `
-        @page { size: ${paperSize} auto; margin: 0; }
-        body { margin: 0; padding: 0; background-color: white !important; color: black !important; }
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    `;
-    doc.head.appendChild(style);
-
-    // Create a container for React
-    const container = doc.createElement('div');
-    container.id = 'print-root';
-    doc.body.appendChild(container);
+    const container = doc.getElementById('print-root');
+    if (!container) return;
 
     const root = createRoot(container);
     
@@ -62,7 +76,7 @@ export const printReactComponent = (component: React.ReactNode, paperSize: '58mm
         root.render(component);
     });
 
-    // Wait for content to render and resources (fonts/styles) to apply
+    // Wait for content (slightly longer)
     setTimeout(() => {
         try {
             if (iframe.contentWindow) {
@@ -72,12 +86,12 @@ export const printReactComponent = (component: React.ReactNode, paperSize: '58mm
         } catch (error) {
             console.error("Print failed:", error);
         } finally {
-            // Delay removal to ensure print dialog has taken over
+            // Delay removal
             setTimeout(() => {
                 if (document.body.contains(iframe)) {
                     document.body.removeChild(iframe);
                 }
-            }, 5000); 
+            }, 3000); 
         }
-    }, 1000); 
+    }, 1500); 
 };

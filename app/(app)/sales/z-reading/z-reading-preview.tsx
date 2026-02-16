@@ -1,5 +1,4 @@
-'use client';
-
+import React from 'react';
 import { format } from 'date-fns';
 
 export type ZReadingData = {
@@ -45,20 +44,11 @@ interface ZReadingPreviewProps {
   businessSettings: BusinessSettings | null;
 }
 
-export function ZReadingPreview({ data, printerFormat, businessSettings }: ZReadingPreviewProps) {
+export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewProps>(({ data, printerFormat, businessSettings }, ref) => {
   const is58mm = printerFormat === '58mm';
-  
-
-
-  // 80mm is approx 300px (safety margin -> 290px), 58mm is approx 219px.
-  // We reduce 58mm to 190px to account for potentially large printer margins (approx 50mm printable area).
-  const widthClass = is58mm ? 'w-[190px]' : 'w-[290px]'; 
-  const fontSize = 'text-[11px]'; 
-  const headerSize = 'text-[12px]';
-
   // Helper for dashed line
   const DashedLine = () => (
-    <div className="w-full border-t border-dashed border-black my-1" />
+    <div style={{ width: '100%', borderTop: '1px dashed black', margin: '5px 0' }} />
   );
 
   const formatCurrency = (amount: number) => 
@@ -66,88 +56,127 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
   const reportDate = new Date(data.reportDate);
   const startTime = new Date(data.reportDate); 
-  // In a real scenario, start time would be the end time of previous Z-Reading or shift start. 
-  // For now we use reportDate set to 00:00 or similar if available, or just same day 
   startTime.setHours(9, 0, 0, 0); // Mock 9 AM start
   
   const minSi = data.minSaleId || '0000000000001';
   const maxSi = data.maxSaleId || '0000000000001';
 
+  const styles = {
+    container: {
+        width: '100%',
+        margin: '0',
+        backgroundColor: 'white',
+        color: 'black',
+        fontFamily: '"Courier New", Courier, monospace',
+        fontSize: '11px', // Standard receipt font size
+        lineHeight: '1.2',
+        padding: '2mm', 
+    },
+    headerDiv: {
+        textAlign: 'center' as const,
+        marginBottom: '10px',
+        fontWeight: 'bold',
+    },
+    headerTitle: {
+        fontSize: '14px',
+        textTransform: 'uppercase' as const,
+        marginBottom: '4px',
+    },
+    sectionTitle: {
+        textAlign: 'center' as const,
+        marginTop: '5px',
+        marginBottom: '5px',
+        fontWeight: 'bold',
+        fontSize: '12px',
+        textTransform: 'uppercase' as const,
+    },
+    row: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: '2px', 
+    },
+    section: {
+        marginBottom: '5px',
+    },
+    bold: {
+        fontWeight: 'bold',
+    },
+    footer: {
+        marginTop: '20px',
+        marginBottom: '20px',
+        textAlign: 'center' as const,
+        fontSize: '10px',
+    },
+    center: {
+        textAlign: 'center' as const,
+    }
+  };
+
   return (
-    <div 
-        className={`${widthClass} mx-auto bg-white text-black font-mono leading-tight p-2`} 
-        style={{ 
-            fontFamily: '"Courier New", Courier, monospace',
-            color: 'black', 
-            backgroundColor: 'white',
-            border: process.env.NODE_ENV === 'development' ? '1px dotted lightgray' : 'none' // Debug visual
-        }}
-    >
+    <div style={styles.container} ref={ref}>
       {/* Business Header */}
-      <div className="text-center mb-4 font-bold">
-        <div className={`${headerSize} uppercase`}>{businessSettings?.businessName || 'NICOLE\'S SUPERMARKET'}</div>
-        <div className={fontSize}>Operated by: Facunla Enterprise Inc.</div>
-        <div className={fontSize}>{businessSettings?.address || 'Ground Floor Jade Bldg., Jennalyn Ave., Brgy. Abogado, Paniqui, Tarlac'}</div>
-        <div className={fontSize}>VAT REG TIN: {businessSettings?.tin || '123-456-789-00000'}</div>
-        <div className={fontSize}>MIN: 1234567890</div>
-        <div className={fontSize}>S/N: 0987654321-11</div>
+      <div style={styles.headerDiv}>
+        <div style={styles.headerTitle}>{businessSettings?.businessName || 'NICOLE\'S SUPERMARKET'}</div>
+        <div style={{ fontSize: '10px' }}>Operated by: Facunla Enterprise Inc.</div>
+        <div style={{ fontSize: '10px' }}>{businessSettings?.address || 'Paniqui, Tarlac'}</div>
+        <div style={{ fontSize: '10px' }}>VAT REG TIN: {businessSettings?.tin || '123-456-789-00000'}</div>
+        <div style={{ fontSize: '10px' }}>MIN: 1234567890</div>
+        <div style={{ fontSize: '10px' }}>S/N: 0987654321-11</div>
       </div>
 
-      <div className="text-center mb-2 font-bold">
-        <div className={headerSize}>Z-READING REPORT</div>
+      <div style={styles.sectionTitle}>
+        <div>Z-READING REPORT</div>
       </div>
 
-      <div className={`${fontSize} mb-2`}>
-        <div className="flex justify-between">
+      <div style={styles.section}>
+        <div style={styles.row}>
           <span>Report Date:</span>
           <span>{format(reportDate, 'MMMM d, yyyy')}</span>
         </div>
-        <div className="flex justify-between">
+        <div style={styles.row}>
           <span>Report Time:</span>
           <span>{format(reportDate, 'h:mm a')}</span>
         </div>
-        <br/>
-        <div className="flex justify-between">
-          <span>Start Date & Time:</span>
+        <div style={styles.row}>
+          <span>Start:</span>
           <span>{format(startTime, 'MM/dd/yy h:mm a')}</span>
         </div>
-        <div className="flex justify-between">
-          <span>End Date & Time:</span>
+        <div style={styles.row}>
+          <span>End:</span>
           <span>{format(reportDate, 'MM/dd/yy h:mm a')}</span>
         </div>
       </div>
 
-      <div className={`${fontSize} mb-2`}>
-        <div className="flex justify-between">
+      <div style={styles.section}>
+        <div style={styles.row}>
           <span>Beg. SI #:</span>
           <span>{minSi}</span>
         </div>
-        <div className="flex justify-between">
+        <div style={styles.row}>
           <span>End. SI #:</span>
           <span>{maxSi}</span>
         </div>
-        <div className="flex justify-between">
+        <div style={styles.row}>
           <span>Beg. VOID #:</span>
           <span>0000000000001</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>End. VOID #:</span>
           <span>0000000000001</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Beg. RETURN #:</span>
           <span>0000000000000</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>End. RETURN #:</span>
           <span>0000000000000</span>
         </div>
-        <br />
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Reset Counter No.</span>
           <span>0</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Z Counter No. :</span>
           <span>1</span>
         </div>
@@ -155,16 +184,16 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
       <DashedLine />
 
-      <div className={`${fontSize} mb-1`}>
-        <div className="flex justify-between">
-          <span>Present Accumulated Sales:</span>
+      <div style={styles.section}>
+        <div style={styles.row}>
+          <span>Present Sales:</span>
           <span>{formatCurrency(data.netSales)}</span> 
         </div>
-         <div className="flex justify-between">
-          <span>Previous Accumulated Sales:</span>
+         <div style={styles.row}>
+          <span>Previous Sales:</span>
           <span>{formatCurrency(data.previousReading || 0)}</span>
         </div>
-         <div className="flex justify-between font-bold">
+         <div style={{ ...styles.row, ...styles.bold }}>
           <span>Sales for the Day:</span>
           <span>{formatCurrency(data.netSales)}</span>
         </div>
@@ -172,24 +201,24 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
       <DashedLine />
 
-      <div className="text-center mb-1 font-bold">
-        <div className={fontSize}>BREAKDOWN OF SALES</div>
+      <div style={styles.sectionTitle}>
+        <div>BREAKDOWN OF SALES</div>
       </div>
 
-      <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between">
+      <div style={styles.section}>
+         <div style={styles.row}>
           <span>VATABLE SALES :</span>
           <span>{formatCurrency(data.vatSales)}</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>VAT AMOUNT:</span>
           <span>{formatCurrency(data.vatAmount)}</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>VAT EXEMPT SALES:</span>
           <span>{formatCurrency(data.vatExempt)}</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>ZERO RATED SALES:</span>
           <span>{formatCurrency(data.zeroRated)}</span>
         </div>
@@ -197,28 +226,28 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
       <DashedLine />
 
-      <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between">
+      <div style={styles.section}>
+         <div style={styles.row}>
           <span>Gross Amount:</span>
           <span>{formatCurrency(data.grossSales)}</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Less Discount:</span>
           <span>{formatCurrency(data.discounts)}</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Less Return:</span>
           <span>{formatCurrency(data.returns)}</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Less Void:</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Less VAT Adjustment:</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between font-bold mt-1">
+         <div style={{ ...styles.row, ...styles.bold, marginTop: '4px' }}>
           <span>Net Amount:</span>
           <span>{formatCurrency(data.netSales)}</span>
         </div>
@@ -226,28 +255,28 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
        <DashedLine />
 
-       <div className="text-center mb-1">
-        <div className={fontSize}>DISCOUNT SUMMARY</div>
+       <div style={styles.sectionTitle}>
+        <div>DISCOUNT SUMMARY</div>
       </div>
       
-       <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between">
+       <div style={styles.section}>
+         <div style={styles.row}>
           <span>SC Disc. :</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>PWD Disc. :</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>NAAC Disc. :</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Solo Parent Disc. :</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Other Disc. :</span>
           <span>{formatCurrency(data.discounts)}</span>
         </div>
@@ -255,16 +284,16 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
       <DashedLine />
 
-       <div className="text-center mb-1">
-        <div className={fontSize}>SALES ADJUSTMENT</div>
+       <div style={styles.sectionTitle}>
+        <div>SALES ADJUSTMENT</div>
       </div>
 
-       <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between">
+       <div style={styles.section}>
+         <div style={styles.row}>
           <span>VOID :</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>RETURN :</span>
           <span>{formatCurrency(data.returns)}</span>
         </div>
@@ -272,33 +301,33 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
       <DashedLine />
 
-      <div className="text-center mb-1">
-        <div className={fontSize}>VAT ADJUSTMENT</div>
+      <div style={styles.sectionTitle}>
+        <div>VAT ADJUSTMENT</div>
       </div>
 
-      <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between">
+      <div style={styles.section}>
+         <div style={styles.row}>
           <span>SC TRANS. :</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>PWD TRANS :</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>REG.Disc. TRANS :</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>ZERO-RATED TRANS.:</span>
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>VAT on Return:</span>
           {/* Approximate VAT on Return if known, otherwise placeholders */}
           <span>0.00</span>
         </div>
-         <div className="flex justify-between">
+         <div style={styles.row}>
           <span>Other VAT Adjustments</span>
           <span>0.00</span>
         </div>
@@ -306,27 +335,27 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
       <DashedLine />
 
-      <div className="text-center mb-1">
-        <div className={fontSize}>TRANSACTION SUMMARY</div>
+      <div style={styles.sectionTitle}>
+        <div>TRANSACTION SUMMARY</div>
       </div>
       
-       <div className={`${fontSize} mb-1`}>
+       <div style={styles.section}>
          {(data.paymentMethods || []).map(method => (
-             <div key={method.name} className="flex justify-between">
-              <span className="uppercase">{method.name}:</span>
+             <div key={method.name} style={styles.row}>
+              <span style={{ textTransform: 'uppercase' }}>{method.name}:</span>
               <span>{formatCurrency(method.amount)}</span>
             </div>
          ))}
          
-         <div className="flex justify-between">
+         <div style={styles.row}>
             <span>Opening Fund:</span>
             <span>{formatCurrency(data.startingCash)}</span>
          </div>
-          <div className="flex justify-between">
+          <div style={styles.row}>
             <span>Less Withdrawal:</span>
             <span>0.00</span>
          </div>
-          <div className="flex justify-between font-bold mt-1">
+          <div style={{ ...styles.row, ...styles.bold, marginTop: '4px' }}>
              <span>Payments Received:</span>
              {/* Total Payments */}
             <span>{formatCurrency((data.paymentMethods || []).reduce((acc, m) => acc + m.amount, 0))}</span>
@@ -335,8 +364,8 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
       <DashedLine />
       
-       <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between">
+       <div style={styles.section}>
+         <div style={styles.row}>
           <span>SHORT/OVER:</span>
           <span>0.00</span>
         </div>
@@ -344,16 +373,18 @@ export function ZReadingPreview({ data, printerFormat, businessSettings }: ZRead
 
       <DashedLine />
       
-      <div className="mt-8 mb-8 text-center">
-        <div className={fontSize}>This Receipt shall be valid for</div>
-        <div className={fontSize}>five (5) years from the date of</div>
-        <div className={fontSize}>the permit to use.</div>
+      <div style={styles.footer}>
+        <div>This Receipt shall be valid for</div>
+        <div>five (5) years from the date of</div>
+        <div>the permit to use.</div>
       </div>
     
-      <div className="text-center font-bold">
-         <div className={fontSize}>THIS IS NOT AN OFFICIAL RECEIPT</div>
+      <div style={{ ...styles.center, ...styles.bold }}>
+         <div>THIS IS NOT AN OFFICIAL RECEIPT</div>
       </div>
 
     </div>
   );
-}
+});
+
+ZReadingPreview.displayName = 'ZReadingPreview';

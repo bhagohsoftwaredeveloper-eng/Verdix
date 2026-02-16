@@ -18,12 +18,35 @@ import { ZReadingData } from '@/lib/types';
 import { usePrinter } from '@/lib/use-printer';
 import { ZReadingGenerator } from '@/lib/z-reading-generator';
 
+import { useReactToPrint } from 'react-to-print';
+import { useRef } from 'react';
+
 function ZReadingReportView({ onBack, printMode }: { onBack: () => void, printMode: 'browser' | 'escpos' | 'usb' }): JSX.Element {
     const [data, setData] = useState<ZReadingData | null>(null);
     const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
     const { toast } = useToast();
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    const handleReactToPrint = useReactToPrint({
+        contentRef: contentRef, // Try fallback to contentRef for older versions or robust content function
+        content: () => contentRef.current,
+        documentTitle: 'Z-Reading-Report',
+        pageStyle: `
+            @page {
+                size: 58mm auto;
+                margin: 0;
+            }
+            @media print {
+                body {
+                    -webkit-print-color-adjust: exact;
+                }
+            }
+        `,
+        onAfterPrint: () => console.log('Print finished'),
+        onPrintError: (error: unknown) => console.error('Print error:', error),
+    } as any);
     
     useEffect(() => {
         const fetchData = async () => {
@@ -63,22 +86,12 @@ function ZReadingReportView({ onBack, printMode }: { onBack: () => void, printMo
         if (!data) return;
 
         if (printMode === 'browser') {
-            try {
-                const { printReactComponent } = await import('@/app/lib/print-utils');
-                printReactComponent(
-                    <ZReadingPreview 
-                        data={data} 
-                        businessSettings={businessSettings || {} as BusinessSettings} 
-                        printerFormat="80mm" 
-                    />,
-                    '80mm'
-                );
-                return;
-            } catch (e) {
-                console.error('Browser print error:', e);
-                window.print();
-                return;
+            if (handleReactToPrint) {
+                handleReactToPrint();
+            } else {
+                 console.error("Print handle not ready or failed to initialize");
             }
+             return;
         }
 
         if (!isConnected) {
@@ -136,7 +149,7 @@ function ZReadingReportView({ onBack, printMode }: { onBack: () => void, printMo
                     <DialogTitle>Z-READING REPORT</DialogTitle>
                 </div>
                 <div className="flex gap-2">
-                    {!isConnected && (
+                    {!isConnected && printMode !== 'browser' && (
                         <Button variant="outline" size="sm" onClick={connect}>
                             Connect Printer
                         </Button>
@@ -150,7 +163,12 @@ function ZReadingReportView({ onBack, printMode }: { onBack: () => void, printMo
 
             <div className="flex-1 overflow-auto p-4 bg-muted/20 flex justify-center">
                  <div className="max-w-[400px] w-full shadow-lg bg-white h-fit">
-                    <ZReadingPreview data={data} businessSettings={businessSettings} printerFormat="80mm" />
+                    <ZReadingPreview 
+                        ref={contentRef}
+                        data={data} 
+                        businessSettings={businessSettings} 
+                        printerFormat="58mm" 
+                    />
                  </div>
             </div>
         </div>
