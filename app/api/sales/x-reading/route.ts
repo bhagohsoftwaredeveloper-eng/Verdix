@@ -44,9 +44,13 @@ export async function GET(request: NextRequest) {
         COALESCE(sales.net_sales, 0) as net_sales,
         COALESCE(sales.vat_amount, 0) as vat_amount,
         COALESCE(sales.discounts, 0) as discounts,
-        COALESCE(sales.returns, 0) as returns_amount,
+        COALESCE(sales.returns_amount, 0) as returns_amount,
         COALESCE(sales.transaction_count, 0) as transaction_count,
-        COALESCE(sales.cash_sales, 0) as cash_sales
+        COALESCE(sales.cash_sales, 0) as cash_sales,
+        sales.min_sale_id,
+        sales.max_sale_id,
+        COALESCE(sales.void_amount, 0) as void_amount,
+        COALESCE(sales.refund_amount, 0) as refund_amount
       FROM shifts s
       LEFT JOIN users u ON s.user_id = u.uid
       LEFT JOIN (
@@ -56,9 +60,13 @@ export async function GET(request: NextRequest) {
               SUM(CASE WHEN pt.transaction_type = 'sale' THEN pt.total_amount ELSE 0 END) as net_sales,
               SUM(pt.tax_amount) as vat_amount,
               SUM(pt.discount_amount) as discounts,
-              SUM(CASE WHEN pt.transaction_type = 'return' THEN pt.total_amount ELSE 0 END) as returns,
+              SUM(CASE WHEN pt.transaction_type = 'return' THEN pt.total_amount ELSE 0 END) as returns_amount,
               COUNT(CASE WHEN pt.transaction_type = 'sale' THEN 1 END) as transaction_count,
-              SUM(CASE WHEN pt.transaction_type = 'sale' AND pt.payment_method = 'CASH' THEN pt.total_amount ELSE 0 END) as cash_sales
+              SUM(CASE WHEN pt.transaction_type = 'sale' AND pt.payment_method = 'CASH' THEN pt.total_amount ELSE 0 END) as cash_sales,
+              MIN(CASE WHEN pt.transaction_type = 'sale' THEN pt.order_number END) as min_sale_id,
+              MAX(CASE WHEN pt.transaction_type = 'sale' THEN pt.order_number END) as max_sale_id,
+              SUM(CASE WHEN pt.transaction_type = 'void' THEN pt.total_amount ELSE 0 END) as void_amount,
+              SUM(CASE WHEN pt.transaction_type = 'refund' THEN pt.total_amount ELSE 0 END) as refund_amount
           FROM pos_transactions pt
           GROUP BY pt.shift_id
       ) sales ON s.id = sales.shift_id
@@ -148,6 +156,14 @@ export async function GET(request: NextRequest) {
         cashDenominations: typeof shift.cash_denominations === 'string' 
             ? JSON.parse(shift.cash_denominations) 
             : shift.cash_denominations || [],
+
+        // New Layout Fields
+        minSaleId: shift.min_sale_id ? String(shift.min_sale_id).padStart(12, '0') : '0000000000000',
+        maxSaleId: shift.max_sale_id ? String(shift.max_sale_id).padStart(12, '0') : '0000000000000',
+        voidAmount: parseFloat(shift.void_amount || 0),
+        refundAmount: parseFloat(shift.refund_amount || 0),
+        min: '0987654321', // Placeholder or fetch from settings
+        sn: '1234567890-01', // Placeholder or fetch from settings
       };
     }));
 
@@ -216,11 +232,19 @@ export async function POST(request: NextRequest) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
+    const formatDate = (date: any) => {
+        if (!date) return null;
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return null;
+        // Format to YYYY-MM-DD HH:mm:ss for MySQL
+        return d.toISOString().slice(0, 19).replace('T', ' ');
+    };
+
     const [result] = await pool.query(query, [
       readingNumber,
-      reportDate,
-      shiftStart || null,
-      shiftEnd || null,
+      formatDate(reportDate),
+      formatDate(shiftStart),
+      formatDate(shiftEnd),
       terminalId,
       cashierName,
       cashierId,

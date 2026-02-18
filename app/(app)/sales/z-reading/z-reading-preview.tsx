@@ -23,8 +23,14 @@ export type ZReadingData = {
   terminalId?: string;
   minSaleId?: string;
   maxSaleId?: string;
+  minVoidId?: string;
+  maxVoidId?: string;
+  minReturnId?: string;
+  maxReturnId?: string;
   previousReading?: number;
   runningTotal?: number;
+  voidAmount?: number;
+  vatAdjustment?: number;
 };
 
 type PrinterFormat = '58mm' | '80mm';
@@ -58,34 +64,46 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
   const startTime = new Date(data.reportDate); 
   startTime.setHours(9, 0, 0, 0); // Mock 9 AM start
   
-  const minSi = data.minSaleId || '0000000000001';
-  const maxSi = data.maxSaleId || '0000000000001';
+  const stripLeadingZeros = (str: string) => {
+    // If it's all zeros, return "0"
+    if (/^0+$/.test(str)) return "0";
+    // Remove leading zeros
+    return str.replace(/^0+/, '') || "0";
+  };
+
+  const minSi = stripLeadingZeros(data.minSaleId || '1');
+  const maxSi = stripLeadingZeros(data.maxSaleId || '1');
+  const minVoid = stripLeadingZeros(data.minVoidId || '1');
+  const maxVoid = stripLeadingZeros(data.maxVoidId || '1');
+  const minReturn = stripLeadingZeros(data.minReturnId || '0');
+  const maxReturn = stripLeadingZeros(data.maxReturnId || '0');
 
   const styles = {
     container: {
         width: '100%',
-        margin: '0',
+        margin: '0', 
         backgroundColor: 'white',
         color: 'black',
         fontFamily: '"Courier New", Courier, monospace',
-        fontSize: '11px', // Standard receipt font size
+        fontSize: '11px', 
         lineHeight: '1.2',
-        padding: '2mm', 
+        padding: '4mm', // Adjusted for 58mm paper fit
+        fontWeight: 'bold',
     },
     headerDiv: {
         textAlign: 'center' as const,
-        marginBottom: '10px',
+        marginBottom: '2px', // Tight header
         fontWeight: 'bold',
     },
     headerTitle: {
         fontSize: '14px',
         textTransform: 'uppercase' as const,
-        marginBottom: '4px',
+        marginBottom: '2px',
     },
     sectionTitle: {
         textAlign: 'center' as const,
         marginTop: '5px',
-        marginBottom: '5px',
+        marginBottom: '2px',
         fontWeight: 'bold',
         fontSize: '12px',
         textTransform: 'uppercase' as const,
@@ -96,14 +114,14 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
         marginBottom: '2px', 
     },
     section: {
-        marginBottom: '5px',
+        marginBottom: '2px',
     },
     bold: {
         fontWeight: 'bold',
     },
     footer: {
-        marginTop: '20px',
-        marginBottom: '20px',
+        marginTop: '10px',
+        marginBottom: '10px',
         textAlign: 'center' as const,
         fontSize: '10px',
     },
@@ -113,7 +131,7 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
   };
 
   return (
-    <div style={styles.container} ref={ref}>
+    <div style={styles.container} ref={ref} className="printable-area">
       {/* Business Header */}
       <div style={styles.headerDiv}>
         <div style={styles.headerTitle}>{businessSettings?.businessName || 'NICOLE\'S SUPERMARKET'}</div>
@@ -158,19 +176,19 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
         </div>
         <div style={styles.row}>
           <span>Beg. VOID #:</span>
-          <span>0000000000001</span>
+          <span>{minVoid}</span>
         </div>
          <div style={styles.row}>
           <span>End. VOID #:</span>
-          <span>0000000000001</span>
+          <span>{maxVoid}</span>
         </div>
          <div style={styles.row}>
           <span>Beg. RETURN #:</span>
-          <span>0000000000000</span>
+          <span>{minReturn}</span>
         </div>
          <div style={styles.row}>
           <span>End. RETURN #:</span>
-          <span>0000000000000</span>
+          <span>{maxReturn}</span>
         </div>
          <div style={styles.row}>
           <span>Reset Counter No.</span>
@@ -241,11 +259,11 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
         </div>
          <div style={styles.row}>
           <span>Less Void:</span>
-          <span>0.00</span>
+          <span>{formatCurrency(data.voidAmount || 0)}</span>
         </div>
          <div style={styles.row}>
           <span>Less VAT Adjustment:</span>
-          <span>0.00</span>
+          <span>{formatCurrency(data.vatAdjustment || 0)}</span>
         </div>
          <div style={{ ...styles.row, ...styles.bold, marginTop: '4px' }}>
           <span>Net Amount:</span>

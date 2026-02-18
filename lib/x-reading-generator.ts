@@ -16,132 +16,204 @@ export class XReadingGenerator {
     public generate(data: XReadingData): Uint8Array {
         const {
             reportDate,
-            grossSales,
-            returns,
-            discounts,
-            netSales,
-            vatAmount,
             paymentMethods,
-            transactionCount,
-            terminalId,
             cashierName,
             shiftStart,
             shiftEnd,
             startingCash,
-            cashSales,
-            cashDeposit,
+            cashInDrawer,
             cashPickup,
-            cashCountTotal,
-            overShort
+            overShort,
+            minSaleId,
+            maxSaleId,
+            voidAmount,
+            refundAmount,
+            min,
+            sn,
+            cashDenominations
         } = data;
 
-        const dateStr = format(new Date(reportDate), 'PP p');
+        const dateStr = format(new Date(reportDate), 'MMMM d, yyyy');
+        const timeStr = format(new Date(reportDate), 'h:mm a');
         const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        
+        // Helper to format short/over with sign at end
+        const formatShortOver = (val: number) => {
+            const absVal = Math.abs(val || 0);
+            const sign = (val || 0) >= 0 ? '+' : '-';
+            return `${absVal.toFixed(2)}${sign}`;
+        };
 
         let encoder = this.encoder
             .initialize()
             .codepage('cp437')
             .align('center')
             .bold(true)
+            .line('TESSA\'S RESTAURANT') // Placeholder, ideally should come from settings
+            .bold(false)
+            .line('Operated by: CBR Foods, Inc.')
+            .line('VAT REG TIN: 321-654-987-00000')
+            .line(`MIN: ${min || '0987654321'}`)
+            .line(`S/N: ${sn || '1234567890-01'}`)
+            .newline()
+            .bold(true)
             .line('X-READING REPORT')
             .bold(false)
-            .line('STOCK PILOT')
-            .line(dateStr)
             .newline()
             .align('left')
-            .line(`Shift Start: ${shiftStart ? format(new Date(shiftStart), 'PP p') : 'N/A'}`)
-            .line(`Shift End: ${shiftEnd ? format(new Date(shiftEnd), 'PP p') : 'Active'}`)
-            .line(`Register: ${terminalId}`)
-            .line(`Staff: ${cashierName}`)
-            .rule({ style: 'double' })
+            .table(
+                [
+                    { width: 12, align: 'left' },
+                    { width: 20, align: 'right' }
+                ],
+                [
+                    ['Report Date:', dateStr],
+                    ['Report Time:', timeStr]
+                ]
+            )
+            .newline()
+            .table(
+                [
+                    { width: 15, align: 'left' },
+                    { width: 17, align: 'right' }
+                ],
+                [
+                    ['Start Date & Time:', shiftStart ? format(new Date(shiftStart), 'MM/dd/yy h:mm a') : '-'],
+                    ['End Date & Time:', shiftEnd ? format(new Date(shiftEnd), 'MM/dd/yy h:mm a') : 'Active']
+                ]
+            )
+            .newline()
+            .table(
+                [
+                    { width: 10, align: 'left' },
+                    { width: 22, align: 'right' }
+                ],
+                [
+                    ['Cashier:', cashierName]
+                ]
+            )
+            .newline()
+            .table(
+                 [
+                    { width: 12, align: 'left' },
+                    { width: 20, align: 'right' }
+                ],
+                [
+                    ['Beg. OR #:', minSaleId || '0000000000000'],
+                    ['End. OR #:', maxSaleId || '0000000000000']
+                ]
+            )
+            .newline()
+            .table(
+                 [
+                    { width: 15, align: 'left' },
+                    { width: 17, align: 'right' }
+                ],
+                [
+                    ['Opening Fund:', formatCurrency(startingCash)]
+                ]
+            )
+            .line('--------------------------------') // ~32 chars for 58mm
             
-            // Financial Summary
-            .bold(true).align('center').line('CURRENT FINANCIALS').bold(false).align('left')
-            .rule()
+            // PAYMENTS RECEIVED
+            .line('PAYMENTS RECEIVED')
             .table(
                 [
                     { width: 20, align: 'left' },
                     { width: 12, align: 'right' }
                 ],
-                [
-                    ['Gross Sales', formatCurrency(grossSales)],
-                    ['Returns', `-${formatCurrency(returns)}`],
-                    ['Discounts', `-${formatCurrency(discounts)}`]
-                ]
+                paymentMethods.map(pm => [pm.name.toUpperCase(), formatCurrency(pm.amount)])
             )
-            .rule()
-            .bold(true)
             .table(
                  [
                     { width: 20, align: 'left' },
                     { width: 12, align: 'right' }
                 ],
-                [['NET SALES', formatCurrency(netSales)]]
-            )
-            .bold(false)
-            .newline()
-
-            // Payment Methods
-            .bold(true).align('center').line('PAYMENT METHODS').bold(false).align('left')
-            .rule()
-             .table(
                 [
-                    { width: 16, align: 'left' },
-                    { width: 6, align: 'right' },
-                    { width: 10, align: 'right' }
-                ],
-                [
-                    ['Method', 'Cnt', 'Amount']
+                     ['Total Payments:', formatCurrency(paymentMethods.reduce((acc, m) => acc + m.amount, 0))]
                 ]
             )
-            .rule();
+            .line('--------------------------------')
 
-         const paymentRows = paymentMethods.map(pm => [
-             pm.name,
-             (pm.count || 0).toString(),
-             formatCurrency(pm.amount)
-         ]);
-
-         encoder.table(
-                [
-                    { width: 16, align: 'left' },
-                    { width: 6, align: 'right' },
-                    { width: 10, align: 'right' }
-                ],
-                paymentRows
-            )
-            .newline()
-
-            // Cash Summary
-            .bold(true).align('center').line('CASH SUMMARY').bold(false).align('left')
-            .rule()
+            // VOID
             .table(
-                [
+                 [
                     { width: 20, align: 'left' },
                     { width: 12, align: 'right' }
                 ],
+                [['VOID', formatCurrency(voidAmount || 0)]]
+            )
+            .line('--------------------------------')
+
+            // REFUND
+             .table(
+                 [
+                    { width: 20, align: 'left' },
+                    { width: 12, align: 'right' }
+                ],
+                [['REFUND', formatCurrency(refundAmount || 0)]]
+            )
+            .line('--------------------------------')
+
+            // WITHDRAWAL
+             .table(
+                 [
+                    { width: 20, align: 'left' },
+                    { width: 12, align: 'right' }
+                ],
+                [['WITHDRAWAL', formatCurrency(cashPickup || 0)]]
+            )
+            .line('--------------------------------')
+
+            // TRANSACTION SUMMARY
+            .line('TRANSACTION SUMMARY')
+            .table(
                 [
-                    ['Opening Fund', formatCurrency(startingCash)],
-                    ['Cash Sales', formatCurrency(cashSales)],
-                    ['Cash Deposit', formatCurrency(cashDeposit || 0)],
-                    ['Cash Pickup', `-${formatCurrency(cashPickup || 0)}`],
-                    ['Expected Cash', formatCurrency(startingCash + cashSales + (cashDeposit || 0) - (cashPickup || 0))],
-                    ['Actual Count', formatCurrency(cashCountTotal || 0)],
-                    ['Difference', formatCurrency(overShort || 0)]
+                     { width: 20, align: 'left' },
+                     { width: 12, align: 'right' }
+                ],
+                [
+                    ['Cash In Drawer:', formatCurrency(cashInDrawer)],
+                    ...paymentMethods.filter(p => p.name !== 'CASH').map(pm => [pm.name.toUpperCase(), formatCurrency(pm.amount)]),
+                    ['Opening Fund:', formatCurrency(startingCash)],
+                    ['Less Withdrawal:', formatCurrency(cashPickup || 0)],
+                    ['Payments Received:', formatCurrency(paymentMethods.reduce((acc, m) => acc + m.amount, 0))]
                 ]
             )
-            .newline()
+             .line('--------------------------------')
 
-            // Trans Stats
-            .line(`Trans. Count: ${transactionCount}`)
-            
-            .newline()
-            .align('center')
-            .line('--- END OF X-READING ---')
-            .newline()
-            .newline()
-            .newline()
-            .cut();
+             // CASH DENOMINATIONS
+             .line('CASH DENOMINATIONS')
+             .table(
+                 [
+                     { width: 20, align: 'left' },
+                     { width: 12, align: 'right' }
+                 ],
+                 (cashDenominations || []).map(d => [
+                     `${d.qty} x ${d.amount >= 1 ? d.amount : d.amount.toFixed(2)}`,
+                     formatCurrency(d.total)
+                 ])
+             );
+        
+        if (!cashDenominations || cashDenominations.length === 0) {
+            encoder.line('No denomination data');
+        }
+
+        encoder
+             .line('--------------------------------')
+             .table(
+                 [
+                     { width: 20, align: 'left' },
+                     { width: 12, align: 'right' }
+                 ],
+                 [['SHORT/OVER:', formatShortOver(overShort || 0)]]
+             )
+             .line('--------------------------------')
+             .newline()
+             .align('center')
+             .line('End of X-Reading Report')
+             .newline()
+             .cut();
 
         return encoder.encode();
     }

@@ -74,8 +74,8 @@ import { InsufficientStockDialog } from './insufficient-stock-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 
-import { BusinessSettings } from '../sales/z-reading/z-reading-preview';
-
+import { SystemSettings } from '@/lib/types';
+// ...
 const MOCK_PRODUCTS: Product[] = [
   {
     id: 'parent_1',
@@ -259,7 +259,7 @@ export default function POSPage() {
   const [isZReadingOpen, setIsZReadingOpen] = useState(false);
   const [isShutdownConfirmOpen, setIsShutdownConfirmOpen] = useState(false);
   
-  const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
+  const [businessSettings, setBusinessSettings] = useState<SystemSettings | null>(null);
   
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
@@ -1001,7 +1001,58 @@ export default function POSPage() {
               // Show the report dialog which has the print button
               setShowEndShiftReport(true); 
               
-              toast({ title: "Shift Ended", description: "Shift closed successfully." });
+              // 2. Generate and Save X-Reading
+              try {
+                  const xReadingRes = await fetch(`/api/sales/x-reading?shiftId=${currentShiftId}&limit=1`);
+                  const xReadingResult = await xReadingRes.json();
+                  
+                  if (xReadingResult.success && xReadingResult.data.length > 0) {
+                      const xData = xReadingResult.data[0];
+                      // Save X-Reading Record
+                      await fetch('/api/sales/x-reading', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              readingNumber: `X-${xData.id.substring(0, 8).toUpperCase()}`, // Generate a reading number
+                              reportDate: xData.reportDate,
+                              shiftStart: xData.shiftStart,
+                              shiftEnd: xData.shiftEnd, // Shift is now ended
+                              terminalId: xData.terminalId,
+                              cashierName: xData.cashierName,
+                              cashierId: xData.cashierId,
+                              grossSales: xData.grossSales,
+                              returns: xData.returns,
+                              discounts: xData.discounts,
+                              netSales: xData.netSales,
+                              vatAmount: xData.vatAmount,
+                              paymentMethods: xData.paymentMethods,
+                              transactionCount: xData.transactionCount,
+                              startingCash: xData.startingCash,
+                              cashSales: xData.cashSales,
+                              cashInDrawer: xData.cashInDrawer,
+                              shiftStatus: 'completed'
+                          })
+                      });
+                  }
+              } catch (xError) {
+                  console.error("Failed to generate X-Reading record", xError);
+              }
+
+              // 3. Generate and Save Z-Reading
+              try {
+                  await fetch('/api/sales/z-reading', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                          terminalId: selectedTerminalId,
+                          cashierName: currentUser?.displayName || 'Admin'
+                      })
+                  });
+              } catch (zError) {
+                   console.error("Failed to generate Z-Reading record", zError);
+              }
+
+              toast({ title: "Shift Ended", description: "Shift closed and readings generated successfully." });
           } else {
               throw new Error(result.error);
           }
@@ -1538,22 +1589,22 @@ export default function POSPage() {
         isOpen={isTenderDialogOpen}
         onOpenChange={setIsTenderDialogOpen}
         paymentMethod={tenderMethod || ''}
-        totalDue={totalDue}
+        totalDue={items.reduce((acc, item) => acc + item.price * item.quantity, 0)}
         items={items}
         customer={selectedCustomer}
         currentUser={currentUser}
         onSuccess={handleSuccessfulSale}
-        shiftId={currentShiftId}
+        shiftId={currentShiftId || null}
         terminalId={selectedTerminalId}
         paymentMethods={paymentMethods}
         printMode={businessSettings?.printMode || 'browser'}
+        settings={businessSettings as any} 
       />
       <EditItemDialog
         isOpen={isEditItemOpen}
         onOpenChange={setIsEditItemOpen}
         item={selectedItem}
         onUpdate={handleUpdateItem}
-        mode={editDialogMode}
       />
        {/* Product Search Dialog */}
       <ProductSearchDialog
@@ -1649,12 +1700,13 @@ export default function POSPage() {
         isOpen={isZReadingOpen} 
         onOpenChange={setIsZReadingOpen} 
         printMode={businessSettings?.printMode || 'browser'}
+        terminalId={selectedTerminalId}
       />
       
       <XReadingDialog 
         isOpen={showEndShiftReport} 
         onOpenChange={setShowEndShiftReport}
-        shiftId={lastEndedShiftId}
+        shiftId={lastEndedShiftId ?? undefined}
         autoShow={true}
         printMode={businessSettings?.printMode || 'browser'}
       />

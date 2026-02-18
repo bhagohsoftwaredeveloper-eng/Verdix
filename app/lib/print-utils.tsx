@@ -36,7 +36,8 @@ export const printReactComponent = (component: React.ReactNode, paperSize: '58mm
                     /* Print specific adjustments */
                     @media print {
                         @page { margin: 0; size: ${paperSize} auto; }
-                        body { margin: 0; }
+                        body { margin: 0; visibility: visible !important; }
+                        * { visibility: visible !important; }
                     }
                 </style>
             </head>

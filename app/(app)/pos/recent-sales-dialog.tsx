@@ -29,6 +29,8 @@ import { AdminAuthDialog } from './admin-auth-dialog';
 import { usePrinter } from '@/lib/use-printer';
 import { ReceiptGenerator } from '@/lib/receipt-generator';
 import { useToast } from '@/hooks/use-toast';
+import { ReceiptView } from './receipt-view';
+import { SystemSettings } from '@/lib/types';
 
 
 interface RecentSalesDialogProps {
@@ -44,78 +46,43 @@ const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { mini
 function ReceiptPrintView({ 
     sale, 
     onBack,
-    onPrint 
+    onPrint,
+    settings
 }: { 
     sale: Sale; 
     onBack: () => void;
     onPrint: () => void;
+    settings?: SystemSettings | null;
 }) {
+    // Map Sale to ReceiptViewProps['saleDetails']
+    const saleDetails = {
+        items: sale.items,
+        customer: sale.customer,
+        totalDue: sale.total,
+        change: 0, // Not stored in Sale, assuming 0 for reprint or check transaction details if available
+        paymentMethod: sale.paymentMethod,
+        orderNumber: sale.orderNumber ? String(sale.orderNumber) : sale.id, // Ensure string
+        amountTendered: sale.total, // Assume exact payment
+        transactionDate: sale.date ? new Date(sale.date) : new Date(),
+        cashierName: sale.salesPerson // Or fetch from sale.salesPersonId
+    };
+
     return (
-        <div className="printable-area">
-            <CardHeader className="pr-10">
-                <div className="flex justify-between items-start flex-wrap gap-4">
-                    <div className="flex-1 min-w-[200px]">
-                        <div className="flex items-center gap-2 mb-2">
-                             <Button variant="outline" size="icon" onClick={onBack} className="non-printable shrink-0 print:hidden">
-                                <ArrowLeft className="h-4 w-4" />
-                            </Button>
-                            <CardTitle>Sale Receipt</CardTitle>
-                        </div>
-                        <CardDescription className="break-all">SO Number: {sale.orderNumber || sale.id}</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 text-primary">
-                        <Package2 className="h-6 w-6" />
-                        <h1 className="text-xl font-semibold font-headline">StockPilot</h1>
-                    </div>
-                </div>
-                 <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground pt-4">
-                  <div>
-                      <p className="font-semibold text-foreground">Customer:</p>
-                      <p>{sale.customer.name}</p>
-                  </div>
-                  <div>
-                      <p className="font-semibold text-foreground">Date:</p>
-                      <p>{format(new Date(sale.date || new Date()), 'PPp')}</p>
-                  </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Subtotal</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sale.items.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{item.product.name}</TableCell>
-                      <TableCell>{item.product.unitOfMeasure}</TableCell>
-                      <TableCell className="text-right">{item.quantity}</TableCell>
-                      <TableCell className="text-right">₱{formatCurrency(item.price)}</TableCell>
-                      <TableCell className="text-right">₱{formatCurrency(item.price * item.quantity)}</TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="border-t-2 border-primary">
-                      <TableCell colSpan={4} className="text-right font-bold text-lg">Total</TableCell>
-                      <TableCell className="text-right font-bold text-lg">₱{formatCurrency(sale.total)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-              <div className="mt-4 text-center text-sm text-muted-foreground">
-                Thank you for your purchase!
-              </div>
-          </CardContent>
-          <div className="flex justify-end mt-4 p-6 pt-0 non-printable">
-              <Button onClick={onPrint}>
-                  <Printer className="mr-2 h-4 w-4" />
-                  Print Receipt
-              </Button>
-          </div>
+        <div className="flex flex-col h-full">
+            <div className="flex justify-between items-center mb-4 non-printable">
+                <Button variant="outline" size="sm" onClick={onBack}>
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to List
+                </Button>
+                <Button onClick={onPrint}>
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print Receipt
+                </Button>
+            </div>
+            
+            <div className="printable-area bg-white p-4 shadow-sm mx-auto">
+                 <ReceiptView saleDetails={saleDetails} settings={settings} />
+            </div>
         </div>
     );
 }
@@ -212,6 +179,7 @@ export function RecentSalesDialog({
                     sale={sale} 
                     onBack={() => {}} 
                     onPrint={() => {}} 
+                    settings={posSettings}
                 />,
                 '80mm'
             );
@@ -277,6 +245,7 @@ export function RecentSalesDialog({
                 sale={saleToPrint} 
                 onBack={handleBackToList} 
                 onPrint={() => handlePrintReceiptAction(saleToPrint)}
+                settings={posSettings}
             />
         ) : (
         <>

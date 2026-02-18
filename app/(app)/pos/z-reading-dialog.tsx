@@ -21,7 +21,7 @@ import { ZReadingGenerator } from '@/lib/z-reading-generator';
 import { useReactToPrint } from 'react-to-print';
 import { useRef } from 'react';
 
-function ZReadingReportView({ onBack, printMode }: { onBack: () => void, printMode: 'browser' | 'escpos' | 'usb' }): JSX.Element {
+function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => void, printMode: 'browser' | 'escpos' | 'usb', terminalId?: string }): JSX.Element {
     const [data, setData] = useState<ZReadingData | null>(null);
     const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -40,7 +40,11 @@ function ZReadingReportView({ onBack, printMode }: { onBack: () => void, printMo
             }
             @media print {
                 body {
+                    visibility: visible !important;
                     -webkit-print-color-adjust: exact;
+                }
+                * {
+                    visibility: visible !important;
                 }
             }
         `,
@@ -58,7 +62,7 @@ function ZReadingReportView({ onBack, printMode }: { onBack: () => void, printMo
                     setBusinessSettings(settingsResult.data);
                 }
 
-                const response = await fetch(`/api/sales/z-reading?mode=current`);
+                const response = await fetch(`/api/sales/z-reading?mode=current&terminalId=${terminalId || 'all'}`);
                 const result = await response.json();
 
                 if (result.success && result.data.length > 0) {
@@ -179,12 +183,14 @@ interface ZReadingDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   printMode: 'browser' | 'escpos' | 'usb';
+  terminalId?: string;
 }
 
 export function ZReadingDialog({
   isOpen,
   onOpenChange,
-  printMode
+  printMode,
+  terminalId
 }: ZReadingDialogProps) {
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -207,7 +213,7 @@ export function ZReadingDialog({
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-xl p-0 overflow-hidden">
             {showReport ? (
-                <ZReadingReportView onBack={() => onOpenChange(false)} printMode={printMode} />
+                <ZReadingReportView onBack={() => onOpenChange(false)} printMode={printMode} terminalId={terminalId} />
             ) : (
                 <div className="p-6">
                     <DialogHeader>

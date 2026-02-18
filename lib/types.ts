@@ -281,6 +281,12 @@ export interface StockMovement {
 export interface SystemSettings {
   id?: string;
   businessName?: string;
+  address?: string;
+  contactNumber?: string;
+  tin?: string;
+  email?: string;
+  logoPath?: string;
+  printMode?: 'browser' | 'escpos' | 'usb';
   currencySymbol: string;
   currencyCode: string;
   timezone: string;
@@ -459,4 +465,10 @@ export interface XReadingData {
   cashCountTotal?: number;
   overShort?: number;
   readingNumber?: string;
+  minSaleId?: string;
+  maxSaleId?: string;
+  voidAmount?: number;
+  refundAmount?: number;
+  min?: string;
+  sn?: string;
 }

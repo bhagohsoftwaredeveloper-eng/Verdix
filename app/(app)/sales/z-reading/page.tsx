@@ -27,6 +27,7 @@ import { CalendarIcon, X, Download, Image as ImageIcon, FileText, Printer, Eye }
 import { useToast } from '@/hooks/use-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { useReactToPrint } from 'react-to-print';
 import { ZReadingPreview } from './z-reading-preview';
 import { TerminalSelector } from '@/components/TerminalSelector';
 
@@ -205,13 +206,37 @@ export default function ZReadingPage() {
     }
   };
 
-  const handlePrint = () => {
-    if (!selectedReading) return;
-    
-    setTimeout(() => {
-      window.print();
-      // Keep preview open after print
-    }, 500);
+  const handleReactToPrintFn = useReactToPrint({
+    content: () => previewRef.current,
+    documentTitle: 'Z-Reading-Report',
+    pageStyle: `
+        @page {
+            size: ${printerFormat === '58mm' ? '58mm' : '80mm'} auto;
+            margin: 0;
+        }
+        @media print {
+            body {
+                visibility: visible !important;
+                -webkit-print-color-adjust: exact;
+            }
+            * {
+                visibility: visible !important;
+            }
+        }
+    `,
+  });
+
+  const handlePrint = (reading?: ZReadingData) => {
+    if (reading) {
+      setSelectedReading(reading);
+      setIsPreviewOpen(true);
+      // Wait for modal transition and render
+      setTimeout(() => {
+        handleReactToPrintFn();
+      }, 500);
+    } else if (selectedReading) {
+      handleReactToPrintFn();
+    }
   };
 
   const handleView = (reading: ZReadingData) => {
@@ -316,7 +341,7 @@ export default function ZReadingPage() {
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    onClick={() => { setSelectedReading(reading); handlePrint(); }}
+                                                    onClick={() => handlePrint(reading)}
                                                     title="Print"
                                                 >
                                                     <Printer className="h-4 w-4" />
@@ -407,7 +432,8 @@ export default function ZReadingPage() {
                         Close
                     </Button>
                     <Button 
-                        onClick={handlePrint}
+                        onClick={handleReactToPrintFn}
+                        disabled={!selectedReading}
                         className="bg-[#008CCB] hover:bg-[#007cb3] text-white"
                     >
                         POS Print

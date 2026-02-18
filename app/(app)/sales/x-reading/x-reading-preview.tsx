@@ -22,7 +22,7 @@ export type XReadingData = {
   cashierId: string;
   terminalId: string;
   shiftStatus: string;
-  // Extended properties for the cash count detailed view
+  // Extended properties
   cashCountId?: string;
   cashDenominations?: Array<{
     amount: number;
@@ -34,6 +34,12 @@ export type XReadingData = {
   cashCountTotal?: number;
   overShort?: number;
   readingNumber?: string;
+  minSaleId?: string;
+  maxSaleId?: string;
+  voidAmount?: number;
+  refundAmount?: number;
+  min?: string;
+  sn?: string;
 };
 
 type PrinterFormat = '58mm' | '80mm';
@@ -44,224 +50,244 @@ interface XReadingPreviewProps {
   businessSettings?: BusinessSettings | null;
 }
 
-export function XReadingPreview({ data, printerFormat = '80mm', businessSettings }: XReadingPreviewProps) {
+export function XReadingPreview({ data, printerFormat = '58mm', businessSettings }: XReadingPreviewProps) {
   const is58mm = printerFormat === '58mm';
   
-  // Adjusted widths to match ZReadingPreview's logic roughly
-  const widthClass = is58mm ? 'w-[280px]' : 'w-[360px]';
-  const fontSize = 'text-[11px]'; 
-  const headerSize = 'text-[12px]';
-
   // Helper for dashed line
   const DashedLine = () => (
-    <div className="w-full border-t border-dashed border-black my-1" />
+    <div style={{ width: '100%', borderTop: '1px dashed black', margin: '5px 0' }} />
   );
 
   const formatCurrency = (amount: number) => 
     amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Calculate generic fields if missing
-  const vatableSales = data.netSales / 1.12;
-  const vatExempt = 0; // Placeholder
-  const zeroRated = 0; // Placeholder
-  const nonVat = 0; // Placeholder
+  const styles = {
+    container: {
+        width: '100%',
+        margin: '0', 
+        backgroundColor: 'white',
+        color: 'black',
+        fontFamily: '"Courier New", Courier, monospace',
+        fontSize: '11px', 
+        lineHeight: '1.2',
+        padding: '4mm', // Adjusted for 58mm paper fit
+        fontWeight: 'bold',
+    },
+    headerDiv: {
+        textAlign: 'center' as const,
+        marginBottom: '2px', // Tight header
+        fontWeight: 'bold',
+    },
+    headerTitle: {
+        fontSize: '14px',
+        textTransform: 'uppercase' as const,
+        marginBottom: '2px',
+    },
+    sectionTitle: {
+        textAlign: 'center' as const,
+        marginTop: '5px',
+        marginBottom: '2px',
+        fontWeight: 'bold',
+        fontSize: '12px',
+        textTransform: 'uppercase' as const,
+    },
+    row: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: '2px', 
+    },
+    section: {
+        marginBottom: '2px',
+    },
+    bold: {
+        fontWeight: 'bold',
+    },
+    footer: {
+        marginTop: '10px',
+        marginBottom: '10px',
+        textAlign: 'center' as const,
+        fontSize: '10px',
+    },
+    center: {
+        textAlign: 'center' as const,
+    }
+  };
 
   return (
-    <div className={`${widthClass} mx-auto bg-white text-black font-mono leading-tight p-4`} style={{ fontFamily: '"Courier New", Courier, monospace' }}>
+    <div style={styles.container} className="printable-area">
       
       {/* Business Header */}
-      <div className="text-center mb-4 font-bold">
-        <div className={`${headerSize} uppercase`}>{businessSettings?.businessName || 'MY BUSINESS'}</div>
-        <div className={fontSize}>Operated by: {businessSettings?.businessName || 'Business Owner'}</div>
-        <div className={fontSize}>{businessSettings?.address || 'Address'}</div>
-        <div className={fontSize}>VAT REG TIN: {businessSettings?.tin || '000-000-000-000'}</div>
+      <div style={styles.headerDiv}>
+        <div style={styles.headerTitle}>{businessSettings?.businessName || 'MY BUSINESS'}</div>
+        <div style={{ fontSize: '10px' }}>Operated by: {businessSettings?.businessName || 'Business Owner'}</div>
+        <div style={{ fontSize: '10px' }}>{businessSettings?.address || 'Address'}</div>
+        <div style={{ fontSize: '10px' }}>VAT REG TIN: {businessSettings?.tin || '000-000-000-000'}</div>
+        <div style={{ fontSize: '10px' }}>MIN: {data.min || '0987654321'}</div>
+        <div style={{ fontSize: '10px' }}>S/N: {data.sn || '1234567890-01'}</div>
       </div>
 
-      <div className="text-center mb-2 font-bold">
-        <div className={headerSize}>X-READING REPORT</div>
+      <div style={styles.sectionTitle}>
+        <div>X-READING REPORT</div>
       </div>
 
-      <div className={`${fontSize} mb-2`}>
-        <div className="flex justify-between">
-            <span>Reading #:</span>
-            <span>{data.readingNumber || data.id.substring(0, 8).toUpperCase()}</span>
-        </div>
-        <div className="flex justify-between">
+      <div style={styles.section}>
+        <div style={styles.row}>
           <span>Report Date:</span>
           <span>{format(new Date(), 'MMMM d, yyyy')}</span>
         </div>
-        <div className="flex justify-between">
+        <div style={styles.row}>
           <span>Report Time:</span>
           <span>{format(new Date(), 'h:mm a')}</span>
         </div>
-        <br/>
-        <div className="flex justify-between">
-          <span>Start Shift:</span>
-          <span>{data.shiftStart ? format(new Date(data.shiftStart), 'MM/dd/yy h:mm a') : '-'}</span>
+        <div style={styles.row}>
+          <span>Start Date & Time:</span>
+          <span style={{textAlign: 'right'}}>{data.shiftStart ? format(new Date(data.shiftStart), 'MM/dd/yy h:mm a') : '-'}</span>
         </div>
-        <div className="flex justify-between">
-          <span>End Shift:</span>
-          <span>{data.shiftEnd ? format(new Date(data.shiftEnd), 'MM/dd/yy h:mm a') : 'Active'}</span>
+        <div style={styles.row}>
+          <span>End Date & Time:</span>
+          <span style={{textAlign: 'right'}}>{data.shiftEnd ? format(new Date(data.shiftEnd), 'MM/dd/yy h:mm a') : 'Active'}</span>
         </div>
-        <div className="flex justify-between">
+        <div style={styles.row}>
             <span>Cashier:</span>
             <span>{data.cashierName}</span>
         </div>
-        <div className="flex justify-between">
-            <span>Terminal:</span>
-            <span>{data.terminalId}</span>
+        <div style={styles.row}>
+          <span>Beg. OR #:</span>
+          <span>{data.minSaleId || '0000000000000'}</span>
+        </div>
+        <div style={styles.row}>
+          <span>End. OR #:</span>
+          <span>{data.maxSaleId || '0000000000000'}</span>
+        </div>
+        <div style={styles.row}>
+            <span>Opening Fund:</span>
+            <span>{formatCurrency(data.startingCash)}</span>
         </div>
       </div>
 
       <DashedLine />
 
-      <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between font-bold">
-          <span>Sales for the Shift:</span>
-          <span>{formatCurrency(data.netSales)}</span>
-        </div>
+      <div style={styles.sectionTitle}>
+         <div>PAYMENTS RECEIVED</div>
       </div>
 
-      <DashedLine />
-
-      <div className="text-center mb-1 font-bold">
-        <div className={fontSize}>BREAKDOWN OF SALES</div>
-      </div>
-
-      <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between">
-          <span>VATABLE SALES :</span>
-          <span>{formatCurrency(vatableSales)}</span>
-        </div>
-         <div className="flex justify-between">
-          <span>VAT AMOUNT:</span>
-          <span>{formatCurrency(data.vatAmount)}</span>
-        </div>
-         <div className="flex justify-between">
-          <span>VAT EXEMPT SALES:</span>
-          <span>{formatCurrency(vatExempt)}</span>
-        </div>
-         <div className="flex justify-between">
-          <span>ZERO RATED SALES:</span>
-          <span>{formatCurrency(zeroRated)}</span>
-        </div>
-      </div>
-
-      <DashedLine />
-
-      <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between">
-          <span>Gross Amount:</span>
-          <span>{formatCurrency(data.grossSales)}</span>
-        </div>
-         <div className="flex justify-between">
-          <span>Less Discount:</span>
-          <span>{formatCurrency(data.discounts)}</span>
-        </div>
-         <div className="flex justify-between">
-          <span>Less Return:</span>
-          <span>{formatCurrency(data.returns)}</span>
-        </div>
-         <div className="flex justify-between font-bold mt-1">
-          <span>Net Amount:</span>
-          <span>{formatCurrency(data.netSales)}</span>
-        </div>
-      </div>
-
-       <DashedLine />
-
-       <div className="text-center mb-1">
-        <div className={fontSize}>TRANSACTION SUMMARY</div>
-      </div>
-      
-       <div className={`${fontSize} mb-1`}>
-         {data.paymentMethods.map((method, idx) => (
-             <div key={idx} className="flex justify-between">
-              <span className="uppercase">{method.name}:</span>
+      <div style={styles.section}>
+         {(data.paymentMethods || []).map((method, idx) => (
+             <div key={idx} style={styles.row}>
+              <span style={{textTransform: 'uppercase'}}>{method.name}</span>
               <span>{formatCurrency(method.amount)}</span>
             </div>
          ))}
          
-          <div className="flex justify-between font-bold mt-1">
+          <div style={{ ...styles.row, ...styles.bold, marginTop: '2px' }}>
              <span>Total Payments:</span>
-            <span>{formatCurrency(data.paymentMethods.reduce((acc, m) => acc + m.amount, 0))}</span>
+            <span>{formatCurrency((data.paymentMethods || []).reduce((acc, m) => acc + m.amount, 0))}</span>
          </div>
       </div>
-      
+
       <DashedLine />
 
-      {/* Cash Count Details - Kept from X-Reading specific reqs */}
-      <div className="text-center mb-1 font-bold">
-        <div className={fontSize}>CASH COUNT DETAILS</div>
+      <div style={styles.section}>
+         <div style={styles.row}>
+          <span>VOID</span>
+          <span>{formatCurrency(data.voidAmount || 0)}</span>
+        </div>
       </div>
-       <div className={`${fontSize} mb-1`}>
-         <div className="flex justify-between underline mb-1">
-            <span className="w-1/3 text-left">Denom</span>
-            <span className="w-1/3 text-center">Qty</span>
-            <span className="w-1/3 text-right">Total</span>
-         </div>
-         {(data.cashDenominations || []).map((d, i) => (
-             <div key={i} className="flex justify-between">
-                 <span className="w-1/3 text-left">{d.amount >= 1 ? d.amount : d.amount.toFixed(2)}</span>
-                 <span className="w-1/3 text-center">{d.qty}</span>
-                 <span className="w-1/3 text-right">{formatCurrency(d.total)}</span>
-             </div>
-         ))}
-       </div>
 
        <DashedLine />
 
-      <div className={`${fontSize} mb-1`}>
-        <div className="flex justify-between">
-          <span>Opening Fund:</span>
-          <span>{formatCurrency(data.startingCash)}</span>
+       <div style={styles.section}>
+         <div style={styles.row}>
+          <span>REFUND</span>
+          <span>{formatCurrency(data.refundAmount || 0)}</span>
         </div>
-        <div className="flex justify-between">
-          <span>+ Cash Sales:</span>
-          <span>{formatCurrency(data.cashSales)}</span>
-        </div>
-         <div className="flex justify-between">
-          <span>+ Cash Deposit:</span>
-          <span>{formatCurrency(data.cashDeposit || 0)}</span>
-        </div>
-         <div className="flex justify-between">
-          <span>- Cash Pickup:</span>
+      </div>
+
+      <DashedLine />
+
+       <div style={styles.section}>
+         <div style={styles.row}>
+          <span>WITHDRAWAL</span>
           <span>{formatCurrency(data.cashPickup || 0)}</span>
         </div>
-        <div className="flex justify-between font-bold mt-1">
-          <span>Expected Cash:</span>
-          <span>{formatCurrency(data.startingCash + data.cashSales + (data.cashDeposit || 0) - (data.cashPickup || 0))}</span>
+      </div>
+
+      <DashedLine />
+
+      <div style={styles.sectionTitle}>
+        <div>TRANSACTION SUMMARY</div>
+      </div>
+        
+      <div style={styles.section}>
+        <div style={styles.row}>
+           <span>Cash In Drawer:</span>
+           <span>{formatCurrency(data.cashInDrawer)}</span>
         </div>
-        <div className="flex justify-between font-bold">
-          <span>Actual Count:</span>
-          <span>{formatCurrency(data.cashCountTotal || 0)}</span>
-        </div>
+
+         {(data.paymentMethods || []).filter(p => p.name !== 'CASH').map((method, idx) => (
+             <div key={idx} style={styles.row}>
+              <span style={{textTransform: 'uppercase'}}>{method.name}</span>
+              <span>{formatCurrency(method.amount)}</span>
+            </div>
+         ))}
+
+         <div style={styles.row}>
+           <span>Opening Fund:</span>
+           <span>{formatCurrency(data.startingCash)}</span>
+         </div>
+
+         <div style={styles.row}>
+           <span>Less Withdrawal:</span>
+           <span>{formatCurrency(data.cashPickup || 0)}</span>
+         </div>
+
+         <div style={{ ...styles.row, ...styles.bold, marginTop: '2px' }}>
+             <span>Payments Received:</span>
+            <span>{formatCurrency((data.paymentMethods || []).reduce((acc, m) => acc + m.amount, 0))}</span>
+         </div>
+      </div>
+
+      <DashedLine />
+
+      <div style={styles.sectionTitle}>
+        <div>CASH DENOMINATIONS</div>
+      </div>
+
+       <div style={styles.section}>
+         {(data.cashDenominations || []).map((d, i) => (
+             <div key={i} style={styles.row}>
+                 <span>{d.qty} x {d.amount >= 1 ? d.amount : d.amount.toFixed(2)}</span>
+                 <span>{formatCurrency(d.total)}</span>
+             </div>
+         ))}
+         {(!data.cashDenominations || data.cashDenominations.length === 0) && (
+             <div style={{ ...styles.center, fontStyle: 'italic', fontSize: '10px' }}>No denomination data</div>
+         )}
       </div>
 
       <DashedLine />
       
-       <div className={`${fontSize} mb-1 font-bold`}>
-         <div className="flex justify-between">
-          <span>{data.overShort && data.overShort >= 0 ? 'OVERAGE' : 'SHORTAGE'}:</span>
-          <span>{formatCurrency(Math.abs(data.overShort || 0))}</span>
+       <div style={{ ...styles.section, ...styles.bold }}>
+         <div style={styles.row}>
+          <span>SHORT/OVER:</span>
+          <span>{Math.abs(data.overShort || 0).toFixed(2)}{data.overShort && data.overShort >= 0 ? '+' : '-'}</span>
         </div>
       </div>
-
-      <DashedLine />
       
-      <div className="mt-8 mb-4 text-center">
-         <div className={`${fontSize} mb-6`}>
+       <div style={styles.footer}>
+         <div style={{marginBottom: '5px'}}>
              _______________________<br/>
              Cashier Signature
         </div>
-        <div className={`${fontSize}`}>
+        <div>
              _______________________<br/>
              Manager Signature
         </div>
+         <div style={{marginTop: '5px', fontStyle: 'italic'}}>End of X-Reading Report</div>
       </div>
     
-      <div className="text-center font-bold">
-         <div className={fontSize}>THIS IS NOT AN OFFICIAL RECEIPT</div>
+      <div style={{ ...styles.center, ...styles.bold }}>
+         <div>THIS IS NOT AN OFFICIAL RECEIPT</div>
       </div>
 
     </div>

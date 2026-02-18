@@ -27,6 +27,10 @@ import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { usePrinter } from '@/lib/use-printer';
 import { ReceiptGenerator } from '@/lib/receipt-generator';
+import { useReactToPrint } from 'react-to-print';
+import { ReceiptView } from './receipt-view';
+
+import { SystemSettings } from '@/lib/types';
 
 interface TenderDialogProps {
     isOpen: boolean;
@@ -41,117 +45,28 @@ interface TenderDialogProps {
     terminalId: string;
     paymentMethods: { id: string; name: string; isReferenceRequired?: boolean }[];
     printMode: 'browser' | 'escpos' | 'usb';
+    settings?: SystemSettings | null;
 }
 
 
-
-
-function ReceiptView({
+// Print-only receipt component is imported
+// Wrapper for visible receipt view with actions
+function ReceiptActionView({
     saleDetails,
     onNewSale,
-    onPrint
+    onPrint,
+    settings
 }: {
-    saleDetails: {
-        items: SaleItem[],
-        customer: Customer | null,
-        totalDue: number,
-        change: number,
-        paymentMethod: string,
-        orderNumber?: string,
-        amountTendered?: number,
-    };
+    saleDetails: any;
     onNewSale: () => void;
     onPrint: () => void;
+    settings?: SystemSettings | null;
 }) {
-    const { items, customer, totalDue, change, paymentMethod } = saleDetails;
-    const subTotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-    const totalDiscount = items.reduce((acc, item) => acc + (item.price * item.quantity * item.discount) / 100, 0);
-    const vatAmount = (totalDue / 1.12) * 0.12;
-    const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    
-    // Auto-print effect
-    const hasPrinted = useRef(false);
-    useEffect(() => {
-        if (!hasPrinted.current) {
-            onPrint();
-            hasPrinted.current = true;
-        }
-    }, [onPrint]);
-
     return (
         <div className="flex flex-col h-full bg-gray-50 p-4">
              <div className="flex-1 overflow-auto flex justify-center">
-                <div className="printable-area w-[300px] bg-white text-black p-4 text-xs font-mono border shadow-sm my-4 h-fit">
-                    <div className="text-center mb-4">
-                        <div className="font-bold text-lg mb-1">STOCK PILOT</div>
-                        <div>General Merchandise</div>
-                        <div className="text-[10px]">{format(new Date(), 'PP p')}</div>
-                    </div>
-
-                    <div className="mb-2 border-b border-dashed border-black pb-2">
-                        <div>Sale Details</div>
-                        <div className="font-bold">Order #: {saleDetails.orderNumber || 'N/A'}</div>
-                        <div>Cust: {customer?.name || 'Walk-in'}</div>
-                        <div>Cashier: Admin</div>
-                    </div>
-
-                    <div className="mb-2">
-                        <div className="flex justify-between font-bold border-b border-black mb-1 text-[10px]">
-                            <span className="w-8 text-left">Qty</span>
-                            <span className="flex-1 text-left">Item</span>
-                            <span className="w-12 text-right">Amt</span>
-                        </div>
-                        {items.map(item => (
-                            <div key={item.id} className="flex justify-between mb-1 items-start text-[10px]">
-                                <span className="w-8 text-left">{item.quantity}</span>
-                                <span className="flex-1 text-left px-1">
-                                    <div>{item.name}</div>
-                                    <div className="text-muted-foreground">@ {formatCurrency(item.price)}</div>
-                                </span>
-                                <span className="w-12 text-right">{formatCurrency(item.price * item.quantity)}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="border-t border-dashed border-black pt-2 space-y-1">
-                        <div className="flex justify-between">
-                            <span>Subtotal:</span>
-                            <span>{formatCurrency(subTotal)}</span>
-                        </div>
-                        {totalDiscount > 0 && (
-                            <div className="flex justify-between">
-                            <span>Discount:</span>
-                            <span>-{formatCurrency(totalDiscount)}</span>
-                        </div>
-                        )}
-                        <div className="flex justify-between font-bold text-sm mt-2">
-                            <span>TOTAL:</span>
-                            <span>{formatCurrency(totalDue)}</span>
-                        </div>
-                        <div className="flex justify-between text-[10px]">
-                            <span>VAT (12%):</span>
-                            <span>{formatCurrency(vatAmount)}</span>
-                        </div>
-                    </div>
-
-                    <div className="border-t border-black my-2"></div>
-
-                    <div className="space-y-1">
-                        <div className="flex justify-between font-bold">
-                            <span>{paymentMethod}:</span>
-                            <span>{paymentMethod === 'CASH' ? formatCurrency(saleDetails.amountTendered || (totalDue + change)) : formatCurrency(totalDue)}</span>
-                        </div>
-                        {paymentMethod === 'CASH' && (
-                             <div className="flex justify-between">
-                                <span>Change:</span>
-                                <span>{formatCurrency(change)}</span>
-                            </div>
-                        )}
-                    </div>
-                     <div className="text-center mt-6">
-                        <div>Thank you for your purchase!</div>
-                        <div style={{fontSize: '9px'}}>Pos System by Bhagoh</div>
-                    </div>
+                <div className="printable-area bg-white shadow-sm my-4 h-fit">
+                    <ReceiptView saleDetails={saleDetails} settings={settings} />
                 </div>
             </div>
             <div className="mt-4 flex justify-center gap-4 print:hidden">
@@ -168,8 +83,6 @@ function ReceiptView({
 }
 
 
-
-
 export function TenderDialog({
     isOpen,
     onOpenChange,
@@ -183,6 +96,7 @@ export function TenderDialog({
     terminalId,
     paymentMethods = [],
     printMode,
+    settings
 }: TenderDialogProps) {
     const [selectedMethod, setSelectedMethod] = useState(paymentMethod);
     const [amountTendered, setAmountTendered] = useState('');
@@ -234,27 +148,41 @@ export function TenderDialog({
 
 
 
+    const receiptRef = useRef<HTMLDivElement>(null);
+
+    const handlePrint = useReactToPrint({
+        contentRef: receiptRef,
+        documentTitle: `Receipt-${new Date().getTime()}`,
+        onAfterPrint: () => console.log('Print finished'),
+        pageStyle: `
+            @page {
+                size: 58mm auto;
+                margin: 0;
+            }
+            @media print {
+                body {
+                    -webkit-print-color-adjust: exact;
+                }
+            }
+        `
+    });
+
     const handlePrintReceipt = async (dataToPrint?: any) => {
          const details = dataToPrint || completedSale;
          if (!details) return;
 
          if (printMode === 'browser') {
-             try {
-                 const { printReactComponent } = await import('@/app/lib/print-utils');
-                 printReactComponent(
-                     <ReceiptView 
-                         saleDetails={details} 
-                         onNewSale={() => {}} 
-                         onPrint={() => {}} 
-                     />,
-                     '80mm'
-                 );
-                 return;
-             } catch (e) {
-                 console.error('Browser print error:', e);
-                 window.print();
-                 return;
+             // We need to ensure state is set before printing if passed explicitly
+             if (dataToPrint && dataToPrint !== completedSale) {
+                 setCompletedSale(dataToPrint);
+                 // Allow a small tick for ref to update with new data
+                 setTimeout(() => {
+                     handlePrint();
+                 }, 100);
+             } else {
+                 handlePrint();
              }
+             return;
          }
 
          if (!isConnected) {
@@ -486,7 +414,7 @@ export function TenderDialog({
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
                 {view === 'receipt' && completedSale ? (
-                    <ReceiptView saleDetails={completedSale} onNewSale={handleNewSale} onPrint={handleSmartPrint} />
+                    <ReceiptActionView saleDetails={completedSale} onNewSale={handleNewSale} onPrint={handleSmartPrint} settings={settings} />
                 ) : view === 'change' && completedSale ? (
                     <div className="flex flex-col items-center justify-center p-6 space-y-8 animate-in zoom-in-95 duration-200">
                         <div className="text-center space-y-2">
@@ -664,6 +592,10 @@ export function TenderDialog({
                         </div>
                     </>
                 )}
+                {/* Hidden Receipt for Printing - using absolute positioning instead of display:none to ensure it renders for print */}
+                <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
+                    {completedSale && <ReceiptView ref={receiptRef} saleDetails={completedSale} settings={settings} />}
+                </div>
             </DialogContent>
         </Dialog>
     );
