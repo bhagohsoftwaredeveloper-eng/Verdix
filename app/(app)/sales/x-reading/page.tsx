@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -11,40 +9,41 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Calendar } from '@/components/ui/calendar';
+import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Printer, Eye, X, RefreshCw, CalendarIcon, FileText, Image as ImageIcon } from 'lucide-react';
-import { format } from 'date-fns';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { CalendarIcon, X, Image as ImageIcon, FileText, Printer, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { useReactToPrint } from 'react-to-print';
 import { XReadingPreview, XReadingData } from './x-reading-preview';
+import { BusinessSettings } from '../z-reading/z-reading-preview';
 
 type PrinterFormat = '58mm' | '80mm';
 
 export default function XReadingPage() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [selectedShiftId, setSelectedShiftId] = useState<string>('');
-  
-  // These shifts populate the dropdown for the specific date
-  const [shiftsForDate, setShiftsForDate] = useState<XReadingData[]>([]);
-  
-  // These are the filtered results shown in the table (could be same as filtering by shift)
-  const [filteredReadings, setFilteredReadings] = useState<XReadingData[]>([]);
-  
-  const [loading, setLoading] = useState(false);
+  const [xReadings, setXReadings] = useState<XReadingData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [printerFormat, setPrinterFormat] = useState<PrinterFormat>('80mm');
+  const [selectedCashier, setSelectedCashier] = useState<string>('all');
   const [selectedReading, setSelectedReading] = useState<XReadingData | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [printerFormat, setPrinterFormat] = useState<PrinterFormat>('80mm');
-  const [businessSettings, setBusinessSettings] = useState<any | null>(null);
-  
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
   const { toast } = useToast();
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Fetch business settings on mount
   useEffect(() => {
     const fetchSettings = async () => {
         try {
@@ -60,191 +59,328 @@ export default function XReadingPage() {
     fetchSettings();
   }, []);
 
-  // Load shifts whenever the date changes
-  useEffect(() => {
-    const fetchShiftsForDate = async () => {
-      if (!date) return;
-      
-      setLoading(true);
-      try {
-        const formattedDate = format(date, 'yyyy-MM-dd');
-        // Fetch all shifts for the day to populate the dropdown
-        const response = await fetch(`/api/sales/x-reading?startDate=${formattedDate}&endDate=${formattedDate}`);
-        const result = await response.json();
+  // ... (existing code)
 
-        if (result.success) {
-            setShiftsForDate(result.data);
-            setFilteredReadings(result.data); // Show all for the day by default in table
-        } else {
-            setShiftsForDate([]);
-            setFilteredReadings([]);
-            toast({
-                title: "Error",
-                description: "Failed to load shifts for selected date.",
-                variant: "destructive"
-            });
-        }
-      } catch (error) {
-        console.error('Error loading shifts:', error);
-        setShiftsForDate([]);
-        setFilteredReadings([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const uniqueCashiers = Array.from(new Set(xReadings.map(r => r.cashierName).filter(Boolean))) as string[];
 
-    fetchShiftsForDate();
-  }, [date, toast]);
+  const filteredReadings = xReadings.filter(reading => 
+    selectedCashier === 'all' || reading.cashierName === selectedCashier
+  );
 
-  const handleShowReport = () => {
-    if (!selectedShiftId || selectedShiftId === 'all') {
-        if (shiftsForDate.length === 0) {
-           toast({
-                title: "No Shifts",
-                description: "No shifts found for this date.",
-                variant: "destructive",
-           });
-           return;
-        }
-        
+  const fetchXReadings = async () => {
+    if (!date) {
         toast({
-            title: "Select Shift",
-            description: "Please select a specific shift from the dropdown to view its report.",
-            variant: "default", // Changed from Info/destructive to just default or maybe warning if available
+            title: 'Error',
+            description: 'Please select a date',
+            variant: 'destructive',
         });
-        setFilteredReadings(shiftsForDate);
         return;
     }
 
-    const reading = shiftsForDate.find(s => s.id === selectedShiftId);
-    if (reading) {
-        setFilteredReadings([reading]); // Filter table to just this one
-        setSelectedReading(reading);
-        setIsPreviewOpen(true); 
-    }
-  };
-  
-  // Format for the dropdown option: "CashierName - Terminal (Time)"
-  const getShiftLabel = (r: XReadingData) => {
-      const time = r.shiftStart ? format(new Date(r.shiftStart), 'hh:mm a') : 'N/A';
-      return `${r.cashierName} - ${r.terminalId} (${time})`;
-  };
+    setIsLoading(true);
+    setHasSearched(true);
+    try {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      // Fetch all shifts for the date
+      const response = await fetch(`/api/sales/x-reading?startDate=${dateStr}&endDate=${dateStr}`);
+      const result = await response.json();
 
-  const handlePrint = () => {
-    if (!selectedReading) return;
-    
-    // Allow a small delay for render then print
-    setTimeout(() => {
-        window.print();
-    }, 100);
+      if (result.success) {
+        setXReadings(result.data);
+      } else {
+        console.error('Failed to fetch X-readings:', result.error);
+        setXReadings([]);
+      }
+    } catch (error) {
+      console.error('Error fetching X-readings:', error);
+      setXReadings([]);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch X-readings',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExportPDF = async (reading: XReadingData) => {
-     // Similar implementation to Z-Reading if needed, or just keep placeholder
-      toast({ title: "Export PDF", description: "Not yet implemented for X-Reading" });
+    try {
+      setSelectedReading(reading);
+      setIsPreviewOpen(true);
+      
+      // Wait for the preview to render
+      setTimeout(async () => {
+        if (previewRef.current) {
+          const canvas = await html2canvas(previewRef.current, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+          });
+          
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF({
+            orientation: printerFormat === '58mm' ? 'portrait' : 'portrait',
+            unit: 'mm',
+            format: printerFormat === '58mm' ? [58, 297] : [80, 297],
+          });
+          
+          const pdfWidth = printerFormat === '58mm' ? 58 : 80;
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+          
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+          pdf.save(`X-Reading-${reading.id}.pdf`);
+          
+          toast({
+            title: 'Success',
+            description: 'X-Reading exported as PDF',
+          });
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to export PDF',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleExportImage = async (reading: XReadingData) => {
-      toast({ title: "Export Image", description: "Not yet implemented for X-Reading" });
+    try {
+      setSelectedReading(reading);
+      setIsPreviewOpen(true);
+      
+      // Wait for the preview to render
+      setTimeout(async () => {
+        if (previewRef.current) {
+          const canvas = await html2canvas(previewRef.current, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+          });
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `X-Reading-${reading.id}.png`;
+              link.click();
+              URL.revokeObjectURL(url);
+              
+              toast({
+                title: 'Success',
+                description: 'X-Reading exported as image',
+              });
+            }
+          });
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Error exporting image:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to export image',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleReactToPrintFn = useReactToPrint({
+    contentRef: previewRef,
+    documentTitle: 'X-Reading-Report',
+    pageStyle: `
+        @page {
+            size: ${printerFormat === '58mm' ? '58mm' : '80mm'} auto;
+            margin: 0;
+        }
+        @media print {
+            body {
+                visibility: visible !important;
+                -webkit-print-color-adjust: exact;
+            }
+            * {
+                visibility: visible !important;
+            }
+        }
+    `,
+  });
+
+  const handlePrint = (reading?: XReadingData) => {
+    if (reading) {
+      setSelectedReading(reading);
+      setIsPreviewOpen(true);
+      // Wait for modal transition and render
+      setTimeout(() => {
+        handleReactToPrintFn();
+      }, 500);
+    } else if (selectedReading) {
+      handleReactToPrintFn();
+    }
+  };
+
+  const handleView = (reading: XReadingData) => {
+    setSelectedReading(reading);
+    setIsPreviewOpen(true);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-end gap-4 p-1 bg-background rounded-lg">
-        {/* Date Filter */}
+        {/* Date Picker */}
         <div className="space-y-2">
-            <label className="text-sm font-medium leading-none">Date</label>
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Date
+            </label>
             <Popover>
                 <PopoverTrigger asChild>
                     <Button
-                        variant="outline"
-                        className={cn("w-[240px] justify-start text-left font-normal", !date && "text-muted-foreground")}
+                        variant={"outline"}
+                        className={cn(
+                            "w-[240px] justify-start text-left font-normal",
+                            !date && "text-muted-foreground"
+                        )}
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date ? format(date, "yyyy-MM-dd") : "Pick a date"}
+                        {date ? format(date, "yyyy-MM-dd") : <span>Pick a date</span>}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                    <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={setDate}
+                        initialFocus
+                    />
                 </PopoverContent>
             </Popover>
         </div>
 
-        {/* Cashier Shift Dropdown */}
+        {/* Cashier Filter */}
         <div className="space-y-2">
-            <label className="text-sm font-medium leading-none">Cashier Shift</label>
-            <Select value={selectedShiftId} onValueChange={setSelectedShiftId}>
-                <SelectTrigger className="w-[300px]">
-                    <SelectValue placeholder={loading ? "Loading..." : "Select active shift"} />
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Cashier
+            </label>
+            <Select value={selectedCashier} onValueChange={setSelectedCashier} disabled={xReadings.length === 0}>
+                <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="All Cashiers" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="all">All Shifts</SelectItem>
-                    {shiftsForDate.map(shift => (
-                        <SelectItem key={shift.id} value={shift.id}>
-                            {getShiftLabel(shift)}
+                    <SelectItem value="all">All Cashiers</SelectItem>
+                    {uniqueCashiers.map((cashier) => (
+                        <SelectItem key={cashier} value={cashier}>
+                            {cashier}
                         </SelectItem>
                     ))}
                 </SelectContent>
             </Select>
         </div>
 
-        {/* Show Report Button */}
-        <Button onClick={handleShowReport} className="bg-white hover:bg-gray-100 text-black border border-gray-200 shadow-sm">
+
+
+        <Button onClick={fetchXReadings} className="bg-white hover:bg-gray-100 text-black border border-gray-200 shadow-sm">
             Show Report
         </Button>
       </div>
-
-      {/* Results Table */}
-      <div className="border-t pt-6">
-        <Table>
-            <TableHeader>
-            <TableRow>
-                <TableHead>Reading ID</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Cashier</TableHead>
-                <TableHead>Terminal</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Net Sales</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-            </TableHeader>
-            <TableBody>
-            {filteredReadings.length === 0 ? (
-                 <TableRow>
-                    <TableCell colSpan={7} className="text-center h-24">
-                        {loading ? "Loading..." : "No X-reading reports found for the selected date."}
-                    </TableCell>
-                </TableRow>
-            ) : filteredReadings.map((reading) => (
-                <TableRow key={reading.id}>
-                <TableCell className="font-medium">{reading.id.substring(0, 8)}</TableCell>
-                <TableCell>{format(new Date(reading.reportDate), 'PP p')}</TableCell>
-                <TableCell>{reading.cashierName}</TableCell>
-                <TableCell>{reading.terminalId}</TableCell>
-                <TableCell>
-                    <Badge variant={reading.shiftStatus === 'active' ? 'default' : 'secondary'}>
-                    {reading.shiftStatus}
-                    </Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono">
-                    ₱{reading.netSales.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => {
-                        setSelectedReading(reading);
-                        setIsPreviewOpen(true);
-                    }}>
-                    <Eye className="h-4 w-4" />
-                    </Button>
-                </TableCell>
-                </TableRow>
-            ))}
-            </TableBody>
-        </Table>
-      </div>
+      
+        <div className="border-t pt-6">
+            {hasSearched ? (
+                isLoading ? (
+                    <div className="flex items-center justify-center h-24">
+                        <div className="text-muted-foreground">Loading X-readings...</div>
+                    </div>
+                ) : (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Shift ID</TableHead>
+                                <TableHead>Shift Start</TableHead>
+                                <TableHead>Shift End</TableHead>
+                                <TableHead>Cashier</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Net Sales</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredReadings.length > 0 ? (
+                                filteredReadings.map((reading) => (
+                                    <TableRow key={reading.id}>
+                                        <TableCell className="font-medium font-mono">
+                                            {reading.id}
+                                        </TableCell>
+                                        <TableCell>
+                                            {format(new Date(reading.shiftStart), 'PP p')}
+                                        </TableCell>
+                                        <TableCell>
+                                            {reading.shiftEnd ? format(new Date(reading.shiftEnd), 'PP p') : 'Active'}
+                                        </TableCell>
+                                        <TableCell>{reading.cashierName || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            <span className={cn(
+                                                "px-2 py-1 rounded-full text-xs font-semibold",
+                                                reading.shiftStatus === 'active' ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                                            )}>
+                                                {reading.shiftStatus}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-right font-mono">
+                                            ₱{reading.netSales.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleView(reading)}
+                                                    title="View"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handlePrint(reading)}
+                                                    title="Print"
+                                                >
+                                                    <Printer className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleExportPDF(reading)}
+                                                    title="Export as PDF"
+                                                >
+                                                    <FileText className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleExportImage(reading)}
+                                                    title="Export as Image"
+                                                >
+                                                    <ImageIcon className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={7} className="text-center h-24">
+                                        No X-readings found for the selected {selectedCashier !== 'all' ? 'cashier' : 'date'}.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                )
+            ) : null}
+            
+        </div>
 
       {/* Preview Modal */}
-       {isPreviewOpen && selectedReading && (
+      {isPreviewOpen && selectedReading && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-xl max-h-[90vh] flex flex-col rounded shadow-lg overflow-hidden">
              
@@ -263,7 +399,7 @@ export default function XReadingPage() {
 
              {/* Modal Body - Scrollable */}
              <div className="flex-1 overflow-auto bg-gray-50 p-4 flex justify-center">
-                <div ref={previewRef} className="bg-white shadow-sm h-fit printable-area">
+                <div ref={previewRef} className="bg-white shadow-sm h-fit">
                     <XReadingPreview 
                         data={selectedReading} 
                         printerFormat={printerFormat} 
@@ -295,7 +431,8 @@ export default function XReadingPage() {
                         Close
                     </Button>
                     <Button 
-                        onClick={handlePrint}
+                        onClick={handleReactToPrintFn}
+                        disabled={!selectedReading}
                         className="bg-[#008CCB] hover:bg-[#007cb3] text-white"
                     >
                         POS Print

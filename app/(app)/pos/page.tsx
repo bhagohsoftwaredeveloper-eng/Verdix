@@ -265,7 +265,6 @@ export default function POSPage() {
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
   const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
   
-  const [enableAdvancedInventory, setEnableAdvancedInventory] = useState(false);
   const [enableNegativeInventory, setEnableNegativeInventory] = useState(false);
   const [enableCashCountAuth, setEnableCashCountAuth] = useState(false);
   const [cashCountAuthCredentials, setCashCountAuthCredentials] = useState<{username?: string | null, password?: string | null} | null>(null);
@@ -273,6 +272,8 @@ export default function POSPage() {
   const [enableLineVoidAuth, setEnableLineVoidAuth] = useState(false);
   const [lineVoidAuthCredentials, setLineVoidAuthCredentials] = useState<{username?: string | null, password?: string | null} | null>(null);
   const [isLineVoidAuthOpen, setIsLineVoidAuthOpen] = useState(false);
+  const [priceEditAuthCredentials, setPriceEditAuthCredentials] = useState<{username?: string | null, password?: string | null} | null>(null);
+  const [isPriceEditAuthOpen, setIsPriceEditAuthOpen] = useState(false);
 
   const [isInsufficientStockOpen, setIsInsufficientStockOpen] = useState(false);
   const [insufficientItems, setInsufficientItems] = useState<SaleItem[]>([]);
@@ -382,7 +383,6 @@ export default function POSPage() {
             const response = await fetch('/api/pos-settings');
             const result = await response.json();
             if (result.success) {
-                setEnableAdvancedInventory(result.data.enableAdvancedInventory);
                 setEnableNegativeInventory(result.data.enableNegativeInventory);
                 setEnableCashCountAuth(result.data.enableCashCountAuth);
                 setCashCountAuthCredentials({
@@ -393,6 +393,10 @@ export default function POSPage() {
                 setLineVoidAuthCredentials({
                     username: result.data.lineVoidAuthUsername,
                     password: result.data.lineVoidAuthPassword
+                });
+                setPriceEditAuthCredentials({
+                    username: result.data.priceEditAuthUsername,
+                    password: result.data.priceEditAuthPassword
                 });
                 setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
                 setBusinessSettings(result.data);
@@ -1081,7 +1085,13 @@ export default function POSPage() {
 
   const handleRequestPriceEdit = () => {
     if (selectedItem) {
-      setIsAuthDialogOpen(true);
+      if (businessSettings?.enablePriceEditAuth) {
+          setIsPriceEditAuthOpen(true);
+      } else {
+         // Direct access if auth is disabled
+         setEditDialogMode('price-only');
+         setIsEditItemOpen(true);
+      }
     } else {
       toast({
         title: "No Item Selected",
@@ -1096,6 +1106,13 @@ export default function POSPage() {
     setEditDialogMode('price-only');
     setIsEditItemOpen(true); // Open the edit dialog after successful auth
   };
+
+  const handlePriceEditAuthSuccess = () => {
+    setIsPriceEditAuthOpen(false);
+    setEditDialogMode('price-only');
+    setIsEditItemOpen(true);
+  };
+
 
   const handleSelectCustomer = (customer: Customer | null) => {
     setSelectedCustomer(customer);
@@ -1645,6 +1662,23 @@ export default function POSPage() {
         onOpenChange={setIsAuthDialogOpen}
         onSuccess={handleAdminAuthSuccess}
       />
+      <AdminAuthDialog
+        isOpen={isPriceEditAuthOpen}
+        onOpenChange={setIsPriceEditAuthOpen}
+        title="Price Edit Authorization"
+        description="Please provide credentials to edit item price"
+        requiredCredentials={priceEditAuthCredentials}
+        onSuccess={handlePriceEditAuthSuccess}
+      />
+      <AdminAuthDialog
+        isOpen={isPriceEditAuthOpen}
+        onOpenChange={setIsPriceEditAuthOpen}
+        title="Price Edit Authorization"
+        description="Please provide credentials to edit item price"
+        requiredCredentials={priceEditAuthCredentials}
+        onSuccess={handlePriceEditAuthSuccess}
+      />
+
       <AdminAuthDialog
         isOpen={isLineVoidAuthOpen}
         onOpenChange={setIsLineVoidAuthOpen}

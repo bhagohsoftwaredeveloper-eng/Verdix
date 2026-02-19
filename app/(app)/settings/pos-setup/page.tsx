@@ -21,7 +21,6 @@ import { TerminalSettingsDialog } from './terminal-settings-dialog';
 interface PosSettings {
   businessName: string;
   logoPath: string | null;
-  enableAdvancedInventory: boolean;
   transactionPrefix: string;
   address: string | null;
   contactNumber: string | null;
@@ -48,13 +47,15 @@ interface PosSettings {
   cashCountAuthUsername?: string | null;
   cashCountAuthPassword?: string | null;
   showQuantityInSearch?: boolean;
+  enablePriceEditAuth?: boolean;
+  priceEditAuthUsername?: string | null;
+  priceEditAuthPassword?: string | null;
 }
 
 export default function PosSetupPage() {
   const [settings, setSettings] = useState<PosSettings>({
     businessName: '',
     logoPath: null,
-    enableAdvancedInventory: false,
     transactionPrefix: 'TXN',
     address: '',
     contactNumber: '',
@@ -80,7 +81,10 @@ export default function PosSetupPage() {
     enableCashCountAuth: false,
     cashCountAuthUsername: '',
     cashCountAuthPassword: '',
-    showQuantityInSearch: true
+    showQuantityInSearch: true,
+    enablePriceEditAuth: false,
+    priceEditAuthUsername: '',
+    priceEditAuthPassword: ''
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -251,459 +255,486 @@ export default function PosSetupPage() {
         </Button>
       </div>
 
-      {/* Business Setup Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            Business Setup
-          </CardTitle>
-          <CardDescription>Configure your business name and logo</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="businessName">Business Name</Label>
-            <Input
-              id="businessName"
-              value={settings.businessName}
-              onChange={(e) => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
-              placeholder="Enter your business name"
-            />
-          </div>
+      <div className="space-y-4">
+        {/* Business Setup Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Business Setup
+            </CardTitle>
+            <CardDescription>Configure your business name and logo</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="businessName">Business Name</Label>
+              <Input
+                id="businessName"
+                value={settings.businessName}
+                onChange={(e) => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
+                placeholder="Enter your business name"
+              />
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
-              <Input
-                id="address"
-                value={settings.address || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, address: e.target.value }))}
-                placeholder="Enter business address"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="contactNumber">Contact Number</Label>
-              <Input
-                id="contactNumber"
-                value={settings.contactNumber || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, contactNumber: e.target.value }))}
-                placeholder="Enter contact number"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tin">TIN#</Label>
-              <Input
-                id="tin"
-                value={settings.tin || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, tin: e.target.value }))}
-                placeholder="Enter TIN number"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={settings.email || ''}
-                onChange={(e) => setSettings(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="Enter email address"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Business Logo</Label>
-            <div className="flex items-center gap-4">
-              <div className="w-32 h-32 border-2 border-dashed rounded-lg flex items-center justify-center bg-muted relative overflow-hidden">
-                {logoPreview ? (
-                  <Image
-                    src={logoPreview}
-                    alt="Business Logo"
-                    fill
-                    className="object-contain p-2"
-                  />
-                ) : (
-                  <Upload className="h-8 w-8 text-muted-foreground" />
-                )}
-              </div>
-              <div className="flex-1 space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="address">Address</Label>
                 <Input
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg"
-                  onChange={handleLogoUpload}
-                  disabled={isUploading}
-                  className="cursor-pointer"
+                  id="address"
+                  value={settings.address || ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="Enter business address"
                 />
-                <p className="text-xs text-muted-foreground">
-                  PNG, JPG or JPEG (max 2MB)
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contactNumber">Contact Number</Label>
+                <Input
+                  id="contactNumber"
+                  value={settings.contactNumber || ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, contactNumber: e.target.value }))}
+                  placeholder="Enter contact number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tin">TIN#</Label>
+                <Input
+                  id="tin"
+                  value={settings.tin || ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, tin: e.target.value }))}
+                  placeholder="Enter TIN number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={settings.email || ''}
+                  onChange={(e) => setSettings(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="Enter email address"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Business Logo</Label>
+              <div className="flex items-center gap-4">
+                <div className="w-32 h-32 border-2 border-dashed rounded-lg flex items-center justify-center bg-muted relative overflow-hidden">
+                  {logoPreview ? (
+                    <Image
+                      src={logoPreview}
+                      alt="Business Logo"
+                      fill
+                      className="object-contain p-2"
+                    />
+                  ) : (
+                    <Upload className="h-8 w-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg"
+                    onChange={handleLogoUpload}
+                    disabled={isUploading}
+                    className="cursor-pointer"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    PNG, JPG or JPEG (max 2MB)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Printer Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" />
+              Printer Configuration
+            </CardTitle>
+            <CardDescription>Configure receipt printer settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="paperSize">Paper Size</Label>
+                <p className="text-sm text-muted-foreground">Select the width of your thermal paper</p>
+              </div>
+              <div className="w-[200px]">
+                <select
+                  id="paperSize"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={settings.paperSize || '58mm'}
+                  onChange={(e) => setSettings(prev => ({ ...prev, paperSize: e.target.value as any }))}
+                >
+                  <option value="58mm">58mm (Standard Thermal)</option>
+                  <option value="80mm">80mm (Wide Thermal)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="printMode">Print Mode</Label>
+                <p className="text-sm text-muted-foreground">
+                  Choose how receipts are sent to the printer
+                </p>
+              </div>
+              <div className="w-[300px]">
+                <select
+                  id="printMode"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={settings.printMode || 'browser'}
+                  onChange={(e) => setSettings(prev => ({ ...prev, printMode: e.target.value as any }))}
+                >
+                  <option value="browser">Use Installed Driver (Browser Print)</option>
+                  <option value="escpos">Direct Serial (Use if no driver)</option>
+                  <option value="usb">Direct USB (WinUSB/Zadig Only)</option>
+                </select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  * If you installed a printer driver (e.g., XPrinter, Epson), choose "Use Installed Driver".
+                  <br />
+                  * "Direct USB" requires replacing your driver with WinUSB via Zadig.
                 </p>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Advanced Inventory Toggle */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Advanced Features
-          </CardTitle>
-          <CardDescription>Enable or disable advanced POS features</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between mb-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="advancedInventory">Advanced Inventory</Label>
-              <p className="text-sm text-muted-foreground">
-                Enable batch tracking, serial numbers, and multi-location inventory
-              </p>
-            </div>
-            <Switch
-              id="advancedInventory"
-              checked={settings.enableAdvancedInventory}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableAdvancedInventory: checked }))}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="showQuantityInSearch">Show Quantity in Search Product</Label>
-              <p className="text-sm text-muted-foreground">
-                Display product quantity in the POS product search dialog
-              </p>
-            </div>
-            <Switch
-              id="showQuantityInSearch"
-              checked={!!settings.showQuantityInSearch}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, showQuantityInSearch: checked }))}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Inventory Rules */}
-      <Card>
-        <CardHeader>
+        {/* General Settings (Merged Advanced & Inventory Rules) */}
+        <Card>
+          <CardHeader>
             <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Inventory Rules
+              <Settings className="h-5 w-5" />
+              General Settings
             </CardTitle>
-            <CardDescription>Configure inventory movement rules</CardDescription>
-        </CardHeader>
-        <CardContent>
-            <div className="flex items-center justify-between">
+            <CardDescription>Configure inventory and operational preferences</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="showQuantityInSearch">Show Quantity in Search Product</Label>
+                <p className="text-sm text-muted-foreground">
+                  Display product quantity in the POS product search dialog
+                </p>
+              </div>
+              <Switch
+                id="showQuantityInSearch"
+                checked={!!settings.showQuantityInSearch}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, showQuantityInSearch: checked }))}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="enableNegativeInventory">Allow Negative Inventory</Label>
+                <p className="text-sm text-muted-foreground">
+                  Allow sales even when stock is insufficient
+                </p>
+              </div>
+              <Switch
+                id="enableNegativeInventory"
+                checked={settings.enableNegativeInventory}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableNegativeInventory: checked }))}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Security Configuration (Merged all security) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Security Settings
+            </CardTitle>
+            <CardDescription>Manage authentication for sensitive actions</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Line Void Auth */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                    <Label htmlFor="enableNegativeInventory">Allow Negative Inventory</Label>
-                    <p className="text-sm text-muted-foreground">
-                        Allow sales even when stock is insufficient
-                    </p>
+                  <Label htmlFor="enableLineVoidAuth">Line Void Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Require credentials to remove an item
+                  </p>
                 </div>
-                <Switch 
-                    id="enableNegativeInventory"
-                    checked={settings.enableNegativeInventory}
-                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableNegativeInventory: checked }))}
+                <Switch
+                  id="enableLineVoidAuth"
+                  checked={!!settings.enableLineVoidAuth}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableLineVoidAuth: checked }))}
                 />
-            </div>
-        </CardContent>
-      </Card>
-
-      {/* Void Security Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" />
-            Void Security
-          </CardTitle>
-          <CardDescription>Configure authentication requirements for voiding items</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="enableLineVoidAuth">Require Admin Authentication for Line Void</Label>
-              <p className="text-sm text-muted-foreground">
-                When enabled, users must authenticate with specific credentials to remove an item (Line Void)
-              </p>
-            </div>
-            <Switch
-              id="enableLineVoidAuth"
-              checked={!!settings.enableLineVoidAuth}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableLineVoidAuth: checked }))}
-            />
-          </div>
-
-          {settings.enableLineVoidAuth && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-               <div className="space-y-2">
-                  <Label htmlFor="lineVoidAuthUsername">Line Void Username</Label>
-                  <Input 
+              </div>
+              {settings.enableLineVoidAuth && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label htmlFor="lineVoidAuthUsername">Username</Label>
+                    <Input
                       id="lineVoidAuthUsername"
                       value={settings.lineVoidAuthUsername || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, lineVoidAuthUsername: e.target.value }))}
                       placeholder="e.g. admin"
-                  />
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="lineVoidAuthPassword">Line Void Password</Label>
-                  <Input 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lineVoidAuthPassword">Password</Label>
+                    <Input
                       id="lineVoidAuthPassword"
                       type="password"
                       value={settings.lineVoidAuthPassword || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, lineVoidAuthPassword: e.target.value }))}
                       placeholder="e.g. 1234"
-                  />
-               </div>
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          
-          <div className="flex items-center justify-between pt-4 border-t">
-            <div className="space-y-0.5">
-              <Label htmlFor="enableVoidAuth">Require Admin Authentication for Post Void</Label>
-              <p className="text-sm text-muted-foreground">
-                When enabled, users must authenticate with specific credentials to process voids
-              </p>
-            </div>
-            <Switch
-              id="enableVoidAuth"
-              checked={!!settings.enableVoidReturnAuth}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableVoidReturnAuth: checked }))}
-            />
-          </div>
-          
-          {settings.enableVoidReturnAuth && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-               <div className="space-y-2">
-                  <Label htmlFor="voidAuthUsername">Void Username</Label>
-                  <Input 
+
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableVoidAuth">Post Void Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Require credentials to process voids
+                  </p>
+                </div>
+                <Switch
+                  id="enableVoidAuth"
+                  checked={!!settings.enableVoidReturnAuth}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableVoidReturnAuth: checked }))}
+                />
+              </div>
+              {settings.enableVoidReturnAuth && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label htmlFor="voidAuthUsername">Username</Label>
+                    <Input
                       id="voidAuthUsername"
                       value={settings.voidAuthUsername || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, voidAuthUsername: e.target.value }))}
                       placeholder="e.g. admin"
-                  />
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="voidAuthPassword">Void Password</Label>
-                  <Input 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="voidAuthPassword">Password</Label>
+                    <Input
                       id="voidAuthPassword"
                       type="password"
                       value={settings.voidAuthPassword || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, voidAuthPassword: e.target.value }))}
                       placeholder="e.g. 1234"
-                  />
-               </div>
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Return Security Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Undo className="h-5 w-5" />
-            Return Security
-          </CardTitle>
-          <CardDescription>Configure authentication requirements for returning items</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="enableReturnAuth">Require Admin Authentication for Return</Label>
-              <p className="text-sm text-muted-foreground">
-                When enabled, users must authenticate with specific credentials to process returns
-              </p>
-            </div>
-            <Switch
-              id="enableReturnAuth"
-              checked={!!settings.enableReturnAuth}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableReturnAuth: checked }))}
-            />
-          </div>
-
-          {settings.enableReturnAuth && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-               <div className="space-y-2">
-                  <Label htmlFor="returnAuthUsername">Return Username</Label>
-                  <Input 
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableReturnAuth">Merchandise Credit Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Require credentials to process merchandise credit
+                  </p>
+                </div>
+                <Switch
+                  id="enableReturnAuth"
+                  checked={!!settings.enableReturnAuth}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableReturnAuth: checked }))}
+                />
+              </div>
+              {settings.enableReturnAuth && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label htmlFor="returnAuthUsername">Username</Label>
+                    <Input
                       id="returnAuthUsername"
                       value={settings.returnAuthUsername || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, returnAuthUsername: e.target.value }))}
                       placeholder="e.g. manager"
-                  />
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="returnAuthPassword">Return Password</Label>
-                  <Input 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="returnAuthPassword">Password</Label>
+                    <Input
                       id="returnAuthPassword"
                       type="password"
                       value={settings.returnAuthPassword || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, returnAuthPassword: e.target.value }))}
                       placeholder="e.g. 5678"
-                  />
-               </div>
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-       {/* Recent Sales Security Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" />
-            Recent Sales Security
-          </CardTitle>
-          <CardDescription>Configure authentication requirements for viewing recent sales</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="enableRecentSalesAuth">Require Admin Authentication for Recent Sales</Label>
-              <p className="text-sm text-muted-foreground">
-                When enabled, users must authenticate with specific credentials to view recent sales history
-              </p>
-            </div>
-            <Switch
-              id="enableRecentSalesAuth"
-              checked={!!settings.enableRecentSalesAuth}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableRecentSalesAuth: checked }))}
-            />
-          </div>
-
-          {settings.enableRecentSalesAuth && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-               <div className="space-y-2">
-                  <Label htmlFor="recentSalesAuthUsername">Recent Sales Username</Label>
-                  <Input 
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableRecentSalesAuth">Recent Sales Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Require credentials to view history
+                  </p>
+                </div>
+                <Switch
+                  id="enableRecentSalesAuth"
+                  checked={!!settings.enableRecentSalesAuth}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableRecentSalesAuth: checked }))}
+                />
+              </div>
+              {settings.enableRecentSalesAuth && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label htmlFor="recentSalesAuthUsername">Username</Label>
+                    <Input
                       id="recentSalesAuthUsername"
                       value={settings.recentSalesAuthUsername || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, recentSalesAuthUsername: e.target.value }))}
                       placeholder="e.g. supervisor"
-                  />
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="recentSalesAuthPassword">Recent Sales Password</Label>
-                  <Input 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="recentSalesAuthPassword">Password</Label>
+                    <Input
                       id="recentSalesAuthPassword"
                       type="password"
                       value={settings.recentSalesAuthPassword || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, recentSalesAuthPassword: e.target.value }))}
                       placeholder="e.g. 4321"
-                  />
-               </div>
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Cash Count Security Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" />
-            Cash Count Security
-          </CardTitle>
-          <CardDescription>Configure authentication requirements for accessing cash count (end shift)</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="enableCashCountAuth">Require Admin Authentication for Cash Count</Label>
-              <p className="text-sm text-muted-foreground">
-                When enabled, users must authenticate with specific credentials before accessing the Cash Count screen
-              </p>
-            </div>
-            <Switch
-              id="enableCashCountAuth"
-              checked={!!settings.enableCashCountAuth}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableCashCountAuth: checked }))}
-            />
-          </div>
-
-          {settings.enableCashCountAuth && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-               <div className="space-y-2">
-                  <Label htmlFor="cashCountAuthUsername">Cash Count Username</Label>
-                  <Input 
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableCashCountAuth">Cash Count Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Require credentials for end shift
+                  </p>
+                </div>
+                <Switch
+                  id="enableCashCountAuth"
+                  checked={!!settings.enableCashCountAuth}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableCashCountAuth: checked }))}
+                />
+              </div>
+              {settings.enableCashCountAuth && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label htmlFor="cashCountAuthUsername">Username</Label>
+                    <Input
                       id="cashCountAuthUsername"
                       value={settings.cashCountAuthUsername || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, cashCountAuthUsername: e.target.value }))}
                       placeholder="e.g. auditor"
-                  />
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="cashCountAuthPassword">Cash Count Password</Label>
-                  <Input 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cashCountAuthPassword">Password</Label>
+                    <Input
                       id="cashCountAuthPassword"
                       type="password"
                       value={settings.cashCountAuthPassword || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, cashCountAuthPassword: e.target.value }))}
                       placeholder="e.g. 9999"
-                  />
-               </div>
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Printer Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Printer className="h-5 w-5" />
-            Printer Configuration
-          </CardTitle>
-          <CardDescription>Configure receipt printer settings</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-             <div className="space-y-0.5">
-                <Label htmlFor="paperSize">Paper Size</Label>
-                <p className="text-sm text-muted-foreground">Select the width of your thermal paper</p>
-             </div>
-             <div className="w-[200px]">
-                <select
-                    id="paperSize"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={settings.paperSize || '58mm'}
-                    onChange={(e) => setSettings(prev => ({ ...prev, paperSize: e.target.value as any }))}
-                >
-                    <option value="58mm">58mm (Standard Thermal)</option>
-                    <option value="80mm">80mm (Wide Thermal)</option>
-                </select>
-             </div>
-          </div>
-          
-          <div className="flex items-center justify-between pt-4 border-t">
-            <div className="space-y-0.5">
-              <Label htmlFor="printMode">Print Mode</Label>
-              <p className="text-sm text-muted-foreground">
-                Choose how receipts are sent to the printer
-              </p>
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enablePriceEditAuth">Edit Price Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Require credentials to edit item price
+                  </p>
+                </div>
+                <Switch
+                  id="enablePriceEditAuth"
+                  checked={!!settings.enablePriceEditAuth}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enablePriceEditAuth: checked }))}
+                />
+              </div>
+              {settings.enablePriceEditAuth && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label htmlFor="priceEditAuthUsername">Username</Label>
+                    <Input
+                      id="priceEditAuthUsername"
+                      value={settings.priceEditAuthUsername || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, priceEditAuthUsername: e.target.value }))}
+                      placeholder="e.g. manager"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="priceEditAuthPassword">Password</Label>
+                    <Input
+                      id="priceEditAuthPassword"
+                      type="password"
+                      value={settings.priceEditAuthPassword || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, priceEditAuthPassword: e.target.value }))}
+                      placeholder="e.g. 1234"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-             <div className="w-[300px]">
-                <select
-                    id="printMode"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={settings.printMode || 'browser'}
-                    onChange={(e) => setSettings(prev => ({ ...prev, printMode: e.target.value as any }))}
-                >
-                    <option value="browser">Use Installed Driver (Browser Print)</option>
-                    <option value="escpos">Direct Serial (Use if no driver)</option>
-                    <option value="usb">Direct USB (WinUSB/Zadig Only)</option>
-                </select>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                    * If you installed a printer driver (e.g., XPrinter, Epson), choose "Use Installed Driver".
-                    <br/>
-                    * "Direct USB" requires replacing your driver with WinUSB via Zadig.
-                </p>
-             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Setup Sections */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Data Management Section */}
+        {/* Terminals */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">POS Terminals</CardTitle>
+            <Monitor className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-4">
+              Configure which terminal this computer represents.
+            </CardDescription>
+            <div className="flex flex-col gap-2">
+              <div className="text-sm font-medium text-slate-700">
+                {settings.currentTerminalId ? (
+                  <span className="flex items-center gap-2 text-green-600">
+                    <Monitor className="h-4 w-4" />
+                    {settings.currentTerminalName || 'Linked (Loading...)'}
+                  </span>
+                ) : (
+                  <span className="text-slate-500 italic">Not Linked to any Terminal</span>
+                )}
+              </div>
+              {!settings.currentTerminalId && (
+                <TerminalSettingsDialog
+                  currentTerminalId={settings.currentTerminalId || null}
+                  onTerminalChanged={(id) => {
+                    setSettings(prev => ({ ...prev, currentTerminalId: id, currentTerminalName: id ? 'Updated' : null }));
+                    if (id) window.location.reload();
+                  }}
+                />
+              )}
+
+              <div className="pt-2 border-t border-slate-100 flex justify-end">
+                <Link href="/settings/pos-terminals">
+                  <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
+                    <span className="text-xs font-medium">Manage All Terminals</span>
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Transaction Reference */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Transaction Reference</CardTitle>
@@ -717,86 +748,7 @@ export default function PosSetupPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">POS Terminals</CardTitle>
-            <Monitor className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Configure which terminal this computer represents.
-            </CardDescription>
-            <div className="flex flex-col gap-2">
-                <div className="text-sm font-medium text-slate-700">
-                    {settings.currentTerminalId ? (
-                         <span className="flex items-center gap-2 text-green-600">
-                             <Monitor className="h-4 w-4" />
-                             {settings.currentTerminalName || 'Linked (Loading...)'}
-                         </span>
-                    ) : (
-                        <span className="text-slate-500 italic">Not Linked to any Terminal</span>
-                    )}
-                </div>
-                {!settings.currentTerminalId && (
-                    <TerminalSettingsDialog 
-                        currentTerminalId={settings.currentTerminalId || null} 
-                        onTerminalChanged={(id) => {
-                            setSettings(prev => ({ ...prev, currentTerminalId: id, currentTerminalName: id ? 'Updated' : null })); 
-                            if(id) window.location.reload(); 
-                        }}
-                    />
-                )}
-                
-                <div className="pt-2 border-t border-slate-100 flex justify-end">
-                    <Link href="/settings/pos-terminals">
-                        <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
-                            <span className="text-xs font-medium">Manage All Terminals</span>
-                        </Button>
-                    </Link>
-                </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Area</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Define sales territories and regions
-            </CardDescription>
-            <AddSalesAreaDialog onAreaAdded={() => {}} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Group</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Organize sales teams and groups
-            </CardDescription>
-            <AddSalesGroupDialog onGroupAdded={() => {}} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Person</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Manage sales representatives
-            </CardDescription>
-            <ManageSalesPersonsDialog />
-          </CardContent>
-        </Card>
-
+        {/* Payment Terms */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Payment Terms</CardTitle>
@@ -810,6 +762,7 @@ export default function PosSetupPage() {
           </CardContent>
         </Card>
 
+        {/* Payment Types */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">POS Payment Type</CardTitle>
@@ -820,7 +773,7 @@ export default function PosSetupPage() {
               Manage accepted payment methods
             </CardDescription>
             <div className="flex justify-end">
-              <ManagePaymentMethodsDialog 
+              <ManagePaymentMethodsDialog
                 trigger={
                   <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
                     <span className="text-xs font-medium">Manage</span>
@@ -828,6 +781,48 @@ export default function PosSetupPage() {
                 }
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Sales Area */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Sales Area</CardTitle>
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-4">
+              Define sales territories and regions
+            </CardDescription>
+            <AddSalesAreaDialog onAreaAdded={() => { }} />
+          </CardContent>
+        </Card>
+
+        {/* Sales Group */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Sales Group</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-4">
+              Organize sales teams and groups
+            </CardDescription>
+            <AddSalesGroupDialog onGroupAdded={() => { }} />
+          </CardContent>
+        </Card>
+
+        {/* Sales Person */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Sales Person</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-4">
+              Manage sales representatives
+            </CardDescription>
+            <ManageSalesPersonsDialog />
           </CardContent>
         </Card>
       </div>

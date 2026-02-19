@@ -294,6 +294,9 @@ export interface SystemSettings {
   enableAutomaticMarkup?: boolean;
   defaultMarkupPercentage?: number;
   markupPriority?: string[];
+  enablePriceEditAuth?: boolean;
+  priceEditAuthUsername?: string | null;
+  priceEditAuthPassword?: string | null;
 }
 
 export interface User {

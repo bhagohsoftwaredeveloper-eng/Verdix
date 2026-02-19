@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
         id,
         business_name AS businessName,
         logo_path AS logoPath,
-        enable_advanced_inventory AS enableAdvancedInventory,
         transaction_prefix AS transactionPrefix,
         currency_symbol AS currencySymbol,
         currency_code AS currencyCode,
@@ -42,7 +41,10 @@ export async function GET(request: NextRequest) {
         enable_cash_count_auth AS enableCashCountAuth,
         cash_count_auth_username AS cashCountAuthUsername,
         cash_count_auth_password AS cashCountAuthPassword,
-        show_quantity_in_search AS showQuantityInSearch
+        show_quantity_in_search AS showQuantityInSearch,
+        enable_price_edit_auth AS enablePriceEditAuth,
+        price_edit_auth_username AS priceEditAuthUsername,
+        price_edit_auth_password AS priceEditAuthPassword
       FROM pos_settings
       LIMIT 1
     `;
@@ -52,8 +54,8 @@ export async function GET(request: NextRequest) {
     if (result.length === 0) {
       // Create default settings if none exist
       const insertSQL = `
-        INSERT INTO pos_settings (id, business_name, enable_advanced_inventory, transaction_prefix, currency_symbol, currency_code, timezone, date_format, enable_automatic_markup, default_markup_percentage, markup_priority, show_quantity_in_search)
-        VALUES ('pos_settings_1', 'My Business', FALSE, 'TXN', '$', 'USD', 'UTC', 'MM/DD/YYYY', TRUE, 0.00, '["subcategory", "category", "brand", "supplier"]', TRUE)
+        INSERT INTO pos_settings (id, business_name, transaction_prefix, currency_symbol, currency_code, timezone, date_format, enable_automatic_markup, default_markup_percentage, markup_priority, show_quantity_in_search)
+        VALUES ('pos_settings_1', 'My Business', 'TXN', '$', 'USD', 'UTC', 'MM/DD/YYYY', TRUE, 0.00, '["subcategory", "category", "brand", "supplier"]', TRUE)
       `;
       await query(insertSQL);
       
@@ -92,7 +94,7 @@ export async function POST(request: NextRequest) {
     if (existing.length === 0) {
       // Insert new settings (initial setup)
       const { 
-        businessName, logoPath, enableAdvancedInventory, transactionPrefix, 
+        businessName, logoPath, transactionPrefix, 
         address, contactNumber, tin, email,
         currencySymbol, currencyCode, timezone, dateFormat,
         enableAutomaticMarkup, defaultMarkupPercentage, markupPriority,
@@ -103,12 +105,13 @@ export async function POST(request: NextRequest) {
         paperSize, printMode,
         enableNegativeInventory,
         enableCashCountAuth, cashCountAuthUsername, cashCountAuthPassword,
-        showQuantityInSearch
+        showQuantityInSearch,
+        enablePriceEditAuth, priceEditAuthUsername, priceEditAuthPassword
       } = body;
 
       const insertSQL = `
         INSERT INTO pos_settings (
-          id, business_name, logo_path, enable_advanced_inventory, transaction_prefix, 
+          id, business_name, logo_path, transaction_prefix, 
           address, contact_number, tin, email,
           currency_symbol, currency_code, timezone, date_format,
           enable_automatic_markup, default_markup_percentage, markup_priority,
@@ -118,14 +121,14 @@ export async function POST(request: NextRequest) {
           enable_recent_sales_auth, recent_sales_auth_username, recent_sales_auth_password,
           paper_size, print_mode, enable_negative_inventory,
           enable_cash_count_auth, cash_count_auth_username, cash_count_auth_password,
-          show_quantity_in_search
+          show_quantity_in_search,
+          enable_price_edit_auth, price_edit_auth_username, price_edit_auth_password
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
         logoPath || null,
-        enableAdvancedInventory ?? false,
         transactionPrefix || 'TXN',
         address || null,
         contactNumber || null,
@@ -156,14 +159,16 @@ export async function POST(request: NextRequest) {
         enableCashCountAuth ?? false,
         cashCountAuthUsername || null,
         cashCountAuthPassword || null,
-        showQuantityInSearch ?? true
+        showQuantityInSearch ?? true,
+        enablePriceEditAuth ?? false,
+        priceEditAuthUsername || null,
+        priceEditAuthPassword || null
       ]);
     } else {
       // Update existing settings - Dynamic Update
       const allowedFields: Record<string, string> = {
         businessName: 'business_name',
         logoPath: 'logo_path',
-        enableAdvancedInventory: 'enable_advanced_inventory',
         transactionPrefix: 'transaction_prefix',
         address: 'address',
         contactNumber: 'contact_number',
@@ -194,7 +199,10 @@ export async function POST(request: NextRequest) {
         enableCashCountAuth: 'enable_cash_count_auth',
         cashCountAuthUsername: 'cash_count_auth_username',
         cashCountAuthPassword: 'cash_count_auth_password',
-        showQuantityInSearch: 'show_quantity_in_search'
+        showQuantityInSearch: 'show_quantity_in_search',
+        enablePriceEditAuth: 'enable_price_edit_auth',
+        priceEditAuthUsername: 'price_edit_auth_username',
+        priceEditAuthPassword: 'price_edit_auth_password'
       };
 
       const updates: string[] = [];

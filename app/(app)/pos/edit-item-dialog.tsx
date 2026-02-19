@@ -75,16 +75,8 @@ export function EditItemDialog({
           <DialogTitle>Edit Item: {item.name}</DialogTitle>
           <DialogDescription>{item.description}</DialogDescription>
         </DialogHeader>
+
         <div className="py-4 space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="name" className="text-base">Product Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="focus-visible:ring-primary"
-            />
-          </div>
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
               <Label htmlFor="price" className="text-base">Price (₱)</Label>
@@ -94,24 +86,11 @@ export function EditItemDialog({
                 step="0.01"
                 value={price}
                 onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                className="font-medium focus-visible:ring-primary"
+                className="font-medium focus-visible:ring-primary text-[30px] h-20 py-4 text-center leading-none"
               />
             </div>
           </div>
-          {mode === 'full' && (
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="quantity" className="text-base">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                  autoFocus
-                />
-              </div>
-            </div>
-          )}
+
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
