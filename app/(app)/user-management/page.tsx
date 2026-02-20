@@ -32,6 +32,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AddUserDialog } from './add-user-dialog';
 import { EditUserDialog } from './edit-user-dialog';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type User = {
   uid: string;
@@ -84,6 +95,10 @@ function UserRow({
   onUserUpdated: () => void,
   onEdit: (user: User) => void
 }) {
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
+
   const getInitials = (name?: string | null, username?: string | null) => {
     if (name) {
       const names = name.split(' ');
@@ -95,8 +110,36 @@ function UserRow({
     return '??';
   };
 
+  const handleDeleteConfirm = async () => {
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/users?uid=${user.uid}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        throw new Error('Failed to delete user');
+      }
+      toast({
+        title: 'User deleted',
+        description: 'The user has been successfully removed.',
+      });
+      onUserUpdated();
+    } catch (error) {
+      console.error(error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to delete the user.',
+      });
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+
   return (
-    <TableRow>
+    <>
+      <TableRow>
       <TableCell>
         <div className="flex items-center gap-4">
           <Avatar>
@@ -149,7 +192,7 @@ function UserRow({
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive focus:bg-destructive/10"
-            // Add onClick handler for deletion here
+              onClick={() => setIsDeleteDialogOpen(true)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete User
@@ -158,6 +201,23 @@ function UserRow({
         </DropdownMenu>
       </TableCell>
     </TableRow>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the user "{user.displayName || user.username}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? 'Deleting...' : 'Delete User'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

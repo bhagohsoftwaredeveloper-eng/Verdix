@@ -49,9 +49,11 @@ type LoyaltyView = 'menu' | 'add' | 'withdraw' | 'balance' | 'input-card';
 function AdjustPointsForm({
   customer: initialCustomer,
   onFinished,
+  hideAdjustments,
 }: {
   customer: CustomerWithLoyalty | null;
   onFinished: () => void;
+  hideAdjustments?: boolean;
 }) {
   const [view, setView] = useState<LoyaltyView>('menu');
   const [customer, setCustomer] = useState<CustomerWithLoyalty | null>(initialCustomer);
@@ -220,33 +222,37 @@ function AdjustPointsForm({
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-3 py-4">
-          <Button 
-            className="h-16 justify-between px-6 text-base font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 group transition-all"
-            variant="outline"
-            onClick={() => handleActionClick('add')}
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-2 bg-emerald-500 rounded-full text-white group-hover:scale-110 transition-transform">
-                <Plus className="w-5 h-5" />
-              </div>
-              <span>Add Points</span>
-            </div>
-            <TrendingUp className="w-5 h-5 opacity-40" />
-          </Button>
+          {!hideAdjustments && (
+            <>
+              <Button 
+                className="h-16 justify-between px-6 text-base font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 group transition-all"
+                variant="outline"
+                onClick={() => handleActionClick('add')}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-emerald-500 rounded-full text-white group-hover:scale-110 transition-transform">
+                    <Plus className="w-5 h-5" />
+                  </div>
+                  <span>Add Points</span>
+                </div>
+                <TrendingUp className="w-5 h-5 opacity-40" />
+              </Button>
 
-          <Button 
-            className="h-16 justify-between px-6 text-base font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 group transition-all"
-            variant="outline"
-            onClick={() => handleActionClick('withdraw')}
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-2 bg-amber-500 rounded-full text-white group-hover:scale-110 transition-transform">
-                <Minus className="w-5 h-5" />
-              </div>
-              <span>Withdraw Points</span>
-            </div>
-            <TrendingDown className="w-5 h-5 opacity-40" />
-          </Button>
+              <Button 
+                className="h-16 justify-between px-6 text-base font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 group transition-all"
+                variant="outline"
+                onClick={() => handleActionClick('withdraw')}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-amber-500 rounded-full text-white group-hover:scale-110 transition-transform">
+                    <Minus className="w-5 h-5" />
+                  </div>
+                  <span>Withdraw Points</span>
+                </div>
+                <TrendingDown className="w-5 h-5 opacity-40" />
+              </Button>
+            </>
+          )}
 
           <Button 
             className="h-16 justify-between px-6 text-base font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 group transition-all"
@@ -472,10 +478,10 @@ export function AdjustPointsDialog({ customer, onFinished }: { customer: Custome
   );
 }
 
-export function AdjustPointsDialogContent({ customer, onFinished }: { customer: CustomerWithLoyalty | null; onFinished: () => void; }) {
+export function AdjustPointsDialogContent({ customer, onFinished, hideAdjustments }: { customer: CustomerWithLoyalty | null; onFinished: () => void; hideAdjustments?: boolean; }) {
   return (
     <DialogContent className="sm:max-w-3xl p-6 rounded-[32px] overflow-hidden border-none shadow-2xl">
-       <AdjustPointsForm customer={customer} onFinished={onFinished} />
+       <AdjustPointsForm customer={customer} onFinished={onFinished} hideAdjustments={hideAdjustments} />
     </DialogContent>
   );
 }

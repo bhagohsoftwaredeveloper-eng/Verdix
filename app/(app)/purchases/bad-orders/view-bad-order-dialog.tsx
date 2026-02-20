@@ -184,11 +184,11 @@ export function ViewBadOrderDialog({
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Purchase Order</p>
-              <p className="text-sm font-semibold">{badOrder.purchaseOrderId}</p>
+              <p className="text-sm font-semibold">{badOrder.purchaseOrderId || '-'}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Supplier</p>
-              <p className="text-sm font-semibold">{badOrder.supplierName}</p>
+              <p className="text-sm font-semibold">{badOrder.supplierName || '-'}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Report Date</p>

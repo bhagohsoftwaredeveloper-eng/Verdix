@@ -86,7 +86,13 @@ export function EditItemDialog({
                 step="0.01"
                 value={price}
                 onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                className="font-medium focus-visible:ring-primary text-[30px] h-20 py-4 text-center leading-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    save();
+                  }
+                }}
+                className="font-medium focus-visible:ring-primary text-[30px] md:text-[30px] h-20 py-4 text-center leading-none"
               />
             </div>
           </div>

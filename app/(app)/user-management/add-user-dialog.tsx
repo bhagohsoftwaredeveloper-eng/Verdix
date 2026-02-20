@@ -126,7 +126,7 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
           Add User
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] flex flex-col max-h-[90vh]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
@@ -134,8 +134,8 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
-            <div className="overflow-y-auto flex-1 pr-2 space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-4">
               <FormField
                 control={form.control}
                 name="username"
@@ -237,7 +237,7 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
                 )}
               />
             </div>
-            <DialogFooter className="mt-4">
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"

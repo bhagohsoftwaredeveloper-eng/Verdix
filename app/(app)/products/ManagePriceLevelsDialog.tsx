@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PriceLevel } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlusCircle, Pencil, Trash2, Loader2, Check } from 'lucide-react';
@@ -50,10 +51,11 @@ function CurrencyIcon({ className }: { className?: string }) {
   );
 }
 
-function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: PriceLevel, onSave: (name: string, description: string, isDefault: boolean, percentageAdjustment: number) => Promise<boolean>, onCancel: () => void }) {
+function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: PriceLevel, onSave: (name: string, description: string, isDefault: boolean, percentageAdjustment: number, calculationBase: 'retail' | 'cost') => Promise<boolean>, onCancel: () => void }) {
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [isDefault, setIsDefault] = useState(initialData?.isDefault || false);
+  const [calculationBase, setCalculationBase] = useState<'retail' | 'cost'>(initialData?.calculationBase || 'retail');
   const [percentageAdjustment, setPercentageAdjustment] = useState(initialData?.percentageAdjustment?.toString() || '0');
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
@@ -80,7 +82,7 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
 
     setIsSaving(true);
     try {
-      const success = await onSave(name, description, isDefault, adjustment);
+      const success = await onSave(name, description, isDefault, adjustment, calculationBase);
       if (success) {
         toast({
           title: initialData ? 'Price Level Updated' : 'Price Level Added',
@@ -90,6 +92,7 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
           setName('');
           setDescription('');
           setIsDefault(false);
+          setCalculationBase('retail');
           setPercentageAdjustment('0');
         }
       }
@@ -143,6 +146,27 @@ function PriceLevelForm({ initialData, onSave, onCancel }: { initialData?: Price
           className="col-span-3"
           placeholder="e.g., 20 for 20% markup"
         />
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="calculationBase" className="text-right">
+          Base On
+        </Label>
+        <div className="col-span-3">
+          <Select value={calculationBase} onValueChange={(val: 'retail' | 'cost') => setCalculationBase(val)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select calculation base" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="retail">Retail Target Price</SelectItem>
+              <SelectItem value="cost">Product Cost</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1 text-right">
+            {calculationBase === 'retail' 
+              ? 'Applies markup/discount on top of the calculated Retail price.' 
+              : 'Applies markup/discount on top of the base Cost.'}
+          </p>
+        </div>
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="isDefault" className="text-right">
@@ -199,7 +223,7 @@ function PriceLevelRow({ level, onUpdated, onDeleted, onEdit }: { level: PriceLe
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">{level.description}</TableCell>
-      <TableCell className="text-center">{level.percentageAdjustment}%</TableCell>
+      <TableCell className="text-center">{level.percentageAdjustment}% <br /> <span className="text-xs text-muted-foreground">on {level.calculationBase === 'cost' ? 'Cost' : 'Retail'}</span></TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => onEdit(level)}>
@@ -252,8 +276,8 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
     refreshLevels();
   }, []);
 
-  const handleAddLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number): Promise<boolean> => {
-    const result = await addPriceLevel(name, description, isDefault, percentageAdjustment, 0);
+  const handleAddLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number, calculationBase: 'retail' | 'cost'): Promise<boolean> => {
+    const result = await addPriceLevel(name, description, isDefault, percentageAdjustment, 0, calculationBase);
     if (result.success) {
       await refreshLevels();
       onLevelAdded?.();
@@ -269,9 +293,9 @@ export function ManagePriceLevelsDialog({ trigger, onLevelAdded, open, onOpenCha
     }
   };
 
-  const handleUpdateLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number): Promise<boolean> => {
+  const handleUpdateLevel = async (name: string, description: string, isDefault: boolean, percentageAdjustment: number, calculationBase: 'retail' | 'cost'): Promise<boolean> => {
     if (!editingLevel) return false;
-    const result = await updatePriceLevel(editingLevel.id, name, description, isDefault, percentageAdjustment, 0);
+    const result = await updatePriceLevel(editingLevel.id, name, description, isDefault, percentageAdjustment, 0, calculationBase);
     if (result.success) {
       await refreshLevels();
       setView('list');

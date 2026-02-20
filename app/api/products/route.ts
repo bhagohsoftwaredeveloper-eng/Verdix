@@ -91,7 +91,8 @@ export async function GET(request: NextRequest) {
           .filter((pl: any) => pl.product_id === product.id)
           .map((pl: any) => ({
             levelId: pl.price_level_id,
-            price: parseFloat(pl.price)
+            price: parseFloat(pl.price),
+            minQuantity: pl.min_quantity ? parseInt(pl.min_quantity) : 0
           }));
       });
     }
@@ -189,10 +190,10 @@ export async function POST(request: NextRequest) {
     if (priceLevels && priceLevels.length > 0) {
       for (const pl of priceLevels) {
         const plSql = `
-          INSERT INTO product_price_levels (product_id, price_level_id, price)
-          VALUES (?, ?, ?)
+          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity)
+          VALUES (?, ?, ?, ?)
         `;
-        await query(plSql, [id, pl.levelId, pl.price]);
+        await query(plSql, [id, pl.levelId, pl.price, pl.minQuantity || 0]);
       }
     }
 

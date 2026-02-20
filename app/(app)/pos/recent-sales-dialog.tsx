@@ -56,7 +56,13 @@ function ReceiptPrintView({
 }) {
     // Map Sale to ReceiptViewProps['saleDetails']
     const saleDetails = {
-        items: sale.items,
+        items: sale.items.map(item => ({
+            ...item.product,
+            price: item.price,
+            quantity: item.quantity,
+            discount: 0,
+            name: item.product.name
+        })),
         customer: sale.customer,
         totalDue: sale.total,
         change: 0, // Not stored in Sale, assuming 0 for reprint or check transaction details if available
@@ -64,7 +70,8 @@ function ReceiptPrintView({
         orderNumber: sale.orderNumber ? String(sale.orderNumber) : sale.id, // Ensure string
         amountTendered: sale.total, // Assume exact payment
         transactionDate: sale.date ? new Date(sale.date) : new Date(),
-        cashierName: sale.salesPerson // Or fetch from sale.salesPersonId
+        cashierName: sale.salesPerson, // Or fetch from sale.salesPersonId
+        pointsEarned: sale.pointsEarned || 0
     };
 
     return (

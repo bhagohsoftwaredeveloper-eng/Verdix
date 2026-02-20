@@ -24,6 +24,7 @@ export function LoyaltyRewardsDialog({
       <AdjustPointsDialogContent
         customer={customerData}
         onFinished={() => onOpenChange(false)}
+        hideAdjustments
       />
     </Dialog>
   );

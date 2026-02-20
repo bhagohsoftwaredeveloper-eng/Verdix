@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,35 @@ export function HeldTransactionsDialog({
   onRestore,
   onDelete,
 }: HeldTransactionsDialogProps) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedIndex(0);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (heldTransactions.length === 0) return;
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev < heldTransactions.length - 1 ? prev + 1 : prev));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        onRestore(selectedIndex);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, heldTransactions, selectedIndex, onRestore]);
 
   const calculateTotal = (items: SaleItem[]) => {
     return items.reduce((acc, item) => acc + item.price * item.quantity * (1 - item.discount / 100), 0);
@@ -47,11 +77,11 @@ export function HeldTransactionsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Suspended Transactions</DialogTitle>
           <DialogDescription>
-            Select a transaction to restore it to the cart or delete it.
+            Select a transaction to restore it to the cart or delete it. Use Up/Down arrows to navigate and Enter to select.
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="h-96">
@@ -67,7 +97,12 @@ export function HeldTransactionsDialog({
             <TableBody>
               {heldTransactions.length > 0 ? (
                 heldTransactions.map((transaction, index) => (
-                  <TableRow key={index}>
+                  <TableRow 
+                    key={index}
+                    className={index === selectedIndex ? "bg-muted cursor-pointer" : "cursor-pointer"}
+                    onClick={() => setSelectedIndex(index)}
+                    onDoubleClick={() => onRestore(index)}
+                  >
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{calculateItemCount(transaction)}</TableCell>
                     <TableCell>₱{calculateTotal(transaction).toFixed(2)}</TableCell>
@@ -76,7 +111,10 @@ export function HeldTransactionsDialog({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => onRestore(index)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRestore(index);
+                          }}
                         >
                           <Undo className="mr-2 h-4 w-4" />
                           Restore
@@ -84,7 +122,10 @@ export function HeldTransactionsDialog({
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => onDelete(index)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(index);
+                          }}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Delete

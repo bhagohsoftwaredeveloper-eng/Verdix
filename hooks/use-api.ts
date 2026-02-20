@@ -15,7 +15,7 @@ export interface UseSalesInvoicesResult {
   refetch: () => void;
 }
 
-export function useProducts(search?: string, availability?: string, supplierId?: string): UseProductsResult {
+export function useProducts(search?: string, availability?: string, supplierId?: string, warehouseId?: string): UseProductsResult {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +34,9 @@ export function useProducts(search?: string, availability?: string, supplierId?:
       }
       if (supplierId) {
         params.append('supplierId', supplierId);
+      }
+      if (warehouseId) {
+        params.append('warehouseId', warehouseId);
       }
       params.append('limit', '100'); // Get more products for search
 
@@ -68,6 +71,7 @@ export function useProducts(search?: string, availability?: string, supplierId?:
         unitOfMeasure: item.unitOfMeasure || item.unit_of_measure || '',
         incomeAccount: '',
         expenseAccount: '',
+        priceLevels: item.priceLevels || [],
         createdAt: item.created_at,
         updatedAt: item.updated_at,
       }));
@@ -83,7 +87,7 @@ export function useProducts(search?: string, availability?: string, supplierId?:
 
   useEffect(() => {
     fetchProducts();
-  }, [search, supplierId]);
+  }, [search, availability, supplierId, warehouseId]);
 
   const refetch = () => {
     fetchProducts();

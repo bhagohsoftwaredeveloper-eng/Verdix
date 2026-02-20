@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Table,
@@ -41,12 +42,11 @@ import {
 } from '@/components/ui/table';
 import { PlusCircle, Loader2, Trash2, Plus, Search, ArrowRight, CreditCard, Warehouse as WarehouseIcon, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Product, Customer, Sale, PaymentMethod, Warehouse, SalesPerson } from '@/lib/types';
+import { Product, Customer, Sale, PaymentMethod, Warehouse } from '@/lib/types';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ManageCustomersDialog } from '../ManageCustomersDialog';
 import { ManagePaymentMethodsDialog } from '../ManagePaymentMethodsDialog';
 import { ManageWarehousesDialog } from '../ManageWarehousesDialog';
-import { ManageSalesPersonsDialog } from '../ManageSalesPersonsDialog';
 import { CustomerSelectionField } from './customer-selection-field';
 
 import { useProducts, useCustomers } from '@/hooks/use-api';
@@ -63,21 +63,30 @@ const salesInvoiceSchema = z.object({
   invoiceDate: z.string().min(1, 'Invoice date is required'),
   deliveryDate: z.string().optional(),
   dueDate: z.string().optional(),
+  invoiceReference: z.string().optional(),
   reference: z.string().optional(),
   deliveryAddress: z.string().optional(),
   paymentMethod: z.string().min(1, 'Payment method is required'),
   shipping: z.coerce.number().nonnegative().optional(),
   warehouse: z.string().optional(),
-  salesPerson: z.string().optional(),
-  depositAccount: z.string().optional(),
   note: z.string().optional(),
   items: z.array(salesInvoiceItemSchema).min(1, 'At least one item is required'),
+}).refine((data) => {
+  // If payment method is not Cash or Petty Cash, reference is required
+  const cashMethods = ['Cash', 'Petty Cash'];
+  if (!cashMethods.includes(data.paymentMethod) && (!data.reference || data.reference.trim() === '')) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Reference number is required for non-cash payments',
+  path: ['reference'],
 });
 
 type SalesInvoiceFormValues = z.infer<typeof salesInvoiceSchema>;
 
-function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Product) => void }) {
-  const { products, loading, error } = useProducts();
+function ProductSelector({ onSelectProduct, warehouseId }: { onSelectProduct: (product: Product) => void, warehouseId?: string }) {
+  const { products, loading, error } = useProducts(undefined, undefined, undefined, warehouseId);
   const [inputValue, setInputValue] = useState('');
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
@@ -177,9 +186,6 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
-  const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
-  const [isLoadingSalesPersons, setIsLoadingSalesPersons] = useState(false);
-  const [showSalesPersonDialog, setShowSalesPersonDialog] = useState(false);
   const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
   const { toast } = useToast();
   const { customers } = useCustomers();
@@ -197,10 +203,10 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
       invoiceDate: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
       deliveryDate: '',
       dueDate: new Date().toISOString().split('T')[0], // Today's date as default due date
+      invoiceReference: '',
       reference: '',
       deliveryAddress: '',
       paymentMethod: '',
-      depositAccount: '',
       items: [],
       shipping: 0,
       note: '',
@@ -278,35 +284,15 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
     }
   };
 
-  // Fetch sales persons from API
-  const fetchSalesPersons = async () => {
-    try {
-      setIsLoadingSalesPersons(true);
-      const response = await fetch('/api/sales-persons?activeOnly=true');
-      const result = await response.json();
-
-      if (result.success) {
-        setSalesPersons(result.data);
-      } else {
-        console.error('Failed to fetch sales persons:', result.error);
-      }
-    } catch (error) {
-      console.error('Error fetching sales persons:', error);
-    } finally {
-      setIsLoadingSalesPersons(false);
-    }
-  };
-
-  // Auto-generate reference when dialog opens
+  // Fetch necessary data when dialog opens
   useEffect(() => {
     if (isOpen) {
       const autoReference = generateReference();
-      form.setValue('reference', autoReference);
+      form.setValue('invoiceReference', autoReference);
       fetchWarehouses();
       fetchPaymentMethods();
-      fetchSalesPersons();
     }
-  }, [isOpen, form]);
+  }, [isOpen]);
 
   const watchedCustomer = form.watch('customer');
   const watchedInvoiceDate = form.watch('invoiceDate');
@@ -405,7 +391,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
         <DialogHeader className="px-6 py-4 border-b bg-background">
           <DialogTitle>New Sales Invoice</DialogTitle>
           <DialogDescription>
-            Create a transaction. Reference: <span className="font-mono font-medium text-primary">{form.watch('reference')}</span>
+            Create a transaction. Reference: <span className="font-mono font-medium text-primary">{form.watch('invoiceReference')}</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -416,61 +402,14 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
               {/* TOP HEADER - Form Fields (Compact Grid) */}
               <div className="bg-background border-b p-4 grid grid-cols-4 gap-4 shrink-0">
                   
-                  {/* Column 1: Customer & Sales Person */}
+                  {/* Column 1: Customer & Dates */}
                   <div className="space-y-3">
                          <CustomerSelectionField
                             control={form.control}
                             customerList={customers}
                             className="bg-white h-8 text-xs"
-                            labelClassName="text-xs font-semibold text-muted-foreground"
+                             labelClassName="text-xs font-semibold text-muted-foreground"
                         />
-
-                      <FormField
-                        control={form.control}
-                        name="salesPerson"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <div className="flex justify-between items-center w-full h-5">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
-                                <Button
-                                    variant="link"
-                                    className="h-auto p-0 text-xs text-primary"
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setShowSalesPersonDialog(true);
-                                    }}
-                                >
-                                    Manage
-                                </Button>
-                            </div>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="h-8 bg-white text-xs">
-                                    <SelectValue placeholder="Select sales person" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-
-                                  {salesPersons?.map(person => (
-                                    <SelectItem key={person.id} value={person.id.toString()} className="text-xs">
-                                      {person.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                            </Select>
-                             <ManageSalesPersonsDialog
-                                open={showSalesPersonDialog}
-                                onOpenChange={setShowSalesPersonDialog}
-                                onChange={fetchSalesPersons}
-                              />
-                          </FormItem>
-                        )}
-                      />
-                  </div>
-
-                  {/* Column 2: Dates & Warehouse */}
-                  <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2">
                         <FormField
                             control={form.control}
@@ -501,6 +440,66 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             )}
                         />
                       </div>
+                  </div>
+
+                  {/* Column 2: Payment & Shipping */}
+                  <div className="space-y-3">
+                       <FormField
+                            control={form.control}
+                            name="paymentMethod"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <div className="flex justify-between items-center w-full h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                    <Button
+                                        variant="link"
+                                        className="h-auto p-0 text-xs text-primary"
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowPaymentMethodDialog(true);
+                                        }}
+                                    >
+                                        Manage
+                                    </Button>
+                                </div>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                    <SelectValue placeholder="Select method" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+
+                                    {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
+                                </SelectContent>
+                                </Select>
+                                 <ManagePaymentMethodsDialog
+                                    open={showPaymentMethodDialog}
+                                    onOpenChange={setShowPaymentMethodDialog}
+                                    onChange={fetchPaymentMethods}
+                                />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="shipping"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
+                                </div>
+                                <FormControl>
+                                <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
+                                </FormControl>
+                            </FormItem>
+                            )}
+                        />
+                  </div>
+                  
+                  {/* Column 3: Warehouse & Address */}
+                  <div className="space-y-3">
                        <FormField
                             control={form.control}
                             name="warehouse"
@@ -543,94 +542,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             </FormItem>
                             )}
                         />
-                  </div>
-                  
-                  {/* Column 3: Payment & Shipping */}
-                  <div className="space-y-3">
-                       <FormField
-                            control={form.control}
-                            name="paymentMethod"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex justify-between items-center w-full h-5">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
-                                    <Button
-                                        variant="link"
-                                        className="h-auto p-0 text-xs text-primary"
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setShowPaymentMethodDialog(true);
-                                        }}
-                                    >
-                                        Manage
-                                    </Button>
-                                </div>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                    <SelectTrigger className="h-8 bg-white text-xs">
-                                    <SelectValue placeholder="Select method" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-
-                                    {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
-                                </SelectContent>
-                                </Select>
-                                 <ManagePaymentMethodsDialog
-                                    open={showPaymentMethodDialog}
-                                    onOpenChange={setShowPaymentMethodDialog}
-                                    onChange={fetchPaymentMethods}
-                                />
-                            </FormItem>
-                            )}
-                        />
-                          <div className="grid grid-cols-2 gap-2">
-                            <FormField
-                                control={form.control}
-                                name="shipping"
-                                render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                    <div className="flex items-center justify-between h-5">
-                                        <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
-                                    </div>
-                                    <FormControl>
-                                    <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
-                                    </FormControl>
-                                </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="depositAccount"
-                                render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                    <div className="flex items-center justify-between h-5">
-                                        <FormLabel className="text-xs font-semibold text-muted-foreground">Deposit Acc</FormLabel>
-                                    </div>
-                                    <FormControl>
-                                      <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl>
-                                          <SelectTrigger className="h-8 bg-white text-xs">
-                                            <SelectValue placeholder="Select" />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          <SelectItem value="cash" className="text-xs">Cash</SelectItem>
-                                          <SelectItem value="bank" className="text-xs">Bank</SelectItem>
-                                          <SelectItem value="petty-cash" className="text-xs">Petty Cash</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </FormControl>
-                                </FormItem>
-                                )}
-                            />
-                        </div>
-                  </div>
-
-                  {/* Column 4: Address / Notes */}
-                  <div className="space-y-3">
-                      <FormField
+                        <FormField
                             control={form.control}
                             name="deliveryAddress"
                             render={({ field }) => (
@@ -644,6 +556,10 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             </FormItem>
                             )}
                        />
+                  </div>
+
+                  {/* Column 4: Notes / Payment Ref */}
+                  <div className="space-y-3">
                        <FormField
                           control={form.control}
                           name="note"
@@ -653,11 +569,30 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                     <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
                                 </div>
                               <FormControl>
-                                <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
+                                <Textarea className="h-8 min-h-8 resize-none bg-white text-xs pt-2" placeholder="Brief notes..." {...field} value={field.value || ''} />
                               </FormControl>
                             </FormItem>
                           )}
                         />
+                       <FormField
+                            control={form.control}
+                            name="reference"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">
+                                        Reference #
+                                        {watchedPaymentMethod && !['Cash', 'Petty Cash'].includes(watchedPaymentMethod) && (
+                                            <span className="text-destructive ml-1">*</span>
+                                        )}
+                                    </FormLabel>
+                                </div>
+                                <FormControl>
+                                <Input className="h-8 bg-white text-xs" {...field} />
+                                </FormControl>
+                            </FormItem>
+                            )}
+                       />
                   </div>
 
               </div>
@@ -665,7 +600,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
               {/* CENTER - ITEMS TABLE */}
               <div className="flex-1 flex flex-col overflow-hidden bg-muted/5 p-4 relative">
                   <div className="max-w-2xl mb-4 z-10">
-                    <ProductSelector onSelectProduct={handleAddProduct} />
+                    <ProductSelector onSelectProduct={handleAddProduct} warehouseId={form.watch('warehouse')} />
                   </div>
                   
                   <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col relative">
@@ -734,7 +669,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                             />
                                         </TableCell>
                                         <TableCell className="text-right py-2 pr-4 font-mono">
-                                            ₱{(form.watch(`items.${index}.price`) * form.watch(`items.${index}.quantity`)).toFixed(2)}
+                                            ₱{(Number(form.watch(`items.${index}.price`) || 0) * Number(form.watch(`items.${index}.quantity`) || 0)).toFixed(2)}
                                         </TableCell>
                                         <TableCell className="py-2">
                                             <Button 
@@ -760,15 +695,15 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                           <div className="col-span-4 space-y-2">
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Subtotal</span>
-                                <span>₱{(total - (form.watch('shipping') || 0)).toFixed(2)}</span>
+                                <span>₱{(Number(total) - Number(form.watch('shipping') || 0)).toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Shipping</span>
-                                <span>₱{(form.watch('shipping') || 0).toFixed(2)}</span>
+                                <span>₱{Number(form.watch('shipping') || 0).toFixed(2)}</span>
                             </div>
                             <div className="border-t pt-2 flex justify-between items-center">
                                 <span className="font-semibold text-lg">Total</span>
-                                <span className="font-bold text-xl text-primary">₱{total.toFixed(2)}</span>
+                                <span className="font-bold text-xl text-primary">₱{Number(total).toFixed(2)}</span>
                             </div>
                           </div>
                       </div>

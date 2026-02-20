@@ -21,8 +21,9 @@ export class ReceiptGenerator {
         paymentMethod: string;
         orderNumber?: string;
         amountTendered?: number;
+        pointsEarned?: number;
     }): Uint8Array {
-        const { items, customer, totalDue, change, paymentMethod, orderNumber, amountTendered } = sale;
+        const { items, customer, totalDue, change, paymentMethod, orderNumber, amountTendered, pointsEarned } = sale;
         const subTotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
         const totalDiscount = items.reduce((acc, item) => acc + (item.price * item.quantity * item.discount) / 100, 0);
         const vatAmount = (totalDue / 1.12) * 0.12;
@@ -98,6 +99,14 @@ export class ReceiptGenerator {
 
         if (paymentMethod === 'CASH') {
             encoder.line(`Change: ${this.formatCurrency(change)}`);
+        }
+
+        if (pointsEarned && pointsEarned > 0) {
+            encoder
+                .rule()
+                .bold(true)
+                .line(`Points Earned: ${pointsEarned} pts`)
+                .bold(false);
         }
 
         encoder

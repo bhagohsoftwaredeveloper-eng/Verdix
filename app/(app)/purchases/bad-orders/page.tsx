@@ -165,8 +165,6 @@ export default function BadOrdersPage() {
             <TableHeader>
               <TableRow className="hover:bg-transparent bg-muted/50">
                 <TableHead className="font-semibold text-foreground">Bad Order ID</TableHead>
-                <TableHead className="font-semibold text-foreground">PO Reference</TableHead>
-                <TableHead className="font-semibold text-foreground">Supplier</TableHead>
                 <TableHead className="font-semibold text-foreground">Report Date</TableHead>
                 <TableHead className="font-semibold text-foreground text-right">Total Value</TableHead>
                 <TableHead className="font-semibold text-foreground text-center">Status</TableHead>
@@ -183,7 +181,7 @@ export default function BadOrdersPage() {
                 </>
               ) : badOrders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     No bad orders found
                   </TableCell>
                 </TableRow>
@@ -195,19 +193,6 @@ export default function BadOrdersPage() {
                 <TableRow key={order.id} className="text-xs group hover:bg-muted/50">
                   <TableCell className="font-medium">
                     {order.id.substring(0, 8).toUpperCase()}
-                  </TableCell>
-                  <TableCell>
-                    {order.purchaseOrderId.substring(0, 12).toUpperCase()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                       {order.supplierName}
-                       {isHighRiskSupplier && (
-                         <Badge variant="destructive" className="h-[18px] px-1.5 text-[10px] uppercase">
-                            High Risk
-                         </Badge>
-                       )}
-                    </div>
                   </TableCell>
                   <TableCell>{format(new Date(order.reportDate), 'MMM dd, yyyy')}</TableCell>
                   <TableCell className="text-right font-medium">

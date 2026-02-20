@@ -582,28 +582,24 @@ export default function POSPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [items, selectedItemId, heldTransactions, enableLineVoidAuth]); // Dependencies for relevant state - validated
 
-  // Update item prices when price level changes
+  // Update item prices when price level or customer changes
   useEffect(() => {
-    if (items.length === 0 || !selectedPriceLevelId) return;
+    if (!selectedPriceLevelId) return;
 
-    const updatedItems = items.map(item => {
-      let newPrice = item.price;
-      // Try to find override for this level
-      if ((item as any).priceLevels) {
-        const override = (item as any).priceLevels.find((pl: any) => pl.levelId === selectedPriceLevelId);
-        if (override) {
-          newPrice = override.price;
-        }
-      }
-      return { ...item, price: newPrice };
+    setItems(currentItems => {
+      if (currentItems.length === 0) return currentItems;
+      
+      const updatedItems = currentItems.map(item => {
+        // Re-calculate the effective price based on new parameters, preserving quantity thresholds
+        const newPrice = calculateEffectivePrice(item, item.quantity, selectedCustomer?.priceLevelId);
+        return { ...item, price: newPrice };
+      });
+
+      const hasChanged = JSON.stringify(currentItems.map(i => i.price)) !== JSON.stringify(updatedItems.map(i => i.price));
+      return hasChanged ? updatedItems : currentItems;
     });
-
-    // Check if anything actually changed to avoid infinite loop or unnecessary updates
-    const hasChanged = JSON.stringify(items.map(i => i.price)) !== JSON.stringify(updatedItems.map(i => i.price));
-    if (hasChanged) {
-      setItems(updatedItems);
-    }
-  }, [selectedPriceLevelId, items]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPriceLevelId, selectedCustomer?.priceLevelId]);
 
   const calculateEffectivePrice = (product: Product, quantity: number, customerLevelId?: string) => {
       let effectivePrice = product.price; // Default to Base Price

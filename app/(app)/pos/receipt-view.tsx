@@ -16,6 +16,7 @@ interface ReceiptViewProps {
         amountTendered?: number;
         transactionDate?: Date; // Add support for date if available
         cashierName?: string;
+        pointsEarned?: number;
     };
     settings?: SystemSettings | null;
 }
@@ -101,6 +102,12 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                         <span>{formatCurrency(change)}</span>
                     </div>
                 )}
+                {saleDetails.pointsEarned && saleDetails.pointsEarned > 0 ? (
+                    <div className="flex justify-between font-bold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                        <span>Points Earned:</span>
+                        <span>{saleDetails.pointsEarned} pts</span>
+                    </div>
+                ) : null}
             </div>
                 <div className="text-center mt-6">
                 <div>Thank you for your purchase!</div>

@@ -45,7 +45,7 @@ export interface Product {
   updatedAt?: string;
 
   // Price Levels
-  priceLevels?: { levelId: string; price: number }[];
+  priceLevels?: { levelId: string; price: number; minQuantity?: number }[];
 
   // Supplier Mapping
   primarySupplierRop?: number;
@@ -57,6 +57,7 @@ export interface PriceLevel {
   name: string;
   description?: string;
   isDefault: boolean;
+  calculationBase?: 'retail' | 'cost';
   percentageAdjustment?: number; // 100 = 100% (No change), 90 = 10% discount
   minQuantity?: number;
   createdAt?: string;
@@ -121,6 +122,7 @@ export interface Sale {
   orderNumber?: number;
   notes?: string;
   shipping?: number;
+  pointsEarned?: number;
 }
 
 export interface PurchaseOrder {

@@ -310,12 +310,14 @@ function ProductsContent() {
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all');
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>(filter === 'low-stock' ? 'low-stock' : 'all');
 
   // Pending Filters (Inside Dialog)
   const [tempBrand, setTempBrand] = useState('all');
   const [tempCategory, setTempCategory] = useState('all');
   const [tempSupplier, setTempSupplier] = useState('all');
+  const [tempWarehouse, setTempWarehouse] = useState('all');
   const [tempStatus, setTempStatus] = useState(filter === 'low-stock' ? 'low-stock' : 'all');
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -343,6 +345,7 @@ function ProductsContent() {
         brand: selectedBrand !== 'all' ? selectedBrand : undefined,
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
         supplier: selectedSupplier !== 'all' ? selectedSupplier : undefined,
+        warehouse: selectedWarehouse !== 'all' ? selectedWarehouse : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
       };
 
@@ -359,7 +362,7 @@ function ProductsContent() {
     } finally {
       setIsLoadingProducts(false);
     }
-  }, [currentPage, pageSize, searchTerm, selectedBrand, selectedCategory, selectedSupplier, selectedStatus]);
+  }, [currentPage, pageSize, searchTerm, selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedStatus]);
 
   useEffect(() => {
     loadProducts(currentPage, pageSize);
@@ -394,8 +397,8 @@ function ProductsContent() {
   }, [searchTerm]);
 
   const filtersActive = useMemo(() => {
-    return selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedStatus !== 'all' || searchTerm !== '';
-  }, [selectedBrand, selectedCategory, selectedSupplier, selectedStatus, searchTerm]);
+    return selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedStatus !== 'all' || searchTerm !== '';
+  }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedStatus, searchTerm]);
 
   const productTree = useMemo(() => {
     if (!products) return [];
@@ -505,15 +508,16 @@ function ProductsContent() {
                    setTempBrand(selectedBrand);
                    setTempCategory(selectedCategory);
                    setTempSupplier(selectedSupplier);
+                   setTempWarehouse(selectedWarehouse);
                    setTempStatus(selectedStatus);
                 }}>
                    <span className="sr-only">Open filters</span>
                    <Settings className="h-4 w-4 mr-2" />
                    Filter Products
-                   {(selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedStatus !== 'all') && (
+                   {(selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedStatus !== 'all') && (
                        <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center">
                            {
-                               [selectedBrand, selectedCategory, selectedSupplier, selectedStatus].filter(v => v !== 'all').length
+                               [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedStatus].filter(v => v !== 'all').length
                            }
                        </Badge>
                    )}
@@ -579,6 +583,23 @@ function ProductsContent() {
                   </div>
 
                   <div className="grid gap-2">
+                    <Label htmlFor="warehouse-filter">Warehouse</Label>
+                    <Select value={tempWarehouse} onValueChange={setTempWarehouse}>
+                      <SelectTrigger id="warehouse-filter">
+                        <SelectValue placeholder="All Warehouses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Warehouses</SelectItem>
+                        {productOptions?.warehouses?.map((warehouse: any) => (
+                          <SelectItem key={warehouse.id} value={warehouse.id}>
+                            {warehouse.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
                     <Label htmlFor="status-filter">Status</Label>
                     <Select value={tempStatus} onValueChange={setTempStatus}>
                       <SelectTrigger id="status-filter">
@@ -598,12 +619,14 @@ function ProductsContent() {
                        setTempBrand('all');
                        setTempCategory('all');
                        setTempSupplier('all');
+                       setTempWarehouse('all');
                        setTempStatus('all');
                    }}>Reset</Button>
                    <Button onClick={() => {
                        setSelectedBrand(tempBrand);
                        setSelectedCategory(tempCategory);
                        setSelectedSupplier(tempSupplier);
+                       setSelectedWarehouse(tempWarehouse);
                        setSelectedStatus(tempStatus);
                        setIsFilterDialogOpen(false);
                    }}>Apply Filters</Button>
@@ -622,7 +645,7 @@ function ProductsContent() {
 
         
         {/* Active Filters Badges */}
-        {(selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedStatus !== 'all') && (
+        {(selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedStatus !== 'all') && (
             <div className="flex flex-wrap items-center gap-2">
                  {selectedBrand !== 'all' && (
                      <Badge variant="secondary" className="gap-1 pl-2">
@@ -651,6 +674,15 @@ function ProductsContent() {
                          </Button>
                      </Badge>
                  )}
+                 {selectedWarehouse !== 'all' && (
+                     <Badge variant="secondary" className="gap-1 pl-2">
+                         Warehouse: {productOptions?.warehouses?.find((w:any) => w.id === selectedWarehouse)?.name || 'Unknown'}
+                         <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent" onClick={() => setSelectedWarehouse('all')}>
+                             <span className="sr-only">Remove</span>
+                             <span className="text-xs">×</span>
+                         </Button>
+                     </Badge>
+                 )}
                  {selectedStatus !== 'all' && (
                      <Badge variant="secondary" className="gap-1 pl-2">
                          Status: {selectedStatus === 'in-stock' ? 'In Stock' : selectedStatus === 'low-stock' ? 'Low Stock' : 'Out of Stock'}
@@ -668,6 +700,7 @@ function ProductsContent() {
                         setSelectedBrand('all');
                         setSelectedCategory('all');
                         setSelectedSupplier('all');
+                        setSelectedWarehouse('all');
                         setSelectedStatus('all');
                     }}
                     className="h-8 text-xs text-muted-foreground"

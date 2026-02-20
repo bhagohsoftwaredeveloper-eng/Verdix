@@ -319,15 +319,18 @@ export function EditProductDialog({
               const getFieldIndex = (levelId: string) => currentFields.findIndex((f: any) => f.levelId === levelId);
 
               priceLevels.forEach((level: any) => {
-                  // Check if this is the "Retail" level
                   let levelPrice;
-                  if (level.name?.toLowerCase() === 'retail') {
-                      // Retail uses basePrice directly, ignoring its markup percentage
-                      levelPrice = parseFloat(basePrice.toFixed(2));
+                  const levelMarkup = level.percentageAdjustment ?? 0;
+                  
+                  if (level.calculationBase === 'cost') {
+                      levelPrice = parseFloat((watchedCost * (1 + levelMarkup / 100)).toFixed(2));
                   } else {
-                      // Other levels apply their markup on top of basePrice
-                      const levelMarkup = level.percentageAdjustment ?? 0;
-                      levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                      // Retail base
+                      if (levelMarkup === 0 && level.name?.toLowerCase() === 'retail') {
+                          levelPrice = parseFloat(basePrice.toFixed(2));
+                      } else {
+                          levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                      }
                   }
                   
                   const index = getFieldIndex(level.id);
@@ -340,15 +343,18 @@ export function EditProductDialog({
               priceLevelFields.forEach((field, index) => {
                   const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
                   if (levelDef) {
-                      // Check if this is the "Retail" level
                       let levelPrice;
-                      if (levelDef.name?.toLowerCase() === 'retail') {
-                          // Retail uses basePrice directly
-                          levelPrice = parseFloat(basePrice.toFixed(2));
+                      const levelMarkup = levelDef.percentageAdjustment ?? 0;
+                      
+                      if (levelDef.calculationBase === 'cost') {
+                          levelPrice = parseFloat((watchedCost * (1 + levelMarkup / 100)).toFixed(2));
                       } else {
-                          // Other levels apply their markup
-                          const levelMarkup = levelDef.percentageAdjustment ?? 0;
-                          levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                          // Retail base
+                          if (levelMarkup === 0 && levelDef.name?.toLowerCase() === 'retail') {
+                              levelPrice = parseFloat(basePrice.toFixed(2));
+                          } else {
+                              levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                          }
                       }
                       form.setValue(`priceLevels.${index}.price`, levelPrice);
                   }
@@ -398,11 +404,16 @@ export function EditProductDialog({
           
           // Calculate price based on selected level
           let finalPrice;
-          if (selectedLevel.name?.toLowerCase() === 'retail') {
-            finalPrice = basePrice;
+          const selectedLevelMarkup = selectedLevel.percentageAdjustment ?? 0;
+          if (selectedLevel.calculationBase === 'cost') {
+             finalPrice = cost * (1 + selectedLevelMarkup / 100);
           } else {
-            const levelMarkup = selectedLevel.percentageAdjustment ?? 0;
-            finalPrice = basePrice * (1 + levelMarkup / 100);
+             // Retail Base
+             if (selectedLevelMarkup === 0 && selectedLevel.name?.toLowerCase() === 'retail') {
+                 finalPrice = basePrice;
+             } else {
+                 finalPrice = basePrice * (1 + selectedLevelMarkup / 100);
+             }
           }
           
           form.setValue('price', parseFloat(finalPrice.toFixed(2)));
@@ -414,11 +425,17 @@ export function EditProductDialog({
               if (levelDef) {
                 // Calculate price for each level
                 let levelPrice;
-                if (levelDef.name?.toLowerCase() === 'retail') {
-                  levelPrice = parseFloat(basePrice.toFixed(2));
+                const levelMarkup = levelDef.percentageAdjustment ?? 0;
+                
+                if (levelDef.calculationBase === 'cost') {
+                    levelPrice = parseFloat((cost * (1 + levelMarkup / 100)).toFixed(2));
                 } else {
-                  const levelMarkup = levelDef.percentageAdjustment ?? 0;
-                  levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                    // Retail Base
+                    if (levelMarkup === 0 && levelDef.name?.toLowerCase() === 'retail') {
+                        levelPrice = parseFloat(basePrice.toFixed(2));
+                    } else {
+                        levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
+                    }
                 }
                 form.setValue(`priceLevels.${index}.price`, levelPrice);
               }

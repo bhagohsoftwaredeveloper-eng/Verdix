@@ -154,9 +154,9 @@ export async function POST(request: NextRequest) {
       notes,
     } = body;
 
-    if (!purchaseOrderId || !supplierId || !supplierName || !items || items.length === 0) {
+    if (!items || items.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: 'Missing required fields: items' },
         { status: 400 }
       );
     }
@@ -184,9 +184,9 @@ export async function POST(request: NextRequest) {
 
     await query(insertOrderQuery, [
       badOrderId,
-      purchaseOrderId,
-      supplierId,
-      supplierName,
+      purchaseOrderId || null,
+      supplierId || null,
+      supplierName || null,
       reportedBy || null,
       formattedDate,
       status || 'Reported',

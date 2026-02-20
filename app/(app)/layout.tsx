@@ -293,7 +293,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuItem>
               )}
 
-               {hasPermission('view_sales') && (
+               {hasPermission('manage_customers') && (
                 <SidebarMenuItem>
                   <Collapsible defaultOpen={isCustomerPage} className="group/collapsible">
                      <CollapsibleTrigger asChild>
@@ -355,7 +355,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuItem>
               )}
 
-               {hasPermission('manage_purchases') && (
+               {hasPermission('manage_suppliers') && (
                 <SidebarMenuItem>
                   <Collapsible defaultOpen={isSuppliersPage} className="group/collapsible">
                     <CollapsibleTrigger asChild>
