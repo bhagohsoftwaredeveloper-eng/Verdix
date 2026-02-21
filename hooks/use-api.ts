@@ -236,6 +236,7 @@ export function usePaymentMethods(search?: string): UsePaymentMethodsResult {
       const transformedPaymentMethods: PaymentMethod[] = result.data.map((item: any) => ({
         id: item.id,
         name: item.name,
+        isReferenceRequired: item.isReferenceRequired ?? false,
       }));
 
       setPaymentMethods(transformedPaymentMethods);

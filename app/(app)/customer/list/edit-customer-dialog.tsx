@@ -37,7 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, PlusCircle } from 'lucide-react';
 
 import { useToast } from '@/hooks/use-toast';
-import { Customer, SalesPerson } from '@/lib/types';
+import { Customer } from '@/lib/types';
 
 interface LoyaltySetting {
   id: string;
@@ -51,9 +51,6 @@ const customerSchema = z.object({
   name: z.string().min(1, 'Customer name is required'),
   contactNumber: z.string().min(1, 'Contact number is required'),
   active: z.boolean().default(true),
-  salesPerson: z.string().optional(),
-  salesArea: z.string().optional(),
-  salesGroup: z.string().optional(),
   loyaltyPoints: z.coerce.number().min(0).default(0),
   paymentTerms: z.string().optional(),
   address: z.string().optional(),
@@ -80,12 +77,6 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
   const [isSaving, setIsSaving] = useState(false);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
-  const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
-  const [isLoadingSalesPersons, setIsLoadingSalesPersons] = useState(false);
-  const [salesAreas, setSalesAreas] = useState<any[]>([]);
-  const [isLoadingSalesAreas, setIsLoadingSalesAreas] = useState(false);
-  const [salesGroups, setSalesGroups] = useState<any[]>([]);
-  const [isLoadingSalesGroups, setIsLoadingSalesGroups] = useState(false);
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySetting[]>([]);
   const [isLoadingLoyaltySettings, setIsLoadingLoyaltySettings] = useState(false);
   const [paymentTermsList, setPaymentTermsList] = useState<any[]>([]);
@@ -99,9 +90,6 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
       name: customer.name,
       contactNumber: customer.contactNumber,
       active: customer.active === undefined ? true : !!customer.active,
-      salesPerson: customer.salesPerson || '',
-      salesArea: customer.salesArea || '',
-      salesGroup: customer.salesGroup || '',
       loyaltyPoints: customer.loyaltyPoints || 0,
       paymentTerms: customer.paymentTerms || '',
       address: customer.address || '',
@@ -118,9 +106,6 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
         name: customer.name,
         contactNumber: customer.contactNumber,
         active: customer.active === undefined ? true : !!customer.active,
-        salesPerson: customer.salesPerson || '',
-        salesArea: customer.salesArea || '',
-        salesGroup: customer.salesGroup || '',
         loyaltyPoints: customer.loyaltyPoints || 0,
         paymentTerms: customer.paymentTerms || '',
         address: customer.address || '',
@@ -130,33 +115,10 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
         priceLevelId: customer.priceLevelId || '',
       });
       fetchPriceLevels();
-      fetchSalesPersons();
-      fetchSalesAreas();
-      fetchSalesGroups();
       fetchLoyaltySettings();
       fetchPaymentTerms();
     }
   }, [isOpen, customer, form]);
-
-  const fetchSalesGroups = async () => {
-    try {
-      setIsLoadingSalesGroups(true);
-      const response = await fetch('/api/sales-groups?activeOnly=true');
-      const result = await response.json();
-      if (result.success) {
-        setSalesGroups(result.data);
-      }
-    } catch (error) {
-      console.error('Error fetching sales groups:', error);
-    } finally {
-      setIsLoadingSalesGroups(false);
-    }
-  };
-
-  const handleGroupAdded = (newGroup: { id: string; name: string }) => {
-    setSalesGroups(prev => [...prev, newGroup]);
-    form.setValue('salesGroup', newGroup.name);
-  };
 
   const fetchPriceLevels = async () => {
     try {
@@ -168,44 +130,6 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
     } finally {
       setIsLoadingPriceLevels(false);
     }
-  };
-
-  const fetchSalesPersons = async () => {
-    try {
-      setIsLoadingSalesPersons(true);
-      const response = await fetch('/api/sales-persons?activeOnly=true');
-      const result = await response.json();
-
-      if (result.success) {
-        setSalesPersons(result.data);
-      } else {
-        console.error('Failed to fetch sales persons:', result.error);
-      }
-    } catch (error) {
-      console.error('Error fetching sales persons:', error);
-    } finally {
-      setIsLoadingSalesPersons(false);
-    }
-  };
-
-  const fetchSalesAreas = async () => {
-    try {
-      setIsLoadingSalesAreas(true);
-      const response = await fetch('/api/sales-areas?activeOnly=true');
-      const result = await response.json();
-      if (result.success) {
-        setSalesAreas(result.data);
-      }
-    } catch (error) {
-      console.error('Error fetching sales areas:', error);
-    } finally {
-      setIsLoadingSalesAreas(false);
-    }
-  };
-
-  const handleAreaAdded = (newArea: { id: string; name: string }) => {
-    setSalesAreas(prev => [...prev, newArea]);
-    form.setValue('salesArea', newArea.name);
   };
 
   const fetchLoyaltySettings = async () => {
@@ -279,9 +203,8 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
             <form id="edit-customer-form" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="h-[520px]">
                 <Tabs defaultValue="basic" className="w-full h-full">
-              <TabsList className="grid w-fit grid-cols-4 mx-auto">
+              <TabsList className="grid w-fit grid-cols-3 mx-auto">
                 <TabsTrigger value="basic">Basic Info</TabsTrigger>
-                <TabsTrigger value="sales">Sales Info</TabsTrigger>
                 <TabsTrigger value="address">Address</TabsTrigger>
                 <TabsTrigger value="financial">Financial</TabsTrigger>
               </TabsList>
@@ -339,149 +262,7 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                   )}
                 />
               </TabsContent>
-              <TabsContent value="sales" className="space-y-4 p-6 h-[450px] overflow-y-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="salesPerson"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center h-8">
-                          <FormLabel>Sales Person</FormLabel>
-                        </div>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select Sales Person" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {isLoadingSalesPersons ? (
-                              <SelectItem value="loading" disabled>Loading...</SelectItem>
-                            ) : (
-                              salesPersons?.map(salesPerson => (
-                                <SelectItem key={salesPerson.id} value={salesPerson.name}>
-                                  {salesPerson.name}
-                                  {salesPerson.contactNumber && ` (${salesPerson.contactNumber})`}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="salesArea"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center justify-between">
-                          <FormLabel>Sales Area</FormLabel>
-                          <AddSalesAreaDialog 
-                            onAreaAdded={handleAreaAdded} 
-                            onSalesAreasUpdated={fetchSalesAreas}
-                          />
-                        </div>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
-                          <FormControl>
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select Sales Area" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {isLoadingSalesAreas ? (
-                              <SelectItem value="loading" disabled>Loading...</SelectItem>
-                            ) : (
-                              salesAreas?.map(area => (
-                                <SelectItem key={area.id} value={area.name}>
-                                  {area.name}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="salesGroup"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center justify-between">
-                          <FormLabel>Sales Group</FormLabel>
-                          <AddSalesGroupDialog 
-                            onGroupAdded={handleGroupAdded} 
-                            onSalesGroupsUpdated={fetchSalesGroups}
-                          />
-                        </div>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
-                          <FormControl>
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select Sales Group" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {isLoadingSalesGroups ? (
-                              <SelectItem value="loading" disabled>Loading...</SelectItem>
-                            ) : (
-                              salesGroups?.map(group => (
-                                <SelectItem key={group.id} value={group.name}>
-                                  {group.name}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="loyaltyPoints"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center h-8">
-                          <FormLabel>Loyalty Points Setting</FormLabel>
-                        </div>
-                        <Select 
-                          key={field.value?.toString()}
-                          onValueChange={(value) => field.onChange(Number(value))} 
-                          value={String(field.value ?? 0)}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select Loyalty Points Setting" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {isLoadingLoyaltySettings ? (
-                               <SelectItem value="loading" disabled>Loading...</SelectItem>
-                            ) : loyaltySettings.length > 0 ? (
-                                loyaltySettings.map((setting) => (
-                                  <SelectItem key={setting.id} value={Number(setting.amount).toString()}>
-                                    {setting.description} ({setting.amount} points)
-                                  </SelectItem>
-                                ))
-                            ) : (
-                                <>
-                                  <SelectItem value="0">None (0 points)</SelectItem>
-                                </>
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </TabsContent>
+
               <TabsContent value="address" className="space-y-4 p-6 h-[450px] overflow-y-auto">
                 <div className="grid grid-cols-1 gap-4">
                   <FormField
@@ -584,34 +365,76 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                     )}
                   />
                 </div>
-                <FormField
-                  control={form.control}
-                  name="priceLevelId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Default Price Level</FormLabel>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="loyaltyPoints"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center h-8">
+                          <FormLabel>Loyalty Points Setting</FormLabel>
+                        </div>
+                        <Select 
+                          key={field.value?.toString()}
+                          onValueChange={(value) => field.onChange(Number(value))} 
+                          value={String(field.value ?? 0)}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Loyalty Points Setting" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {isLoadingLoyaltySettings ? (
+                               <SelectItem value="loading" disabled>Loading...</SelectItem>
+                            ) : loyaltySettings.length > 0 ? (
+                                loyaltySettings.map((setting) => (
+                                  <SelectItem key={setting.id} value={Number(setting.amount).toString()}>
+                                    {setting.description} ({setting.amount} points)
+                                  </SelectItem>
+                                ))
+                            ) : (
+                                <>
+                                  <SelectItem value="0">None (0 points)</SelectItem>
+                                </>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="priceLevelId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center h-8">
+                          <FormLabel>Default Price Level</FormLabel>
+                        </div>
                         <Select onValueChange={field.onChange} value={field.value || ''}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select Price Level" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {isLoadingPriceLevels ? (
-                            <SelectItem value="loading" disabled>Loading...</SelectItem>
-                          ) : (
-                            priceLevels?.map(level => (
-                              <SelectItem key={level.id} value={level.id}>
-                                {level.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Price Level" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {isLoadingPriceLevels ? (
+                              <SelectItem value="loading" disabled>Loading...</SelectItem>
+                            ) : (
+                              priceLevels?.map(level => (
+                                <SelectItem key={level.id} value={level.id}>
+                                  {level.name}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </TabsContent>
                 </Tabs>
               </div>

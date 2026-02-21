@@ -29,6 +29,7 @@ interface CustomerSelectionFieldProps {
   label?: string;
   className?: string;
   onCustomerAdded?: () => void;
+  formItemClassName?: string;
 }
 
 export function CustomerSelectionField({
@@ -38,7 +39,8 @@ export function CustomerSelectionField({
   label = 'Customer',
   className,
   onCustomerAdded,
-  labelClassName
+  labelClassName,
+  formItemClassName
 }: CustomerSelectionFieldProps & { labelClassName?: string }) {
   const [showAddDialog, setShowAddDialog] = useState(false);
 
@@ -100,7 +102,7 @@ export function CustomerSelectionField({
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem>
+        <FormItem className={formItemClassName}>
           <div className="flex items-center justify-between h-5">
               {label && <FormLabel className={labelClassName}>{label}</FormLabel>}
               <Button

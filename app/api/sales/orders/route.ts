@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
         so.sales_person_id,
         sp.name as sales_person_name,
         so.note,
+        so.payment_reference,
         so.created_at,
         so.updated_at
       FROM sales_orders so
@@ -198,6 +199,7 @@ export async function GET(request: NextRequest) {
           total: parseFloat(row.total),
           formattedTotal: `₱${parseFloat(row.total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           paymentMethod: row.payment_method || '',
+          paymentReference: row.payment_reference || '',
           status: row.status as 'Pending' | 'Paid' | 'Shipped' | 'Delivered' | 'Failed' | 'Returned',
           notes: row.notes,
           items: formattedItems,
@@ -241,6 +243,7 @@ export async function POST(request: NextRequest) {
       reference,
       deliveryAddress,
       paymentMethod,
+      paymentReference,
       status,
       shipping,
       warehouse,
@@ -260,9 +263,9 @@ export async function POST(request: NextRequest) {
       const insertOrderQuery = `
         INSERT INTO sales_orders (
           id, customer_id, order_date, delivery_date, reference,
-          delivery_address, total, payment_method, status, shipping,
+          delivery_address, total, payment_method, payment_reference, status, shipping,
           warehouse_id, sales_person_id, note
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       await connection.query(insertOrderQuery, [
@@ -274,6 +277,7 @@ export async function POST(request: NextRequest) {
         deliveryAddress || null,
         total,
         paymentMethod,
+        paymentReference || null,
         status || 'Pending',
         shipping || 0,
         warehouse || null,

@@ -26,6 +26,7 @@ import Image from 'next/image';
 import { useProducts } from '@/hooks/use-api';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Loader2 } from 'lucide-react';
+import { calculateEffectivePrice } from '@/lib/pricing';
 
 interface ProductSearchDialogProps {
   onSelectProduct: (product: Product) => void;
@@ -33,9 +34,21 @@ interface ProductSearchDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   showQuantityInSearch?: boolean;
+  activeLevelId?: string;
+  defaultLevelId?: string;
+  activeLevelName?: string;
 }
 
-export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenChange, showQuantityInSearch = true }: ProductSearchDialogProps) {
+export function ProductSearchDialog({ 
+  onSelectProduct, 
+  children, 
+  isOpen, 
+  onOpenChange, 
+  showQuantityInSearch = true,
+  activeLevelId,
+  defaultLevelId,
+  activeLevelName = 'Retail'
+}: ProductSearchDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const { products, loading, error } = useProducts(debouncedSearchTerm, 'Available');
@@ -52,7 +65,7 @@ export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenC
     if (isOpen) {
       setSearchTerm('');
     }
-  }, [isOpen]);
+  }, [isOpen, activeLevelId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -131,13 +144,18 @@ export function ProductSearchDialog({ onSelectProduct, children, isOpen, onOpenC
                         <p className="text-sm text-muted-foreground">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col items-end gap-1">
                         {!!showQuantityInSearch && (
                             <div className={`text-sm ${product.stock <= 0 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
                                 {product.stock} {product.unitOfMeasure}
                             </div>
                         )}
-                        <p className="font-mono">₱{product.price.toFixed(2)}</p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">{activeLevelName}:</span>
+                          <p className="font-mono font-bold text-primary">
+                            ₱{calculateEffectivePrice(product, 1, activeLevelId, defaultLevelId).toFixed(2)}
+                          </p>
+                        </div>
                     </div>
                   </CommandItem>
                 ))}

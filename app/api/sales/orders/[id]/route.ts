@@ -127,6 +127,7 @@ export async function PUT(
             reference,
             deliveryAddress,
             paymentMethod,
+            paymentReference,
             status,
             shipping,
             warehouse,
@@ -187,13 +188,13 @@ export async function PUT(
             const updateOrderQuery = `
                 UPDATE sales_orders SET
                     customer_id = ?, order_date = ?, delivery_date = ?, reference = ?,
-                    delivery_address = ?, total = ?, payment_method = ?, status = ?,
+                    delivery_address = ?, total = ?, payment_method = ?, payment_reference = ?, status = ?,
                     shipping = ?, warehouse_id = ?, sales_person_id = ?, note = ?, updated_at = NOW()
                 WHERE id = ?
             `;
             await connection.query(updateOrderQuery, [
                 customer.id, formatDateForMySQL(orderDate), formatDateForMySQL(deliveryDate), reference || null,
-                deliveryAddress || null, total, paymentMethod, status || 'Pending',
+                deliveryAddress || null, total, paymentMethod, paymentReference || null, status || 'Pending',
                 shipping || 0, warehouse || null, salesPerson || null, note || null, 
                 orderId
             ]);

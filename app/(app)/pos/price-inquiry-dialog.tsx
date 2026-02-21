@@ -23,13 +23,23 @@ import type { Product } from '@/lib/types';
 import Image from 'next/image';
 import { useProducts } from '@/hooks/use-api';
 import { ArrowLeft } from 'lucide-react';
+import { calculateEffectivePrice } from '@/lib/pricing';
 
 interface PriceInquiryDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
+  activeLevelId?: string;
+  defaultLevelId?: string;
+  activeLevelName?: string;
 }
 
-export function PriceInquiryDialog({ isOpen, onOpenChange }: PriceInquiryDialogProps) {
+export function PriceInquiryDialog({ 
+  isOpen, 
+  onOpenChange,
+  activeLevelId,
+  defaultLevelId,
+  activeLevelName = 'Retail'
+}: PriceInquiryDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const { products, loading, error } = useProducts(searchTerm);
@@ -40,7 +50,7 @@ export function PriceInquiryDialog({ isOpen, onOpenChange }: PriceInquiryDialogP
       setSearchTerm('');
       setSelectedProduct(null);
     }
-  }, [isOpen]);
+  }, [isOpen, activeLevelId]);
 
   const handleSelect = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -137,9 +147,9 @@ export function PriceInquiryDialog({ isOpen, onOpenChange }: PriceInquiryDialogP
 
                     <div className="text-center w-full bg-primary/5 py-8 rounded-xl border-2 border-primary/10 shadow-sm relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
-                         <div className="text-xs font-bold text-primary/70 uppercase tracking-widest mb-1">Item Price</div>
+                         <div className="text-xs font-bold text-primary/70 uppercase tracking-widest mb-1">{activeLevelName} Price</div>
                          <div className="text-5xl font-black text-primary tracking-tighter drop-shadow-sm">
-                            ₱{selectedProduct.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            ₱{calculateEffectivePrice(selectedProduct, 1, activeLevelId, defaultLevelId).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                          </div>
                     </div>
 

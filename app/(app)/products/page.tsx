@@ -113,16 +113,6 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
             <div className="w-10"></div>
           )}
         </TableCell>
-        <TableCell>
-          <Image
-            alt={product.name}
-            className="aspect-square rounded-md object-cover"
-            height="40"
-            src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
-            data-ai-hint={product.imageHint}
-            width="40"
-          />
-        </TableCell>
         <TableCell className="font-medium">
           {product.name}
           {product.parentId && <div className="text-xs text-muted-foreground">Child Unit</div>}
@@ -143,6 +133,9 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
         </TableCell>
         <TableCell className="hidden md:table-cell text-center">
           {product.stock}
+        </TableCell>
+        <TableCell className="hidden md:table-cell text-right">
+          {product.cost && typeof product.cost === 'number' ? `₱${product.cost.toFixed(2)}` : '—'}
         </TableCell>
         <TableCell className="hidden md:table-cell text-right">
           {typeof product.price === 'number' ? `₱${product.price.toFixed(2)}` : 'N/A'}
@@ -275,14 +268,14 @@ function ProductSkeleton() {
   return (
     <TableRow>
       <TableCell className="hidden sm:table-cell w-12"><Skeleton className="h-5 w-5" /></TableCell>
-      <TableCell><Skeleton className="w-10 h-10 rounded-md" /></TableCell>
       <TableCell><Skeleton className="h-5 w-32" /></TableCell>
       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-24" /></TableCell>
       <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-24" /></TableCell>
       <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-10 mx-auto" /></TableCell>
       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-12 mx-auto" /></TableCell>
-      <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+      <TableCell className="hidden md:table-cell text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+      <TableCell className="hidden md:table-cell text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 mx-auto" /></TableCell>
       <TableCell className="text-right"><div className='flex gap-2 justify-end'><Skeleton className="h-8 w-8 rounded-full" /></div></TableCell>
     </TableRow>
@@ -714,18 +707,18 @@ function ProductsContent() {
       <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden">
         <CardContent className="p-0">
         <TooltipProvider>
-          <Table>
+          <Table className="text-xs">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12 hidden sm:table-cell"><span className="sr-only">Expand</span></TableHead>
-                <TableHead className="w-[80px]">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="hidden md:table-cell">SKU</TableHead>
                 <TableHead className="hidden lg:table-cell">Barcode</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden md:table-cell text-center">Unit</TableHead>
                 <TableHead className="hidden md:table-cell text-center">Stock</TableHead>
-                <TableHead className="hidden md:table-cell text-right">Price</TableHead>
+                <TableHead className="hidden md:table-cell text-right">Cost</TableHead>
+                <TableHead className="hidden md:table-cell text-right">Retail Price</TableHead>
                 <TableHead className="hidden md:table-cell text-center">Warehouse</TableHead>
                 <TableHead>
                   Actions
@@ -750,7 +743,7 @@ function ProductsContent() {
               )}
               {!isLoadingProducts && filteredProducts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-24 text-center">
+                  <TableCell colSpan={11} className="h-24 text-center">
                     No products found.
                   </TableCell>
                 </TableRow>

@@ -45,12 +45,15 @@ export default function DataManagementPage() {
   const [connectionStatus, setConnectionStatus] = useState<'none' | 'success' | 'error'>('none');
   const [statusMessage, setStatusMessage] = useState('');
 
+  // Export states
+  const [exporting, setExporting] = useState(false);
+  const [customerExporting, setCustomerExporting] = useState(false);
+
   // Import states
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
-  
-  // Export states
-  const [exporting, setExporting] = useState(false);
+  const [customerImportFile, setCustomerImportFile] = useState<File | null>(null);
+  const [customerImporting, setCustomerImporting] = useState(false);
 
   // Backup states
   const [backups, setBackups] = useState<BackupFile[]>([]);
@@ -163,6 +166,86 @@ export default function DataManagementPage() {
       });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleCustomerExport = async () => {
+    setCustomerExporting(true);
+    try {
+      const res = await fetch('/api/data-management/export/customers');
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to export');
+      }
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'customers.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Export Successful",
+        description: "Your customer list has been downloaded.",
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: "Export Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setCustomerExporting(false);
+    }
+  };
+
+  const handleCustomerFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setCustomerImportFile(e.target.files[0]);
+    }
+  };
+
+  const uploadCustomers = async () => {
+    if (!customerImportFile) return;
+
+    setCustomerImporting(true);
+    const formData = new FormData();
+    formData.append('file', customerImportFile);
+
+    try {
+      const res = await fetch('/api/data-management/import/customers', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast({
+          title: "Import Successful",
+          description: data.message,
+        });
+        setCustomerImportFile(null);
+      } else {
+        toast({
+          title: "Import Failed",
+          description: data.error || "Unknown error occurred",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+       toast({
+        title: "Error",
+        description: "Network error during upload",
+        variant: "destructive",
+      });
+    } finally {
+      setCustomerImporting(false);
     }
   };
 
@@ -787,15 +870,45 @@ export default function DataManagementPage() {
                 </div>
               </div>
 
-               {/* Customers Section (Placeholder for now) */}
-               <div className="space-y-4 opacity-50 cursor-not-allowed">
-                <h3 className="text-lg font-medium border-b pb-2">Customers <span className="text-xs font-normal ml-2">(Coming Soon)</span></h3>
+               {/* Customers Section */}
+               <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">Customers</h3>
                  <div className="grid gap-4 md:grid-cols-2">
-                   <div className="p-4 border rounded-lg">
-                      <div className="font-medium">Export Customers</div>
+                   <div className="p-4 border rounded-lg space-y-3">
+                      <div className="font-medium flex items-center">
+                        <Download className="mr-2 h-4 w-4 text-blue-500" /> Export Customers
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Download your entire customer list as a CSV file.
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={handleCustomerExport}
+                        disabled={customerExporting}
+                      >
+                        {customerExporting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4 text-blue-500" />} 
+                        Export CSV
+                      </Button>
                    </div>
-                   <div className="p-4 border rounded-lg">
-                      <div className="font-medium">Import Customers</div>
+                   <div className="p-4 border rounded-lg space-y-3">
+                      <div className="font-medium flex items-center">
+                        <Upload className="mr-2 h-4 w-4 text-green-500" /> Import Customers
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Add/Update customers via CSV. Exact matches will be skipped.
+                      </div>
+                      <div className="flex gap-2">
+                         <Input 
+                            type="file" 
+                            accept=".csv" 
+                            onChange={handleCustomerFileUpload}
+                            disabled={customerImporting}
+                         />
+                         <Button onClick={uploadCustomers} disabled={!customerImportFile || customerImporting}>
+                            {customerImporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Import'}
+                         </Button>
+                      </div>
                    </div>
                  </div>
                </div>

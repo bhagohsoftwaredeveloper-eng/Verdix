@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { getPriceLevels } from '../products/actions';
 
 interface AddCustomerDialogProps {
   isOpen: boolean;
@@ -26,8 +34,33 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
   const [name, setName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [address, setAddress] = useState('');
+  const [priceLevelId, setPriceLevelId] = useState<string>('');
+  const [priceLevels, setPriceLevels] = useState<any[]>([]);
+  const [isLoadingLevels, setIsLoadingLevels] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isOpen) {
+      const fetchLevels = async () => {
+        setIsLoadingLevels(true);
+        try {
+          const levels = await getPriceLevels();
+          setPriceLevels(levels);
+          // Auto-select default level if none selected
+          const defaultLevel = levels.find((l: any) => l.isDefault);
+          if (defaultLevel && !priceLevelId) {
+            setPriceLevelId(defaultLevel.id);
+          }
+        } catch (error) {
+          console.error('Error fetching price levels:', error);
+        } finally {
+          setIsLoadingLevels(false);
+        }
+      };
+      fetchLevels();
+    }
+  }, [isOpen]);
 
   const handleSave = async () => {
     if (!name.trim() || !contactNumber.trim()) {
@@ -48,6 +81,7 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
         address,
         active: true,
         paymentTerms: 'Due on receipt', // Default
+        priceLevelId: priceLevelId || null,
       };
 
       const response = await fetch('/api/customers', {
@@ -93,6 +127,7 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
     setName('');
     setContactNumber('');
     setAddress('');
+    setPriceLevelId('');
   };
 
   return (
@@ -134,6 +169,25 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Complete address"
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="price-level">Default Price Level</Label>
+            <Select onValueChange={setPriceLevelId} value={priceLevelId}>
+              <SelectTrigger id="price-level">
+                <SelectValue placeholder="Select Price Level" />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoadingLevels ? (
+                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                ) : (
+                  priceLevels.map((level) => (
+                    <SelectItem key={level.id} value={level.id}>
+                      {level.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>

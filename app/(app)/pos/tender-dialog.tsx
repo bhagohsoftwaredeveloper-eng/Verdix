@@ -126,14 +126,12 @@ export function TenderDialog({
 
     const isCashPayment = selectedMethod?.toUpperCase() === 'CASH';
 
-    // UX: Pre-fill amount for non-cash methods (usually exact payment)
+    // UX: Always pre-fill amount with total due for all methods
     useEffect(() => {
-        if (!isCashPayment && totalDue > 0) {
+        if (isOpen && totalDue > 0) {
             setAmountTendered(totalDue.toFixed(2));
-        } else if (isCashPayment) {
-            setAmountTendered('');
         }
-    }, [isCashPayment, totalDue]);
+    }, [isOpen, totalDue]);
 
     const amountTenderedNum = useMemo(() => parseFloat(amountTendered) || 0, [amountTendered]);
     const change = useMemo(() => amountTenderedNum - totalDue, [amountTenderedNum, totalDue]);
@@ -368,7 +366,7 @@ export function TenderDialog({
             setView('tender');
             setCompletedSale(null);
             setIsProcessing(false);
-            setAmountTendered('');
+            // Amount tendered is now handled by the specific pre-fill effect above
             setReferenceInput('');
             // Auto-confirm removed to allow amount entry for all methods
         }
@@ -481,6 +479,7 @@ export function TenderDialog({
                                     className="h-12 text-2xl text-right font-bold text-foreground [&:not(:placeholder-shown)]:text-foreground"
                                     style={{ color: 'hsl(var(--foreground))' }}
                                     autoFocus
+                                    onFocus={(e) => e.target.select()}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             e.preventDefault();

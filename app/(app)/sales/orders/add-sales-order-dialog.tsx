@@ -5,7 +5,6 @@ import { useState, useMemo, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { mockCustomers } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,7 +31,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -41,51 +39,45 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlusCircle, Loader2, Trash2, Plus, Search, ArrowRight } from 'lucide-react';
+import { PlusCircle, Loader2, Trash2, Search, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Product, Customer, Sale, PaymentMethod, Warehouse, SalesPerson } from '@/lib/types';
+import { Product, Customer, Sale, PaymentMethod, Warehouse } from '@/lib/types';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ManageCustomersDialog } from '../ManageCustomersDialog';
 import { ManagePaymentMethodsDialog } from '../ManagePaymentMethodsDialog';
-import { ManageWarehousesDialog, WarehouseDialog as AddWarehouseDialog } from '../ManageWarehousesDialog';
-import { ManageSalesPersonsDialog } from '../ManageSalesPersonsDialog';
+import { ManageWarehousesDialog } from '../ManageWarehousesDialog';
 import { CustomerSelectionField } from '../invoices/customer-selection-field';
-
 import { useProducts, useCustomers } from '@/hooks/use-api';
-import { format, addDays } from 'date-fns';
 
 const salesOrderItemSchema = z.object({
-  product: z.any(), // Keep full product object
+  product: z.any(),
   quantity: z.coerce.number().positive(),
   price: z.coerce.number().nonnegative(),
 });
 
 const salesOrderSchema = z.object({
-  customer: z.any(), // Keep full customer object
+  customer: z.any(),
   orderDate: z.string().min(1, 'Order date is required'),
   deliveryDate: z.string().optional(),
   reference: z.string().optional(),
   deliveryAddress: z.string().optional(),
   paymentMethod: z.string().min(1, 'Payment method is required'),
+  paymentReference: z.string().optional(),
   shipping: z.coerce.number().nonnegative().optional(),
   warehouse: z.string().optional(),
-  salesPerson: z.string().optional(),
-  depositAccount: z.string().optional(),
   note: z.string().optional(),
   items: z.array(salesOrderItemSchema).min(1, 'At least one item is required'),
 });
 
 type SalesOrderFormValues = z.infer<typeof salesOrderSchema>;
 
-function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Product) => void }) {
-  const { products, loading, error } = useProducts();
+function ProductSelector({ onSelectProduct, warehouseId }: { onSelectProduct: (product: Product) => void, warehouseId?: string }) {
+  const { products, loading, error } = useProducts(undefined, undefined, undefined, warehouseId);
   const [inputValue, setInputValue] = useState('');
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
   const handleScanOrPunch = () => {
     if (!inputValue.trim()) return;
 
-    // Find product by barcode, SKU, or name (case insensitive)
     const product = products.find(p =>
       p.barcode?.toLowerCase() === inputValue.toLowerCase() ||
       p.sku?.toLowerCase() === inputValue.toLowerCase() ||
@@ -96,7 +88,6 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
       onSelectProduct(product);
       setInputValue('');
     } else {
-      // Could add a toast notification here for not found
       console.log('Product not found');
     }
   };
@@ -108,7 +99,7 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
           placeholder="Scan barcode, enter SKU, or type product name"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleScanOrPunch()}
+          onKeyDown={(e) => e.key === 'Enter' && handleScanOrPunch()}
           className="pr-10 bg-white"
         />
         <Search
@@ -167,8 +158,6 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
 }
 
 
-// ... (imports remain)
-
 interface AddSalesOrderDialogProps {
   initialData?: Sale;
   isOpen?: boolean;
@@ -183,20 +172,19 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
   const setIsOpen = setControlledIsOpen || setInternalIsOpen;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Lists
+
+  // Payment methods - fetched directly (same as invoice dialog)
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(false);
-  const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
-  
+
+  // Warehouses - fetched directly (same as invoice dialog)
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
-  const [showAddWarehouseDialog, setShowAddWarehouseDialog] = useState(false);
-  
-  const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
-  const [isLoadingSalesPersons, setIsLoadingSalesPersons] = useState(false);
-  const [showAddSalesPersonDialog, setShowAddSalesPersonDialog] = useState(false);
-  
+
+  // Controlled manage dialog open states (same as invoice dialog)
+  const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
+  const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
+
   const { toast } = useToast();
   const { customers, refetch: refetchCustomers } = useCustomers();
 
@@ -206,8 +194,20 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     return `SO-${randomNum}`;
   };
 
+  // Define refined schema inside the component to access paymentMethods state
+  const refinedSchema = useMemo(() => salesOrderSchema.refine((data) => {
+    const selectedMethod = paymentMethods.find(m => m.name === data.paymentMethod);
+    if (selectedMethod?.isReferenceRequired && (!data.paymentReference || data.paymentReference.trim() === '')) {
+      return false;
+    }
+    return true;
+  }, {
+    message: 'Payment reference is required for this method',
+    path: ['paymentReference'],
+  }), [paymentMethods]);
+
   const form = useForm<SalesOrderFormValues>({
-    resolver: zodResolver(salesOrderSchema),
+    resolver: zodResolver(refinedSchema),
     defaultValues: {
       customer: undefined,
       orderDate: new Date().toISOString().split('T')[0],
@@ -215,73 +215,93 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
       reference: '',
       deliveryAddress: '',
       paymentMethod: '',
-      depositAccount: '',
+      paymentReference: '',
       items: [],
       shipping: 0,
       note: ''
     },
   });
 
-  const { fields, append, remove, update, replace } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: 'items',
   });
 
-    // Populate form if initialData provided (Edit Mode)
-    useEffect(() => {
-        const initializeForm = async () => {
-             // Always fetch latest data first
-             const [warehousesData, paymentMethodsData, salesPersonsData] = await Promise.all([
-                 fetchWarehouses(),
-                 fetchPaymentMethods(),
-                 fetchSalesPersons()
-             ]);
+  // Fetch payment methods from API (same as invoice dialog)
+  const fetchPaymentMethods = async () => {
+    try {
+      setIsLoadingPaymentMethods(true);
+      const response = await fetch('/api/payment-methods?activeOnly=true');
+      const result = await response.json();
+      if (result.success) {
+        // Explicitly map properties (same as invoice dialog)
+        const mapped = result.data.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            isReferenceRequired: item.isReferenceRequired ?? false,
+        }));
+        setPaymentMethods(mapped);
+      } else {
+        console.error('Failed to fetch payment methods:', result.error);
+      }
+    } catch (error) {
+      console.error('Error fetching payment methods:', error);
+    } finally {
+      setIsLoadingPaymentMethods(false);
+    }
+  };
 
-            if (initialData && isOpen) {
-                // Check if salesPersonId is actually a name (legacy data fix)
-                let salesPersonId = initialData.salesPersonId || (initialData as any).sales_person_id;
-                
-                // If the current ID is NOT in the list of IDs, check if it matches a name
-                if (salesPersonsData && salesPersonId) {
-                     const exists = salesPersonsData.some(sp => sp.id.toString() === salesPersonId);
-                     if (!exists) {
-                         const foundByName = salesPersonsData.find(sp => sp.name.toLowerCase() === salesPersonId.toLowerCase());
-                         if (foundByName) {
-                             salesPersonId = foundByName.id.toString();
-                         }
-                     }
-                }
+  // Fetch warehouses from API (same as invoice dialog)
+  const fetchWarehouses = async () => {
+    try {
+      setIsLoadingWarehouses(true);
+      const response = await fetch('/api/warehouses?activeOnly=true');
+      const result = await response.json();
+      if (result.success) {
+        setWarehouses(result.data);
+      } else {
+        console.error('Failed to fetch warehouses:', result.error);
+      }
+    } catch (error) {
+      console.error('Error fetching warehouses:', error);
+    } finally {
+      setIsLoadingWarehouses(false);
+    }
+  };
 
-                form.reset({
-                    customer: initialData.customer,
-                    orderDate: initialData.orderDate ? new Date(initialData.orderDate).toISOString().split('T')[0] : '',
-                    deliveryDate: initialData.deliveryDate ? new Date(initialData.deliveryDate).toISOString().split('T')[0] : '',
-                    reference: initialData.reference,
-                    deliveryAddress: initialData.deliveryAddress,
-                    paymentMethod: initialData.paymentMethod,
-                    // shipping not in Sale type directly but in API response, assume it maps if available. 
-                    // Since Sale type might be incomplete locally vs API full response, we guard.
-                    shipping: (initialData as any).shipping || 0, 
-                    warehouse: (initialData as any).warehouse_id, 
-                    salesPerson: salesPersonId,
-                    note: initialData.notes,
-                    items: initialData.items.map(item => ({
-                        product: item.product,
-                        quantity: item.quantity,
-                        price: item.price
-                    }))
-                });
-            } else if (isOpen && !initialData) {
-                // New Mode - generate ref if empty
-                 const autoReference = generateReference();
-                 form.setValue('reference', autoReference);
-            }
-        };
+  // Populate form and fetch data when dialog opens (same as invoice dialog)
+  useEffect(() => {
+    const initializeForm = async () => {
+      await Promise.all([fetchPaymentMethods(), fetchWarehouses()]);
 
-        if (isOpen) {
-            initializeForm();
-        }
-    }, [initialData, isOpen, form]);
+      if (initialData && isOpen) {
+        form.reset({
+          customer: initialData.customer,
+          orderDate: initialData.orderDate ? new Date(initialData.orderDate).toISOString().split('T')[0] : '',
+          deliveryDate: initialData.deliveryDate ? new Date(initialData.deliveryDate).toISOString().split('T')[0] : '',
+          reference: initialData.reference,
+          deliveryAddress: initialData.deliveryAddress,
+          paymentMethod: initialData.paymentMethod,
+          paymentReference: (initialData as any).paymentReference || '',
+          shipping: (initialData as any).shipping || 0,
+          warehouse: (initialData as any).warehouse_id,
+          note: initialData.notes,
+          items: initialData.items.map(item => ({
+            product: item.product,
+            quantity: item.quantity,
+            price: item.price
+          }))
+        });
+      } else if (isOpen && !initialData) {
+        const autoReference = generateReference();
+        form.setValue('reference', autoReference);
+      }
+    };
+
+    if (isOpen) {
+      initializeForm();
+    }
+  }, [isOpen]);
 
 
   const [total, setTotal] = useState(0);
@@ -312,111 +332,13 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch warehouses from API
-  const fetchWarehouses = async () => {
-    try {
-      setIsLoadingWarehouses(true);
-      const response = await fetch('/api/warehouses?activeOnly=true');
-      const result = await response.json();
-
-      if (result.success) {
-        setWarehouses(result.data);
-        return result.data;
-      } else {
-        console.error('Failed to fetch warehouses:', result.error);
-        return [];
-      }
-    } catch (error) {
-      console.error('Error fetching warehouses:', error);
-      return [];
-    } finally {
-      setIsLoadingWarehouses(false);
-    }
-  };
-
-  const handleAddWarehouse = async (name: string, location?: string) => {
-    try {
-      const response = await fetch('/api/warehouses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, location }),
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to add warehouse');
-      }
-
-      await fetchWarehouses();
-    } catch (error) {
-      console.error('Error adding warehouse:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to add warehouse.',
-      });
-      throw error;
-    }
-  };
-
-  // Fetch payment methods from API
-  const fetchPaymentMethods = async () => {
-    try {
-      setIsLoadingPaymentMethods(true);
-      const response = await fetch('/api/payment-methods?activeOnly=true');
-      const result = await response.json();
-
-      if (result.success) {
-        setPaymentMethods(result.data);
-        return result.data;
-      } else {
-        console.error('Failed to fetch payment methods:', result.error);
-        return [];
-      }
-    } catch (error) {
-      console.error('Error fetching payment methods:', error);
-      return [];
-    } finally {
-      setIsLoadingPaymentMethods(false);
-    }
-  };
-
-  // Fetch sales persons from API
-  const fetchSalesPersons = async () => {
-    try {
-      setIsLoadingSalesPersons(true);
-      const response = await fetch('/api/sales-persons?activeOnly=true');
-      const result = await response.json();
-
-      if (result.success) {
-        setSalesPersons(result.data);
-        return result.data as SalesPerson[];
-      } else {
-        console.error('Failed to fetch sales persons:', result.error);
-        return [] as SalesPerson[];
-      }
-    } catch (error) {
-      console.error('Error fetching sales persons:', error);
-      return [] as SalesPerson[];
-    } finally {
-      setIsLoadingSalesPersons(false);
-    }
-  };
-
-
-
-
-
   const handleAddProduct = (product: Product) => {
     const existingItemIndex = fields.findIndex(field => field.product.id === product.id);
     if(existingItemIndex !== -1) {
-        const existingItem = fields[existingItemIndex];
-        update(existingItemIndex, { ...existingItem, quantity: existingItem.quantity + 1 });
+      const existingItem = fields[existingItemIndex];
+      update(existingItemIndex, { ...existingItem, quantity: existingItem.quantity + 1 });
     } else {
-        append({ product, quantity: 1, price: product.price });
+      append({ product, quantity: 1, price: product.price });
     }
   };
 
@@ -427,23 +349,9 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
       const url = initialData ? `/api/sales/orders/${initialData.id}` : '/api/sales/orders';
       const method = initialData ? 'PUT' : 'POST';
 
-      const bodyData = { 
-          ...values, 
-          status: initialData ? undefined : 'To Deliver' // Set status only for new orders if needed, or let API handle it.
-          // Actually, 'To Deliver' is the requested default status.
-      };
-      // If editing, we shouldn't overwrite status unless explicitly changed, but here we just pass ...values.
-      // Wait, values (from form) doesn't include status field.
-      // So new orders get 'To Deliver'. Existing orders keep their status (handled by backend or we don't pass it).
-      // But PUT endpoint expects full object or partial? My PUT implementation updates status if provided.
-      // If I don't provide status in PUT body, what happens?
-      // My backend PUT implementation: const { status ... } = body; ... status || 'Pending'.
-      // So if I don't send status, it might reset to Pending!
-      // I need to send existing status if editing.
-      
       const payload = {
-          ...values,
-          status: initialData ? initialData.status : 'To Deliver'
+        ...values,
+        status: initialData ? initialData.status : 'To Deliver'
       };
 
       const response = await fetch(url, {
@@ -462,10 +370,10 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
           description: `Sales order ${data.data.id} has been successfully ${initialData ? 'updated' : 'created'}.`,
         });
 
-        if (!initialData) form.reset(); // Only reset if new, or maybe always reset?
+        if (!initialData) form.reset();
         setIsOpen(false);
         if (onSuccess) onSuccess();
-        else window.location.reload(); // Fallback
+        else window.location.reload();
       } else {
         toast({
           title: 'Error',
@@ -484,6 +392,10 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
       setIsSubmitting(false);
     }
   }
+
+  const watchedPaymentMethod = form.watch('paymentMethod');
+  const selectedPaymentMethod = paymentMethods.find(m => m.name === watchedPaymentMethod);
+  const isReferenceRequired = selectedPaymentMethod?.isReferenceRequired ?? false;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -510,58 +422,29 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
               {/* TOP HEADER - Form Fields (Compact Grid) */}
               <div className="bg-background border-b p-4 grid grid-cols-4 gap-4 shrink-0">
                   
-                  {/* Column 1: Customer & Sales Person */}
+                  {/* Column 1: Customer & Address */}
                   <div className="space-y-3">
-                         <CustomerSelectionField
-                            control={form.control}
-                            customerList={customers}
-                            className="bg-white h-8 text-xs"
-                            onCustomerAdded={refetchCustomers}
-                            labelClassName="text-xs font-semibold text-muted-foreground"
+                        <CustomerSelectionField
+                          control={form.control}
+                          customerList={customers}
+                          className="bg-white h-8 text-xs"
+                          onCustomerAdded={refetchCustomers}
+                          labelClassName="text-xs font-semibold text-muted-foreground"
                         />
-
-                      <FormField
-                        control={form.control}
-                        name="salesPerson"
-                        render={({ field }) => (
-                          <FormItem className="space-y-1">
-                            <div className="flex items-center justify-between">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
-                                 <Button
-                                    variant="link"
-                                    size="sm"
-                                    className="h-auto p-0 text-xs text-primary"
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setShowAddSalesPersonDialog(true);
-                                    }}
-                                  >
-                                    Manage
-                                  </Button>
-                            </div>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                         <FormField
+                            control={form.control}
+                            name="deliveryAddress"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                                </div>
                                 <FormControl>
-                                  <SelectTrigger className="h-8 bg-white text-xs">
-                                    <SelectValue placeholder="Select sales person" />
-                                  </SelectTrigger>
+                                <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
                                 </FormControl>
-                                <SelectContent>
-                                  {salesPersons?.map(person => (
-                                    <SelectItem key={person.id} value={person.id.toString()} className="text-xs">
-                                      {person.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                            </Select>
-                            <ManageSalesPersonsDialog
-                                open={showAddSalesPersonDialog}
-                                onOpenChange={setShowAddSalesPersonDialog}
-                                onChange={fetchSalesPersons}
-                            />
-                          </FormItem>
-                        )}
-                      />
+                            </FormItem>
+                            )}
+                       />
                   </div>
 
                   {/* Column 2: Dates & Warehouse */}
@@ -597,20 +480,19 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                             name="warehouse"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
+                                <div className="flex justify-between items-center w-full h-5">
                                     <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
                                     <Button
                                         variant="link"
-                                        size="sm"
                                         className="h-auto p-0 text-xs text-primary"
                                         type="button"
                                         onClick={(e) => {
                                             e.preventDefault();
-                                            setShowAddWarehouseDialog(true);
+                                            setShowWarehouseDialog(true);
                                         }}
-                                      >
+                                    >
                                         Manage
-                                      </Button>
+                                    </Button>
                                 </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
@@ -626,39 +508,37 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                     ))}
                                 </SelectContent>
                                 </Select>
-                                <AddWarehouseDialog
-                                    open={showAddWarehouseDialog}
-                                    onOpenChange={setShowAddWarehouseDialog}
-                                    onSave={handleAddWarehouse}
-                                >
-                                    <div />
-                                </AddWarehouseDialog>
+                                <ManageWarehousesDialog
+                                    open={showWarehouseDialog}
+                                    onOpenChange={setShowWarehouseDialog}
+                                    onChange={fetchWarehouses}
+                                />
+                                <FormMessage className="text-xs" />
                             </FormItem>
                             )}
                         />
                   </div>
                   
-                  {/* Column 3: Payment & Shipping */}
+                  {/* Column 3: Payment Method & Reference */}
                   <div className="space-y-3">
                        <FormField
                             control={form.control}
                             name="paymentMethod"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
+                                <div className="flex justify-between items-center w-full h-5">
                                     <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
-                                     <Button
+                                    <Button
                                         variant="link"
-                                        size="sm"
                                         className="h-auto p-0 text-xs text-primary"
                                         type="button"
                                         onClick={(e) => {
-                                          e.preventDefault();
-                                          setShowPaymentMethodDialog(true);
+                                            e.preventDefault();
+                                            setShowPaymentMethodDialog(true);
                                         }}
-                                      >
+                                    >
                                         Manage
-                                      </Button>
+                                    </Button>
                                 </div>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
@@ -670,62 +550,67 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                     {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
                                 </SelectContent>
                                 </Select>
-                                 <ManagePaymentMethodsDialog
+                                <ManagePaymentMethodsDialog
                                     open={showPaymentMethodDialog}
                                     onOpenChange={setShowPaymentMethodDialog}
                                     onChange={fetchPaymentMethods}
                                 />
+                                <FormMessage className="text-xs" />
                             </FormItem>
                             )}
                         />
-                          <div className="grid grid-cols-2 gap-2">
-                            <FormField
-                                control={form.control}
-                                name="shipping"
-                                render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
-                                    <FormControl>
-                                    <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
-                                    </FormControl>
-                                </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="depositAccount"
-                                render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Deposit Acc</FormLabel>
-                                    <FormControl>
-                                    <Input className="h-8 bg-white text-xs" {...field} />
-                                    </FormControl>
-                                </FormItem>
-                                )}
-                            />
-                        </div>
-                  </div>
-
-                  {/* Column 4: Address / Notes */}
-                  <div className="space-y-3">
-                      <FormField
+                        <FormField
                             control={form.control}
-                            name="deliveryAddress"
+                            name="shipping"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
-                                <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping Cost</FormLabel>
+                                </div>
                                 <FormControl>
-                                <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
+                                <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
                             </FormItem>
                             )}
-                       />
+                        />
+                  </div>
+
+                  {/* Column 4: Reference & Notes */}
+                  <div className="space-y-3">
+                      <FormField
+                          control={form.control}
+                          name="paymentReference"
+                          render={({ field }) => (
+                          <FormItem className="space-y-1">
+                              <div className="flex items-center justify-between h-5">
+                                  <FormLabel className="text-xs font-semibold text-muted-foreground">
+                                      {isReferenceRequired ? (
+                                          <>Reference <span className="text-destructive">*</span></>
+                                      ) : (
+                                          'Reference'
+                                      )}
+                                  </FormLabel>
+                              </div>
+                              <FormControl>
+                                  <Input 
+                                    className="h-8 bg-white text-xs" 
+                                    placeholder={isReferenceRequired ? "Reference required..." : "Optional reference..."} 
+                                    {...field} 
+                                    value={field.value || ''} 
+                                  />
+                              </FormControl>
+                              <FormMessage className="text-xs" />
+                          </FormItem>
+                          )}
+                      />
                        <FormField
                           control={form.control}
                           name="note"
                           render={({ field }) => (
                             <FormItem className="space-y-1">
-                              <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                              <div className="flex items-center justify-between h-5">
+                                  <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                              </div>
                               <FormControl>
                                 <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
                               </FormControl>
@@ -739,7 +624,8 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
               {/* CENTER - ITEMS TABLE */}
               <div className="flex-1 flex flex-col overflow-hidden bg-muted/5 p-4 relative">
                   <div className="max-w-2xl mb-4 z-10">
-                    <ProductSelector onSelectProduct={handleAddProduct} />
+                    {/* Pass the selected warehouseId to filter products (same as invoice) */}
+                    <ProductSelector onSelectProduct={handleAddProduct} warehouseId={form.watch('warehouse')} />
                   </div>
                   
                   <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col relative">
@@ -808,7 +694,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                             />
                                         </TableCell>
                                         <TableCell className="text-right py-2 pr-4 font-mono">
-                                            ₱{(form.watch(`items.${index}.price`) * form.watch(`items.${index}.quantity`)).toFixed(2)}
+                                            ₱{(Number(form.watch(`items.${index}.price`) || 0) * Number(form.watch(`items.${index}.quantity`) || 0)).toFixed(2)}
                                         </TableCell>
                                         <TableCell className="py-2">
                                             <Button 

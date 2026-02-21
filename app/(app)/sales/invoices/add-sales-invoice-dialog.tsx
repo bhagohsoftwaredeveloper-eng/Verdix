@@ -63,24 +63,14 @@ const salesInvoiceSchema = z.object({
   invoiceDate: z.string().min(1, 'Invoice date is required'),
   deliveryDate: z.string().optional(),
   dueDate: z.string().optional(),
-  invoiceReference: z.string().optional(),
   reference: z.string().optional(),
+  paymentReference: z.string().optional(),
   deliveryAddress: z.string().optional(),
   paymentMethod: z.string().min(1, 'Payment method is required'),
   shipping: z.coerce.number().nonnegative().optional(),
   warehouse: z.string().optional(),
   note: z.string().optional(),
   items: z.array(salesInvoiceItemSchema).min(1, 'At least one item is required'),
-}).refine((data) => {
-  // If payment method is not Cash or Petty Cash, reference is required
-  const cashMethods = ['Cash', 'Petty Cash'];
-  if (!cashMethods.includes(data.paymentMethod) && (!data.reference || data.reference.trim() === '')) {
-    return false;
-  }
-  return true;
-}, {
-  message: 'Reference number is required for non-cash payments',
-  path: ['reference'],
 });
 
 type SalesInvoiceFormValues = z.infer<typeof salesInvoiceSchema>;
@@ -188,7 +178,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
   const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
   const { toast } = useToast();
-  const { customers } = useCustomers();
+  const { customers, refetch: refetchCustomers } = useCustomers();
 
   // Generate auto reference number
   const generateReference = () => {
@@ -196,15 +186,27 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
     return `INV-${randomNum}`;
   };
 
+  // Define refined schema inside the component to access paymentMethods state
+  const refinedSchema = useMemo(() => salesInvoiceSchema.refine((data) => {
+    const selectedMethod = paymentMethods.find(m => m.name === data.paymentMethod);
+    if (selectedMethod?.isReferenceRequired && (!data.paymentReference || data.paymentReference.trim() === '')) {
+      return false;
+    }
+    return true;
+  }, {
+    message: 'Payment reference is required for this method',
+    path: ['paymentReference'],
+  }), [paymentMethods]);
+
   const form = useForm<SalesInvoiceFormValues>({
-    resolver: zodResolver(salesInvoiceSchema),
+    resolver: zodResolver(refinedSchema),
     defaultValues: {
       customer: undefined,
       invoiceDate: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
       deliveryDate: '',
       dueDate: new Date().toISOString().split('T')[0], // Today's date as default due date
-      invoiceReference: '',
       reference: '',
+      paymentReference: '',
       deliveryAddress: '',
       paymentMethod: '',
       items: [],
@@ -228,7 +230,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
           const quantity = item?.quantity || 0;
           return acc + (price * quantity);
         }, 0);
-        const shippingCost = value.shipping || 0;
+        const shippingCost = Number(value.shipping || 0);
         setTotal(itemsTotal + shippingCost);
       }
     });
@@ -240,7 +242,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
       const quantity = item?.quantity || 0;
       return acc + (price * quantity);
     }, 0);
-    const shippingCost = currentValues.shipping || 0;
+    const shippingCost = Number(currentValues.shipping || 0);
     setTotal(itemsTotal + shippingCost);
 
     return () => subscription.unsubscribe();
@@ -273,7 +275,13 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
       const result = await response.json();
 
       if (result.success) {
-        setPaymentMethods(result.data);
+        // Map isReferenceRequired so we can use the flag in the UI
+        const mapped = result.data.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          isReferenceRequired: item.isReferenceRequired ?? false,
+        }));
+        setPaymentMethods(mapped);
       } else {
         console.error('Failed to fetch payment methods:', result.error);
       }
@@ -288,7 +296,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   useEffect(() => {
     if (isOpen) {
       const autoReference = generateReference();
-      form.setValue('invoiceReference', autoReference);
+      form.setValue('reference', autoReference);
       fetchWarehouses();
       fetchPaymentMethods();
     }
@@ -297,6 +305,10 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   const watchedCustomer = form.watch('customer');
   const watchedInvoiceDate = form.watch('invoiceDate');
   const watchedPaymentMethod = form.watch('paymentMethod');
+
+  // Derive isReferenceRequired from the selected payment method
+  const selectedPaymentMethod = paymentMethods.find(m => m.name === watchedPaymentMethod);
+  const isReferenceRequired = selectedPaymentMethod?.isReferenceRequired ?? false;
 
   useEffect(() => {
     if (!watchedInvoiceDate) return;
@@ -354,7 +366,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
       if (data.success) {
         toast({
           title: 'Sales Invoice Added',
-          description: `Sales Invoice ${values.reference} has been successfully created.`,
+          description: `Sales Invoice ${values.reference || values.paymentReference} has been successfully created.`,
         });
 
         form.reset();
@@ -391,7 +403,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
         <DialogHeader className="px-6 py-4 border-b bg-background">
           <DialogTitle>New Sales Invoice</DialogTitle>
           <DialogDescription>
-            Create a transaction. Reference: <span className="font-mono font-medium text-primary">{form.watch('invoiceReference')}</span>
+            Create a transaction. Reference: <span className="font-mono font-medium text-primary">{form.watch('reference')}</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -402,14 +414,34 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
               {/* TOP HEADER - Form Fields (Compact Grid) */}
               <div className="bg-background border-b p-4 grid grid-cols-4 gap-4 shrink-0">
                   
-                  {/* Column 1: Customer & Dates */}
+                  {/* Column 1: Customer & Address */}
                   <div className="space-y-3">
                          <CustomerSelectionField
                             control={form.control}
                             customerList={customers}
                             className="bg-white h-8 text-xs"
+                            formItemClassName="space-y-1"
+                            onCustomerAdded={refetchCustomers}
                              labelClassName="text-xs font-semibold text-muted-foreground"
                         />
+                         <FormField
+                            control={form.control}
+                            name="deliveryAddress"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <div className="flex items-center justify-between h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                                </div>
+                                <FormControl>
+                                <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
+                                </FormControl>
+                            </FormItem>
+                            )}
+                       />
+                  </div>
+
+                  {/* Column 2: Dates & Warehouse */}
+                  <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2">
                         <FormField
                             control={form.control}
@@ -440,9 +472,51 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             )}
                         />
                       </div>
-                  </div>
+                       <FormField
+                            control={form.control}
+                            name="warehouse"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <div className="flex justify-between items-center w-full h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
+                                    <Button
+                                        variant="link"
+                                        className="h-auto p-0 text-xs text-primary"
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowWarehouseDialog(true);
+                                        }}
+                                    >
+                                        Manage
+                                    </Button>
+                                </div>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                    <SelectValue placeholder="Select warehouse" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
 
-                  {/* Column 2: Payment & Shipping */}
+                                    {warehouses?.map(warehouse => (
+                                    <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
+                                        {warehouse.name}
+                                    </SelectItem>
+                                    ))}
+                                </SelectContent>
+                                </Select>
+                                <ManageWarehousesDialog
+                                    open={showWarehouseDialog}
+                                    onOpenChange={setShowWarehouseDialog}
+                                    onChange={fetchWarehouses}
+                                />
+                            </FormItem>
+                            )}
+                        />
+                  </div>
+                  
+                  {/* Column 3: Payment & Shipping */}
                   <div className="space-y-3">
                        <FormField
                             control={form.control}
@@ -497,102 +571,49 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                             )}
                         />
                   </div>
-                  
-                  {/* Column 3: Warehouse & Address */}
+
+                  {/* Column 4: Reference & Notes */}
                   <div className="space-y-3">
                        <FormField
                             control={form.control}
-                            name="warehouse"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex justify-between items-center w-full h-5">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
-                                    <Button
-                                        variant="link"
-                                        className="h-auto p-0 text-xs text-primary"
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            setShowWarehouseDialog(true);
-                                        }}
-                                    >
-                                        Manage
-                                    </Button>
-                                </div>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                    <SelectTrigger className="h-8 bg-white text-xs">
-                                    <SelectValue placeholder="Select warehouse" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-
-                                    {warehouses?.map(warehouse => (
-                                    <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
-                                        {warehouse.name}
-                                    </SelectItem>
-                                    ))}
-                                </SelectContent>
-                                </Select>
-                                <ManageWarehousesDialog
-                                    open={showWarehouseDialog}
-                                    onOpenChange={setShowWarehouseDialog}
-                                    onChange={fetchWarehouses}
-                                />
-                            </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="deliveryAddress"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between h-5">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
-                                </div>
-                                <FormControl>
-                                <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
-                                </FormControl>
-                            </FormItem>
-                            )}
-                       />
-                  </div>
-
-                  {/* Column 4: Notes / Payment Ref */}
-                  <div className="space-y-3">
-                       <FormField
-                          control={form.control}
-                          name="note"
-                          render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between h-5">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
-                                </div>
-                              <FormControl>
-                                <Textarea className="h-8 min-h-8 resize-none bg-white text-xs pt-2" placeholder="Brief notes..." {...field} value={field.value || ''} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                       <FormField
-                            control={form.control}
-                            name="reference"
+                            name="paymentReference"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
                                 <div className="flex items-center justify-between h-5">
                                     <FormLabel className="text-xs font-semibold text-muted-foreground">
-                                        Reference #
-                                        {watchedPaymentMethod && !['Cash', 'Petty Cash'].includes(watchedPaymentMethod) && (
-                                            <span className="text-destructive ml-1">*</span>
+                                        {isReferenceRequired ? (
+                                            <>Reference <span className="text-destructive">*</span></>
+                                        ) : (
+                                            'Reference'
                                         )}
                                     </FormLabel>
                                 </div>
                                 <FormControl>
-                                <Input className="h-8 bg-white text-xs" {...field} />
+                                <Input 
+                                    className="h-8 bg-white text-xs" 
+                                    placeholder={isReferenceRequired ? "Reference required..." : "Optional reference..."} 
+                                    {...field} 
+                                    value={field.value || ''} 
+                                />
                                 </FormControl>
+                                <FormMessage className="text-xs" />
                             </FormItem>
                             )}
-                       />
+                        />
+                        <FormField
+                           control={form.control}
+                           name="note"
+                           render={({ field }) => (
+                             <FormItem className="space-y-1">
+                                 <div className="flex items-center justify-between h-5">
+                                     <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                                 </div>
+                               <FormControl>
+                                 <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
+                               </FormControl>
+                             </FormItem>
+                           )}
+                         />
                   </div>
 
               </div>

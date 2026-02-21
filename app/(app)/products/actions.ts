@@ -147,36 +147,52 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
       });
     });
 
-    // Map database fields to Product type
-    return products.map((product: any) => ({
-      ...product,
-      additionalDescription: product.additional_description,
-      reorderPoint: product.reorder_point,
-      primarySupplierRop: product.primary_supplier_rop, // Included new field
-      avgDailySales: product.avg_daily_sales,
-      price: parseFloat(product.price) || 0,
-      cost: product.cost ? parseFloat(product.cost) : undefined,
-      imageUrl: product.image_url,
-      imageHint: product.image_hint,
-      unitOfMeasure: product.unit_of_measure,
-      parentId: product.parent_id,
-      conversionFactor: product.conversion_factor,
-      conversionFactors: cfMap.get(product.id) || [],
-      incomeAccount: product.income_account,
-      expenseAccount: product.expense_account,
-      supplier: product.primary_supplier_id || product.supplier_id, // Use primary mapped supplier if available
-      supplierName: product.primary_supplier_name || product.legacy_supplier_name,
-      warehouse: product.warehouse_id,
-      warehouseName: product.warehouse_name,
+    // Fetch default price level
+    const defaultPriceLevelSql = `SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1`;
+    const defaultPriceLevelResult = await query(defaultPriceLevelSql);
+    const defaultLevelId = defaultPriceLevelResult.length > 0 ? defaultPriceLevelResult[0].id : 'retail-level';
 
-      priceLevels: plMap.get(product.id) || [],
-      vatStatus: product.vat_status,
-      availability: product.availability,
-      earnsPoints: product.earns_points === 1,
-      expirationDate: product.expiration_date,
-      createdAt: product.created_at,
-      updatedAt: product.updated_at,
-    }));
+    // Map database fields to Product type
+    return products.map((product: any) => {
+      const productPriceLevels = plMap.get(product.id) || [];
+      // Sort overrides by minQuantity to find the standard (lowest quantity) retail price
+      const retailPriceOverrides = productPriceLevels
+        .filter((pl: any) => pl.levelId === defaultLevelId)
+        .sort((a: any, b: any) => (a.minQuantity || 0) - (b.minQuantity || 0));
+      
+      const effectivePrice = retailPriceOverrides.length > 0 
+        ? retailPriceOverrides[0].price 
+        : (parseFloat(product.price) || 0);
+
+      return {
+        ...product,
+        additionalDescription: product.additional_description,
+        reorderPoint: product.reorder_point,
+        primarySupplierRop: product.primary_supplier_rop,
+        avgDailySales: product.avg_daily_sales,
+        price: effectivePrice,
+        cost: product.cost ? parseFloat(product.cost) : undefined,
+        imageUrl: product.image_url,
+        imageHint: product.image_hint,
+        unitOfMeasure: product.unit_of_measure,
+        parentId: product.parent_id,
+        conversionFactor: product.conversion_factor,
+        conversionFactors: cfMap.get(product.id) || [],
+        incomeAccount: product.income_account,
+        expenseAccount: product.expense_account,
+        supplier: product.primary_supplier_id || product.supplier_id,
+        supplierName: product.primary_supplier_name || product.legacy_supplier_name,
+        warehouse: product.warehouse_id,
+        warehouseName: product.warehouse_name,
+        priceLevels: productPriceLevels,
+        vatStatus: product.vat_status,
+        availability: product.availability,
+        earnsPoints: product.earns_points === 1,
+        expirationDate: product.expiration_date,
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
+      };
+    });
   } catch (error) {
     console.error('Error fetching products:', error);
     return []; // Return empty array instead of throwing to avoid crashing

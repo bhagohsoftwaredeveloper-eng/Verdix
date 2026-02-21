@@ -81,19 +81,36 @@ export async function GET(request: NextRequest) {
 
     // Fetch price levels for the retrieved products
     if (products.length > 0) {
+      // Fetch default price level for effective price calculation
+      const defaultPriceLevelSql = `SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1`;
+      const defaultPriceLevelResult = await query(defaultPriceLevelSql);
+      const defaultLevelId = defaultPriceLevelResult.length > 0 ? defaultPriceLevelResult[0].id : null;
+
       const productIds = products.map((p: any) => p.id);
       const priceLevelsSql = `SELECT * FROM product_price_levels WHERE product_id IN (?)`;
       const priceLevels = await query(priceLevelsSql, [productIds]);
       
       // Map price levels back to products
       products.forEach((product: any) => {
-        product.priceLevels = priceLevels
-          .filter((pl: any) => pl.product_id === product.id)
-          .map((pl: any) => ({
+        const productSpecificLevels = priceLevels.filter((pl: any) => pl.product_id === product.id);
+        
+        product.priceLevels = productSpecificLevels.map((pl: any) => ({
             levelId: pl.price_level_id,
             price: parseFloat(pl.price),
             minQuantity: pl.min_quantity ? parseInt(pl.min_quantity) : 0
           }));
+        
+        // If a default price level exists and this product has an override for it,
+        // use the one with the lowest min_quantity as the base retail price (matches products page logic)
+        if (defaultLevelId) {
+            const retailOverrides = productSpecificLevels
+                .filter((pl: any) => pl.price_level_id === defaultLevelId)
+                .sort((a: any, b: any) => (a.min_quantity || 0) - (b.min_quantity || 0));
+            
+            if (retailOverrides.length > 0) {
+                product.price = parseFloat(retailOverrides[0].price);
+            }
+        }
       });
     }
 

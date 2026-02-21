@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
       reference,
       deliveryAddress,
       paymentMethod,
+      paymentReference,
       status = 'Pending',
       shipping = 0,
       warehouse,
@@ -42,8 +43,8 @@ export async function POST(request: NextRequest) {
         const insertInvoiceSql = `
           INSERT INTO sales_invoices (
             id, customer_id, invoice_date, due_date, total, payment_method,
-            status, notes, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            payment_reference, status, notes, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         `;
 
         await connection.query(insertInvoiceSql, [
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
           (dueDate && dueDate.trim() !== '') ? dueDate : null,
           total,
           paymentMethod,
+          paymentReference || null,
           status,
           note || null,
         ]);
@@ -228,6 +230,7 @@ export async function GET(request: NextRequest) {
         si.due_date,
         si.total,
         si.payment_method,
+        si.payment_reference,
         si.status,
         si.notes,
         si.created_at,
@@ -286,6 +289,7 @@ export async function GET(request: NextRequest) {
           dueDate: row.due_date,
           total: parseFloat(row.total),
           paymentMethod: row.payment_method || '',
+          paymentReference: row.payment_reference || '',
           status: row.status as 'Paid' | 'Pending' | 'Failed' | 'Shipped' | 'Delivered' | 'Returned',
           notes: row.notes,
           items: formattedItems,

@@ -25,6 +25,7 @@ export async function GET(
         billing_address,
         discount,
         credit_limit,
+        price_level_id,
         created_at,
         updated_at
       FROM customers
@@ -75,7 +76,8 @@ export async function PUT(
       address,
       billingAddress,
       discount,
-      creditLimit
+      creditLimit,
+      priceLevelId
     } = body;
 
     if (!name || !contactNumber) {
@@ -99,6 +101,7 @@ export async function PUT(
         billing_address = ?,
         discount = ?,
         credit_limit = ?,
+        price_level_id = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
@@ -116,6 +119,7 @@ export async function PUT(
       billingAddress || null,
       discount ?? 0,
       creditLimit ?? 0,
+      priceLevelId || null,
       customerId
     ]);
 

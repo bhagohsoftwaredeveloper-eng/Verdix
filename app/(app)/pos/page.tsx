@@ -72,6 +72,7 @@ import { ShutdownConfirmationDialog } from './shutdown-confirmation-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { InsufficientStockDialog } from './insufficient-stock-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { calculateEffectivePrice } from '@/lib/pricing';
 
 
 import { SystemSettings } from '@/lib/types';
@@ -582,6 +583,20 @@ export default function POSPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [items, selectedItemId, heldTransactions, enableLineVoidAuth]); // Dependencies for relevant state - validated
 
+  const defaultLevelId = useMemo(() => {
+    const defaultLevel = priceLevels.find((l: any) => l.isDefault);
+    return defaultLevel?.id || 'retail-level';
+  }, [priceLevels]);
+
+  const activeLevelId = useMemo(() => {
+    return selectedCustomer?.priceLevelId || selectedPriceLevelId || defaultLevelId;
+  }, [selectedCustomer?.priceLevelId, selectedPriceLevelId, defaultLevelId]);
+
+  const activeLevelName = useMemo(() => {
+    const level = priceLevels.find((l: any) => l.id === activeLevelId);
+    return level?.name || 'Retail';
+  }, [activeLevelId, priceLevels]);
+
   // Update item prices when price level or customer changes
   useEffect(() => {
     if (!selectedPriceLevelId) return;
@@ -591,7 +606,7 @@ export default function POSPage() {
       
       const updatedItems = currentItems.map(item => {
         // Re-calculate the effective price based on new parameters, preserving quantity thresholds
-        const newPrice = calculateEffectivePrice(item, item.quantity, selectedCustomer?.priceLevelId);
+        const newPrice = calculateEffectivePrice(item, item.quantity, activeLevelId, defaultLevelId);
         return { ...item, price: newPrice };
       });
 
@@ -599,66 +614,8 @@ export default function POSPage() {
       return hasChanged ? updatedItems : currentItems;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPriceLevelId, selectedCustomer?.priceLevelId]);
+  }, [activeLevelId]);
 
-  const calculateEffectivePrice = (product: Product, quantity: number, customerLevelId?: string) => {
-      let effectivePrice = product.price; // Default to Base Price
-      let priceFound = false;
-
-      // 1. Check for Product-Specific Quantity-Based Price Levels
-      if (product.priceLevels && product.priceLevels.length > 0) {
-          const applicableProductLevels = product.priceLevels.filter((pl: any) => 
-               pl.minQuantity && quantity >= pl.minQuantity
-          ).sort((a: any, b: any) => (b.minQuantity || 0) - (a.minQuantity || 0));
-
-          if (applicableProductLevels.length > 0) {
-              return applicableProductLevels[0].price;
-          }
-      }
-
-      // 2. Check for Global Quantity-Based Price Levels (Higher Min Quantity takes precedence)
-      // Only if no product-specific quantity rule matched (which would have returned above)
-      if (priceLevels.length > 0) {
-          // Find all applicable GLOBAL levels for this quantity
-          const applicableSystemLevels = priceLevels.filter((sysLevel: any) => 
-              sysLevel.minQuantity && quantity >= sysLevel.minQuantity
-          ).sort((a: any, b: any) => b.minQuantity - a.minQuantity);
-
-          if (applicableSystemLevels.length > 0) {
-              const bestLevelId = applicableSystemLevels[0].id;
-              // Check if product has an override for this specific level ID
-              const productPriceLevel = product.priceLevels?.find((pl: any) => pl.levelId === bestLevelId);
-              if (productPriceLevel) {
-                  return productPriceLevel.price;
-              }
-               // If logic requires applying global percentage to base price if no override exists:
-               // But usually product.priceLevels contains the specific price.
-               // If product doesn't have an entry for "Wholesale", we might not want to apply it?
-               // Or we calculate based on markup? 
-               // Default behavior: Look for override. If not found, ignore? 
-               // Let's assume strict override for now as per current schema structure.
-          }
-      }
-
-      // 3. Fallback to Specific Customer Level or Selected Global Level (if no quantity override found)
-      if (customerLevelId && product.priceLevels) {
-          const override = product.priceLevels.find((pl: any) => pl.levelId === customerLevelId);
-          if (override) {
-              effectivePrice = override.price;
-              priceFound = true;
-          }
-      } 
-      
-      if (!priceFound && selectedPriceLevelId && product.priceLevels) {
-           // Fallback to global selected level
-           const override = product.priceLevels.find((pl: any) => pl.levelId === selectedPriceLevelId);
-           if (override) {
-               effectivePrice = override.price;
-           }
-      }
-      
-      return effectivePrice;
-  };
 
   const handleAddItem = (product: Product | undefined) => {
     if (product) {
@@ -666,7 +623,7 @@ export default function POSPage() {
       if (existingItem) {
         updateQuantity(product.id, existingItem.quantity + 1);
       } else {
-        const itemPrice = calculateEffectivePrice(product, 1, selectedCustomer?.priceLevelId);
+        const itemPrice = calculateEffectivePrice(product, 1, activeLevelId, defaultLevelId);
         const newItem: SaleItem = { ...product, quantity: 1, discount: 0, name: product.name, price: itemPrice };
         setItems([...items, newItem]);
         setSelectedItemId(newItem.id); 
@@ -706,7 +663,7 @@ export default function POSPage() {
     } else {
       setItems(items.map(item => {
         if (item.id === productId) {
-             const newPrice = calculateEffectivePrice(item, newQuantity, selectedCustomer?.priceLevelId);
+             const newPrice = calculateEffectivePrice(item, newQuantity, activeLevelId, defaultLevelId);
              return { ...item, quantity: newQuantity, price: newPrice };
         }
         return item;
@@ -1362,7 +1319,7 @@ export default function POSPage() {
                         <div className="text-sm font-medium truncate">{selectedCustomer?.name || 'Walk-in'}</div>
                     </div>
                     {selectedCustomer?.id !== 'walk-in' && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1" onClick={() => setSelectedCustomer(WALK_IN_CUSTOMER)}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1" onClick={() => handleSelectCustomer(WALK_IN_CUSTOMER)}>
                             <X className="h-3 w-3" />
                         </Button>
                     )}
@@ -1625,6 +1582,9 @@ export default function POSPage() {
         onOpenChange={setIsProductSearchOpen}
         onSelectProduct={handleAddItem}
         showQuantityInSearch={showQuantityInSearch}
+        activeLevelId={activeLevelId}
+        defaultLevelId={defaultLevelId}
+        activeLevelName={activeLevelName}
       />
       <AdjustQuantityDialog
         isOpen={isQuantityDialogOpen}
@@ -1657,14 +1617,6 @@ export default function POSPage() {
         isOpen={isAuthDialogOpen}
         onOpenChange={setIsAuthDialogOpen}
         onSuccess={handleAdminAuthSuccess}
-      />
-      <AdminAuthDialog
-        isOpen={isPriceEditAuthOpen}
-        onOpenChange={setIsPriceEditAuthOpen}
-        title="Price Edit Authorization"
-        description="Please provide credentials to edit item price"
-        requiredCredentials={priceEditAuthCredentials}
-        onSuccess={handlePriceEditAuthSuccess}
       />
       <AdminAuthDialog
         isOpen={isPriceEditAuthOpen}
@@ -1725,7 +1677,13 @@ export default function POSPage() {
         terminalId={selectedTerminalId}
         printMode={businessSettings?.printMode || 'browser'}
       />
-      <PriceInquiryDialog isOpen={isPriceInquiryOpen} onOpenChange={setIsPriceInquiryOpen} />
+      <PriceInquiryDialog 
+        isOpen={isPriceInquiryOpen} 
+        onOpenChange={setIsPriceInquiryOpen} 
+        activeLevelId={activeLevelId}
+        defaultLevelId={defaultLevelId}
+        activeLevelName={activeLevelName}
+      />
       <ZReadingDialog 
         isOpen={isZReadingOpen} 
         onOpenChange={setIsZReadingOpen} 

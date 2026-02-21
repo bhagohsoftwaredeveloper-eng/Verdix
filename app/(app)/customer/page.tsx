@@ -18,14 +18,21 @@ import { useToast } from '@/hooks/use-toast';
 export default function CustomerListPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const { toast } = useToast();
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (page: number = currentPage) => {
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/customers');
+      const limit = 10;
+      const offset = (page - 1) * limit;
+      const response = await fetch(`/api/customers?limit=${limit}&offset=${offset}`);
       const result = await response.json();
       if (result.success) {
         setCustomers(result.data);
+        setTotalCount(result.pagination?.total || 0);
+        setCurrentPage(page);
       } else {
         toast({
           variant: 'destructive',
@@ -46,10 +53,14 @@ export default function CustomerListPage() {
   };
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(1);
   }, []);
 
-  const handleAddCustomer = async (customerId: string, name: string, contactNumber: string, active: boolean, salesPerson: string, salesArea: string, salesGroup: string, loyaltyPoints: number, paymentTerms: string, address: string, billingAddress: string, discount: number, creditLimit: number) => {
+  const handlePageChange = (page: number) => {
+    fetchCustomers(page);
+  };
+
+  const handleAddCustomer = async (customerId: string, name: string, contactNumber: string, active: boolean, loyaltyPoints: number, paymentTerms: string, address: string, billingAddress: string, discount: number, creditLimit: number, priceLevelId?: string) => {
     try {
       const response = await fetch('/api/customers', {
         method: 'POST',
@@ -61,15 +72,13 @@ export default function CustomerListPage() {
           name,
           contactNumber,
           active,
-          salesPerson,
-          salesArea,
-          salesGroup,
           loyaltyPoints,
           paymentTerms,
           address,
           billingAddress,
           discount,
           creditLimit,
+          priceLevelId,
         }),
       });
 
@@ -79,7 +88,7 @@ export default function CustomerListPage() {
           title: 'Success',
           description: 'Customer added successfully',
         });
-        fetchCustomers(); // Refresh the list
+        fetchCustomers(currentPage); // Refresh current page
       } else {
         toast({
           variant: 'destructive',
@@ -97,7 +106,7 @@ export default function CustomerListPage() {
     }
   };
 
-  const handleUpdateCustomer = async (customerId: string, values: { name: string; contactNumber: string; active: boolean; salesPerson?: string; salesArea?: string; salesGroup?: string; loyaltyPoints: number; paymentTerms?: string; address?: string; billingAddress?: string; discount: number; creditLimit: number }) => {
+  const handleUpdateCustomer = async (customerId: string, values: { name: string; contactNumber: string; active: boolean; loyaltyPoints: number; paymentTerms?: string; address?: string; billingAddress?: string; discount: number; creditLimit: number; priceLevelId?: string }) => {
     try {
       const response = await fetch(`/api/customers/${customerId}`, {
         method: 'PUT',
@@ -113,7 +122,7 @@ export default function CustomerListPage() {
           title: 'Success',
           description: 'Customer updated successfully',
         });
-        fetchCustomers(); // Refresh the list
+        fetchCustomers(currentPage); // Refresh current page
       } else {
         toast({
           variant: 'destructive',
@@ -143,7 +152,11 @@ export default function CustomerListPage() {
           title: 'Success',
           description: 'Customer deleted successfully',
         });
-        fetchCustomers(); // Refresh the list
+        // If we deleted the last item on the page, go back a page
+        const newTotalCount = totalCount - 1;
+        const maxPage = Math.max(1, Math.ceil(newTotalCount / 10));
+        const newPage = currentPage > maxPage ? maxPage : currentPage;
+        fetchCustomers(newPage);
       } else {
         toast({
           variant: 'destructive',
@@ -191,6 +204,9 @@ export default function CustomerListPage() {
             isLoading={isLoading}
             onUpdateCustomer={handleUpdateCustomer}
             onDeleteCustomer={handleDeleteCustomer}
+            totalCount={totalCount}
+            currentPage={currentPage}
+            onPageChange={handlePageChange}
           />
         </CardContent>
       </Card>
