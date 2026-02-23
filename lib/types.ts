@@ -111,6 +111,7 @@ export interface Sale {
   orderDate?: string;
   deliveryDate?: string;
   reference?: string;
+  transactionSource?: 'POS' | 'Backoffice';
   deliveryAddress?: string;
   salesPerson?: string;
   salesPersonId?: string;
@@ -123,6 +124,7 @@ export interface Sale {
   notes?: string;
   shipping?: number;
   pointsEarned?: number;
+  receiptNo?: string;
 }
 
 export interface PurchaseOrder {

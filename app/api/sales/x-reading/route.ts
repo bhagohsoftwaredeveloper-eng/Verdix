@@ -1,15 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
-
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'stockpilot',
-  password: process.env.DB_PASSWORD || 'stockpilot123',
-  database: process.env.DB_NAME || 'stockpilot',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +12,7 @@ export async function GET(request: NextRequest) {
     const shiftId = searchParams.get('shiftId');
     
     // Base query to fetch shifts
-    let query = `
+    let sql = `
       SELECT
         s.id,
         s.start_time as report_date,
@@ -76,44 +66,44 @@ export async function GET(request: NextRequest) {
     const params: any[] = [];
 
     if (startDate) {
-      query += ' AND DATE(s.start_time) >= ?';
+      sql += ' AND DATE(s.start_time) >= ?';
       params.push(startDate);
     }
 
     if (endDate) {
-      query += ' AND DATE(s.start_time) <= ?';
+      sql += ' AND DATE(s.start_time) <= ?';
       params.push(endDate);
     }
 
     if (cashierId && cashierId !== 'all') {
-      query += ' AND s.user_id = ?';
+      sql += ' AND s.user_id = ?';
       params.push(cashierId);
     }
 
     if (shiftStatus && shiftStatus !== 'all') {
-      query += ' AND s.status = ?';
+      sql += ' AND s.status = ?';
       params.push(shiftStatus);
     }
 
     if (shiftId) {
-        query += ' AND s.id = ?';
+        sql += ' AND s.id = ?';
         params.push(shiftId);
     }
 
-    query += ' ORDER BY s.start_time DESC';
+    sql += ' ORDER BY s.start_time DESC';
 
     if (limit) {
-        query += ' LIMIT ?';
+        sql += ' LIMIT ?';
         params.push(parseInt(limit));
     }
 
-    const [rows] = await pool.query(query, params);
+    const rows = await query(sql, params);
     const shifts = rows as any[];
 
     // For each shift, we also need breakdown of payments
     const formattedReadings = await Promise.all(shifts.map(async (shift) => {
         // Fetch payment breakdown for this shift
-        const [payments] = await pool.query(`
+        const payments = await query(`
             SELECT payment_method as name, SUM(total_amount) as amount
             FROM pos_transactions
             WHERE shift_id = ? AND transaction_type = 'sale'
@@ -208,7 +198,7 @@ export async function POST(request: NextRequest) {
       shiftStatus = 'active',
     } = body;
 
-    const query = `
+    const sql = `
       INSERT INTO x_readings (
         reading_number,
         report_date,
@@ -240,7 +230,7 @@ export async function POST(request: NextRequest) {
         return d.toISOString().slice(0, 19).replace('T', ' ');
     };
 
-    const [result] = await pool.query(query, [
+    const result = await query(sql, [
       readingNumber,
       formatDate(reportDate),
       formatDate(shiftStart),

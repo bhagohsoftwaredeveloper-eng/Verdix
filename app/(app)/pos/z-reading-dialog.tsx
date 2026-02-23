@@ -17,6 +17,7 @@ import { ZReadingPreview, BusinessSettings } from '../sales/z-reading/z-reading-
 import { ZReadingData } from '@/lib/types';
 import { usePrinter } from '@/lib/use-printer';
 import { ZReadingGenerator } from '@/lib/z-reading-generator';
+import { getApiUrl } from '@/lib/api-config';
 
 import { useReactToPrint } from 'react-to-print';
 import { useRef } from 'react';
@@ -56,13 +57,13 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
         const fetchData = async () => {
             setIsLoading(true);
             try {
-                const settingsRes = await fetch('/api/pos-settings');
+                const settingsRes = await fetch(getApiUrl('/pos-settings'));
                 const settingsResult = await settingsRes.json();
                 if (settingsResult.success) {
                     setBusinessSettings(settingsResult.data);
                 }
 
-                const response = await fetch(`/api/sales/z-reading?mode=current&terminalId=${terminalId || 'all'}`);
+                const response = await fetch(getApiUrl(`/sales/z-reading?mode=current&terminalId=${terminalId || 'all'}`));
                 const result = await response.json();
 
                 if (result.success && result.data.length > 0) {

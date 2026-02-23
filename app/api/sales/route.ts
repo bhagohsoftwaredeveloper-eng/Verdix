@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction, query } from '../../../lib/mysql';
+import { withTransaction, query, getNextReference, getNextReceiptNumber } from '../../../lib/mysql';
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,14 +42,26 @@ export async function POST(request: NextRequest) {
         // Insert into sales_invoices table
         const insertInvoiceSql = `
           INSERT INTO sales_invoices (
-            id, customer_id, invoice_date, due_date, total, payment_method,
-            payment_reference, status, notes, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            id, customer_id, reference, receipt_number, invoice_date, due_date, total, payment_method,
+            payment_reference, status, transaction_source, notes, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Backoffice', ?, NOW(), NOW())
         `;
+
+        // Generate sequential reference if not provided
+        let finalReference = reference;
+        if (!finalReference || finalReference.trim() === '') {
+          const nextVal = await getNextReference('sales_invoice');
+          finalReference = `INV-${nextVal.toString().padStart(6, '0')}`;
+        }
+
+        // Generate sequential receipt number (OR)
+        const receiptNumber = await getNextReceiptNumber();
 
         await connection.query(insertInvoiceSql, [
           invoiceId,
           customer.id,
+          finalReference,
+          receiptNumber,
           invoiceDate,
           (dueDate && dueDate.trim() !== '') ? dueDate : null,
           total,
@@ -223,6 +235,8 @@ export async function GET(request: NextRequest) {
       SELECT
         si.id,
         si.customer_id,
+        si.reference,
+        si.receipt_number,
         c.name as customer_name,
         c.contact_number as customer_contact,
         c.payment_terms as customer_payment_terms,
@@ -232,70 +246,87 @@ export async function GET(request: NextRequest) {
         si.payment_method,
         si.payment_reference,
         si.status,
+        si.transaction_source,
         si.notes,
         si.created_at,
-        si.updated_at
+        si.updated_at,
+        pt.order_number
       FROM sales_invoices si
       LEFT JOIN customers c ON si.customer_id = c.id
+      LEFT JOIN sales_transactions st ON si.reference = st.reference
+      LEFT JOIN pos_transactions pt ON st.id = pt.sale_id
       ORDER BY si.created_at DESC
     `;
 
     const salesInvoices = await query(invoicesQuery);
     console.log('Sales invoices found in sales_invoices table:', salesInvoices.length);
 
-    // Fetch items for each invoice
-    const invoicesWithItems = await Promise.all(
-      salesInvoices.map(async (row: any) => {
-        const itemsQuery = `
-          SELECT
-            sii.id,
-            sii.product_id,
-            sii.product_name,
-            p.sku,
-            p.barcode,
-            sii.quantity,
-            sii.price,
-            (sii.quantity * sii.price) as subtotal
-          FROM sales_invoice_items sii
-          LEFT JOIN products p ON sii.product_id = p.id
-          WHERE sii.sales_invoice_id = ?
-          ORDER BY sii.created_at ASC
-        `;
+    // Batch fetch items for all invoices to avoid N+1 queries
+    let allItems: any[] = [];
+    if (salesInvoices.length > 0) {
+      const invoiceIds = salesInvoices.map((inv: any) => inv.id);
+      const placeholders = invoiceIds.map(() => '?').join(',');
+      const itemsQuery = `
+        SELECT
+          sii.id,
+          sii.sales_invoice_id,
+          sii.product_id,
+          sii.product_name,
+          p.sku,
+          p.barcode,
+          sii.quantity,
+          sii.price
+        FROM sales_invoice_items sii
+        LEFT JOIN products p ON sii.product_id = p.id
+        WHERE sii.sales_invoice_id IN (${placeholders})
+        ORDER BY sii.created_at ASC
+      `;
+      allItems = await query(itemsQuery, invoiceIds);
+    }
 
-        const items = await query(itemsQuery, [row.id]);
-
-        // Transform items to match the expected format
-        const formattedItems = items.map((item: any) => ({
-          product: {
-            id: item.product_id,
-            name: item.product_name,
-            sku: item.sku || '',
-            barcode: item.barcode || '',
-            price: parseFloat(item.price),
-          },
-          quantity: parseInt(item.quantity),
+    // Group items by invoice ID
+    const itemsByInvoice: Record<string, any[]> = {};
+    allItems.forEach((item: any) => {
+      if (!itemsByInvoice[item.sales_invoice_id]) {
+        itemsByInvoice[item.sales_invoice_id] = [];
+      }
+      itemsByInvoice[item.sales_invoice_id].push({
+        product: {
+          id: item.product_id,
+          name: item.product_name,
+          sku: item.sku || '',
+          barcode: item.barcode || '',
           price: parseFloat(item.price),
-        }));
+        },
+        quantity: parseInt(item.quantity),
+        price: parseFloat(item.price),
+      });
+    });
 
-        return {
-          id: row.id,
-          customer: {
-            id: row.customer_id || '',
-            name: row.customer_name || 'Walk-in Customer',
-            contactNumber: row.customer_contact || '',
-            paymentTerms: row.customer_payment_terms || '',
-          },
-          invoiceDate: row.invoice_date,
-          dueDate: row.due_date,
-          total: parseFloat(row.total),
-          paymentMethod: row.payment_method || '',
-          paymentReference: row.payment_reference || '',
-          status: row.status as 'Paid' | 'Pending' | 'Failed' | 'Shipped' | 'Delivered' | 'Returned',
-          notes: row.notes,
-          items: formattedItems,
-        };
-      })
-    );
+    // Map items back to invoices
+    const invoicesWithItems = salesInvoices.map((row: any) => {
+      return {
+        id: row.id,
+        reference: row.reference,
+        receiptNo: row.receipt_number,
+        transactionSource: row.transaction_source,
+        customer: {
+          id: row.customer_id || '',
+          name: row.customer_name || 'Walk-in Customer',
+          contactNumber: row.customer_contact || '',
+          paymentTerms: row.customer_payment_terms || '',
+        },
+        invoiceDate: row.invoice_date,
+        dueDate: row.due_date,
+        total: parseFloat(row.total),
+        paymentMethod: row.payment_method || '',
+        paymentReference: row.payment_reference || '',
+        status: row.status as 'Paid' | 'Pending' | 'Failed' | 'Shipped' | 'Delivered' | 'Returned',
+        notes: row.notes,
+        orderNumber: row.order_number,
+        items: itemsByInvoice[row.id] || [],
+      };
+    });
 
     return NextResponse.json({
       success: true,

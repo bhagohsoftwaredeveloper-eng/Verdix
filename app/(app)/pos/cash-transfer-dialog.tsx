@@ -27,6 +27,7 @@ import { Loader2, Minus, Plus } from 'lucide-react';
 import { AdminAuthDialog } from './admin-auth-dialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 const transferSchema = z.object({
   amount: z.coerce.number().positive('Amount must be a positive number.'),
@@ -72,7 +73,7 @@ export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, 
 
   async function onSubmit(values: TransferFormValues) {
     try {
-        const response = await fetch('/api/pos/cash-transfer', {
+        const response = await fetch(getApiUrl('/pos/cash-transfer'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

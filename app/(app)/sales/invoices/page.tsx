@@ -113,7 +113,7 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
                         <tbody>
                             <tr>
                                 <td className="bg-slate-100 p-2 font-semibold w-32 border-b border-white">Invoice Number</td>
-                                <td className="bg-slate-50 p-2 border-b border-white">{order.orderNumber || order.id.substring(0,8)}</td>
+                                <td className="bg-slate-50 p-2 border-b border-white">{order.reference || order.receiptNo || order.orderNumber || order.id.substring(0,8)}</td>
                             </tr>
                             <tr>
                                 <td className="bg-slate-100 p-2 font-semibold border-b border-white">Invoice Date</td>
@@ -419,15 +419,15 @@ export default function SalesInvoicesPage() {
      if (customerFilter && !s.customer?.name?.toLowerCase().includes(customerFilter.toLowerCase())) return false;
 
      // 5. Transaction Source Filter
-     if (transactionSourceFilter !== 'all') {
-     }
+     if (transactionSourceFilter !== 'all' && s.transactionSource !== transactionSourceFilter) return false;
 
      // 6. Reference Type Filter
      if (referenceTypeFilter !== 'all') {
      }
 
      // 7. Reference # Filter
-     if (referenceNumberFilter && !s.reference?.toLowerCase().includes(referenceNumberFilter.toLowerCase())) return false;
+     const displayRef = s.reference || s.id.substring(0,8);
+     if (referenceNumberFilter && !displayRef.toLowerCase().includes(referenceNumberFilter.toLowerCase())) return false;
 
      // 8. Receipt # Filter
      const recNo = (s as any).receiptNo || s.orderNumber?.toString() || '';
@@ -656,6 +656,14 @@ export default function SalesInvoicesPage() {
                             const amountPaid = sale.status === 'Paid' ? sale.total : 0;
                             const balance = sale.total - amountPaid;
                             const isExpanded = expandedRows.has(sale.id);
+                            const formattedRef = (() => {
+                                if (!sale.reference) return sale.id.substring(0,8);
+                                const refNum = sale.reference.replace(/\D/g, '').replace(/^0+/, '') || '0';
+                                if (sale.orderNumber) {
+                                    return `${refNum}|SO#${sale.orderNumber}`;
+                                }
+                                return refNum;
+                            })();
 
                             return (
                                 <Fragment key={sale.id}>
@@ -672,9 +680,13 @@ export default function SalesInvoicesPage() {
                                         </TableCell>
                                         <TableCell className="py-2 px-2">{sale.salesPerson || 'admin'}</TableCell>
                                         <TableCell className="py-2 px-2 font-medium">{sale.customer.name}</TableCell>
-                                        <TableCell className="py-2 px-2">{sale.reference || sale.id.substring(0,8)}</TableCell>
-                                        <TableCell className="py-2 px-2">{sale.orderNumber || ''}</TableCell>
-                                        <TableCell className="py-2 px-2">POS</TableCell>
+                                        <TableCell className="py-2 px-2">{formattedRef}</TableCell>
+                                        <TableCell className="py-2 px-2 text-primary font-medium">{sale.receiptNo || sale.orderNumber || ''}</TableCell>
+                                        <TableCell className="py-2 px-2">
+                                            <Badge variant="outline" className={sale.transactionSource === 'Backoffice' ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-orange-50 text-orange-700 border-orange-200"}>
+                                                {sale.transactionSource || 'POS'}
+                                            </Badge>
+                                        </TableCell>
                                         <TableCell className="py-2 px-2">Sales Invoice</TableCell>
                                         <TableCell className="py-2 px-2">
                                             {displayDate ? format(new Date(displayDate), 'PP') : 'N/A'}

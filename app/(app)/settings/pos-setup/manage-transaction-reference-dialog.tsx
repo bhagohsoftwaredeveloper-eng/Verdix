@@ -36,6 +36,7 @@ const transactionReferenceSchema = z.object({
   deliveryReceipt: z.string().optional(),
   stockAdjustment: z.string().optional(),
   salesHold: z.string().optional(),
+  receiptNumber: z.string().optional(),
 });
 
 type TransactionReferenceFormValues = z.infer<typeof transactionReferenceSchema>;
@@ -50,6 +51,7 @@ interface LastReferences {
   deliveryReceipt: string | null;
   stockAdjustment: string | null;
   salesHold: string | null;
+  receiptNumber: string | null;
 }
 
 interface ManageTransactionReferenceDialogProps {
@@ -75,6 +77,7 @@ export function ManageTransactionReferenceDialog({ onUpdated }: ManageTransactio
       deliveryReceipt: '',
       stockAdjustment: '',
       salesHold: '',
+      receiptNumber: '',
     },
   });
 
@@ -364,6 +367,24 @@ export function ManageTransactionReferenceDialog({ onUpdated }: ManageTransactio
                         {lastReferences?.salesHold && (
                           <FormDescription className="text-xs">
                             Last used: <span className="font-mono font-medium">{lastReferences.salesHold}</span>
+                          </FormDescription>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="receiptNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Next Receipt Number (Global)</FormLabel>
+                        <FormControl>
+                          <Input {...field} className="h-10" placeholder="Next receipt number" />
+                        </FormControl>
+                        {lastReferences?.receiptNumber && (
+                          <FormDescription className="text-xs">
+                            Current counter: <span className="font-mono font-medium">{lastReferences.receiptNumber}</span>
                           </FormDescription>
                         )}
                         <FormMessage />

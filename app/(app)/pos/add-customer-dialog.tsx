@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { getPriceLevels } from '../products/actions';
+import { getApiUrl } from '@/lib/api-config';
 
 interface AddCustomerDialogProps {
   isOpen: boolean;
@@ -84,7 +85,7 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
         priceLevelId: priceLevelId || null,
       };
 
-      const response = await fetch('/api/customers', {
+      const response = await fetch(getApiUrl('/customers'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

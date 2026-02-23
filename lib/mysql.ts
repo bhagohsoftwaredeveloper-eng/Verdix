@@ -4,17 +4,41 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-// Create connection pool
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'stock_pilot',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
+// Extend the global object to hold the pool
+declare global {
+  var __mysqlPool: mysql.Pool | undefined;
+}
+
+// Create connection pool singleton
+let pool: mysql.Pool;
+
+if (process.env.NODE_ENV === 'production') {
+  pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '3306'),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'stock_pilot',
+    waitForConnections: true,
+    connectionLimit: 50, // Increased for production
+    queueLimit: 0,
+  });
+} else {
+  if (!global.__mysqlPool) {
+    global.__mysqlPool = mysql.createPool({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '3306'),
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || 'stock_pilot',
+      waitForConnections: true,
+      connectionLimit: 20, // Moderate for development reloads
+      queueLimit: 0,
+    });
+    console.log('--- Database Connection Pool Created ---');
+  }
+  pool = global.__mysqlPool;
+}
 
 /**
  * Execute a SQL query against the MySQL database
@@ -62,6 +86,78 @@ export async function withTransaction<T>(callback: (connection: mysql.PoolConnec
   } finally {
     connection.release();
   }
+}
+
+/**
+ * Atomicly gets and increments the next reference number for a given transaction type
+ * @param type - The column name in transaction_references table (e.g. 'sales_invoice')
+ * @returns The next reference number
+ */
+export async function getNextReference(type: string): Promise<number> {
+  return await withTransaction(async (connection) => {
+    // 1. Increment the counter
+    await connection.query(
+      `UPDATE transaction_references SET ${type} = CAST(${type} AS UNSIGNED) + 1 WHERE id = 1`
+    );
+    
+    // 2. Fetch the new value
+    const [rows]: any = await connection.query(
+      `SELECT ${type} as next_val FROM transaction_references WHERE id = 1`
+    );
+    
+    if (!rows || rows.length === 0) {
+      throw new Error(`Failed to fetch next reference for ${type}`);
+    }
+    
+    return parseInt(rows[0].next_val);
+  });
+}
+
+/**
+ * Atomicly gets and increments the next receipt number (OR)
+ * @param terminalId - Optional terminal ID. If provided, increments terminal-specific OR.
+ * @returns The next receipt number string
+ */
+export async function getNextReceiptNumber(terminalId?: string): Promise<string> {
+  return await withTransaction(async (connection) => {
+    let nextVal: string;
+    
+    if (terminalId) {
+      // 1. Increment terminal-specific OR
+      await connection.query(
+        `UPDATE pos_terminals SET or_next_reference = LPAD(CAST(or_next_reference AS UNSIGNED) + 1, 8, '0') WHERE id = ?`,
+        [terminalId]
+      );
+      
+      // 2. Fetch the new value
+      const [rows]: any = await connection.query(
+        `SELECT or_next_reference as next_val FROM pos_terminals WHERE id = ?`,
+        [terminalId]
+      );
+      
+      if (!rows || rows.length === 0) {
+        throw new Error(`Failed to fetch next receipt number for terminal ${terminalId}`);
+      }
+      nextVal = rows[0].next_val;
+    } else {
+      // 1. Increment global receipt number
+      await connection.query(
+        `UPDATE transaction_references SET receipt_number = LPAD(CAST(receipt_number AS UNSIGNED) + 1, 8, '0') WHERE id = 1`
+      );
+      
+      // 2. Fetch the new value
+      const [rows]: any = await connection.query(
+        `SELECT receipt_number as next_val FROM transaction_references WHERE id = 1`
+      );
+      
+      if (!rows || rows.length === 0) {
+        throw new Error(`Failed to fetch global next receipt number`);
+      }
+      nextVal = rows[0].next_val;
+    }
+    
+    return nextVal;
+  });
 }
 
 /**

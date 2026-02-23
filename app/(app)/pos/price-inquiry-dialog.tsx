@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
 import type { Product } from '@/lib/types';
-import Image from 'next/image';
 import { useProducts } from '@/hooks/use-api';
 import { ArrowLeft } from 'lucide-react';
 import { calculateEffectivePrice } from '@/lib/pricing';
@@ -42,7 +41,16 @@ export function PriceInquiryDialog({
 }: PriceInquiryDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const { products, loading, error } = useProducts(searchTerm);
+  const { products, loading, error, refetch: refetchPriceProducts } = useProducts(searchTerm);
+
+  // Handle auto-refresh when stock is updated (e.g., after a sale)
+  useEffect(() => {
+    const handleStockUpdate = () => {
+      refetchPriceProducts();
+    };
+    window.addEventListener('stock-updated', handleStockUpdate);
+    return () => window.removeEventListener('stock-updated', handleStockUpdate);
+  }, [refetchPriceProducts]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -94,14 +102,7 @@ export function PriceInquiryDialog({
                       onSelect={() => handleSelect(product.id)}
                       className="flex items-center justify-between cursor-pointer p-3"
                     >
-                      <div className="flex items-center gap-4">
-                        <Image
-                          src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
-                          alt={product.name}
-                          width={40}
-                          height={40}
-                          className="rounded-md object-cover"
-                        />
+                      <div className="flex items-center">
                         <div>
                           <p className="font-medium">{product.name}</p>
                           <p className="text-sm text-muted-foreground">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
@@ -132,14 +133,7 @@ export function PriceInquiryDialog({
             
             {selectedProduct && (
                 <div className="py-6 flex flex-col items-center animate-in zoom-in-95 duration-200">
-                     <div className="relative w-40 h-40 mb-4 border rounded-lg overflow-hidden bg-muted/20 shadow-inner">
-                        <Image
-                          src={selectedProduct.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
-                          alt={selectedProduct.name}
-                          fill
-                          className="object-contain p-2"
-                        />
-                    </div>
+
                     
                     <div className="text-xs text-muted-foreground mb-4 font-mono bg-muted px-2 py-1 rounded">
                         {selectedProduct.barcode || selectedProduct.sku}

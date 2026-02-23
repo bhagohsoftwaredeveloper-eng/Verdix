@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { AdminAuthDialog } from '../admin-auth-dialog';
 import { Separator } from '@/components/ui/separator';
+import { getApiUrl } from '@/lib/api-config';
 
 interface XReadingData {
   id: string;
@@ -126,7 +127,7 @@ export default function XReadingPage() {
         try {
             // Load the most recent active shift X-reading for the current cashier
             // In a real implementation, you'd get the current cashier from auth context
-            const response = await fetch('/api/sales/x-reading?shiftStatus=active&limit=1');
+            const response = await fetch(getApiUrl('/sales/x-reading?shiftStatus=active&limit=1'));
             const result = await response.json();
             if (result.success && result.data.length > 0) {
                 setXReadingData(result.data[0]);

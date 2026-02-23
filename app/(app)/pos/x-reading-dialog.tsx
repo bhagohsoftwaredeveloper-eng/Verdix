@@ -16,6 +16,7 @@ import { BusinessSettings } from '../sales/z-reading/z-reading-preview';
 import { XReadingData } from '@/lib/types';
 import { usePrinter } from '@/lib/use-printer';
 import { XReadingGenerator } from '@/lib/x-reading-generator';
+import { getApiUrl } from '@/lib/api-config';
 
 interface XReadingDialogProps {
   isOpen: boolean;
@@ -56,7 +57,7 @@ export function XReadingDialog({
 
   useEffect(() => {
       if (isOpen) {
-          fetch('/api/pos-settings')
+          fetch(getApiUrl('/pos-settings'))
               .then(res => res.json())
               .then(data => {
                   if (data.success) {
@@ -70,14 +71,14 @@ export function XReadingDialog({
   const loadReportData = async () => {
       setLoading(true);
       try {
-          let url = '/api/sales/x-reading?limit=1';
+          let url = '/sales/x-reading?limit=1';
           if (shiftId) {
-             url = `/api/sales/x-reading?limit=1&shiftId=${shiftId}`; 
+             url = `/sales/x-reading?limit=1&shiftId=${shiftId}`; 
           } else {
-             url = '/api/sales/x-reading?shiftStatus=active&limit=1';
+             url = '/sales/x-reading?shiftStatus=active&limit=1';
           }
           
-          const response = await fetch(url);
+          const response = await fetch(getApiUrl(url));
           const result = await response.json();
           
           if (result.success && result.data.length > 0) {

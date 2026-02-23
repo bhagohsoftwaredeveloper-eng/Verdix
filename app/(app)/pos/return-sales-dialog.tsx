@@ -29,6 +29,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { usePrinter } from '@/lib/use-printer';
 import { CreditSlipGenerator, CreditSlipData } from '@/lib/credit-slip-generator';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 interface ReturnSalesDialogProps {
   isOpen: boolean;
@@ -293,7 +294,7 @@ export function ReturnSalesDialog({
         setReturnedItems([]);
         
         // Fetch settings first to determine step
-        fetch(`/api/pos-settings?_t=${Date.now()}`, { cache: 'no-store' })
+        fetch(getApiUrl(`/pos-settings?_t=${Date.now()}`), { cache: 'no-store' })
           .then(res => res.json())
           .then(result => {
             if (result.success) {
@@ -338,7 +339,7 @@ export function ReturnSalesDialog({
       console.log('ReturnSalesDialog: Searching for SO:', term);
       
       try {
-          const response = await fetch(`/api/pos/recent-sales?query=${encodeURIComponent(term)}`);
+          const response = await fetch(getApiUrl(`/pos/recent-sales?query=${encodeURIComponent(term)}`));
           const result = await response.json();
           console.log('ReturnSalesDialog: Search result:', result);
           
@@ -366,7 +367,7 @@ export function ReturnSalesDialog({
           try {
               const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
               
-              const response = await fetch('/api/sales/returns', {
+              const response = await fetch(getApiUrl('/sales/returns'), {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({

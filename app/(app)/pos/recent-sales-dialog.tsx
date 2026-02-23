@@ -30,6 +30,7 @@ import { usePrinter } from '@/lib/use-printer';
 import { ReceiptGenerator } from '@/lib/receipt-generator';
 import { useToast } from '@/hooks/use-toast';
 import { ReceiptView } from './receipt-view';
+import { getApiUrl } from '@/lib/api-config';
 import { SystemSettings } from '@/lib/types';
 
 
@@ -116,7 +117,7 @@ export function RecentSalesDialog({
         setSaleToPrint(null);
         
         // Fetch settings first to determine step
-        fetch(`/api/pos-settings?_t=${Date.now()}`, { cache: 'no-store' })
+        fetch(getApiUrl(`/pos-settings?_t=${Date.now()}`), { cache: 'no-store' })
           .then(res => res.json())
           .then(result => {
              if (result.success) {
@@ -143,7 +144,7 @@ export function RecentSalesDialog({
     if (isOpen && step === 'list') {
         const fetchRecentSales = async () => {
             try {
-                const response = await fetch(`/api/pos/recent-sales?_t=${Date.now()}`, { cache: 'no-store' });
+                const response = await fetch(getApiUrl(`/pos/recent-sales?_t=${Date.now()}`), { cache: 'no-store' });
                 const result = await response.json();
                 
                 if (result.success) {

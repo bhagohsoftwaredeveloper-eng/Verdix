@@ -3,7 +3,7 @@
 
 import { useTheme } from 'next-themes';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -73,6 +73,7 @@ import { useToast } from '@/hooks/use-toast';
 import { InsufficientStockDialog } from './insufficient-stock-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { calculateEffectivePrice } from '@/lib/pricing';
+import { getApiUrl } from '@/lib/api-config';
 
 
 import { SystemSettings } from '@/lib/types';
@@ -231,7 +232,7 @@ export default function POSPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   
   // Use the hook to fetch real products
-  const { products: fetchedProducts, loading: productsLoading } = useProducts('', 'Available');
+  const { products: fetchedProducts, loading: productsLoading, refetch: refreshProducts } = useProducts('', 'Available');
   const [products, setProducts] = useState<Product[]>([]);
   
   // Sync fetched products to local state
@@ -240,6 +241,16 @@ export default function POSPage() {
         setProducts(fetchedProducts);
     }
   }, [fetchedProducts, productsLoading]);
+
+  // Handle auto-refresh when stock is updated (e.g., after a sale)
+  useEffect(() => {
+    const handleStockUpdate = () => {
+      refreshProducts();
+    };
+    window.addEventListener('stock-updated', handleStockUpdate);
+    return () => window.removeEventListener('stock-updated', handleStockUpdate);
+  }, [refreshProducts]);
+
 
   const [isTenderDialogOpen, setIsTenderDialogOpen] = useState(false);
   const [tenderMethod, setTenderMethod] = useState<string | null>(null);
@@ -360,6 +371,58 @@ export default function POSPage() {
     }
   }, [selectedItemId]);
 
+  // Fetch POS settings - stable reference via useCallback so polling interval never resets
+  const fetchSettings = useCallback(async () => {
+      try {
+          const response = await fetch(getApiUrl('/pos-settings'));
+          const result = await response.json();
+          if (result.success) {
+              setEnableNegativeInventory(result.data.enableNegativeInventory);
+              setEnableCashCountAuth(result.data.enableCashCountAuth);
+              setCashCountAuthCredentials({
+                  username: result.data.cashCountAuthUsername,
+                  password: result.data.cashCountAuthPassword
+              });
+              setEnableLineVoidAuth(result.data.enableLineVoidAuth);
+              setLineVoidAuthCredentials({
+                  username: result.data.lineVoidAuthUsername,
+                  password: result.data.lineVoidAuthPassword
+              });
+              setPriceEditAuthCredentials({
+                  username: result.data.priceEditAuthUsername,
+                  password: result.data.priceEditAuthPassword
+              });
+              setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
+              setBusinessSettings(result.data);
+          }
+      } catch (error) {
+          console.error('Error fetching settings:', error);
+      }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-refresh settings when they are changed from another tab/window
+  // Storage event works for browser-to-browser; polling works universally (including Electron)
+  useEffect(() => {
+    // Fast refresh for browser tabs via storage event
+    const handleSettingsChange = (e: StorageEvent) => {
+      if (e.key === 'pos_settings_version') {
+        fetchSettings();
+      }
+    };
+    window.addEventListener('storage', handleSettingsChange);
+
+    // Universal polling fallback every 30 seconds (works in Electron + browser)
+    const pollInterval = setInterval(() => {
+      fetchSettings();
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('storage', handleSettingsChange);
+      clearInterval(pollInterval);
+    };
+  }, [fetchSettings]);
+
   // Fetch initial data
   useEffect(() => {
     // Fetch price levels
@@ -378,55 +441,56 @@ export default function POSPage() {
     };
     fetchPriceLevels();
     
-    // Fetch POS settings
-    const fetchSettings = async () => {
-        try {
-            const response = await fetch('/api/pos-settings');
-            const result = await response.json();
-            if (result.success) {
-                setEnableNegativeInventory(result.data.enableNegativeInventory);
-                setEnableCashCountAuth(result.data.enableCashCountAuth);
-                setCashCountAuthCredentials({
-                    username: result.data.cashCountAuthUsername,
-                    password: result.data.cashCountAuthPassword
-                });
-                setEnableLineVoidAuth(result.data.enableLineVoidAuth);
-                setLineVoidAuthCredentials({
-                    username: result.data.lineVoidAuthUsername,
-                    password: result.data.lineVoidAuthPassword
-                });
-                setPriceEditAuthCredentials({
-                    username: result.data.priceEditAuthUsername,
-                    password: result.data.priceEditAuthPassword
-                });
-                setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
-                setBusinessSettings(result.data);
-            }
-        } catch (error) {
-            console.error('Error fetching settings:', error);
-        }
-    };
+    // Fetch POS settings on mount
     fetchSettings();
 
     // Fetch Terminals
     const fetchTerminals = async () => {
       try {
-        const response = await fetch('/api/pos-terminals?activeOnly=true');
+        const response = await fetch(getApiUrl('/pos-terminals?activeOnly=true'));
         const result = await response.json();
-        if (result.success && result.data.length > 0) {
-          setTerminals(result.data);
+        if (result.success) {
+          const terminalsData = result.data;
+          setTerminals(terminalsData);
           
-          // Try to get stored terminal ID
+          const clientIp = result.clientIp;
+          console.log('Client IP:', clientIp);
+
+          // Priority 1: Check for terminal matching client IP
+          const autoMatchedTerminal = terminalsData.find((t: any) => t.ipAddress === clientIp);
+          
+          // Priority 2: Check for stored manual selection
           const storedTerminalId = localStorage.getItem('pos_terminal_id');
-          const isValidStored = result.data.some((t: any) => t.id === storedTerminalId);
+          const storedTerminal = terminalsData.find((t: any) => t.id === storedTerminalId);
           
-          if (storedTerminalId && isValidStored) {
-            setSelectedTerminalId(storedTerminalId);
+          if (autoMatchedTerminal) {
+            setSelectedTerminalId(autoMatchedTerminal.id);
+            localStorage.setItem('pos_terminal_id', autoMatchedTerminal.id);
+            toast({
+              title: 'Terminal Connected',
+              description: `Automatically connected to ${autoMatchedTerminal.terminalDescription} (${clientIp})`,
+            });
+          } else if (storedTerminal) {
+            // Use stored terminal but inform user about IP mismatch
+            setSelectedTerminalId(storedTerminal.id);
+            toast({
+              title: 'Manual Terminal Connected',
+              description: `Connected to ${storedTerminal.terminalDescription} (Note: This machine IP is ${clientIp})`,
+            });
           } else {
-            // Default to first terminal
-            const defaultTerminalId = result.data[0].id;
-            setSelectedTerminalId(defaultTerminalId);
-            localStorage.setItem('pos_terminal_id', defaultTerminalId);
+            // No IP match and no valid stored terminal - show informative error
+            toast({
+              variant: 'destructive',
+              title: 'Terminal Not Found',
+              description: `No terminal configured for IP: ${clientIp}. Please register this IP in Terminals page.`,
+            });
+
+            // Fallback to first available if any
+            if (terminalsData.length > 0) {
+              const defaultTerminalId = terminalsData[0].id;
+              setSelectedTerminalId(defaultTerminalId);
+              localStorage.setItem('pos_terminal_id', defaultTerminalId);
+            }
           }
         }
       } catch (error) {
@@ -438,7 +502,7 @@ export default function POSPage() {
     // Fetch Payment Methods
     const fetchPaymentMethods = async () => {
       try {
-        const response = await fetch('/api/payment-methods?activeOnly=true');
+        const response = await fetch(getApiUrl('/payment-methods?activeOnly=true'));
         const result = await response.json();
         if (result.success && result.data) {
           setPaymentMethods(result.data);
@@ -449,6 +513,26 @@ export default function POSPage() {
     };
     fetchPaymentMethods();
   }, []);
+
+  // Heartbeat for terminal status
+  useEffect(() => {
+    if (!selectedTerminalId) return;
+
+    const sendHeartbeat = () => {
+      fetch(getApiUrl('/pos-terminals'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedTerminalId })
+      }).catch(console.error);
+    };
+
+    // Initial heartbeat
+    sendHeartbeat();
+
+    // Heartbeat every 1 minute
+    const interval = setInterval(sendHeartbeat, 60000);
+    return () => clearInterval(interval);
+  }, [selectedTerminalId]);
 
   const currentTerminalName = useMemo(() => {
     const t = terminals.find(t => t.id === selectedTerminalId);
@@ -473,9 +557,17 @@ export default function POSPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Ref so the keyboard handler always sees latest login state without
+  // changing the dependency array size (avoids React Fast Refresh warning).
+  const isPosLoggedInRef = useRef(isPosLoggedIn);
+  useEffect(() => { isPosLoggedInRef.current = isPosLoggedIn; }, [isPosLoggedIn]);
+
   // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Disable all shortcuts while the login form is displayed
+      if (!isPosLoggedInRef.current) return;
+
       // Check if any dialog is open to prevent background interactions
       const isDialogOpen = document.querySelector('[role="dialog"]') !== null;
 
@@ -864,7 +956,7 @@ export default function POSPage() {
              return;
          }
 
-         const response = await fetch('/api/pos/shifts', {
+         const response = await fetch(getApiUrl('/pos/shifts'), {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({
@@ -910,7 +1002,7 @@ export default function POSPage() {
       }
 
       try {
-          const response = await fetch('/api/pos/shifts', {
+          const response = await fetch(getApiUrl('/pos/shifts'), {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -960,13 +1052,13 @@ export default function POSPage() {
               
               // 2. Generate and Save X-Reading
               try {
-                  const xReadingRes = await fetch(`/api/sales/x-reading?shiftId=${currentShiftId}&limit=1`);
+                  const xReadingRes = await fetch(getApiUrl(`/sales/x-reading?shiftId=${currentShiftId}&limit=1`));
                   const xReadingResult = await xReadingRes.json();
                   
                   if (xReadingResult.success && xReadingResult.data.length > 0) {
                       const xData = xReadingResult.data[0];
                       // Save X-Reading Record
-                      await fetch('/api/sales/x-reading', {
+                      await fetch(getApiUrl('/sales/x-reading'), {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
@@ -997,7 +1089,7 @@ export default function POSPage() {
 
               // 3. Generate and Save Z-Reading
               try {
-                  await fetch('/api/sales/z-reading', {
+                  await fetch(getApiUrl('/sales/z-reading'), {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -1148,7 +1240,7 @@ export default function POSPage() {
   const fetchShiftData = async () => {
     if (!currentShiftId) return;
     try {
-        const response = await fetch(`/api/pos/shifts?shiftId=${currentShiftId}`);
+        const response = await fetch(getApiUrl(`/pos/shifts?shiftId=${currentShiftId}`));
         const result = await response.json();
         if (result.success && result.data) {
             setStartingCash(result.data.startingCash);
@@ -1299,17 +1391,19 @@ export default function POSPage() {
                     }}
                     autoFocus
                   />
-                  <ProductSearchDialog onSelectProduct={handleAddItem} isOpen={isProductSearchOpen} onOpenChange={setIsProductSearchOpen}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-2 text-muted-foreground hover:text-foreground"
-                    >
-                      <span className="text-xs mr-1">Search</span>
-                      <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">F9</kbd>
-                    </Button>
-                  </ProductSearchDialog>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsProductSearchOpen(true)}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                        F9
+                      </kbd>
+                    </div>
+                  </Button>
                 </div>
 
                 <div className="flex items-center gap-2 bg-background border border-muted-foreground/20 rounded-md px-3 h-12 shadow-sm min-w-[200px]">

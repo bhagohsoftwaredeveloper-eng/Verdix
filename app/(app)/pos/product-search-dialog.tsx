@@ -22,7 +22,6 @@ import {
 } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
 import type { Product } from '@/lib/types';
-import Image from 'next/image';
 import { useProducts } from '@/hooks/use-api';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Loader2 } from 'lucide-react';
@@ -51,7 +50,7 @@ export function ProductSearchDialog({
 }: ProductSearchDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
-  const { products, loading, error } = useProducts(debouncedSearchTerm, 'Available');
+  const { products, loading, error, refetch: refetchProducts } = useProducts(debouncedSearchTerm, 'Available');
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
 
   // Update displayed products only when not loading or when loading starts to keep previous results
@@ -60,6 +59,15 @@ export function ProductSearchDialog({
       setDisplayedProducts(products);
     }
   }, [products, loading, error]);
+
+  // Handle auto-refresh when stock is updated (e.g., after a sale)
+  useEffect(() => {
+    const handleStockUpdate = () => {
+      refetchProducts();
+    };
+    window.addEventListener('stock-updated', handleStockUpdate);
+    return () => window.removeEventListener('stock-updated', handleStockUpdate);
+  }, [refetchProducts]);
 
   useEffect(() => {
     if (isOpen) {
@@ -131,14 +139,7 @@ export function ProductSearchDialog({
                     onSelect={() => handleSelect(product.id)}
                     className="flex items-center justify-between"
                   >
-                    <div className="flex items-center gap-4">
-                      <Image
-                        src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
-                        alt={product.name}
-                        width={40}
-                        height={40}
-                        className="rounded-md object-cover"
-                      />
+                    <div className="flex items-center">
                       <div>
                         <p className="font-medium">{product.name}</p>
                         <p className="text-sm text-muted-foreground">{product.barcode || product.sku} • {product.unitOfMeasure}</p>

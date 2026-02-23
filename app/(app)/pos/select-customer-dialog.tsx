@@ -23,6 +23,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { User, PlusCircle, Loader2 } from 'lucide-react';
 import type { Customer } from '@/lib/types';
 import { AddCustomerDialog } from './add-customer-dialog';
+import { getApiUrl } from '@/lib/api-config';
 
 export const WALK_IN_CUSTOMER: Customer = {
   id: 'walk-in',
@@ -51,7 +52,7 @@ export function SelectCustomerDialog({ isOpen, onOpenChange, onSelectCustomer }:
       if (query) {
         params.append('search', query);
       }
-      const response = await fetch(`/api/customers?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/customers?${params.toString()}`));
       const result = await response.json();
       if (result.success) {
         setCustomers(result.data);

@@ -1,18 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Building2, Settings, FileText, Monitor, MapPin, Users, CreditCard, DollarSign, Lock, Undo, Printer } from 'lucide-react';
+import { Loader2, Upload, Building2, Settings, FileText, Monitor, Users, CreditCard, Lock, Undo, Printer } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ManageTransactionReferenceDialog } from './manage-transaction-reference-dialog';
-import { AddSalesAreaDialog } from '../../customer/list/add-sales-area-dialog';
-import { AddSalesGroupDialog } from '../../customer/list/add-sales-group-dialog';
+
 import { ManageSalesPersonsDialog } from './manage-sales-persons-dialog';
 import { ManagePaymentTermsDialog } from './manage-payment-terms-dialog';
 import { ManagePaymentMethodsDialog } from '../../sales/ManagePaymentMethodsDialog';
@@ -91,6 +90,9 @@ export default function PosSetupPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const { toast } = useToast();
+  const isFirstLoad = useRef(true);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isRefreshingRef = useRef(false);
 
   // Fetch POS settings on mount
   useEffect(() => {
@@ -98,6 +100,7 @@ export default function PosSetupPage() {
   }, []);
 
   const fetchSettings = async () => {
+    isRefreshingRef.current = true;
     try {
       setIsLoading(true);
       const response = await fetch('/api/pos-settings');
@@ -129,16 +132,18 @@ export default function PosSetupPage() {
       });
     } finally {
       setIsLoading(false);
+      // Allow a tick for state to settle before re-enabling auto-save
+      setTimeout(() => { isRefreshingRef.current = false; }, 100);
     }
   };
 
-  const handleSaveSettings = async () => {
+  const handleSaveSettings = useCallback(async (settingsToSave?: typeof settings) => {
     try {
       setIsSaving(true);
       const response = await fetch('/api/pos-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
+        body: JSON.stringify(settingsToSave ?? settings)
       });
 
       const result = await response.json();
@@ -148,6 +153,10 @@ export default function PosSetupPage() {
           title: 'Settings Saved',
           description: 'POS settings have been updated successfully'
         });
+        // Notify POS page (other tabs/windows) that settings changed
+        localStorage.setItem('pos_settings_version', Date.now().toString());
+        // Auto-refresh after successful save
+        await fetchSettings();
       } else {
         throw new Error(result.error);
       }
@@ -161,7 +170,25 @@ export default function PosSetupPage() {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [settings]);
+
+  // Auto-save with 1.5s debounce whenever settings change
+  useEffect(() => {
+    // Skip on first load or when settings are being refreshed from server
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
+    if (isRefreshingRef.current) return;
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    const snapshot = { ...settings };
+    debounceTimer.current = setTimeout(() => {
+      handleSaveSettings(snapshot);
+    }, 1500);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [settings]);
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -243,7 +270,7 @@ export default function PosSetupPage() {
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">POS Setup</h2>
-        <Button onClick={handleSaveSettings} disabled={isSaving}>
+        <Button onClick={() => handleSaveSettings()} disabled={isSaving}>
           {isSaving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -734,97 +761,88 @@ export default function PosSetupPage() {
           </CardContent>
         </Card>
 
-        {/* Transaction Reference */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Transaction Reference</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Configure transaction number format and prefix
-            </CardDescription>
-            <ManageTransactionReferenceDialog />
-          </CardContent>
-        </Card>
+        {/* Data Management Cards – 2-column grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-        {/* Payment Terms */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Payment Terms</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Configure payment terms and conditions
-            </CardDescription>
-            <ManagePaymentTermsDialog />
-          </CardContent>
-        </Card>
+          {/* Transaction Reference */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Transaction Reference</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-4">
+                Configure transaction number format and prefix
+              </CardDescription>
+              <div className="flex justify-end">
+                <ManageTransactionReferenceDialog onUpdated={fetchSettings} />
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Payment Types */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">POS Payment Type</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Manage accepted payment methods
-            </CardDescription>
-            <div className="flex justify-end">
-              <ManagePaymentMethodsDialog
-                trigger={
-                  <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
-                    <span className="text-xs font-medium">Manage</span>
-                  </Button>
-                }
-              />
-            </div>
-          </CardContent>
-        </Card>
+          {/* Payment Terms */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Payment Terms</CardTitle>
+              <span className="h-4 w-4 text-muted-foreground text-sm font-semibold leading-none flex items-center justify-center">₱</span>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-4">
+                Configure payment terms and conditions
+              </CardDescription>
+              <div className="flex justify-end">
+                <ManagePaymentTermsDialog onPaymentTermsUpdated={fetchSettings} />
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Sales Area */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Area</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Define sales territories and regions
-            </CardDescription>
-            <AddSalesAreaDialog onAreaAdded={() => { }} />
-          </CardContent>
-        </Card>
+          {/* POS Payment Type */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">POS Payment Type</CardTitle>
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-4">
+                Manage accepted payment methods
+              </CardDescription>
+              <div className="flex justify-end">
+                <ManagePaymentMethodsDialog
+                  onChange={fetchSettings}
+                  trigger={
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
+                      <span className="text-xs font-medium">Manage</span>
+                    </Button>
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Sales Group */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Group</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Organize sales teams and groups
-            </CardDescription>
-            <AddSalesGroupDialog onGroupAdded={() => { }} />
-          </CardContent>
-        </Card>
+          {/* Sales Person */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Sales Person</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="mb-4">
+                Manage sales representatives
+              </CardDescription>
+              <div className="flex justify-end">
+                <ManageSalesPersonsDialog
+                  onChange={fetchSettings}
+                  trigger={
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
+                      <span className="text-xs font-medium">Manage</span>
+                    </Button>
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Sales Person */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Person</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="mb-4">
-              Manage sales representatives
-            </CardDescription>
-            <ManageSalesPersonsDialog />
-          </CardContent>
-        </Card>
+        </div>
       </div>
     </div>
   );

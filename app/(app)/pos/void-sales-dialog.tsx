@@ -26,6 +26,7 @@ import type { Sale, SaleItem } from '@/lib/types';
 import { format, subMinutes } from 'date-fns';
 import { AdminAuthDialog } from './admin-auth-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getApiUrl } from '@/lib/api-config';
 
 interface VoidSalesDialogProps {
   isOpen: boolean;
@@ -135,7 +136,7 @@ export function VoidSalesDialog({
         setSelectedSale(null);
         
         // Add cache-busting parameter to ensure fresh settings
-        fetch(`/api/pos-settings?_t=${Date.now()}`, { cache: 'no-store' })
+        fetch(getApiUrl(`/pos-settings?_t=${Date.now()}`), { cache: 'no-store' })
           .then(res => res.json())
           .then(result => {
             if (result.success) {
@@ -178,7 +179,7 @@ export function VoidSalesDialog({
       console.log('VoidSalesDialog: Searching for SO:', term);
       
       try {
-          const response = await fetch(`/api/pos/recent-sales?query=${encodeURIComponent(term)}`);
+          const response = await fetch(getApiUrl(`/pos/recent-sales?query=${encodeURIComponent(term)}`));
           const result = await response.json();
           console.log('VoidSalesDialog: Search result:', result);
           
@@ -212,7 +213,7 @@ export function VoidSalesDialog({
       console.log(`Voiding entire transaction ${selectedSale.id}, SO: ${selectedSale.orderNumber}...`);
       
       try {
-          const response = await fetch('/api/pos/void-transaction', {
+          const response = await fetch(getApiUrl('/pos/void-transaction'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ saleId: selectedSale.id }),

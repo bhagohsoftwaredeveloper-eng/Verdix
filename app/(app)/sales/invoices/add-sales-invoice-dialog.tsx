@@ -180,10 +180,19 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   const { toast } = useToast();
   const { customers, refetch: refetchCustomers } = useCustomers();
 
-  // Generate auto reference number
-  const generateReference = () => {
-    const randomNum = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
-    return `INV-${randomNum}`;
+  // Fetch current reference and show next
+  const fetchNextReference = async () => {
+    try {
+      const response = await fetch('/api/transaction-references');
+      const result = await response.json();
+      if (result.success && result.data?.salesInvoice) {
+        const nextVal = parseInt(result.data.salesInvoice) + 1;
+        return `INV-${nextVal.toString().padStart(6, '0')}`;
+      }
+    } catch (error) {
+      console.error('Error fetching next reference:', error);
+    }
+    return 'INV-000000'; // Fallback
   };
 
   // Define refined schema inside the component to access paymentMethods state
@@ -295,8 +304,15 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   // Fetch necessary data when dialog opens
   useEffect(() => {
     if (isOpen) {
-      const autoReference = generateReference();
-      form.setValue('reference', autoReference);
+      const setRef = async () => {
+        const autoReference = await fetchNextReference();
+        // Don't set the actual value, just show it in the UI preview
+        // This tells the backend to generate a truly sequential one on save
+        form.setValue('reference', ''); 
+        form.clearErrors('reference');
+      };
+      
+      setRef();
       fetchWarehouses();
       fetchPaymentMethods();
     }
@@ -403,7 +419,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
         <DialogHeader className="px-6 py-4 border-b bg-background">
           <DialogTitle>New Sales Invoice</DialogTitle>
           <DialogDescription>
-            Create a transaction. Reference: <span className="font-mono font-medium text-primary">{form.watch('reference')}</span>
+            Create a transaction. Reference: <span className="font-mono font-medium text-primary">Auto-generated</span>
           </DialogDescription>
         </DialogHeader>
 

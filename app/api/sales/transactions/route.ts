@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 // Force rebuild: Fixed import path
-import { query, withTransaction } from '@/lib/mysql';
+import { query, withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,6 +34,9 @@ export async function GET(request: NextRequest) {
         pt.terminal_id,
         term.name as terminal_name,
         st.customer_id,
+        st.reference,
+        st.receipt_number,
+        st.transaction_source,
         c.name as customer_name,
         c.contact_number as customer_contact,
         st.status as sale_status,
@@ -184,11 +187,13 @@ export async function GET(request: NextRequest) {
       
       const balance = 0;
       const amountPaid = totalAmount; // Assuming full payment for now as logic for partial isn't fully clear
-      
+
       return {
         id: row.sale_id,
+        reference: row.reference,
+        transactionSource: row.transaction_source || 'POS',
         orderNumber: row.order_number,
-        receiptNo: row.order_number, // Using order_number as receipt number
+        receiptNo: row.receipt_number || row.order_number, // Fallback to order_number if receipt_number is null
         posTransactionId: row.pos_transaction_id,
         date: row.transaction_time,
         total: totalAmount,
@@ -279,14 +284,23 @@ export async function POST(request: NextRequest) {
         ) VALUES (?, ?, ?, 'initiated', 'pending', ?, ?, NOW())
       `, [auditLogId, posTransId, paymentMethod, totalDue, finalUserId]);
 
+      // Generate sequential reference (INV-XXXXXX)
+      const nextRefVal = await getNextReference('sales_invoice');
+      const sequentialRef = `INV-${nextRefVal.toString().padStart(6, '0')}`;
+      
+      // Get terminal specific receipt (OR)
+      const receiptNo = await getNextReceiptNumber(terminalId);
+
       // 2. Insert into sales_transactions
       const insertSaleSql = `
         INSERT INTO sales_transactions (
-          id, customer_id, invoice_date, date, total, payment_method, status, notes, created_at, updated_at
-        ) VALUES (?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', ?, NOW(), NOW())
+          id, reference, receipt_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', 'POS', ?, NOW(), NOW())
       `;
       await connection.query(insertSaleSql, [
         saleId,
+        sequentialRef,
+        receiptNo,
         (customer && customer.id !== 'walk-in') ? customer.id : null,
         totalDue,
         paymentMethod,
@@ -341,13 +355,17 @@ export async function POST(request: NextRequest) {
 
       // 4. Insert into sales_invoices (Legacy/Reporting Sync)
       const invoiceId = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      
+
       await connection.query(`
         INSERT INTO sales_invoices (
-          id, customer_id, invoice_date, due_date, total, payment_method,
-          status, notes, created_at, updated_at
-        ) VALUES (?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', ?, NOW(), NOW())
+          id, reference, receipt_number, customer_id, invoice_date, due_date, total, payment_method,
+          status, transaction_source, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', 'POS', ?, NOW(), NOW())
       `, [
         invoiceId,
+        sequentialRef,
+        receiptNo,
         (customer && customer.id !== 'walk-in') ? customer.id : null,
         totalDue,
         paymentMethod,

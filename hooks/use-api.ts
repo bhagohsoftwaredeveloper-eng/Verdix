@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Product, Sale, Customer, PaymentMethod, PurchaseOrder } from '@/lib/types';
+import { getApiUrl } from '@/lib/api-config';
 
 export interface UseProductsResult {
   products: Product[];
@@ -40,7 +41,7 @@ export function useProducts(search?: string, availability?: string, supplierId?:
       }
       params.append('limit', '100'); // Get more products for search
 
-      const response = await fetch(`/api/products?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/products?${params.toString()}`));
       const result = await response.json();
 
       if (!result.success) {
@@ -113,7 +114,7 @@ export function useSalesInvoices(): UseSalesInvoicesResult {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/sales');
+      const response = await fetch(getApiUrl('/sales'));
       const result = await response.json();
 
       if (!result.success) {
@@ -157,7 +158,7 @@ export function useCustomers(search?: string): UseCustomersResult {
       }
       params.append('limit', '100'); // Get more customers for search
 
-      const response = await fetch(`/api/customers?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/customers?${params.toString()}`));
       const result = await response.json();
 
       if (!result.success) {
@@ -179,6 +180,7 @@ export function useCustomers(search?: string): UseCustomersResult {
         billingAddress: item.billingAddress || '',
         discount: item.discount || 0,
         creditLimit: item.creditLimit || 0,
+        priceLevelId: item.priceLevelId || '',
       }));
 
       setCustomers(transformedCustomers);
@@ -225,7 +227,7 @@ export function usePaymentMethods(search?: string): UsePaymentMethodsResult {
       params.append('activeOnly', 'true'); // Only fetch active payment methods
       params.append('limit', '100');
 
-      const response = await fetch(`/api/payment-methods?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/payment-methods?${params.toString()}`));
       const result = await response.json();
 
       if (!result.success) {
@@ -294,7 +296,7 @@ export function usePurchaseOrders(search?: string, status?: string, page: number
       params.append('limit', limit.toString());
       params.append('offset', offset.toString());
 
-      const response = await fetch(`/api/purchase-orders?${params.toString()}`, {
+      const response = await fetch(getApiUrl(`/purchase-orders?${params.toString()}`), {
         cache: 'no-store',
         headers: {
           'Pragma': 'no-cache',
@@ -357,7 +359,7 @@ export function useBusinessProfile(): UseBusinessProfileResult {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/pos-settings');
+      const response = await fetch(getApiUrl('/pos-settings'));
       const result = await response.json();
 
       if (!result.success) {
@@ -419,7 +421,7 @@ export function useBadOrders(search?: string, status?: string, page: number = 1,
       params.append('limit', limit.toString());
       params.append('offset', offset.toString());
 
-      const response = await fetch(`/api/bad-orders?${params.toString()}`, {
+      const response = await fetch(getApiUrl(`/bad-orders?${params.toString()}`), {
         cache: 'no-store',
         headers: {
           'Pragma': 'no-cache',
@@ -474,7 +476,7 @@ export function useBadOrderStats() {
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/bad-orders/stats');
+      const response = await fetch(getApiUrl('/bad-orders/stats'));
       const result = await response.json();
       if (result.success) {
         setStats(result.data);

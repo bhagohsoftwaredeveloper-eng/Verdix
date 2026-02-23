@@ -16,6 +16,7 @@ async function ensureTransactionReferencesTable() {
         delivery_receipt VARCHAR(50),
         stock_adjustment VARCHAR(50),
         sales_hold VARCHAR(50),
+        receipt_number VARCHAR(100) DEFAULT '00000001',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
@@ -29,8 +30,9 @@ async function ensureTransactionReferencesTable() {
       await query(`
         INSERT INTO transaction_references (
           sales_order, purchase_order, sales_delivery, payment_to_supplier,
-          sales_invoice, customer_payment, delivery_receipt, stock_adjustment, sales_hold
-        ) VALUES ('2944', '53', '2832', '34', '2974', '63', '1', '106', '5')
+          sales_invoice, customer_payment, delivery_receipt, stock_adjustment, sales_hold,
+          receipt_number
+        ) VALUES ('2944', '53', '2832', '34', '2974', '63', '1', '106', '5', '00000001')
       `);
     }
   } catch (error) {
@@ -54,7 +56,8 @@ export async function GET(request: NextRequest) {
         customer_payment AS customerPayment,
         delivery_receipt AS deliveryReceipt,
         stock_adjustment AS stockAdjustment,
-        sales_hold AS salesHold
+        sales_hold AS salesHold,
+        receipt_number AS receiptNumber
       FROM transaction_references
       ORDER BY id DESC
       LIMIT 1
@@ -89,7 +92,8 @@ export async function POST(request: NextRequest) {
       customerPayment,
       deliveryReceipt,
       stockAdjustment,
-      salesHold
+      salesHold,
+      receiptNumber
     } = body;
 
     // Check if a record exists
@@ -108,7 +112,8 @@ export async function POST(request: NextRequest) {
           customer_payment = ?,
           delivery_receipt = ?,
           stock_adjustment = ?,
-          sales_hold = ?
+          sales_hold = ?,
+          receipt_number = ?
         WHERE id = ?
       `, [
         salesOrder || null,
@@ -120,6 +125,7 @@ export async function POST(request: NextRequest) {
         deliveryReceipt || null,
         stockAdjustment || null,
         salesHold || null,
+        receiptNumber || null,
         existing[0].id
       ]);
     } else {
@@ -127,8 +133,9 @@ export async function POST(request: NextRequest) {
       await query(`
         INSERT INTO transaction_references (
           sales_order, purchase_order, sales_delivery, payment_to_supplier,
-          sales_invoice, customer_payment, delivery_receipt, stock_adjustment, sales_hold
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          sales_invoice, customer_payment, delivery_receipt, stock_adjustment, sales_hold,
+          receipt_number
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         salesOrder || null,
         purchaseOrder || null,
@@ -138,7 +145,8 @@ export async function POST(request: NextRequest) {
         customerPayment || null,
         deliveryReceipt || null,
         stockAdjustment || null,
-        salesHold || null
+        salesHold || null,
+        receiptNumber || null
       ]);
     }
 

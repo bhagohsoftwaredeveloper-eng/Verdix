@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction } from '@/lib/mysql';
+import { withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,14 +48,23 @@ export async function POST(request: NextRequest) {
           id, transaction_id, payment_method, action, status, amount, user_id, created_at
         ) VALUES (?, ?, ?, 'initiated', 'pending', ?, ?, NOW())
       `, [auditLogId, posTransId, paymentMethod, totalDue, userId]);
+      // Generate sequential reference (INV-XXXXXX)
+      const nextRefVal = await getNextReference('sales_invoice');
+      const sequentialRef = `INV-${nextRefVal.toString().padStart(6, '0')}`;
+      
+      // Get terminal specific receipt (OR)
+      const receiptNo = await getNextReceiptNumber(terminalId);
+
       // 1. Insert into sales_transactions
       const insertSaleSql = `
         INSERT INTO sales_transactions (
-          id, customer_id, invoice_date, date, total, payment_method, status, notes, created_at, updated_at
-        ) VALUES (?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', ?, NOW(), NOW())
+          id, reference, receipt_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', 'POS', ?, NOW(), NOW())
       `;
       await connection.query(insertSaleSql, [
         saleId,
+        sequentialRef,
+        receiptNo,
         (customer && customer.id !== 'walk-in') ? customer.id : null,
         totalDue,
         paymentMethod,
@@ -267,14 +276,17 @@ export async function POST(request: NextRequest) {
 
       // 3. Insert into sales_invoices (to show up in /sales reports)
       const invoiceId = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      
       const insertInvoiceSql = `
         INSERT INTO sales_invoices (
-          id, customer_id, invoice_date, due_date, total, payment_method,
-          status, notes, created_at, updated_at
-        ) VALUES (?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', ?, NOW(), NOW())
+          id, reference, receipt_number, customer_id, invoice_date, due_date, total, payment_method,
+          status, transaction_source, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', 'POS', ?, NOW(), NOW())
       `;
       await connection.query(insertInvoiceSql, [
         invoiceId,
+        sequentialRef,
+        receiptNo,
         (customer && customer.id !== 'walk-in') ? customer.id : null,
         totalDue,
         paymentMethod,

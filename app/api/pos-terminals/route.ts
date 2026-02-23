@@ -9,8 +9,14 @@ async function ensurePosTerminalsTable() {
         id VARCHAR(50) PRIMARY KEY,
         ip_address VARCHAR(45),
         name VARCHAR(100),
+        serial_number VARCHAR(100),
+        min_number VARCHAR(100),
+        permit_no VARCHAR(100),
+        print_official_receipt VARCHAR(10) DEFAULT 'No',
+        or_next_reference VARCHAR(100),
         location VARCHAR(100),
         is_active BOOLEAN DEFAULT TRUE,
+        last_active TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_name (name),
@@ -19,6 +25,33 @@ async function ensurePosTerminalsTable() {
     `;
     
     await query(createTableSQL);
+
+    // Add missing columns if table already exists
+    const columns = [
+      { name: 'serial_number', type: 'VARCHAR(100)' },
+      { name: 'min_number', type: 'VARCHAR(100)' },
+      { name: 'permit_no', type: 'VARCHAR(100)' },
+      { name: 'print_official_receipt', type: 'VARCHAR(10) DEFAULT "No"' },
+      { name: 'or_next_reference', type: 'VARCHAR(100)' },
+      { name: 'last_active', type: 'TIMESTAMP NULL' }
+    ];
+
+    // Get current columns
+    const currentColumnsResult = await query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'pos_terminals' AND TABLE_SCHEMA = DATABASE()"
+    );
+    const existingColumns = new Set(currentColumnsResult.map((c: any) => c.COLUMN_NAME));
+
+    for (const col of columns) {
+      if (!existingColumns.has(col.name)) {
+        try {
+          await query(`ALTER TABLE pos_terminals ADD COLUMN ${col.name} ${col.type}`);
+        } catch (e) {
+          // Fallback catch
+        }
+      }
+    }
+
   } catch (error) {
     console.error('Error ensuring pos_terminals table:', error);
     throw error;
@@ -35,14 +68,44 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const search = searchParams.get('search');
     const activeOnly = searchParams.get('activeOnly') === 'true';
+    const getNextOR = searchParams.get('getNextOR') === 'true';
+
+    if (getNextOR) {
+      const sql = `
+        SELECT or_next_reference 
+        FROM pos_terminals 
+        WHERE or_next_reference REGEXP '^[0-9]+$'
+        ORDER BY CAST(or_next_reference AS UNSIGNED) DESC 
+        LIMIT 1
+      `;
+      const result = await query(sql);
+      
+      let nextRef = '00000001';
+      if (result && result.length > 0) {
+        const currentMax = parseInt(result[0].or_next_reference);
+        nextRef = (currentMax + 1).toString().padStart(8, '0');
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: nextRef,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     let sql = `
       SELECT
         id,
         ip_address AS ipAddress,
         name AS terminalDescription,
+        serial_number AS serialNumber,
+        min_number AS min,
+        permit_no AS permitNo,
+        print_official_receipt AS printOfficialReceipt,
+        or_next_reference AS orNextReference,
         location AS inventoryLocation,
         is_active AS isActive,
+        last_active AS lastActive,
         created_at AS createdAt
       FROM pos_terminals
       WHERE 1=1
@@ -81,9 +144,16 @@ export async function GET(request: NextRequest) {
     const countResult = await query(countSql, countParams);
     const total = countResult[0]?.total || 0;
 
+    // Get client IP
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
+                     request.headers.get('x-real-ip') || 
+                     request.ip || 
+                     '127.0.0.1';
+
     return NextResponse.json({
       success: true,
       data: terminals,
+      clientIp,
       pagination: {
         total,
         limit,
@@ -124,16 +194,22 @@ export async function POST(request: NextRequest) {
 
     const sql = `
       INSERT INTO pos_terminals (
-        id, ip_address, name,
+        id, ip_address, name, serial_number, min_number,
+        permit_no, print_official_receipt, or_next_reference,
         location, is_active
       )
-      VALUES (?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     await query(sql, [
       id,
       ipAddress?.trim() || null,
       terminalDescription?.trim() || null,
+      serialNumber?.trim() || null,
+      min?.trim() || null,
+      permitNo?.trim() || null,
+      printOfficialReceipt || 'No',
+      orNextReference?.trim() || null,
       inventoryLocation || 'Store',
       isActive
     ]);
@@ -171,18 +247,7 @@ export async function PUT(request: NextRequest) {
     await ensurePosTerminalsTable();
 
     const body = await request.json();
-    const {
-      id,
-      ipAddress,
-      terminalDescription,
-      serialNumber,
-      min,
-      permitNo,
-      printOfficialReceipt,
-      orNextReference,
-      inventoryLocation,
-      isActive
-    } = body;
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -191,23 +256,44 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const sql = `
-      UPDATE pos_terminals
-      SET
-        ip_address = ?,
-        name = ?,
-        location = ?,
-        is_active = ?
-      WHERE id = ?
-    `;
+    // Build dynamic UPDATE query
+    const updates: string[] = [];
+    const params: any[] = [];
 
-    await query(sql, [
-      ipAddress?.trim() || null,
-      terminalDescription?.trim() || null,
-      inventoryLocation || 'Store',
-      isActive !== undefined ? isActive : true,
-      id
-    ]);
+    const fieldMap: Record<string, string> = {
+      ipAddress: 'ip_address',
+      terminalDescription: 'name',
+      serialNumber: 'serial_number',
+      min: 'min_number',
+      permitNo: 'permit_no',
+      printOfficialReceipt: 'print_official_receipt',
+      orNextReference: 'or_next_reference',
+      inventoryLocation: 'location',
+      isActive: 'is_active'
+    };
+
+    Object.entries(fieldMap).forEach(([bodyKey, dbColumn]) => {
+      if (body[bodyKey] !== undefined) {
+        updates.push(`${dbColumn} = ?`);
+        params.push(typeof body[bodyKey] === 'string' ? body[bodyKey].trim() : body[bodyKey]);
+      }
+    });
+
+    // Always update last_active
+    updates.push('last_active = ?');
+    params.push(new Date());
+
+    if (updates.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    params.push(id);
+    const sql = `UPDATE pos_terminals SET ${updates.join(', ')} WHERE id = ?`;
+
+    await query(sql, params);
 
     return NextResponse.json({
       success: true,

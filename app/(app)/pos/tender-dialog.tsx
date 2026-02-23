@@ -29,6 +29,7 @@ import { usePrinter } from '@/lib/use-printer';
 import { ReceiptGenerator } from '@/lib/receipt-generator';
 import { useReactToPrint } from 'react-to-print';
 import { ReceiptView } from './receipt-view';
+import { getApiUrl } from '@/lib/api-config';
 
 import { SystemSettings } from '@/lib/types';
 
@@ -243,7 +244,7 @@ export function TenderDialog({
         // toast({ title: "Processing...", description: "Sending transaction to server." }); 
 
         try {
-            const response = await fetch('/api/pos/checkout', {
+            const response = await fetch(getApiUrl('/pos/checkout'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

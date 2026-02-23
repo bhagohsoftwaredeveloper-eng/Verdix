@@ -72,6 +72,7 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
   useEffect(() => {
     if (open) {
       fetchWarehouses();
+      fetchNextOR();
     }
   }, [open]);
 
@@ -84,6 +85,18 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
       }
     } catch (error) {
       console.error('Error fetching warehouses:', error);
+    }
+  };
+
+  const fetchNextOR = async () => {
+    try {
+      const response = await fetch('/api/pos-terminals?getNextOR=true');
+      const result = await response.json();
+      if (result.success && result.data) {
+        form.setValue('orNextReference', result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching next OR reference:', error);
     }
   };
 
