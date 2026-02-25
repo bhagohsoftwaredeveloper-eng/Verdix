@@ -46,7 +46,7 @@ import {
 } from 'lucide-react';
 import type { Product, Customer } from '@/lib/types';
 import Link from 'next/link';
-import { Logo } from '@/components/logo';
+
 import { TenderDialog } from './tender-dialog';
 import { ProductSearchDialog } from './product-search-dialog';
 import { EditItemDialog } from './edit-item-dialog';
@@ -682,7 +682,7 @@ export default function POSPage() {
 
   const activeLevelId = useMemo(() => {
     return selectedCustomer?.priceLevelId || selectedPriceLevelId || defaultLevelId;
-  }, [selectedCustomer?.priceLevelId, selectedPriceLevelId, defaultLevelId]);
+  }, [selectedCustomer, selectedPriceLevelId, defaultLevelId]);
 
   const activeLevelName = useMemo(() => {
     const level = priceLevels.find((l: any) => l.id === activeLevelId);
@@ -691,13 +691,12 @@ export default function POSPage() {
 
   // Update item prices when price level or customer changes
   useEffect(() => {
-    if (!selectedPriceLevelId) return;
+    if (!activeLevelId) return;
 
     setItems(currentItems => {
       if (currentItems.length === 0) return currentItems;
       
       const updatedItems = currentItems.map(item => {
-        // Re-calculate the effective price based on new parameters, preserving quantity thresholds
         const newPrice = calculateEffectivePrice(item, item.quantity, activeLevelId, defaultLevelId);
         return { ...item, price: newPrice };
       });
@@ -711,15 +710,24 @@ export default function POSPage() {
 
   const handleAddItem = (product: Product | undefined) => {
     if (product) {
-      const existingItem = items.find((item) => item.id === product.id);
-      if (existingItem) {
-        updateQuantity(product.id, existingItem.quantity + 1);
-      } else {
-        const itemPrice = calculateEffectivePrice(product, 1, activeLevelId, defaultLevelId);
-        const newItem: SaleItem = { ...product, quantity: 1, discount: 0, name: product.name, price: itemPrice };
-        setItems([...items, newItem]);
-        setSelectedItemId(newItem.id); 
-      }
+      setItems(prevItems => {
+        const existingItem = prevItems.find((item) => item.id === product.id);
+        if (existingItem) {
+          const newQuantity = existingItem.quantity + 1;
+          // Use original product for price calculation to ensure base price is preserved
+          const newPrice = calculateEffectivePrice(product, newQuantity, activeLevelId, defaultLevelId);
+          return prevItems.map(item => 
+            item.id === product.id 
+              ? { ...item, quantity: newQuantity, price: newPrice } 
+              : item
+          );
+        } else {
+          const itemPrice = calculateEffectivePrice(product, 1, activeLevelId, defaultLevelId);
+          const newItem: SaleItem = { ...product, quantity: 1, discount: 0, name: product.name, price: itemPrice };
+          setSelectedItemId(newItem.id); 
+          return [...prevItems, newItem];
+        }
+      });
     } else {
       toast({
         title: "Error",
@@ -753,9 +761,11 @@ export default function POSPage() {
     if (newQuantity <= 0) {
       removeItem(productId);
     } else {
-      setItems(items.map(item => {
+      setItems(prevItems => prevItems.map(item => {
         if (item.id === productId) {
-             const newPrice = calculateEffectivePrice(item, newQuantity, activeLevelId, defaultLevelId);
+             const originalProduct = products?.find(p => p.id === productId);
+             const newPrice = calculateEffectivePrice(originalProduct || item, newQuantity, activeLevelId, defaultLevelId);
+             // console.log(`Price update for ${item.name}: Qty ${newQuantity}, Level ${activeLevelId} -> ${newPrice}`);
              return { ...item, quantity: newQuantity, price: newPrice };
         }
         return item;
@@ -764,7 +774,7 @@ export default function POSPage() {
   };
 
   const handleUpdateItem = (itemId: string, newName: string, newQuantity: number, newPrice: number, newDiscount: number) => {
-    setItems(items.map(item =>
+    setItems(prevItems => prevItems.map(item =>
       item.id === itemId
         ? { ...item, name: newName, quantity: newQuantity, price: newPrice, discount: newDiscount }
         : item
@@ -1161,15 +1171,6 @@ export default function POSPage() {
 
   const handleSelectCustomer = (customer: Customer | null) => {
     setSelectedCustomer(customer);
-    if (customer && customer.priceLevelId) {
-      setSelectedPriceLevelId(customer.priceLevelId);
-    } else {
-      // Back to default if walk-in or no level
-      const defaultLevel = priceLevels.find(l => l.isDefault);
-      if (defaultLevel) {
-        setSelectedPriceLevelId(defaultLevel.id);
-      }
-    }
     setIsCustomerSelectOpen(false);
   }
 
@@ -1409,7 +1410,12 @@ export default function POSPage() {
                 <div className="flex items-center gap-2 bg-background border border-muted-foreground/20 rounded-md px-3 h-12 shadow-sm min-w-[200px]">
                     <User className="h-4 w-4 text-primary" />
                     <div className="flex-1 overflow-hidden">
-                        <div className="text-xs text-muted-foreground">Customer</div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="text-xs text-muted-foreground">Customer</div>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${activeLevelId === defaultLevelId ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground shadow-sm'}`}>
+                                {activeLevelName}
+                            </span>
+                        </div>
                         <div className="text-sm font-medium truncate">{selectedCustomer?.name || 'Walk-in'}</div>
                     </div>
                     {selectedCustomer?.id !== 'walk-in' && (
@@ -1471,8 +1477,11 @@ export default function POSPage() {
                                     <TableCell className="text-left text-sm text-muted-foreground">
                                         {item.unitOfMeasure}
                                     </TableCell>
-                                    <TableCell className="text-right font-mono text-sm">
-                                        ₱{item.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                    <TableCell className="text-right font-mono text-sm group">
+                                        <div className="flex flex-col items-end">
+                                            <span>₱{item.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                            {/* Tiered Pricing Label Removed */}
+                                        </div>
                                     </TableCell>
                                     <TableCell className="p-0">
                                         <div className="flex items-center justify-center gap-1 h-full">
@@ -1532,8 +1541,8 @@ export default function POSPage() {
                         />
                      </div>
                  ) : (
-                    <Logo className="size-10 text-primary mb-2" enableLink={false} />
-                 )}
+                     <div className="text-[40px] uppercase font-bold text-primary mb-2 leading-none tracking-tight">STOCK PILOT</div>
+                  )}
                  <div className="text-center">
                     <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>
                     <p className="text-xs text-muted-foreground mt-1 font-mono">{currentTerminalName}</p>
@@ -1653,7 +1662,10 @@ export default function POSPage() {
         isOpen={isTenderDialogOpen}
         onOpenChange={setIsTenderDialogOpen}
         paymentMethod={tenderMethod || ''}
-        totalDue={items.reduce((acc, item) => acc + item.price * item.quantity, 0)}
+        totalDue={items.reduce((acc, item) => {
+          const itemTotal = item.price * item.quantity;
+          return acc + (itemTotal - (itemTotal * item.discount) / 100);
+        }, 0)}
         items={items}
         customer={selectedCustomer}
         currentUser={currentUser}
@@ -1668,7 +1680,10 @@ export default function POSPage() {
         isOpen={isEditItemOpen}
         onOpenChange={setIsEditItemOpen}
         item={selectedItem}
+        product={products?.find(p => p.id === selectedItemId)}
         onUpdate={handleUpdateItem}
+        activeLevelId={activeLevelId}
+        defaultLevelId={defaultLevelId}
       />
        {/* Product Search Dialog */}
       <ProductSearchDialog

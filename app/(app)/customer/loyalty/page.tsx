@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/pagination';
 import type { Customer } from '@/lib/types';
 import { format } from 'date-fns';
+import { getApiUrl } from '@/lib/api-config';
 import { AdjustPointsDialog } from './adjust-points-dialog';
 import { LoyaltySettingsDialog } from './loyalty-settings-dialog';
 import { AddLoyaltyCardDialog } from './add-loyalty-card-dialog';
@@ -138,7 +139,7 @@ export default function CustomerLoyaltyPage() {
   const fetchCustomers = async (silent = false) => {
     try {
       if (!silent) setIsLoading(true);
-      const response = await fetch('/api/customer-loyalty');
+      const response = await fetch(getApiUrl('/customer-loyalty'));
       if (response.ok) {
         const result = await response.json();
         setCustomers(result.data || []);

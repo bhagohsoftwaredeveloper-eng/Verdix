@@ -35,6 +35,7 @@ import { Loader2, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ALL_PERMISSIONS } from './permissions';
+import { getApiUrl } from '@/lib/api-config';
 
 type User = {
   uid: string;
@@ -113,7 +114,7 @@ export function EditUserDialog({
         : values.permissions;
 
       // Call the API to update user
-      const response = await fetch(`/api/users/${user.uid}`, {
+      const response = await fetch(getApiUrl(`/users/${user.uid}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

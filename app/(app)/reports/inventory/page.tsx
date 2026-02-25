@@ -23,6 +23,7 @@ import { Loader2, Printer } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
+import { getApiUrl } from '@/lib/api-config';
 
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 
@@ -97,7 +98,7 @@ export default function InventoryReportPage() {
       params.append('page', page.toString());
       params.append('limit', pageSize.toString());
       
-      const res = await fetch(`/api/reports/inventory?${params.toString()}`);
+      const res = await fetch(getApiUrl(`/reports/inventory?${params.toString()}`));
       const data = await res.json();
       
       if (data.success) {

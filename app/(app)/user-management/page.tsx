@@ -33,6 +33,7 @@ import {
 import { AddUserDialog } from './add-user-dialog';
 import { EditUserDialog } from './edit-user-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -113,7 +114,7 @@ function UserRow({
   const handleDeleteConfirm = async () => {
     try {
       setIsDeleting(true);
-      const res = await fetch(`/api/users?uid=${user.uid}`, {
+      const res = await fetch(getApiUrl(`/users?uid=${user.uid}`), {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -251,7 +252,7 @@ export default function UserManagementPage() {
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/users');
+      const response = await fetch(getApiUrl('/users'));
       if (!response.ok) {
         throw new Error('Failed to fetch users');
       }

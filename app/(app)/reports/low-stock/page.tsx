@@ -16,6 +16,7 @@ import { Loader2, Printer, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
+import { getApiUrl } from '@/lib/api-config';
 
 interface Product {
   id: string;
@@ -47,7 +48,7 @@ export default function LowStockReportPage() {
     setLoading(true);
     try {
       // Reusing the inventory API with lowStock=true
-      const res = await fetch(`/api/reports/inventory?lowStock=true`);
+      const res = await fetch(getApiUrl(`/reports/inventory?lowStock=true`));
       const data = await res.json();
       
       if (data.success) {

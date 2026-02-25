@@ -29,6 +29,7 @@ import { Warehouse } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlusCircle, Pencil, Trash2, Loader2, WarehouseIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 export function WarehouseDialog({ warehouse, onSave, children, disabled, open, onOpenChange }: { warehouse?: Warehouse, onSave: (name: string, location?: string) => Promise<void>, children: React.ReactNode, disabled?: boolean | null, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -133,7 +134,7 @@ function WarehouseRow({ warehouse, onUpdate, onDelete }: { warehouse: Warehouse,
 
   const handleUpdate = async (name: string, location?: string) => {
     try {
-      const response = await fetch(`/api/warehouses/${warehouse.id}`, {
+      const response = await fetch(getApiUrl(`/warehouses/${warehouse.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -167,9 +168,9 @@ function WarehouseRow({ warehouse, onUpdate, onDelete }: { warehouse: Warehouse,
     try {
       // Fetch dependency counts
       const [productsRes, ordersRes, transactionsRes] = await Promise.all([
-        fetch(`/api/products?warehouseId=${warehouse.id}&countOnly=true`),
-        fetch(`/api/sales/orders?warehouseId=${warehouse.id}&countOnly=true`),
-        fetch(`/api/sales?warehouse=${encodeURIComponent(warehouse.name)}&countOnly=true`)
+        fetch(getApiUrl(`/products?warehouseId=${warehouse.id}&countOnly=true`)),
+        fetch(getApiUrl(`/sales/orders?warehouseId=${warehouse.id}&countOnly=true`)),
+        fetch(getApiUrl(`/sales?warehouse=${encodeURIComponent(warehouse.name)}&countOnly=true`))
       ]);
 
       const [productsData, ordersData, transactionsData] = await Promise.all([
@@ -199,7 +200,7 @@ function WarehouseRow({ warehouse, onUpdate, onDelete }: { warehouse: Warehouse,
   const handleConfirmDelete = async () => {
     setIsDeleteDialogOpen(false);
     try {
-      const response = await fetch(`/api/warehouses/${warehouse.id}`, {
+      const response = await fetch(getApiUrl(`/warehouses/${warehouse.id}`), {
         method: 'DELETE',
       });
 
@@ -356,7 +357,7 @@ export function ManageWarehousesDialog({ trigger, onChange, open, onOpenChange }
   const fetchWarehouses = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/warehouses?activeOnly=false');
+      const response = await fetch(getApiUrl('/warehouses?activeOnly=false'));
       const result = await response.json();
 
       if (result.success) {
@@ -384,7 +385,7 @@ export function ManageWarehousesDialog({ trigger, onChange, open, onOpenChange }
 
   const handleAddWarehouse = async (name: string, location?: string) => {
     try {
-      const response = await fetch('/api/warehouses', {
+      const response = await fetch(getApiUrl('/warehouses'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

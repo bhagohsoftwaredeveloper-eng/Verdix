@@ -25,6 +25,7 @@ import type { Sale } from '@/lib/types';
 import { AddSalesInvoiceDialog } from './add-sales-invoice-dialog';
 import { Logo } from '@/components/logo';
 import { useSalesInvoices } from '@/hooks/use-api';
+import { getApiUrl } from '@/lib/api-config';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -121,7 +122,7 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
                             </tr>
                             <tr>
                                 <td className="bg-slate-100 p-2 font-semibold border-b border-white">Payment Terms</td>
-                                <td className="bg-slate-50 p-2 border-b border-white uppercase">{order.customer.paymentTerms || 'CASH'}</td>
+                                <td className="bg-slate-50 p-2 border-b border-white uppercase">{order.customer?.paymentTerms || 'CASH'}</td>
                             </tr>
                             <tr>
                                 <td className="bg-slate-100 p-2 font-semibold">Due Date</td>
@@ -136,16 +137,16 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
             <div className="grid grid-cols-2 gap-12 mb-8">
                 <div>
                     <h3 className="font-bold mb-2 text-sm">Bill to:</h3>
-                    <p className="text-lg font-medium mb-1">{order.customer.name}</p>
+                    <p className="text-lg font-medium mb-1">{order.customer?.name || 'Unknown Customer'}</p>
                     <p className="text-sm text-muted-foreground">Store</p>
-                    <p className="text-sm text-muted-foreground">{order.customer.address || 'Address not provided'}</p>
-                    <p className="text-sm text-muted-foreground">{order.customer.contactNumber}</p>
+                    <p className="text-sm text-muted-foreground">{order.customer?.address || 'Address not provided'}</p>
+                    <p className="text-sm text-muted-foreground">{order.customer?.contactNumber || ''}</p>
                 </div>
                 <div>
                     <h3 className="font-bold mb-2 text-sm">Ship to:</h3>
-                    <p className="text-lg font-medium mb-1">{order.customer.name}</p>
+                    <p className="text-lg font-medium mb-1">{order.customer?.name || 'Unknown Customer'}</p>
                     <p className="text-sm text-muted-foreground">Store</p>
-                     <p className="text-sm text-muted-foreground">{order.customer.address || 'Address not provided'}</p>
+                     <p className="text-sm text-muted-foreground">{order.customer?.address || 'Address not provided'}</p>
                 </div>
             </div>
 
@@ -220,7 +221,7 @@ export default function SalesInvoicesPage() {
   const { salesInvoices, loading, error, refetch } = useSalesInvoices();
   
   useEffect(() => {
-    fetch('/api/pos-settings')
+    fetch(getApiUrl('/pos-settings'))
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -297,7 +298,7 @@ export default function SalesInvoicesPage() {
   const handleVoid = async (saleId: string) => {
     try {
       setIsVoiding(true);
-      const response = await fetch(`/api/sales/invoices/${saleId}/void`, {
+      const response = await fetch(getApiUrl(`/sales/invoices/${saleId}/void`), {
         method: 'POST',
       });
       const result = await response.json();
@@ -388,8 +389,8 @@ export default function SalesInvoicesPage() {
          const matches = 
             s.customer?.name?.toLowerCase().includes(query) ||
             s.salesPerson?.toLowerCase().includes(query) ||
-            s.reference?.toLowerCase().includes(query) ||
-            (s as any).receiptNo?.toLowerCase().includes(query) ||
+            s.reference?.toString().toLowerCase().includes(query) ||
+            (s as any).receiptNo?.toString().toLowerCase().includes(query) ||
             s.orderNumber?.toString().includes(query) ||
             s.id.toLowerCase().includes(query);
         
@@ -430,8 +431,8 @@ export default function SalesInvoicesPage() {
      if (referenceNumberFilter && !displayRef.toLowerCase().includes(referenceNumberFilter.toLowerCase())) return false;
 
      // 8. Receipt # Filter
-     const recNo = (s as any).receiptNo || s.orderNumber?.toString() || '';
-     if (receiptNumberFilter && !recNo.includes(receiptNumberFilter)) return false;
+     const recNo = (s as any).receiptNo?.toString() || s.orderNumber?.toString() || '';
+     if (receiptNumberFilter && !recNo.toLowerCase().includes(receiptNumberFilter.toLowerCase())) return false;
 
      return true;
   });
@@ -658,7 +659,7 @@ export default function SalesInvoicesPage() {
                             const isExpanded = expandedRows.has(sale.id);
                             const formattedRef = (() => {
                                 if (!sale.reference) return sale.id.substring(0,8);
-                                const refNum = sale.reference.replace(/\D/g, '').replace(/^0+/, '') || '0';
+                                const refNum = sale.reference.toString().replace(/\D/g, '').replace(/^0+/, '') || '0';
                                 if (sale.orderNumber) {
                                     return `${refNum}|SO#${sale.orderNumber}`;
                                 }
@@ -679,7 +680,7 @@ export default function SalesInvoicesPage() {
                                             )}
                                         </TableCell>
                                         <TableCell className="py-2 px-2">{sale.salesPerson || 'admin'}</TableCell>
-                                        <TableCell className="py-2 px-2 font-medium">{sale.customer.name}</TableCell>
+                                        <TableCell className="py-2 px-2 font-medium">{sale.customer?.name || 'Unknown'}</TableCell>
                                         <TableCell className="py-2 px-2">{formattedRef}</TableCell>
                                         <TableCell className="py-2 px-2 text-primary font-medium">{sale.receiptNo || sale.orderNumber || ''}</TableCell>
                                         <TableCell className="py-2 px-2">

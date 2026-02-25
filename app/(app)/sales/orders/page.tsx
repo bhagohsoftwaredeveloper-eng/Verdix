@@ -60,6 +60,7 @@ import { AddSalesOrderDialog } from './add-sales-order-dialog';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer, Trash2, ChevronDown, Filter, Calendar as CalendarIcon, X, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import { Logo } from '@/components/logo';
 import {
   Pagination,
@@ -346,11 +347,11 @@ export default function SalesOrdersPage() {
     // Fetch filter data
     const fetchFilterData = async () => {
         try {
-            const spRes = await fetch('/api/sales-persons?activeOnly=true');
+            const spRes = await fetch(getApiUrl('/sales-persons?activeOnly=true'));
             const spData = await spRes.json();
             if(spData.success) setSalesPersons(spData.data);
 
-            const cRes = await fetch('/api/customers');
+            const cRes = await fetch(getApiUrl('/customers'));
             const cData = await cRes.json();
             if(cData.success) setCustomers(cData.data);
         } catch(e) { console.error(e); }
@@ -372,7 +373,7 @@ export default function SalesOrdersPage() {
         if (!params.get(key)) params.delete(key);
       });
 
-      const response = await fetch(`/api/sales/orders?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/sales/orders?${params.toString()}`));
       const data = await response.json();
       if (data.success) {
         setSales(data.data);
@@ -418,7 +419,7 @@ export default function SalesOrdersPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`/api/sales/orders/${id}`, {
+      const response = await fetch(getApiUrl(`/sales/orders/${id}`), {
         method: 'DELETE',
       });
       const data = await response.json();
@@ -453,7 +454,7 @@ export default function SalesOrdersPage() {
   const handleMakeDelivery = async (sale: Sale) => {
       try {
            setIsLoading(true);
-           const response = await fetch(`/api/sales/orders/${sale.id}`, {
+           const response = await fetch(getApiUrl(`/sales/orders/${sale.id}`), {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ ...sale, status: 'Fully Delivered' }) 

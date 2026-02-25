@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 interface ViewBadOrderDialogProps {
   badOrder: any;
@@ -60,7 +61,7 @@ export function ViewBadOrderDialog({
   const handleUpdate = async () => {
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/bad-orders/${badOrder.id}`, {
+      const response = await fetch(getApiUrl(`/bad-orders/${badOrder.id}`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

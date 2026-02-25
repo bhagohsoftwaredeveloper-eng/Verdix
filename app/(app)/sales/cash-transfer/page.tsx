@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { TerminalSelector } from '@/components/TerminalSelector';
+import { getApiUrl } from '@/lib/api-config';
 
 interface CashTransfer {
   id: string;
@@ -44,7 +45,7 @@ export default function CashTransferPage() {
   useEffect(() => {
     const fetchCashiers = async () => {
         try {
-            const res = await fetch('/api/users');
+            const res = await fetch(getApiUrl('/users'));
             const data = await res.json();
             
             // The API returns an array directly, or an error object
@@ -72,7 +73,7 @@ export default function CashTransferPage() {
         if (cashierId && cashierId !== 'all') params.append('cashierId', cashierId);
         if (type && type !== 'all') params.append('type', type);
 
-        const res = await fetch(`/api/pos/cash-transfer?${params.toString()}`);
+        const res = await fetch(getApiUrl(`/pos/cash-transfer?${params.toString()}`));
         const json = await res.json();
         if (json.success) {
             setData(json.data);

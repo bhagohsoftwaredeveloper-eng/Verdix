@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { getApiUrl } from "@/lib/api-config"
 import { TrendingUp, Loader2 } from "lucide-react"
 import { Bar, BarChart, XAxis, YAxis, LabelList, Cell, CartesianGrid } from "recharts"
 
@@ -56,7 +57,7 @@ export function TopSellingProductsChart({ data: initialData }: { data?: any[] })
 
     async function fetchData() {
         try {
-            const res = await fetch('/api/sales/top-products')
+            const res = await fetch(getApiUrl('/sales/top-products'))
             const result = await res.json()
             if (result.success) {
                 const dataWithColors = result.data.map((item: any, index: number) => ({

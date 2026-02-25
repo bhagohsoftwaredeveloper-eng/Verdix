@@ -40,6 +40,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
+import { getApiUrl } from '@/lib/api-config';
 
 function DataExistDialog({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   return (
@@ -282,7 +283,7 @@ function PaymentMethodRow({ paymentMethod, onUpdate, onDelete, paymentMethods }:
     }
 
     try {
-      const response = await fetch(`/api/payment-methods/${paymentMethod.id}`, {
+      const response = await fetch(getApiUrl(`/payment-methods/${paymentMethod.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -313,7 +314,7 @@ function PaymentMethodRow({ paymentMethod, onUpdate, onDelete, paymentMethods }:
 
   const handleDelete = async () => {
     try {
-      const response = await fetch(`/api/payment-methods/${paymentMethod.id}`, {
+      const response = await fetch(getApiUrl(`/payment-methods/${paymentMethod.id}`), {
         method: 'DELETE',
       });
 
@@ -422,7 +423,7 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
   const fetchPaymentMethods = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/payment-methods?activeOnly=false');
+      const response = await fetch(getApiUrl('/payment-methods?activeOnly=false'));
       const result = await response.json();
 
       if (result.success) {
@@ -464,7 +465,7 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
     }
 
     try {
-      const response = await fetch('/api/payment-methods', {
+      const response = await fetch(getApiUrl('/payment-methods'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

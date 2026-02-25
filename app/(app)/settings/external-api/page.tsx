@@ -12,6 +12,7 @@ import { Loader2, Save, Send, ShieldCheck, Globe, History, AlertCircle, CheckCir
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ExternalApiConfig, DEFAULT_EXTERNAL_API_CONFIG } from '@/lib/external-api-config';
+import { getApiUrl } from '@/lib/api-config';
 import { ApiSyncLog } from '@/lib/services/api-sync-logger';
 
 export default function ExternalApiSettingsPage() {
@@ -29,7 +30,7 @@ export default function ExternalApiSettingsPage() {
 
   const fetchConfig = async () => {
     try {
-      const response = await fetch('/api/settings/external-api');
+      const response = await fetch(getApiUrl('/settings/external-api'));
       const data = await response.json();
       if (data.success) {
         setConfig(data.config);
@@ -43,7 +44,7 @@ export default function ExternalApiSettingsPage() {
 
   const fetchLogs = async () => {
     try {
-      const response = await fetch('/api/external-api/logs?limit=20');
+      const response = await fetch(getApiUrl('/external-api/logs?limit=20'));
       const data = await response.json();
       if (data.success) {
         setLogs(data.logs);
@@ -56,7 +57,7 @@ export default function ExternalApiSettingsPage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/settings/external-api', {
+      const response = await fetch(getApiUrl('/settings/external-api'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -93,7 +94,7 @@ export default function ExternalApiSettingsPage() {
 
     setIsTesting(true);
     try {
-      const response = await fetch('/api/settings/external-api', {
+      const response = await fetch(getApiUrl('/settings/external-api'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),

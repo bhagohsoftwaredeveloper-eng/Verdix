@@ -37,6 +37,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useProducts } from '@/hooks/use-api';
 import { useUser } from '@/hooks/use-user';
 import { Product } from '@/lib/types';
+import { getApiUrl } from '@/lib/api-config';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   Table,
@@ -372,7 +373,7 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
         description: item.description,
       }));
 
-      const response = await fetch('/api/bad-orders', {
+      const response = await fetch(getApiUrl('/bad-orders'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

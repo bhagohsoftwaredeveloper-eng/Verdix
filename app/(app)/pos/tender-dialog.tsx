@@ -252,9 +252,16 @@ export function TenderDialog({
                 body: JSON.stringify({
                     transactionDate: new Date(), // Use server time preferably, but this is for reference
                     totalDue: totalDue,
-                    subTotal: items.reduce((acc, item) => acc + (item.price * item.quantity), 0),
-                    discount: items.reduce((acc, item) => acc + (item.price * item.quantity * (item.discount / 100)), 0),
-                    taxAmount: items.reduce((acc, item) => acc + (item.price * item.quantity * 0.12), 0), // Rough estimate, backend recalculates
+                    subtotal: items.reduce((acc, item) => acc + (item.price * item.quantity), 0),
+                    discountAmount: items.reduce((acc, item) => acc + (item.price * item.quantity * ((item.discount || 0) / 100)), 0),
+                    taxAmount: items.reduce((acc, item) => {
+                        const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+                        const taxType = item.taxType || 'VAT';
+                        if (taxType === 'VAT') {
+                            return acc + (netItemTotal - (netItemTotal / 1.12));
+                        }
+                        return acc;
+                    }, 0),
                     amountTendered: finalAmountTendered,
                     change: finalAmountTendered - totalDue,
                     paymentMethod: selectedMethod, // Use state: selectedMethod

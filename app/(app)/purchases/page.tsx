@@ -70,6 +70,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { getApiUrl } from '@/lib/api-config';
 
 function PurchaseOrderActions({ 
   order, 
@@ -358,7 +359,7 @@ export default function PurchasesPage() {
 
   const updatePurchaseOrder = async (id: string, updates: any) => {
     try {
-      const response = await fetch(`/api/purchase-orders/${id}`, {
+      const response = await fetch(getApiUrl(`/purchase-orders/${id}`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -405,7 +406,7 @@ export default function PurchasesPage() {
 
       // 2. Create bad order record if there are bad items
       if (badItems && badItems.length > 0) {
-        const badOrderResponse = await fetch('/api/bad-orders', {
+        const badOrderResponse = await fetch(getApiUrl('/bad-orders'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

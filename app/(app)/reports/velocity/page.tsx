@@ -23,6 +23,7 @@ import { useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { Button } from '@/components/ui/button';
 import { ReportHeader } from '@/components/reports/ReportHeader';
+import { getApiUrl } from '@/lib/api-config';
 
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 
@@ -72,7 +73,7 @@ export default function FastSlowMovingReportPage() {
       params.append('page', page.toString());
       params.append('limit', pageSize.toString());
 
-      const res = await fetch(`/api/reports/velocity?${params.toString()}`);
+      const res = await fetch(getApiUrl(`/reports/velocity?${params.toString()}`));
       const data = await res.json();
       
       if (data.success) {

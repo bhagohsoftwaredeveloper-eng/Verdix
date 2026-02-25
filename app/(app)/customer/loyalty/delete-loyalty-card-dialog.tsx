@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 interface CustomerWithLoyalty {
   id: string;
@@ -39,7 +40,7 @@ export function DeleteLoyaltyCardDialog({ customer, onSuccess }: { customer: Cus
   async function handleDelete() {
     try {
       setIsDeleting(true);
-      const response = await fetch(`/api/customer-loyalty/${customer.id}`, {
+      const response = await fetch(getApiUrl(`/customer-loyalty/${customer.id}`), {
         method: 'DELETE',
       });
 

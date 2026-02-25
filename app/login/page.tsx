@@ -15,6 +15,8 @@ import { Logo } from '@/components/logo';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { getApiUrl } from '@/lib/api-config';
+
 
 const loginSchema = z.object({
   username: z.string().min(1, { message: 'Username is required' }),
@@ -45,7 +47,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(getApiUrl('/auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

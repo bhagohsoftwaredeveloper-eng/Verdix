@@ -57,6 +57,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { getApiUrl } from '@/lib/api-config';
 import { Badge } from '@/components/ui/badge';
 
 type SalesData = {
@@ -134,7 +135,7 @@ export default function SalesAnalysisPage() {
         params.append('paymentType', paymentType);
       }
 
-      const response = await fetch(`/api/sales/by-date?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/sales/by-date?${params.toString()}`));
       const result = await response.json();
 
       if (result.success) {
@@ -159,7 +160,7 @@ export default function SalesAnalysisPage() {
         params.append('date', format(dateRange.from, 'yyyy-MM-dd'));
       }
 
-      const response = await fetch(`/api/sales/hourly?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/sales/hourly?${params.toString()}`));
       const result = await response.json();
 
       if (result.success) {
@@ -179,7 +180,7 @@ export default function SalesAnalysisPage() {
   const fetchCategoryData = async () => {
     setIsLoadingCategory(true);
     try {
-      const response = await fetch('/api/sales/monthly-category');
+      const response = await fetch(getApiUrl('/sales/monthly-category'));
       const result = await response.json();
 
       if (result.success) {

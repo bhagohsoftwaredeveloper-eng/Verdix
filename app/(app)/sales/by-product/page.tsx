@@ -59,6 +59,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { TerminalSelector } from '@/components/TerminalSelector';
+import { getApiUrl } from '@/lib/api-config';
+
 
 type ProductSalesData = {
   product: {
@@ -138,14 +140,14 @@ export default function SalesByProductPage() {
     // Fetch filter options
     const fetchOptions = async () => {
         try {
-            const attrRes = await fetch('/api/products/attributes');
+            const attrRes = await fetch(getApiUrl('/products/attributes'));
             const attrData = await attrRes.json();
             if (attrData.success) {
                 setCategories(attrData.categories);
                 setBrands(attrData.brands);
             }
 
-            const usersRes = await fetch('/api/users');
+            const usersRes = await fetch(getApiUrl('/users'));
             const usersData = await usersRes.json();
             if (Array.isArray(usersData)) {
                 setCashiers(usersData.map((u: any) => ({ uid: u.uid, displayName: u.displayName || u.email })));
@@ -180,7 +182,7 @@ export default function SalesByProductPage() {
         params.append('search', searchTerm);
       }
 
-      const response = await fetch(`/api/sales/by-product?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/sales/by-product?${params.toString()}`));
       const result = await response.json();
 
       if (result.success) {
@@ -241,7 +243,7 @@ export default function SalesByProductPage() {
     params.append('limit', '1000000');
     
     try {
-        const response = await fetch(`/api/sales/by-product?${params.toString()}`);
+        const response = await fetch(getApiUrl(`/sales/by-product?${params.toString()}`));
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
             return result.data;
@@ -476,7 +478,7 @@ export default function SalesByProductPage() {
           if (dateRange?.to) params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
           if (terminal && terminal !== 'all') params.append('terminalId', terminal);
           
-          const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+          const response = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
           const result = await response.json();
 
           if (result.success) {

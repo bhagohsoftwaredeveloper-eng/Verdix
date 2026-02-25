@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { getApiUrl } from '@/lib/api-config';
 import jsPDF from 'jspdf';
 
 interface SalesTransaction {
@@ -109,7 +110,7 @@ export default function SalesSummaryPage() {
         params.append('endDate', format(toDate, 'yyyy-MM-dd'));
       }
 
-      const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
       const result = await response.json();
       if (result.success) {
         setRecords(result.data || []);

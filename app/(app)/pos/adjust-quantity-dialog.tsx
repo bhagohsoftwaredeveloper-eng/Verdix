@@ -28,27 +28,33 @@ export function AdjustQuantityDialog({
   item, 
   onUpdate, 
 }: AdjustQuantityDialogProps) {
-  const [addQty, setAddQty] = useState('');
-  const [removeQty, setRemoveQty] = useState('');
+  const [adjustment, setAdjustment] = useState('');
 
   useEffect(() => {
     if (isOpen) {
-      setAddQty('');
-      setRemoveQty('');
+      setAdjustment('');
     }
   }, [isOpen]);
 
   const handleConfirm = () => {
     if (item) {
-      const toAdd = parseInt(addQty, 10) || 0;
-      const toRemove = parseInt(removeQty, 10) || 0;
-      const newQuantity = item.quantity + toAdd - toRemove;
+      const adj = parseInt(adjustment, 10) || 0;
+      const newQuantity = item.quantity + adj;
       onUpdate(item.id, newQuantity);
       onOpenChange(false);
     }
   };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleConfirm();
+    }
+  };
   
   if (!item) return null;
+
+  const adj = parseInt(adjustment, 10) || 0;
+  const resultingQty = Math.max(0, item.quantity + adj);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -56,7 +62,7 @@ export function AdjustQuantityDialog({
         <DialogHeader>
           <DialogTitle>Adjust Quantity</DialogTitle>
           <DialogDescription>
-            For item: {item.name} (Current: {item.quantity})
+            For item: {item.name}
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
@@ -70,26 +76,31 @@ export function AdjustQuantityDialog({
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label htmlFor="add-qty">Quantity to Add</Label>
+                    <Label htmlFor="adjustment">Adjustment (+ / -)</Label>
                     <Input
-                        id="add-qty"
+                        id="adjustment"
                         type="number"
-                        value={addQty}
-                        onChange={(e) => setAddQty(e.target.value)}
+                        value={adjustment}
+                        onChange={(e) => setAdjustment(e.target.value)}
+                        onKeyDown={handleKeyDown}
                         placeholder="0"
                         autoFocus
                     />
                 </div>
                  <div className="space-y-2">
-                    <Label htmlFor="remove-qty">Quantity to Remove</Label>
+                    <Label htmlFor="resulting-qty">Resulting Quantity</Label>
                     <Input
-                        id="remove-qty"
-                        type="number"
-                        value={removeQty}
-                        onChange={(e) => setRemoveQty(e.target.value)}
-                        placeholder="0"
+                        id="resulting-qty"
+                        value={resultingQty}
+                        readOnly
+                        className="bg-muted font-bold"
                     />
                 </div>
+            </div>
+            <div className="text-sm text-muted-foreground text-center">
+              Current: <span className="font-medium text-foreground">{item.quantity}</span> 
+              &nbsp;→&nbsp; 
+              New: <span className="font-medium text-foreground">{resultingQty}</span>
             </div>
         </div>
         <DialogFooter>
@@ -100,7 +111,7 @@ export function AdjustQuantityDialog({
             type="button"
             onClick={handleConfirm}
           >
-            Confirm
+            Confirm (Enter)
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -25,6 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 const transactionReferenceSchema = z.object({
   salesOrder: z.string().optional(),
@@ -106,8 +107,8 @@ export function ManageTransactionReferenceDialog({ onUpdated }: ManageTransactio
       setIsLoading(true);
       
       const [nextRefResponse, lastRefResponse] = await Promise.all([
-        fetch('/api/transaction-references'),
-        fetch('/api/transactions/last-references')
+        fetch(getApiUrl('/transaction-references')),
+        fetch(getApiUrl('/transactions/last-references'))
       ]);
 
       const nextRefResult = await nextRefResponse.json();
@@ -156,7 +157,7 @@ export function ManageTransactionReferenceDialog({ onUpdated }: ManageTransactio
   async function onSubmit(values: TransactionReferenceFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/transaction-references', {
+      const response = await fetch(getApiUrl('/transaction-references'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),

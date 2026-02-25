@@ -11,6 +11,7 @@ import { Loader2, Upload, Building2, Settings, FileText, Monitor, Users, CreditC
 import Image from 'next/image';
 import Link from 'next/link';
 import { ManageTransactionReferenceDialog } from './manage-transaction-reference-dialog';
+import { getApiUrl } from '@/lib/api-config';
 
 import { ManageSalesPersonsDialog } from './manage-sales-persons-dialog';
 import { ManagePaymentTermsDialog } from './manage-payment-terms-dialog';
@@ -103,7 +104,7 @@ export default function PosSetupPage() {
     isRefreshingRef.current = true;
     try {
       setIsLoading(true);
-      const response = await fetch('/api/pos-settings');
+      const response = await fetch(getApiUrl('/pos-settings'));
       const result = await response.json();
       
       if (result.success) {
@@ -112,7 +113,7 @@ export default function PosSetupPage() {
         let termName = null;
         
         if (termId) {
-             const termRes = await fetch(`/api/pos-terminals?activeOnly=true`);
+             const termRes = await fetch(getApiUrl(`/pos-terminals?activeOnly=true`));
              const termData = await termRes.json();
              if (termData.success) {
                  const found = termData.data.find((t:any) => t.id === termId);
@@ -140,7 +141,7 @@ export default function PosSetupPage() {
   const handleSaveSettings = useCallback(async (settingsToSave?: typeof settings) => {
     try {
       setIsSaving(true);
-      const response = await fetch('/api/pos-settings', {
+      const response = await fetch(getApiUrl('/pos-settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsToSave ?? settings)
@@ -229,7 +230,7 @@ export default function PosSetupPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/pos-settings/upload-logo', {
+      const response = await fetch(getApiUrl('/pos-settings/upload-logo'), {
         method: 'POST',
         body: formData
       });

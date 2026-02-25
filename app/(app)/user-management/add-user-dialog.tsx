@@ -35,6 +35,7 @@ import { PlusCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ALL_PERMISSIONS } from './permissions';
+import { getApiUrl } from '@/lib/api-config';
 
 const formSchema = z.object({
   username: z.string().min(1, 'Username is required'),
@@ -77,7 +78,7 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
 
       console.log('Creating user with:', { username, password, permissions: permissionsToSend });
       // Call the API to create user
-      const response = await fetch('/api/users', {
+      const response = await fetch(getApiUrl('/users'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

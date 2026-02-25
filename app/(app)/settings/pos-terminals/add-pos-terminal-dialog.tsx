@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 const terminalSchema = z.object({
   ipAddress: z.string().optional(),
@@ -78,7 +79,7 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
 
   const fetchWarehouses = async () => {
     try {
-      const response = await fetch('/api/warehouses?activeOnly=true');
+      const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
       const result = await response.json();
       if (result.success) {
         setWarehouses(result.data);
@@ -90,7 +91,7 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
 
   const fetchNextOR = async () => {
     try {
-      const response = await fetch('/api/pos-terminals?getNextOR=true');
+      const response = await fetch(getApiUrl('/pos-terminals?getNextOR=true'));
       const result = await response.json();
       if (result.success && result.data) {
         form.setValue('orNextReference', result.data);
@@ -103,7 +104,7 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
   async function onSubmit(values: TerminalFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/pos-terminals', {
+      const response = await fetch(getApiUrl('/pos-terminals'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),

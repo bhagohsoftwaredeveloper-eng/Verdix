@@ -47,6 +47,7 @@ import { ManagePaymentMethodsDialog } from '../ManagePaymentMethodsDialog';
 import { ManageWarehousesDialog } from '../ManageWarehousesDialog';
 import { CustomerSelectionField } from '../invoices/customer-selection-field';
 import { useProducts, useCustomers } from '@/hooks/use-api';
+import { getApiUrl } from '@/lib/api-config';
 
 const salesOrderItemSchema = z.object({
   product: z.any(),
@@ -231,7 +232,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
   const fetchPaymentMethods = async () => {
     try {
       setIsLoadingPaymentMethods(true);
-      const response = await fetch('/api/payment-methods?activeOnly=true');
+      const response = await fetch(getApiUrl('/payment-methods?activeOnly=true'));
       const result = await response.json();
       if (result.success) {
         // Explicitly map properties (same as invoice dialog)
@@ -255,7 +256,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
   const fetchWarehouses = async () => {
     try {
       setIsLoadingWarehouses(true);
-      const response = await fetch('/api/warehouses?activeOnly=true');
+      const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
       const result = await response.json();
       if (result.success) {
         setWarehouses(result.data);
@@ -346,7 +347,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     try {
       setIsSubmitting(true);
 
-      const url = initialData ? `/api/sales/orders/${initialData.id}` : '/api/sales/orders';
+      const url = initialData ? getApiUrl(`/sales/orders/${initialData.id}`) : getApiUrl('/sales/orders');
       const method = initialData ? 'PUT' : 'POST';
 
       const payload = {

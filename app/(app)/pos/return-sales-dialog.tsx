@@ -30,6 +30,8 @@ import { usePrinter } from '@/lib/use-printer';
 import { CreditSlipGenerator, CreditSlipData } from '@/lib/credit-slip-generator';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
+import { useReactToPrint } from 'react-to-print';
+import { CreditSlipView } from './credit-slip-view';
 
 interface ReturnSalesDialogProps {
   isOpen: boolean;
@@ -281,6 +283,23 @@ export function ReturnSalesDialog({
   const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
   const { toast } = useToast();
   const authSucceededRef = useRef(false);
+  const creditSlipRef = useRef<HTMLDivElement>(null);
+
+  const handleBrowserPrint = useReactToPrint({
+      contentRef: creditSlipRef,
+      documentTitle: `CreditSlip-${new Date().getTime()}`,
+      pageStyle: `
+          @page {
+              size: 58mm auto;
+              margin: 0;
+          }
+          @media print {
+              body {
+                  -webkit-print-color-adjust: exact;
+              }
+          }
+      `
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -416,9 +435,7 @@ export function ReturnSalesDialog({
       if (!selectedSale || returnedItems.length === 0) return;
 
       if (printMode === 'browser') {
-           // Fallback or legacy helper if we really want to keep it? 
-           // But actually we want all Direct Print to be unified.
-           toast({ title: "Browser Print", description: "Use the system print dialog." });
+           handleBrowserPrint();
            return;
       }
 
@@ -524,6 +541,22 @@ export function ReturnSalesDialog({
         title="Return Authorization"
         description="Enter authorized credentials to access return functions."
       />
+      <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
+          {selectedSale && returnedItems.length > 0 && (
+              <CreditSlipView
+                  ref={creditSlipRef}
+                  creditDetails={{
+                      originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
+                      customerName: selectedSale.customer?.name || 'Walk-in Customer',
+                      date: new Date().toISOString(),
+                      cashierName: currentUser?.name || currentUser?.displayName || currentUser?.username || 'Cashier',
+                      items: returnedItems,
+                      totalAmount: returnedTotal
+                  }}
+                  settings={posSettings}
+              />
+          )}
+      </div>
     </>
   );
 }

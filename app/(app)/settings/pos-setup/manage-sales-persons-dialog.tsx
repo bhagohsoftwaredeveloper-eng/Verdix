@@ -29,6 +29,7 @@ import { SalesPerson } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlusCircle, Pencil, Trash2, Loader2, UsersIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 function SalesPersonDialog({ salesPerson, onSave, children, disabled }: { salesPerson?: SalesPerson, onSave: (name: string, contactNumber?: string) => Promise<void>, children: React.ReactNode, disabled?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -123,7 +124,7 @@ function SalesPersonRow({ salesPerson, onUpdate, onDelete }: { salesPerson: Sale
 
   const handleUpdate = async (name: string, contactNumber?: string) => {
     try {
-      const response = await fetch(`/api/sales-persons/${salesPerson.id}`, {
+      const response = await fetch(getApiUrl(`/sales-persons/${salesPerson.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -155,7 +156,7 @@ function SalesPersonRow({ salesPerson, onUpdate, onDelete }: { salesPerson: Sale
   const handleDelete = async () => {
     if (confirm(`Are you sure you want to delete the sales person "${salesPerson.name}"? This cannot be undone.`)) {
       try {
-        const response = await fetch(`/api/sales-persons/${salesPerson.id}`, {
+        const response = await fetch(getApiUrl(`/sales-persons/${salesPerson.id}`), {
           method: 'DELETE',
         });
 
@@ -231,7 +232,7 @@ export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: Reac
   const fetchSalesPersons = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/sales-persons?activeOnly=false');
+      const response = await fetch(getApiUrl('/sales-persons?activeOnly=false'));
       const result = await response.json();
 
       if (result.success) {
@@ -267,7 +268,7 @@ export function ManageSalesPersonsDialog({ trigger, onChange }: { trigger?: Reac
 
     setIsAdding(true);
     try {
-      const response = await fetch('/api/sales-persons', {
+      const response = await fetch(getApiUrl('/sales-persons'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

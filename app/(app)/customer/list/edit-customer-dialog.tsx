@@ -37,6 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, PlusCircle } from 'lucide-react';
 
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import { Customer } from '@/lib/types';
 
 interface LoyaltySetting {
@@ -135,7 +136,7 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
   const fetchLoyaltySettings = async () => {
     try {
       setIsLoadingLoyaltySettings(true);
-      const response = await fetch('/api/loyalty-settings');
+      const response = await fetch(getApiUrl('/loyalty-settings'));
       const result = await response.json();
 
       if (result.success) {
@@ -153,7 +154,7 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
   const fetchPaymentTerms = async () => {
     try {
       setIsLoadingPaymentTerms(true);
-      const response = await fetch('/api/payment-terms');
+      const response = await fetch(getApiUrl('/payment-terms'));
       const result = await response.json();
       if (result.success) {
         setPaymentTermsList(result.data);

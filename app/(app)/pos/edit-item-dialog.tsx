@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { SaleItem } from './page';
 import { useToast } from '@/hooks/use-toast';
+import { calculateEffectivePrice } from '@/lib/pricing';
+import type { Product } from '@/lib/types';
 
 interface EditItemDialogProps {
   isOpen: boolean;
@@ -22,6 +24,9 @@ interface EditItemDialogProps {
   item: SaleItem | null;
   onUpdate: (itemId: string, newName: string, newQuantity: number, newPrice: number, newDiscount: number) => void;
   mode?: 'full' | 'price-only';
+  activeLevelId?: string;
+  defaultLevelId?: string;
+  product?: Product | null;
 }
 
 export function EditItemDialog({
@@ -29,7 +34,10 @@ export function EditItemDialog({
   onOpenChange,
   item,
   onUpdate,
-  mode = 'full'
+  mode = 'full',
+  activeLevelId,
+  defaultLevelId = 'retail-level',
+  product
 }: EditItemDialogProps) {
   const [name, setName] = useState(item?.name || '');
   const [quantity, setQuantity] = useState(item?.quantity || 1);
@@ -45,6 +53,17 @@ export function EditItemDialog({
       setDiscount(item.discount);
     }
   }, [isOpen, item]);
+
+  // Update price automatically when quantity changes, 
+  // ONLY if the current price matches the effective price of the current quantity
+  // (to avoid overriding manual price edits unless intended)
+  const handleQuantityChange = (newQty: number) => {
+    setQuantity(newQty);
+    if (product || item) {
+        const newPrice = calculateEffectivePrice((product || item) as unknown as Product, newQty, activeLevelId, defaultLevelId);
+        setPrice(newPrice);
+    }
+  };
 
   const save = () => {
     if (item) {
@@ -93,6 +112,16 @@ export function EditItemDialog({
                   }
                 }}
                 className="font-medium focus-visible:ring-primary text-[30px] md:text-[30px] h-20 py-4 text-center leading-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="quantity" className="text-base">Quantity</Label>
+              <Input
+                id="quantity"
+                type="number"
+                value={quantity}
+                onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
+                className="font-medium focus-visible:ring-primary h-12 text-center"
               />
             </div>
           </div>

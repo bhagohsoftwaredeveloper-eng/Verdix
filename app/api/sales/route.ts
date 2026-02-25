@@ -253,13 +253,28 @@ export async function GET(request: NextRequest) {
         pt.order_number
       FROM sales_invoices si
       LEFT JOIN customers c ON si.customer_id = c.id
-      LEFT JOIN sales_transactions st ON si.reference = st.reference
+      LEFT JOIN sales_transactions st ON si.reference = st.reference AND si.reference IS NOT NULL AND si.reference != ''
       LEFT JOIN pos_transactions pt ON st.id = pt.sale_id
       ORDER BY si.created_at DESC
     `;
 
-    const salesInvoices = await query(invoicesQuery);
-    console.log('Sales invoices found in sales_invoices table:', salesInvoices.length);
+    const salesInvoicesRaw: any[] = await query(invoicesQuery);
+    
+    // Deduplicate in JS to prevent React duplicate key errors and process faster
+    const uniqueSalesInvoicesMap = new Map();
+    for (const row of salesInvoicesRaw) {
+      if (!uniqueSalesInvoicesMap.has(row.id)) {
+        uniqueSalesInvoicesMap.set(row.id, row);
+      } else {
+        const existing = uniqueSalesInvoicesMap.get(row.id);
+        if (!existing.order_number && row.order_number) {
+          existing.order_number = row.order_number;
+        }
+      }
+    }
+    const salesInvoices = Array.from(uniqueSalesInvoicesMap.values());
+    
+    console.log('Sales invoices found in sales_invoices table (unique):', salesInvoices.length);
 
     // Batch fetch items for all invoices to avoid N+1 queries
     let allItems: any[] = [];

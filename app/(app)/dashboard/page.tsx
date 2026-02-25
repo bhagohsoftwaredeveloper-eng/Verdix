@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/chart';
 import { CartesianGrid, XAxis, Line, LineChart } from 'recharts';
 import { Package, ShoppingCart, AlertCircle, Boxes, TrendingUp, Loader2 } from 'lucide-react';
+import { getApiUrl } from '@/lib/api-config';
 import type { ChartConfig } from '@/components/ui/chart';
 import { SupplierScheduleCard } from './supplier-schedule-card';
 import { HourlySalesChart } from './hourly-sales-chart';
@@ -54,7 +55,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch('/api/reports/stats');
+        const res = await fetch(getApiUrl('/reports/stats'));
         const result = await res.json();
         
         // Data processing for charts is now handled within the components

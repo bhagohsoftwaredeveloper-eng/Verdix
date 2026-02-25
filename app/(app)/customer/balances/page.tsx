@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Search } from 'lucide-react';
 import type { Customer } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 interface CustomerWithBalance {
   id: string;
@@ -87,7 +88,7 @@ export default function CustomerBalancesPage() {
   const fetchCustomerBalances = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/customers/balances');
+      const response = await fetch(getApiUrl('/customers/balances'));
       const result = await response.json();
       
       if (result.success) {

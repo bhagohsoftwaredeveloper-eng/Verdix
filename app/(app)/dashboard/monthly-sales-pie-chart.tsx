@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { getApiUrl } from "@/lib/api-config"
 import { TrendingUp, Loader2, PieChart as PieChartIcon } from "lucide-react"
 import { Pie, PieChart, Cell } from "recharts"
 
@@ -48,7 +49,7 @@ export function MonthlySalesPieChart() {
   useEffect(() => {
     async function fetchData() {
         try {
-            const res = await fetch('/api/sales/monthly-category')
+            const res = await fetch(getApiUrl('/sales/monthly-category'))
             const result = await res.json()
             if (result.success) {
                 // Ensure fill color is set for each item

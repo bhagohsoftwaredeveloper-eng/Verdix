@@ -30,6 +30,7 @@ import jsPDF from 'jspdf';
 import { useReactToPrint } from 'react-to-print';
 import { ZReadingPreview } from './z-reading-preview';
 import { TerminalSelector } from '@/components/TerminalSelector';
+import { getApiUrl } from '@/lib/api-config';
 
 import { ZReadingData } from './z-reading-preview';
 
@@ -58,7 +59,7 @@ export default function ZReadingPage() {
   useEffect(() => {
     const fetchSettings = async () => {
         try {
-            const response = await fetch('/api/pos-settings');
+            const response = await fetch(getApiUrl('/pos-settings'));
             const result = await response.json();
             if (result.success) {
                 setBusinessSettings(result.data);
@@ -92,7 +93,7 @@ export default function ZReadingPage() {
         params.append('terminalId', terminal);
       }
 
-      const response = await fetch(`/api/sales/z-reading?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/sales/z-reading?${params.toString()}`));
       const result = await response.json();
 
       if (result.success) {
@@ -207,7 +208,7 @@ export default function ZReadingPage() {
   };
 
   const handleReactToPrintFn = useReactToPrint({
-    content: () => previewRef.current,
+    contentRef: previewRef,
     documentTitle: 'Z-Reading-Report',
     pageStyle: `
         @page {

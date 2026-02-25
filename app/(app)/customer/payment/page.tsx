@@ -50,6 +50,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import { DateRange } from "react-day-picker";
 import {
   Command,
@@ -81,7 +82,7 @@ function OutstandingInvoices() {
             if (dateRange.from) params.append('from', dateRange.from.toISOString());
             if (dateRange.to) params.append('to', dateRange.to.toISOString());
 
-            const response = await fetch(`/api/customers/invoices/outstanding?${params.toString()}`);
+            const response = await fetch(getApiUrl(`/customers/invoices/outstanding?${params.toString()}`));
             const result = await response.json();
             if (result.success) setInvoices(result.data);
             else throw new Error(result.error);
@@ -244,7 +245,7 @@ function PaymentHistory() {
             if (date?.to) params.append('to', date.to.toISOString());
             if (paymentType && paymentType !== 'All') params.append('paymentType', paymentType);
 
-            const response = await fetch(`/api/customers/payments?${params.toString()}`);
+            const response = await fetch(getApiUrl(`/customers/payments?${params.toString()}`));
             const result = await response.json();
             if (result.success) setPayments(result.data);
             else throw new Error(result.error);
@@ -402,7 +403,7 @@ function StatementOfAccount() {
     // Let's stick to replacing this component and then I'll add imports.
     
     useEffect(() => {
-        fetch('/api/customers').then(res => res.json()).then(res => {
+        fetch(getApiUrl('/customers')).then(res => res.json()).then(res => {
             if(res.success) setCustomers(res.data);
         });
     }, []);
@@ -419,7 +420,7 @@ function StatementOfAccount() {
                 from: dateRange.from.toISOString(),
                 to: dateRange.to.toISOString(),
             });
-            const res = await fetch(`/api/reports/soa?${params.toString()}`);
+            const res = await fetch(getApiUrl(`/reports/soa?${params.toString()}`));
             const data = await res.json();
             if (data.success) setSoaData(data.data);
             else throw new Error(data.error);

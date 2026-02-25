@@ -36,6 +36,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, PlusCircle, Loader2, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import { Category, Brand, UnitOfMeasure, Product, Supplier, Account, TaxRate, SystemSettings } from '@/lib/types';
 
 import { Switch } from '@/components/ui/switch';
@@ -155,7 +156,7 @@ export function AddProductDialog({
 
 
   useEffect(() => {
-    fetch('/api/pos-settings')
+    fetch(getApiUrl('/pos-settings'))
       .then(res => res.json())
       .then(data => {
         if (data.success) {

@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import jsPDF from 'jspdf';
+import { getApiUrl } from '@/lib/api-config';
 
 interface VoidRecord {
   refNo: string;
@@ -109,7 +110,7 @@ export default function VoidedSalesPage() {
         params.append('endDate', format(toDate, 'yyyy-MM-dd'));
       }
 
-      const response = await fetch(`/api/sales/voids-report?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/sales/voids-report?${params.toString()}`));
       const result = await response.json();
       if (result.success) {
         setRecords(result.data);

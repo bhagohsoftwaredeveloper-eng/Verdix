@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Database, AlertCircle, CheckCircle2, Save, RefreshCw, Upload, Download, HardDrive, Clock, FileText, Globe, Key, Lock, Link as LinkIcon, Trash2, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { getApiUrl } from '@/lib/api-config';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,7 +92,7 @@ export default function DataManagementPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch('/api/data-management/export/products');
+      const res = await fetch(getApiUrl('/data-management/export/products'));
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to export');
@@ -137,7 +138,7 @@ export default function DataManagementPage() {
     formData.append('file', importFile);
 
     try {
-      const res = await fetch('/api/data-management/import/products', {
+      const res = await fetch(getApiUrl('/data-management/import/products'), {
         method: 'POST',
         body: formData,
       });
@@ -172,7 +173,7 @@ export default function DataManagementPage() {
   const handleCustomerExport = async () => {
     setCustomerExporting(true);
     try {
-      const res = await fetch('/api/data-management/export/customers');
+      const res = await fetch(getApiUrl('/data-management/export/customers'));
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to export');
@@ -218,7 +219,7 @@ export default function DataManagementPage() {
     formData.append('file', customerImportFile);
 
     try {
-      const res = await fetch('/api/data-management/import/customers', {
+      const res = await fetch(getApiUrl('/data-management/import/customers'), {
         method: 'POST',
         body: formData,
       });
@@ -253,7 +254,7 @@ export default function DataManagementPage() {
     // Fetch current config
     const fetchConfig = async () => {
       try {
-        const res = await fetch('/api/settings/database');
+        const res = await fetch(getApiUrl('/settings/database'));
         if (res.ok) {
           const data = await res.json();
           setDbConfig(prev => ({
@@ -278,7 +279,7 @@ export default function DataManagementPage() {
 
   const fetchApiConfig = async () => {
     try {
-      const res = await fetch('/api/settings/api-connection');
+      const res = await fetch(getApiUrl('/settings/api-connection'));
       if (res.ok) {
         const data = await res.json();
         setApiConfig(data);
@@ -290,7 +291,7 @@ export default function DataManagementPage() {
 
   const fetchBackups = async () => {
     try {
-      const res = await fetch('/api/settings/backup/files');
+      const res = await fetch(getApiUrl('/settings/backup/files'));
       if (res.ok) {
         const data = await res.json();
         setBackups(data);
@@ -302,7 +303,7 @@ export default function DataManagementPage() {
 
   const fetchSchedule = async () => {
     try {
-      const res = await fetch('/api/settings/backup/schedule');
+      const res = await fetch(getApiUrl('/settings/backup/schedule'));
       if (res.ok) {
         const data = await res.json();
         setSchedule(data);
@@ -327,7 +328,7 @@ export default function DataManagementPage() {
     setStatusMessage('');
 
     try {
-      const res = await fetch('/api/settings/database', {
+      const res = await fetch(getApiUrl('/settings/database'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...dbConfig, action: 'test' })
@@ -363,7 +364,7 @@ export default function DataManagementPage() {
   const saveConfiguration = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/settings/database', {
+      const res = await fetch(getApiUrl('/settings/database'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...dbConfig, action: 'save' })
@@ -397,7 +398,7 @@ export default function DataManagementPage() {
   const createBackup = async () => {
     setCreatingBackup(true);
     try {
-      const res = await fetch('/api/settings/backup/manual', { method: 'POST' });
+      const res = await fetch(getApiUrl('/settings/backup/manual'), { method: 'POST' });
       const data = await res.json();
       
       if (res.ok) {
@@ -423,7 +424,7 @@ export default function DataManagementPage() {
   const saveSchedule = async () => {
     setSavingSchedule(true);
     try {
-      const res = await fetch('/api/settings/backup/schedule', { 
+      const res = await fetch(getApiUrl('/settings/backup/schedule'), { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(schedule)
@@ -453,7 +454,7 @@ export default function DataManagementPage() {
   };
 
   const downloadBackup = (filename: string) => {
-    window.location.href = `/api/settings/backup/download/${filename}`;
+    window.location.href = getApiUrl(`/settings/backup/download/${filename}`);
   };
 
   const formatFileSize = (bytes: number) => {
@@ -472,7 +473,7 @@ export default function DataManagementPage() {
   const saveApiConfiguration = async () => {
     setSavingApiConfig(true);
     try {
-      const res = await fetch('/api/settings/api-connection', {
+      const res = await fetch(getApiUrl('/settings/api-connection'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(apiConfig)
@@ -514,7 +515,7 @@ export default function DataManagementPage() {
     
     setResetLoading(true);
     try {
-      const res = await fetch('/api/data-management/reset', {
+      const res = await fetch(getApiUrl('/data-management/reset'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: resetAction })

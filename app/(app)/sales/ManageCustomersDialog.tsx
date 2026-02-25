@@ -30,6 +30,7 @@ import { PlusCircle, Pencil, Trash2, Loader2, Users, Eye, EyeOff } from 'lucide-
 import { useToast } from '@/hooks/use-toast';
 import { useCustomers } from '@/hooks/use-api';
 import AddCustomerDialog from '@/app/(app)/customer/list/add-customer-dialog';
+import { getApiUrl } from '@/lib/api-config';
 
 function CustomerRow({ customer, editingCustomer, onEdit, onDelete, onToggleActive, onEditSave }: {
   customer: Customer;
@@ -37,7 +38,7 @@ function CustomerRow({ customer, editingCustomer, onEdit, onDelete, onToggleActi
   onEdit: (customer: Customer) => void;
   onDelete: (customer: Customer) => void;
   onToggleActive: (customer: Customer) => void;
-  onEditSave: (customerId: string, name: string, contactNumber: string, active: boolean, salesPerson: string, salesArea: string, salesGroup: string, loyaltyPoints: number, paymentTerms: string, address: string, billingAddress: string, discount: number, creditLimit: number, priceLevelId?: string) => Promise<void>;
+  onEditSave: (customerId: string, name: string, contactNumber: string, active: boolean, loyaltyPoints: number, paymentTerms: string, address: string, billingAddress: string, discount: number, creditLimit: number, priceLevelId?: string) => Promise<void>;
 }) {
   const { toast } = useToast();
 
@@ -151,9 +152,6 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
     name: string,
     contactNumber: string,
     active: boolean,
-    salesPerson: string,
-    salesArea: string,
-    salesGroup: string,
     loyaltyPoints: number,
     paymentTerms: string,
     address: string,
@@ -163,7 +161,7 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
     priceLevelId?: string
   ) => {
     try {
-      const response = await fetch('/api/customers', {
+      const response = await fetch(getApiUrl('/customers'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -173,9 +171,6 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
           name,
           contactNumber,
           active,
-          salesPerson,
-          salesArea,
-          salesGroup,
           loyaltyPoints,
           paymentTerms,
           address,
@@ -202,9 +197,6 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
     name: string,
     contactNumber: string,
     active: boolean,
-    salesPerson: string,
-    salesArea: string,
-    salesGroup: string,
     loyaltyPoints: number,
     paymentTerms: string,
     address: string,
@@ -214,7 +206,7 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
     priceLevelId?: string
   ) => {
     try {
-      const response = await fetch(`/api/customers/${editingCustomer?.id}`, {
+      const response = await fetch(getApiUrl(`/customers/${editingCustomer?.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -224,9 +216,6 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
           name,
           contactNumber,
           active,
-          salesPerson,
-          salesArea,
-          salesGroup,
           loyaltyPoints,
           paymentTerms,
           address,
@@ -251,7 +240,7 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
 
   const handleDeleteCustomer = async (customer: Customer) => {
     try {
-      const response = await fetch(`/api/customers/${customer.id}`, {
+      const response = await fetch(getApiUrl(`/customers/${customer.id}`), {
         method: 'DELETE',
       });
 
@@ -268,7 +257,7 @@ export function ManageCustomersDialog({ trigger }: { trigger?: React.ReactNode }
 
   const handleToggleActive = async (customer: Customer) => {
     try {
-      const response = await fetch(`/api/customers/${customer.id}`, {
+      const response = await fetch(getApiUrl(`/customers/${customer.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

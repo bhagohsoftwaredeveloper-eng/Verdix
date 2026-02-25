@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import type { Sale } from '@/lib/types';
 import { Printer, FileText, X } from 'lucide-react';
 import { Logo } from '@/components/logo';
+import { getApiUrl } from '@/lib/api-config';
 
 export type OrderDialogMode = 'order' | 'delivery-note';
 
@@ -38,7 +39,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await fetch('/api/pos-settings');
+        const response = await fetch(getApiUrl('/pos-settings'));
         const data = await response.json();
         if (data.success && data.data) {
           setSettings({

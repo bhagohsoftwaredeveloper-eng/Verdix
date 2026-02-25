@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 const terminalSchema = z.object({
   ipAddress: z.string().optional(),
@@ -109,7 +110,7 @@ export function EditPosTerminalDialog({
 
   const fetchWarehouses = async () => {
     try {
-      const response = await fetch('/api/warehouses?activeOnly=true');
+      const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
       const result = await response.json();
       if (result.success) {
         setWarehouses(result.data);
@@ -122,7 +123,7 @@ export function EditPosTerminalDialog({
   async function onSubmit(values: TerminalFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/pos-terminals', {
+      const response = await fetch(getApiUrl('/pos-terminals'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: terminal.id, ...values }),

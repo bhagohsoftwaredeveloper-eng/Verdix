@@ -43,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { getApiUrl } from '@/lib/api-config';
 
 const salesGroupSchema = z.object({
   name: z.string().min(1, 'Group name is required'),
@@ -73,7 +74,7 @@ export function AddSalesGroupDialog({ onGroupAdded, onSalesGroupsUpdated }: AddS
   const fetchSalesGroups = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/sales-groups');
+      const response = await fetch(getApiUrl('/sales-groups'));
       const result = await response.json();
       if (result.success) {
         setSalesGroups(result.data);
@@ -94,7 +95,7 @@ export function AddSalesGroupDialog({ onGroupAdded, onSalesGroupsUpdated }: AddS
   async function onSubmit(values: SalesGroupFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/sales-groups', {
+      const response = await fetch(getApiUrl('/sales-groups'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
@@ -133,7 +134,7 @@ export function AddSalesGroupDialog({ onGroupAdded, onSalesGroupsUpdated }: AddS
     if (!groupToDelete) return;
 
     try {
-      const response = await fetch(`/api/sales-groups?id=${groupToDelete.id}`, {
+      const response = await fetch(getApiUrl(`/sales-groups?id=${groupToDelete.id}`), {
         method: 'DELETE',
       });
       const result = await response.json();

@@ -23,6 +23,7 @@ import { Loader2, ArrowUpRight, ArrowDownLeft, Minus, RefreshCcw, Printer } from
 import { format } from 'date-fns';
 import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
+import { getApiUrl } from '@/lib/api-config';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 
 interface StockMovement {
@@ -73,7 +74,7 @@ export default function StockMovementPage() {
       if (endDate) params.append('endDate', endDate);
       if (movementType && movementType !== 'all') params.append('type', movementType);
 
-      const res = await fetch(`/api/reports/movements?${params.toString()}`);
+      const res = await fetch(getApiUrl(`/reports/movements?${params.toString()}`));
       const data = await res.json();
       
       if (data.success) {

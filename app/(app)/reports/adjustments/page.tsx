@@ -16,6 +16,7 @@ import { Loader2, Printer, ClipboardX } from 'lucide-react';
 import { format } from 'date-fns';
 import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
+import { getApiUrl } from '@/lib/api-config';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 
 interface Adjustment {
@@ -62,7 +63,7 @@ export default function AdjustmentReportPage() {
       params.append('page', page.toString());
       params.append('limit', pageSize.toString());
 
-      const res = await fetch(`/api/reports/adjustments?${params.toString()}`);
+      const res = await fetch(getApiUrl(`/reports/adjustments?${params.toString()}`));
       const data = await res.json();
       
       if (data.success) {

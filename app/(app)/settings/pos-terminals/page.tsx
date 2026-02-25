@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import {
   MoreVertical,
   Network,
@@ -65,7 +66,7 @@ export default function PosTerminalsPage() {
     // Heartbeat for current machine
     if (termId) {
         // Initial heartbeat
-        fetch('/api/pos-terminals', {
+        fetch(getApiUrl('/pos-terminals'), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: termId })
@@ -81,7 +82,7 @@ export default function PosTerminalsPage() {
   const fetchTerminals = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/pos-terminals');
+      const response = await fetch(getApiUrl('/pos-terminals'));
       const result = await response.json();
       if (result.success) {
         setTerminals(result.data);
@@ -111,7 +112,7 @@ export default function PosTerminalsPage() {
       description: `This computer is now linked to ${terminal.terminalDescription || terminal.ipAddress}`,
     });
     // Update last activity so it shows online immediately
-    fetch('/api/pos-terminals', {
+    fetch(getApiUrl('/pos-terminals'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: terminal.id })
@@ -141,7 +142,7 @@ export default function PosTerminalsPage() {
     if (!terminalToDelete) return;
 
     try {
-      const response = await fetch(`/api/pos-terminals?id=${terminalToDelete.id}`, {
+      const response = await fetch(getApiUrl(`/pos-terminals?id=${terminalToDelete.id}`), {
         method: 'DELETE',
       });
       const result = await response.json();

@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, DollarSign, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { SystemSettings } from '@/lib/types';
+import { getApiUrl } from '@/lib/api-config';
 import {
   DragDropContext,
   Droppable,
@@ -37,7 +38,7 @@ export default function PricingSettingsPage() {
   const fetchSettings = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/pos-settings');
+      const response = await fetch(getApiUrl('/pos-settings'));
       const result = await response.json();
       
       if (result.success) {
@@ -64,7 +65,7 @@ export default function PricingSettingsPage() {
     try {
       setIsSaving(true);
       
-      const response = await fetch('/api/pos-settings', {
+      const response = await fetch(getApiUrl('/pos-settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)

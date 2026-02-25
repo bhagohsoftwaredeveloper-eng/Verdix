@@ -28,6 +28,7 @@ import { Loader2, Plus, Minus, Star, Wallet, History, ArrowLeft, TrendingUp, Tre
 import { useToast } from '@/hooks/use-toast';
 import type { Customer } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { getApiUrl } from '@/lib/api-config';
 
 interface CustomerWithLoyalty extends Customer {
   loyaltyPoints: number;
@@ -103,7 +104,7 @@ function AdjustPointsForm({
       // Let's assume there's an endpoint /api/customer-loyalty?rfid=... or similar.
       // If not, we might need to rely on the main customer search.
       
-      const response = await fetch(`/api/customer-loyalty/lookup?rfid=${encodeURIComponent(values.cardNumber)}`);
+      const response = await fetch(getApiUrl(`/customer-loyalty/lookup?rfid=${encodeURIComponent(values.cardNumber)}`));
       
       if (response.ok) {
         const result = await response.json();
@@ -149,7 +150,7 @@ function AdjustPointsForm({
 
     const adjustmentType = view === 'add' ? 'add' : 'remove';
     try {
-      const response = await fetch('/api/customer-loyalty/adjust-points', {
+      const response = await fetch(getApiUrl('/customer-loyalty/adjust-points'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

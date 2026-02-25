@@ -43,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { getApiUrl } from '@/lib/api-config';
 
 const salesAreaSchema = z.object({
   name: z.string().min(1, 'Area name is required'),
@@ -73,7 +74,7 @@ export function AddSalesAreaDialog({ onAreaAdded, onSalesAreasUpdated }: AddSale
   const fetchSalesAreas = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/sales-areas');
+      const response = await fetch(getApiUrl('/sales-areas'));
       const result = await response.json();
       if (result.success) {
         setSalesAreas(result.data);
@@ -94,7 +95,7 @@ export function AddSalesAreaDialog({ onAreaAdded, onSalesAreasUpdated }: AddSale
   async function onSubmit(values: SalesAreaFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/sales-areas', {
+      const response = await fetch(getApiUrl('/sales-areas'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
@@ -133,7 +134,7 @@ export function AddSalesAreaDialog({ onAreaAdded, onSalesAreasUpdated }: AddSale
     if (!areaToDelete) return;
 
     try {
-      const response = await fetch(`/api/sales-areas?id=${areaToDelete.id}`, {
+      const response = await fetch(getApiUrl(`/sales-areas?id=${areaToDelete.id}`), {
         method: 'DELETE',
       });
       const result = await response.json();

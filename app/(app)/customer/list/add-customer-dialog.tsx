@@ -35,6 +35,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PlusCircle, Loader2, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms-dialog';
 
 interface LoyaltySetting {
@@ -84,7 +85,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
   const fetchLoyaltySettings = async () => {
     try {
       setIsLoadingLoyaltySettings(true);
-      const response = await fetch('/api/loyalty-settings');
+      const response = await fetch(getApiUrl('/loyalty-settings'));
       const result = await response.json();
 
       if (result.success) {
@@ -119,7 +120,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
   const fetchPaymentTerms = async () => {
     try {
       setIsLoadingPaymentTerms(true);
-      const response = await fetch('/api/payment-terms');
+      const response = await fetch(getApiUrl('/payment-terms'));
       const result = await response.json();
       if (result.success) {
         setPaymentTermsList(result.data);

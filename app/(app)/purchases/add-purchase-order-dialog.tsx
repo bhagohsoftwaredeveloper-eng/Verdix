@@ -51,6 +51,7 @@ import { useProducts, usePaymentMethods } from '@/hooks/use-api';
 import { SupplierFormDialog } from '../products/ManageSuppliersDialog';
 import { addSupplier } from '../products/actions';
 import { useUser } from '@/hooks/use-user';
+import { getApiUrl } from '@/lib/api-config';
 
 const purchaseOrderItemSchema = z.object({
   productId: z.string().min(1),
@@ -354,7 +355,7 @@ export function AddPurchaseOrderDialog({
 
   useEffect(() => {
     // Fetch tax rates
-    fetch('/api/settings/tax-rates')
+    fetch(getApiUrl('/settings/tax-rates'))
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -619,7 +620,7 @@ export function AddPurchaseOrderDialog({
       let result;
       if (editOrder) {
           // Update
-          const response = await fetch(`/api/purchase-orders/${editOrder.id}`, {
+          const response = await fetch(getApiUrl(`/purchase-orders/${editOrder.id}`), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData),
@@ -627,7 +628,7 @@ export function AddPurchaseOrderDialog({
           result = await response.json();
       } else {
           // Create
-          const response = await fetch('/api/purchase-orders', {
+          const response = await fetch(getApiUrl('/purchase-orders'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData),

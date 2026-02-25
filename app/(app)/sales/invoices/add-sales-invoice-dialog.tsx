@@ -51,6 +51,7 @@ import { CustomerSelectionField } from './customer-selection-field';
 
 import { useProducts, useCustomers } from '@/hooks/use-api';
 import { format, addDays } from 'date-fns';
+import { getApiUrl } from '@/lib/api-config';
 
 const salesInvoiceItemSchema = z.object({
   product: z.any(), // Keep full product object
@@ -183,7 +184,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   // Fetch current reference and show next
   const fetchNextReference = async () => {
     try {
-      const response = await fetch('/api/transaction-references');
+      const response = await fetch(getApiUrl('/transaction-references'));
       const result = await response.json();
       if (result.success && result.data?.salesInvoice) {
         const nextVal = parseInt(result.data.salesInvoice) + 1;
@@ -261,7 +262,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   const fetchWarehouses = async () => {
     try {
       setIsLoadingWarehouses(true);
-      const response = await fetch('/api/warehouses?activeOnly=true');
+      const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
       const result = await response.json();
 
       if (result.success) {
@@ -280,7 +281,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   const fetchPaymentMethods = async () => {
     try {
       setIsLoadingPaymentMethods(true);
-      const response = await fetch('/api/payment-methods?activeOnly=true');
+      const response = await fetch(getApiUrl('/payment-methods?activeOnly=true'));
       const result = await response.json();
 
       if (result.success) {
@@ -369,7 +370,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
     try {
       setIsSubmitting(true);
 
-      const response = await fetch('/api/sales', {
+      const response = await fetch(getApiUrl('/sales'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

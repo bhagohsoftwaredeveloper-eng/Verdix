@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
           item.id,
           item.name,
           item.quantity,
-          item.price
+          item.price * (1 - (item.discount || 0) / 100)
         ]);
 
         // --- Stock Deduction with Family Sync & Loyalty Calculation ---
@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
           INSERT INTO sales_invoice_items (
             id, sales_invoice_id, product_id, product_name, quantity, price, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, NOW())
-        `, [invoiceItemId, invoiceId, item.id, item.name, item.quantity, item.price]);
+        `, [invoiceItemId, invoiceId, item.id, item.name, item.quantity, item.price * (1 - (item.discount || 0) / 100)]);
 
         // Insert into pos_transaction_items (POS Details)
         await connection.query(`
@@ -347,8 +347,8 @@ export async function POST(request: NextRequest) {
           item.id, 
           item.name, 
           item.quantity, 
-          item.price, 
-          item.quantity * item.price
+          item.price * (1 - (item.discount || 0) / 100), 
+          item.quantity * item.price * (1 - (item.discount || 0) / 100)
         ]);
       }
 

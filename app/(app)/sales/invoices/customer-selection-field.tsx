@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import AddCustomerDialog from '../../customer/list/add-customer-dialog';
+import { getApiUrl } from '@/lib/api-config';
 
 interface CustomerSelectionFieldProps {
   control: Control<any>;
@@ -49,9 +50,6 @@ export function CustomerSelectionField({
     name: string,
     contactNumber: string,
     active: boolean,
-    salesPerson: string,
-    salesArea: string,
-    salesGroup: string,
     loyaltyPoints: number,
     paymentTerms: string,
     address: string,
@@ -61,7 +59,7 @@ export function CustomerSelectionField({
     priceLevelId?: string
   ) => {
     try {
-      const response = await fetch('/api/customers', {
+      const response = await fetch(getApiUrl('/customers'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,9 +69,6 @@ export function CustomerSelectionField({
           name,
           contactNumber,
           active,
-          salesPerson,
-          salesArea,
-          salesGroup,
           loyaltyPoints,
           paymentTerms,
           address,

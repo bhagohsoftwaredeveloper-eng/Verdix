@@ -5,6 +5,7 @@
  * Centralized API configuration
  */
 export const DEFAULT_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
+export const API_BASE_URL = DEFAULT_API_BASE_URL;
 
 /**
  * Normalizes and formats an API base URL and path
@@ -22,11 +23,21 @@ export const formatApiUrl = (base: string, path: string) => {
     formatted = `http://${formatted}`;
   }
   
-  // Add port 3001 if no port/protocol-relative port is specified and it's not a domain/localhost with port
+  // Robust port 3001 appending for IP addresses and localhost
   // We check if it contains a colon (after the protocol) to see if a port is already there
   const urlParts = formatted.split('://');
-  if (urlParts.length > 1 && !urlParts[1].includes(':') && !formatted.includes('.com') && !formatted.includes('localhost')) {
-      formatted = `${formatted}:3001`;
+  if (urlParts.length > 1) {
+    const authority = urlParts[1].split('/')[0];
+    // If authority doesn't have a port and it's an IP or localhost or doesn't have a domain suffix
+    if (!authority.includes(':')) {
+      const isIP = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(authority);
+      const isLocalhost = authority === 'localhost';
+      const noDomainSuffix = !authority.includes('.');
+      
+      if (isIP || isLocalhost || noDomainSuffix) {
+        formatted = formatted.replace(authority, `${authority}:3001`);
+      }
+    }
   }
   
   // Ensure it ends with /api
@@ -53,7 +64,21 @@ export const getApiUrl = (path: string) => {
       return formatApiUrl(customIp, path);
     }
     
-    // FALLBACK: Use relative path in the browser if no custom IP is set.
+    // Check if we are running in a file:// environment (like Electron)
+    // or if the URL is not served via http/https.
+    const isFileProtocol = typeof window !== 'undefined' && window.location.protocol === 'file:';
+    const isElectron = typeof window !== 'undefined' && (
+      navigator.userAgent.toLowerCase().includes('electron') || 
+      (window as any).process?.versions?.electron
+    );
+
+    if (isFileProtocol || isElectron) {
+      // In Electron/file:// context, relative paths (/api/...) resolve to file:///api/... which fails.
+      // We must use the absolute default API URL.
+      return formatApiUrl(DEFAULT_API_BASE_URL, path);
+    }
+    
+    // FALLBACK: Use relative path in the browser if no custom IP is set and we're on http/https.
     // This ensures compatibility with whatever port the dev server is running on (e.g. 3000 vs 3001).
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
     return `/api${cleanPath}`;

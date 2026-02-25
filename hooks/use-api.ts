@@ -297,11 +297,7 @@ export function usePurchaseOrders(search?: string, status?: string, page: number
       params.append('offset', offset.toString());
 
       const response = await fetch(getApiUrl(`/purchase-orders?${params.toString()}`), {
-        cache: 'no-store',
-        headers: {
-          'Pragma': 'no-cache',
-          'Cache-Control': 'no-cache'
-        }
+        cache: 'no-store'
       });
       const result = await response.json();
 
@@ -422,11 +418,7 @@ export function useBadOrders(search?: string, status?: string, page: number = 1,
       params.append('offset', offset.toString());
 
       const response = await fetch(getApiUrl(`/bad-orders?${params.toString()}`), {
-        cache: 'no-store',
-        headers: {
-          'Pragma': 'no-cache',
-          'Cache-Control': 'no-cache'
-        }
+        cache: 'no-store'
       });
       const result = await response.json();
 

@@ -37,6 +37,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { getApiUrl } from '@/lib/api-config';
 import type { Customer } from '@/lib/types';
 
 const paymentSchema = z.object({
@@ -96,7 +97,7 @@ export function AddPaymentDialog({ onSuccess }: AddPaymentDialogProps) {
       const fetchCustomers = async () => {
         try {
           setIsLoadingCustomers(true);
-          const response = await fetch('/api/customers');
+          const response = await fetch(getApiUrl('/customers'));
           if (response.ok) {
             const result = await response.json();
             setCustomers(result.data || []);
@@ -117,7 +118,7 @@ export function AddPaymentDialog({ onSuccess }: AddPaymentDialogProps) {
     try {
       const reference = generateReference();
 
-      const response = await fetch('/api/customer-payments', {
+      const response = await fetch(getApiUrl('/customer-payments'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Plus, Trash2, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import {
   Table,
   TableBody,
@@ -100,7 +101,7 @@ export function ManagePaymentTermsDialog({
   const fetchPaymentTerms = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/payment-terms');
+      const response = await fetch(getApiUrl('/payment-terms'));
       const result = await response.json();
       if (result.success) {
         setPaymentTerms(result.data);
@@ -115,7 +116,7 @@ export function ManagePaymentTermsDialog({
   const fetchPaymentTermTypes = async () => {
     try {
       setIsLoadingTypes(true);
-      const response = await fetch('/api/payment-term-types');
+      const response = await fetch(getApiUrl('/payment-term-types'));
       const result = await response.json();
       if (result.success) {
         setCustomTypes(result.data);
@@ -141,7 +142,7 @@ export function ManagePaymentTermsDialog({
       const method = editingTerm ? 'PUT' : 'POST';
       const body = editingTerm ? { id: editingTerm.id, ...values } : values;
 
-      const response = await fetch(url, {
+      const response = await fetch(getApiUrl('/payment-terms'), {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -183,7 +184,7 @@ export function ManagePaymentTermsDialog({
     if (!termToDelete) return;
 
     try {
-      const response = await fetch(`/api/payment-terms?id=${termToDelete.id}`, {
+      const response = await fetch(getApiUrl(`/payment-terms?id=${termToDelete.id}`), {
         method: 'DELETE',
       });
       const result = await response.json();
@@ -229,7 +230,7 @@ export function ManagePaymentTermsDialog({
     if (!newTypeName.trim()) return;
 
     try {
-      const response = await fetch('/api/payment-term-types', {
+      const response = await fetch(getApiUrl('/payment-term-types'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newTypeName.trim() }),
@@ -265,7 +266,7 @@ export function ManagePaymentTermsDialog({
 
   async function handleDeleteType(typeId: string, typeName: string) {
     try {
-      const response = await fetch(`/api/payment-term-types?id=${typeId}`, {
+      const response = await fetch(getApiUrl(`/payment-term-types?id=${typeId}`), {
         method: 'DELETE',
       });
 

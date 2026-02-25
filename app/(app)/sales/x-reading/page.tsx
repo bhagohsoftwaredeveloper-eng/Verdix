@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useReactToPrint } from 'react-to-print';
+import { getApiUrl } from '@/lib/api-config';
 import { XReadingPreview, XReadingData } from './x-reading-preview';
 import { BusinessSettings } from '../z-reading/z-reading-preview';
 
@@ -47,7 +48,7 @@ export default function XReadingPage() {
   useEffect(() => {
     const fetchSettings = async () => {
         try {
-            const response = await fetch('/api/pos-settings');
+            const response = await fetch(getApiUrl('/pos-settings'));
             const result = await response.json();
             if (result.success) {
                 setBusinessSettings(result.data);
@@ -82,7 +83,7 @@ export default function XReadingPage() {
     try {
       const dateStr = format(date, 'yyyy-MM-dd');
       // Fetch all shifts for the date
-      const response = await fetch(`/api/sales/x-reading?startDate=${dateStr}&endDate=${dateStr}`);
+      const response = await fetch(getApiUrl(`/sales/x-reading?startDate=${dateStr}&endDate=${dateStr}`));
       const result = await response.json();
 
       if (result.success) {
@@ -310,7 +311,7 @@ export default function XReadingPage() {
                                             {reading.id}
                                         </TableCell>
                                         <TableCell>
-                                            {format(new Date(reading.shiftStart), 'PP p')}
+                                            {reading.shiftStart ? format(new Date(reading.shiftStart), 'PP p') : 'N/A'}
                                         </TableCell>
                                         <TableCell>
                                             {reading.shiftEnd ? format(new Date(reading.shiftEnd), 'PP p') : 'Active'}

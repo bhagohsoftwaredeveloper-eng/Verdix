@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { getApiUrl } from '@/lib/api-config';
 import jsPDF from 'jspdf';
 
 interface ProductSale {
@@ -88,7 +89,7 @@ export default function ProfitMarginPage() {
         params.append('search', searchTerm);
       }
 
-      const response = await fetch(`/api/sales/by-product?${params.toString()}`);
+      const response = await fetch(getApiUrl(`/sales/by-product?${params.toString()}`));
       const result = await response.json();
       if (result.success) {
         setRecords(result.data || []);

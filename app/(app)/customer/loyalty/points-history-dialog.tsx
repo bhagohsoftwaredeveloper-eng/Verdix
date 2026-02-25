@@ -22,6 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { History, ArrowUp, ArrowDown, ShoppingCart, Gift, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
+import { getApiUrl } from '@/lib/api-config';
 
 interface PointHistoryEntry {
   id: string;
@@ -47,7 +48,7 @@ export function PointsHistoryDialog({ customerLoyaltyId, customerName }: PointsH
   const fetchHistory = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/customer-loyalty/point-history?customerLoyaltyId=${customerLoyaltyId}`);
+      const response = await fetch(getApiUrl(`/customer-loyalty/point-history?customerLoyaltyId=${customerLoyaltyId}`));
       if (response.ok) {
         const result = await response.json();
         setHistory(result.data || []);

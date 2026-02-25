@@ -14,6 +14,7 @@ import { PlusCircle } from 'lucide-react';
 import CustomerList from './list/customer-list';
 import AddCustomerDialog from './list/add-customer-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 
 export default function CustomerListPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -27,7 +28,7 @@ export default function CustomerListPage() {
     try {
       const limit = 10;
       const offset = (page - 1) * limit;
-      const response = await fetch(`/api/customers?limit=${limit}&offset=${offset}`);
+      const response = await fetch(getApiUrl(`/customers?limit=${limit}&offset=${offset}`));
       const result = await response.json();
       if (result.success) {
         setCustomers(result.data);
@@ -62,7 +63,7 @@ export default function CustomerListPage() {
 
   const handleAddCustomer = async (customerId: string, name: string, contactNumber: string, active: boolean, loyaltyPoints: number, paymentTerms: string, address: string, billingAddress: string, discount: number, creditLimit: number, priceLevelId?: string) => {
     try {
-      const response = await fetch('/api/customers', {
+      const response = await fetch(getApiUrl('/customers'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,7 +109,7 @@ export default function CustomerListPage() {
 
   const handleUpdateCustomer = async (customerId: string, values: { name: string; contactNumber: string; active: boolean; loyaltyPoints: number; paymentTerms?: string; address?: string; billingAddress?: string; discount: number; creditLimit: number; priceLevelId?: string }) => {
     try {
-      const response = await fetch(`/api/customers/${customerId}`, {
+      const response = await fetch(getApiUrl(`/customers/${customerId}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +143,7 @@ export default function CustomerListPage() {
 
   const handleDeleteCustomer = async (customerId: string) => {
     try {
-      const response = await fetch(`/api/customers/${customerId}`, {
+      const response = await fetch(getApiUrl(`/customers/${customerId}`), {
         method: 'DELETE',
       });
 

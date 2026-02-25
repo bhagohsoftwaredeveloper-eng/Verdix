@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import { Loader2, Pencil, Trash2, Check } from 'lucide-react';
 import {
   Table,
@@ -44,7 +45,7 @@ export default function TaxRatesPage() {
   const fetchTaxRates = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/settings/tax-rates');
+      const response = await fetch(getApiUrl('/settings/tax-rates'));
       const data = await response.json();
       if (Array.isArray(data)) {
         setTaxRates(data);
@@ -70,7 +71,7 @@ export default function TaxRatesPage() {
     if (!taxRateToDelete) return;
 
     try {
-      const response = await fetch(`/api/settings/tax-rates/${taxRateToDelete.id}`, {
+      const response = await fetch(getApiUrl(`/settings/tax-rates/${taxRateToDelete.id}`), {
         method: 'DELETE',
       });
       const result = await response.json();

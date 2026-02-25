@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
 import { CalendarIcon, Search, X, Loader2, ChevronDown, ChevronUp, Filter, SlidersHorizontal, Download, FileText, FileSpreadsheet } from 'lucide-react';
 import { TerminalSelector } from '@/components/TerminalSelector';
+import { getApiUrl } from '@/lib/api-config';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -129,7 +130,7 @@ export default function SalesPage() {
         params.append('page', page.toString());
         params.append('limit', limit.toString());
         
-        const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+        const response = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
         const result = await response.json();
         
         if (result.success) {
@@ -269,7 +270,7 @@ export default function SalesPage() {
     params.append('limit', '1000000');
     
     try {
-        const response = await fetch(`/api/sales/transactions?${params.toString()}`);
+        const response = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
         const result = await response.json();
         
         if (result.success && Array.isArray(result.data)) {
@@ -331,7 +332,7 @@ export default function SalesPage() {
     // Fetch Business Name
     let businessName = 'BUSINESS NAME';
     try {
-        const settingsRes = await fetch('/api/pos-settings');
+        const settingsRes = await fetch(getApiUrl('/pos-settings'));
         const settings = await settingsRes.json();
         if (settings.success && settings.data?.businessName) {
             businessName = settings.data.businessName;
@@ -447,7 +448,7 @@ export default function SalesPage() {
     try {
         const [salesData, settingsRes] = await Promise.all([
             fetchAllSalesForExport(),
-            fetch('/api/pos-settings').then(res => res.json()).catch(() => ({ success: false }))
+            fetch(getApiUrl('/pos-settings')).then(res => res.json()).catch(() => ({ success: false }))
         ]);
         
         data = salesData;

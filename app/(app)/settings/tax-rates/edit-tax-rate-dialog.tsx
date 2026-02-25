@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/api-config';
 import { TaxRate } from '@/lib/types';
 
 interface EditTaxRateDialogProps {
@@ -56,7 +57,7 @@ export function EditTaxRateDialog({
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/settings/tax-rates/${taxRate.id}`, {
+      const response = await fetch(getApiUrl(`/settings/tax-rates/${taxRate.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
