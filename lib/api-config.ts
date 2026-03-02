@@ -64,16 +64,11 @@ export const getApiUrl = (path: string) => {
       return formatApiUrl(customIp, path);
     }
     
-    // Check if we are running in a file:// environment (like Electron)
-    // or if the URL is not served via http/https.
+    // Check if we are running in a file:// environment (like Electron production)
     const isFileProtocol = typeof window !== 'undefined' && window.location.protocol === 'file:';
-    const isElectron = typeof window !== 'undefined' && (
-      navigator.userAgent.toLowerCase().includes('electron') || 
-      (window as any).process?.versions?.electron
-    );
 
-    if (isFileProtocol || isElectron) {
-      // In Electron/file:// context, relative paths (/api/...) resolve to file:///api/... which fails.
+    if (isFileProtocol) {
+      // In file:// context, relative paths (/api/...) resolve to file:///api/... which fails.
       // We must use the absolute default API URL.
       return formatApiUrl(DEFAULT_API_BASE_URL, path);
     }

@@ -22,7 +22,7 @@ import { getApiUrl } from '@/lib/api-config';
 import { useReactToPrint } from 'react-to-print';
 import { useRef } from 'react';
 
-function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => void, printMode: 'browser' | 'escpos' | 'usb', terminalId?: string }): JSX.Element {
+function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => void, printMode: 'browser' | 'escpos' | 'usb' | 'native', terminalId?: string }): JSX.Element {
     const [data, setData] = useState<ZReadingData | null>(null);
     const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -106,7 +106,7 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
 
         try {
             const generator = new ZReadingGenerator();
-            const bytes = generator.generate(data as any);
+            const bytes = generator.generate(data as any, businessSettings);
             await print(bytes);
             
             toast({
@@ -183,7 +183,7 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
 interface ZReadingDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  printMode: 'browser' | 'escpos' | 'usb';
+  printMode: 'browser' | 'escpos' | 'usb' | 'native';
   terminalId?: string;
 }
 

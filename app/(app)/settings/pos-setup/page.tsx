@@ -421,6 +421,7 @@ export default function PosSetupPage() {
                   <option value="browser">Use Installed Driver (Browser Print)</option>
                   <option value="escpos">Direct Serial (Use if no driver)</option>
                   <option value="usb">Direct USB (WinUSB/Zadig Only)</option>
+                  <option value="native">Native (DLL) Printer</option>
                 </select>
                 <p className="text-[10px] text-muted-foreground mt-1">
                   * If you installed a printer driver (e.g., XPrinter, Epson), choose "Use Installed Driver".

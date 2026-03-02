@@ -125,7 +125,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<{ email: string, permissions?: string[], userType?: string } | null>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);
 
+  const isPOSPage = pathname === '/pos';
+
   useEffect(() => {
+    // Skip global auth enforcement if landing directly on the POS page.
+    // The POS page completely handles its own auth via `PosLoginForm`.
+    if (pathname === '/pos') {
+      setIsUserLoading(false);
+      return;
+    }
+
     const userSession = localStorage.getItem('mock-user-session');
     if (userSession) {
       setUser(JSON.parse(userSession));
@@ -133,7 +142,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       router.push('/login');
     }
     setIsUserLoading(false);
-  }, [router]);
+  }, [router, pathname]);
 
   // Force Cashiers to the POS page
   useEffect(() => {
@@ -142,6 +151,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, pathname, router]);
 
+  // If this is the POS page, immediately bypass the layout and global auth checks!
+  if (isPOSPage) {
+    return <>{children}</>;
+  }
+
+  // Enforce auth UI wrapper for normal pages
   if (isUserLoading || !user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
@@ -168,16 +183,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     return true;
   };
-
-  const isPOSPage = pathname === '/pos';
-
-  if (isPOSPage) {
-    if (!hasPermission('access_pos')) {
-      router.push('/dashboard'); // Or a dedicated "access denied" page
-      return null;
-    }
-    return <>{children}</>;
-  }
 
   const isSalesPage = pathname.startsWith('/sales');
   const isInventoryPage = pathname.startsWith('/inventory');

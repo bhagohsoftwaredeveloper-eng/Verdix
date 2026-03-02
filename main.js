@@ -1,8 +1,10 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
-const isDev = require('electron-is-dev');
+const printerSdk = require('./printer-sdk');
 
 function createWindow() {
+  const isDev = !app.isPackaged;
+  
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -17,27 +19,35 @@ function createWindow() {
   });
 
   // Load the POS specific route
-  const startUrl = isDev 
-    ? 'http://localhost:3001/pos' 
-    : `file://${path.join(__dirname, '../build/index.html')}`; 
+  const startUrl = 'http://localhost:3000/pos'; 
 
   win.loadURL(startUrl);
 
-  // PREVENT navigating away from the POS in Electron
-  // If a link goes to a different page (like /dashboard), open it in the default browser instead
+  // PREVENT navigating away from the app
   win.webContents.on('will-navigate', (event, url) => {
-    const parsedUrl = new URL(url);
-    // Allow navigation within /pos or /api, but intercept others
-    if (!parsedUrl.pathname.startsWith('/pos') && !parsedUrl.pathname.startsWith('/api')) {
-      event.preventDefault();
-      shell.openExternal(url);
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.hostname !== 'localhost') {
+        event.preventDefault();
+        shell.openExternal(url);
+      }
+    } catch (e) {
+      // Ignored
     }
   });
 
   // Also handle links that try to open new windows
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.hostname !== 'localhost') {
+        shell.openExternal(url);
+        return { action: 'deny' };
+      }
+    } catch (e) {
+      // Ignored
+    }
+    return { action: 'allow' };
   });
 
   if (isDev) {
@@ -49,7 +59,22 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+
+  // Register Printer SDK IPC Handlers
+  ipcMain.handle('printer:connect', async (event, portSetting) => {
+    return await printerSdk.connectPrinter(portSetting);
+  });
+
+  ipcMain.handle('printer:print', async (event, buffer) => {
+    return await printerSdk.printData(buffer);
+  });
+
+  ipcMain.handle('printer:disconnect', async (event) => {
+    return await printerSdk.disconnectPrinter();
+  });
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

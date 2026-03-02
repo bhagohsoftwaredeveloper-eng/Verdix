@@ -43,6 +43,7 @@ import {
   Trash2,
   Search,
   ShoppingCart,
+  RefreshCw,
 } from 'lucide-react';
 import type { Product, Customer } from '@/lib/types';
 import Link from 'next/link';
@@ -347,8 +348,18 @@ export default function POSPage() {
       showEndShiftReport, isPosLoggedIn, shiftActive
   ]);
 
-  // Persist shift ID
+  // Persist shift ID and POS user
   useEffect(() => {
+      const storedUser = localStorage.getItem('pos_current_user');
+      if (storedUser) {
+          try {
+              setCurrentUser(JSON.parse(storedUser));
+              setIsPosLoggedIn(true);
+          } catch (e) {
+              console.error("Failed to parse stored POS user");
+          }
+      }
+
       const storedShiftId = localStorage.getItem('pos_current_shift_id');
       if (storedShiftId) {
           setCurrentShiftId(storedShiftId);
@@ -1047,6 +1058,7 @@ export default function POSPage() {
 
               setLastEndedShiftId(currentShiftId);
               localStorage.removeItem('pos_current_shift_id');
+              localStorage.removeItem('pos_current_user');
               setCurrentShiftId(null);
               
               setIsEndShiftOpen(false);
@@ -1124,6 +1136,7 @@ export default function POSPage() {
   const handlePosLoginSuccess = (user: any) => {
     setIsPosLoggedIn(true);
     setCurrentUser(user);
+    localStorage.setItem('pos_current_user', JSON.stringify(user));
     // Determine if shift is already active based on localStorage? 
     // Usually we would fetch "active shift for user" from backend here.
   }
@@ -1132,6 +1145,7 @@ export default function POSPage() {
     // Only log out the user, don't clear transaction
     setIsPosLoggedIn(false);
     setCurrentUser(null);
+    localStorage.removeItem('pos_current_user');
   }
 
   const handleShutdown = () => {
@@ -1360,6 +1374,9 @@ export default function POSPage() {
                     <div className="text-[10px] text-muted-foreground/70">{currentTime}</div>
                  </div>
                  <div className={`h-2 w-2 rounded-full ${shiftActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`} />
+                 <Button variant="outline" size="icon" onClick={() => window.location.reload()} className="h-9 w-9 rounded-md border border-input bg-transparent hover:bg-accent hover:text-accent-foreground" title="Refresh Page">
+                    <RefreshCw className="h-4 w-4" />
+                 </Button>
                  <ThemeToggle />
               </div>
           </header>
@@ -1412,9 +1429,6 @@ export default function POSPage() {
                     <div className="flex-1 overflow-hidden">
                         <div className="flex items-center gap-1.5">
                             <div className="text-xs text-muted-foreground">Customer</div>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${activeLevelId === defaultLevelId ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground shadow-sm'}`}>
-                                {activeLevelName}
-                            </span>
                         </div>
                         <div className="text-sm font-medium truncate">{selectedCustomer?.name || 'Walk-in'}</div>
                     </div>
@@ -1541,7 +1555,9 @@ export default function POSPage() {
                         />
                      </div>
                  ) : (
-                     <div className="text-[40px] uppercase font-bold text-primary mb-2 leading-none tracking-tight">STOCK PILOT</div>
+                     <div className="bg-primary text-white py-2 w-[350px] flex items-center justify-center rounded-md mb-2">
+                         <span className="text-2xl uppercase font-bold leading-none tracking-tight text-center">STOCK PILOT</span>
+                     </div>
                   )}
                  <div className="text-center">
                     <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>

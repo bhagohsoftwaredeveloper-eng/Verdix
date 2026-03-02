@@ -38,7 +38,7 @@ interface ReturnSalesDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   currentUser?: any;
   terminalId?: string;
-  printMode: 'browser' | 'escpos' | 'usb';
+  printMode: 'browser' | 'escpos' | 'usb' | 'native';
 }
 
 const MOCK_RETURNABLE_SALES: Sale[] = [

@@ -1,81 +1,134 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-  Dialog,
-} from '@/components/ui/dialog';
+import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AdminAuthDialog } from '../admin-auth-dialog';
 import { ZReadingPreview, ZReadingData } from '../../sales/z-reading/z-reading-preview';
+import { usePrinter } from '@/lib/use-printer';
+import { getApiUrl } from '@/lib/api-config';
 
-// Mock data for the report - in a real app, this would come from the backend
-const MOCK_Z_READING_DATA: ZReadingData = {
-    id: 'Z-Mock-001',
-    date: new Date().toISOString(),
-    reportDate: new Date(),
-    grossSales: 8540.50,
-    returns: 120.00,
-    discounts: 55.25,
-    netSales: 8365.25,
-    vatSales: 7468.97,
-    vatAmount: 896.28,
-    vatExempt: 359.43,
-    zeroRated: 0.00,
-    nonVat: 0.00,
-    paymentMethods: [
-        { name: 'Cash', amount: 4500.00 },
-        { name: 'Credit Card', amount: 2540.50 },
-        { name: 'GCash', amount: 1500.00 },
-    ],
-    transactionCount: 42,
-    startingCash: 5000.00,
-    cashSales: 4500.00,
-    cashInDrawer: 9500.00,
-    terminalId: 'Counter 1',
-    minSaleId: '0000000000001',
-    maxSaleId: '0000000000042',
-    previousReading: 154300.00,
-    runningTotal: 162665.25
-};
-
-// Mock settings
-const MOCK_SETTINGS = {
-    businessName: "NICOLE'S SUPERMARKET",
-    address: 'Ground Floor Jade Bldg., Jennalyn Ave., Brgy. Abogado, Paniqui, Tarlac',
-    contactNumber: '09123456789',
-    tin: '123-456-789-00000'
+type BusinessSettings = {
+    businessName: string;
+    address: string;
+    contactNumber: string;
+    tin: string;
 };
 
 function ZReadingReportView({ onPrint }: { onPrint?: () => void }) {
-    const data = MOCK_Z_READING_DATA;
     const { toast } = useToast();
+    const { print, isConnected, connect } = usePrinter('native');
 
-    const handlePrint = () => {
-        // In a real app, this would also send a signal to the backend to reset totals.
-        window.print();
+    const [data, setData] = useState<ZReadingData | null>(null);
+    const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Fetch real Z-Reading data and business settings on mount
+    useEffect(() => {
+        const fetchData = async () => {
+            setIsLoading(true);
+            try {
+                // Fetch business settings
+                const settingsRes = await fetch(getApiUrl('/pos-settings'));
+                const settingsResult = await settingsRes.json();
+                if (settingsResult.success) {
+                    setBusinessSettings(settingsResult.data);
+                }
+
+                // Fetch current Z-Reading data (live, from DB)
+                const zRes = await fetch(getApiUrl('/sales/z-reading?mode=current'));
+                const zResult = await zRes.json();
+                if (zResult.success && zResult.data?.length > 0) {
+                    setData(zResult.data[0]);
+                } else {
+                    toast({
+                        title: 'No Data',
+                        description: 'No Z-Reading data found for the current period.',
+                        variant: 'destructive',
+                    });
+                }
+            } catch (e) {
+                console.error('[Z-Reading] Failed to fetch data:', e);
+                toast({
+                    title: 'Error',
+                    description: 'Failed to load Z-Reading data.',
+                    variant: 'destructive',
+                });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    const handlePrint = async () => {
+        if (!data) return;
+
+        let printSuccess = false;
+
+        // Try native ESC/POS print first
+        let printerConnected = isConnected;
+        if (!printerConnected) {
+            printerConnected = await connect();
+        }
+
+        if (printerConnected) {
+            try {
+                const { ReceiptGenerator } = await import('@/lib/receipt-generator');
+                const generator = new ReceiptGenerator();
+                const bytes = generator.generateZReadingReceipt(data, businessSettings);
+                printSuccess = await print(bytes);
+            } catch (e) {
+                console.error('[Z-Reading] Native print error:', e);
+            }
+        }
+
+        // Fallback to browser/Electron print (prints the HTML preview directly)
+        if (!printSuccess) {
+            window.print();
+        }
+
         if (onPrint) onPrint();
         toast({
-            title: "Z-Reading Finalized (Mock)",
-            description: "The daily totals have been reset."
+            title: 'Z-Reading Finalized',
+            description: 'The daily totals have been reset.',
         });
     };
 
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-muted-foreground">Loading Z-Reading data...</div>
+            </div>
+        );
+    }
+
+    if (!data) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="text-muted-foreground">No Z-Reading data available.</div>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-4xl mx-auto p-6 space-y-6 flex flex-col items-center">
-            <div className="bg-white shadow-lg p-4 rounded-lg">
-                <ZReadingPreview 
-                    data={data} 
-                    printerFormat="80mm" 
-                    businessSettings={MOCK_SETTINGS} 
+            {/* 58mm paper width ≈ 220px at screen resolution */}
+            <div style={{ width: '220px' }} className="bg-white shadow-lg p-2 rounded-lg">
+                <ZReadingPreview
+                    data={data}
+                    printerFormat="58mm"
+                    businessSettings={businessSettings}
                 />
             </div>
 
             <div className="flex justify-center space-x-4 print:hidden">
                 <Button size="lg" onClick={handlePrint}>
                     <Printer className="mr-2 h-5 w-5" />
-                    Print Z-Reading & Finalize Shift
+                    Print Z-Reading &amp; Finalize Shift
                 </Button>
             </div>
         </div>
@@ -87,7 +140,6 @@ export default function ZReadingPage() {
     const [showReport, setShowReport] = useState(false);
 
     useEffect(() => {
-        // Require admin auth when the page loads
         setIsAuthDialogOpen(true);
     }, []);
 

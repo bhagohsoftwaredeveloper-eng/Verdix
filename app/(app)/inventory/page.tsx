@@ -1,7 +1,6 @@
 
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   Card,
@@ -23,6 +22,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Product } from '@/lib/types';
 import { getProducts } from '../products/actions';
 import { adjustStock } from './history/actions';
@@ -395,14 +401,6 @@ function ProductCard({ product, hasChildren = false, onSuccess }: { product: Pro
     <Card>
       <CardContent className="p-4">
         <div className="flex gap-4">
-          <Image
-            alt={product.name}
-            className="aspect-square rounded-md object-cover flex-shrink-0"
-            height="64"
-            src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
-            data-ai-hint={product.imageHint}
-            width="64"
-          />
           <div className="flex-1">
             <h3 className="font-medium text-lg flex items-center gap-2">
               {product.name}
@@ -506,7 +504,6 @@ function ProductSkeleton() {
     <Card>
       <CardContent className="p-4">
         <div className="flex gap-4">
-          <Skeleton className="w-16 h-16 rounded-md flex-shrink-0" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-5 w-3/4" />
             <Skeleton className="h-4 w-1/2" />
@@ -530,6 +527,9 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchProducts = async () => {
     try {
@@ -590,6 +590,17 @@ export default function InventoryPage() {
     });
   }, [productTree, searchTerm]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(startIndex, startIndex + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
+
+  const totalProducts = filteredProducts.length;
+
   return (
     <Card>
       <CardHeader>
@@ -611,17 +622,72 @@ export default function InventoryPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-6">
-          {isLoading && Array.from({ length: 5 }).map((_, i) => <ProductSkeleton key={i} />)}
-          {!isLoading && filteredProducts.map((productGroup) => (
-            <ProductGroup key={productGroup.id} productGroup={productGroup} onSuccess={fetchProducts} />
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => <ProductSkeleton key={i} />)
+          ) : (
+            paginatedProducts.map((productGroup) => (
+              <ProductGroup key={productGroup.id} productGroup={productGroup} onSuccess={fetchProducts} />
+            ))
+          )}
           {!isLoading && filteredProducts.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="md:col-span-2 text-center py-12 text-muted-foreground">
               No products found.
             </div>
           )}
         </div>
+        
+        {!isLoading && totalProducts > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t">
+            <div className="text-sm text-muted-foreground">
+              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalProducts)} of {totalProducts} products
+            </div>
+            <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-end">
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="page-size" className="text-sm">Items per page:</Label>
+                <Select
+                  value={pageSize.toString()}
+                  onValueChange={(value) => {
+                    const newSize = parseInt(value, 10);
+                    setPageSize(newSize);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger id="page-size" className="w-[80px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm min-w-[4rem] text-center">
+                  Page {currentPage} of {Math.ceil(totalProducts / pageSize)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalProducts / pageSize), prev + 1))}
+                  disabled={currentPage === Math.ceil(totalProducts / pageSize)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

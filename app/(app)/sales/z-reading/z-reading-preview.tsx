@@ -42,6 +42,9 @@ export type BusinessSettings = {
   contactNumber: string;
   tin: string;
   logoPath?: string;
+  operatedBy?: string;
+  minNumber?: string;
+  serialNumber?: string;
 };
 
 interface ZReadingPreviewProps {
@@ -64,7 +67,8 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
   const startTime = new Date(data.reportDate); 
   startTime.setHours(9, 0, 0, 0); // Mock 9 AM start
   
-  const stripLeadingZeros = (str: string) => {
+  const stripLeadingZeros = (val: string | number) => {
+    const str = String(val);
     // If it's all zeros, return "0"
     if (/^0+$/.test(str)) return "0";
     // Remove leading zeros
@@ -80,15 +84,15 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
 
   const styles = {
     container: {
-        width: '100%',
+        width: is58mm ? '200px' : '300px',
         margin: '0', 
         backgroundColor: 'white',
         color: 'black',
         fontFamily: '"Courier New", Courier, monospace',
-        fontSize: '11px', 
+        fontSize: is58mm ? '9px' : '11px', 
         lineHeight: '1.2',
-        padding: '4mm', // Adjusted for 58mm paper fit
-        fontWeight: 'bold',
+        padding: '2mm',
+        fontWeight: 'normal',
     },
     headerDiv: {
         textAlign: 'center' as const,
@@ -135,11 +139,11 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
       {/* Business Header */}
       <div style={styles.headerDiv}>
         <div style={styles.headerTitle}>{businessSettings?.businessName || 'NICOLE\'S SUPERMARKET'}</div>
-        <div style={{ fontSize: '10px' }}>Operated by: Facunla Enterprise Inc.</div>
+        <div style={{ fontSize: '10px' }}>Operated by: {businessSettings?.operatedBy || 'Facunla Enterprise Inc.'}</div>
         <div style={{ fontSize: '10px' }}>{businessSettings?.address || 'Paniqui, Tarlac'}</div>
         <div style={{ fontSize: '10px' }}>VAT REG TIN: {businessSettings?.tin || '123-456-789-00000'}</div>
-        <div style={{ fontSize: '10px' }}>MIN: 1234567890</div>
-        <div style={{ fontSize: '10px' }}>S/N: 0987654321-11</div>
+        <div style={{ fontSize: '10px' }}>MIN: {businessSettings?.minNumber || '1234567890'}</div>
+        <div style={{ fontSize: '10px' }}>S/N: {businessSettings?.serialNumber || '0987654321-11'}</div>
       </div>
 
       <div style={styles.sectionTitle}>

@@ -4,6 +4,13 @@ import { query } from '../../../lib/mysql';
 // GET endpoint to fetch POS settings
 export async function GET(request: NextRequest) {
   try {
+    // Ensure new columns exist (idempotent migration)
+    await query(`ALTER TABLE pos_settings
+      ADD COLUMN IF NOT EXISTS operated_by VARCHAR(255) NULL,
+      ADD COLUMN IF NOT EXISTS min_number VARCHAR(100) NULL,
+      ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) NULL
+    `).catch(() => {}); // Ignore error if columns already exist
+
     const sql = `
       SELECT
         id,
@@ -44,7 +51,10 @@ export async function GET(request: NextRequest) {
         show_quantity_in_search AS showQuantityInSearch,
         enable_price_edit_auth AS enablePriceEditAuth,
         price_edit_auth_username AS priceEditAuthUsername,
-        price_edit_auth_password AS priceEditAuthPassword
+        price_edit_auth_password AS priceEditAuthPassword,
+        operated_by AS operatedBy,
+        min_number AS minNumber,
+        serial_number AS serialNumber
       FROM pos_settings
       LIMIT 1
     `;
@@ -202,7 +212,10 @@ export async function POST(request: NextRequest) {
         showQuantityInSearch: 'show_quantity_in_search',
         enablePriceEditAuth: 'enable_price_edit_auth',
         priceEditAuthUsername: 'price_edit_auth_username',
-        priceEditAuthPassword: 'price_edit_auth_password'
+        priceEditAuthPassword: 'price_edit_auth_password',
+        operatedBy: 'operated_by',
+        minNumber: 'min_number',
+        serialNumber: 'serial_number'
       };
 
       const updates: string[] = [];

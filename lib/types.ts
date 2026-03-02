@@ -419,6 +419,8 @@ export interface ZReadingData {
   id: string;
   date: string;
   reportDate: Date;
+  businessName?: string;
+  address?: string;
   grossSales: number;
   returns: number;
   discounts: number;
@@ -437,9 +439,16 @@ export interface ZReadingData {
   terminalId?: string;
   minSaleId?: string;
   maxSaleId?: string;
+  minVoidId?: string;
+  maxVoidId?: string;
+  minReturnId?: string;
+  maxReturnId?: string;
   previousReading?: number;
   runningTotal?: number;
+  voidAmount?: number;
+  vatAdjustment?: number;
 }
+
 
 export interface XReadingData {
   id: string;

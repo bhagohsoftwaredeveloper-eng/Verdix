@@ -152,7 +152,6 @@ export function ProductSearchDialog({
                             </div>
                         )}
                         <div className="flex items-baseline gap-1">
-                          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">{activeLevelName}:</span>
                           <p className="font-mono font-bold text-primary">
                             ₱{calculateEffectivePrice(product, 1, activeLevelId, defaultLevelId).toFixed(2)}
                           </p>

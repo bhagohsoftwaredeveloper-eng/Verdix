@@ -45,7 +45,7 @@ interface TenderDialogProps {
     shiftId: string | null;
     terminalId: string;
     paymentMethods: { id: string; name: string; isReferenceRequired?: boolean }[];
-    printMode: 'browser' | 'escpos' | 'usb';
+    printMode: 'browser' | 'escpos' | 'usb' | 'native';
     settings?: SystemSettings | null;
 }
 
@@ -192,7 +192,8 @@ export function TenderDialog({
          try {
              const { ReceiptGenerator } = await import('@/lib/receipt-generator');
              const generator = new ReceiptGenerator();
-             const bytes = generator.generateReceipt(details);
+             // Pass settings to native generator to allow printing of business name/TIN
+             const bytes = generator.generateReceipt(details, settings);
              await print(bytes);
          } catch (e) {
              console.error("Printing error", e);

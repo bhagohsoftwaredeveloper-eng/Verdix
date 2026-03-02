@@ -23,7 +23,7 @@ interface XReadingDialogProps {
   onOpenChange: (open: boolean) => void;
   shiftId?: string;
   autoShow?: boolean;
-  printMode: 'browser' | 'escpos' | 'usb';
+  printMode: 'browser' | 'escpos' | 'usb' | 'native';
 }
 
 export function XReadingDialog({
