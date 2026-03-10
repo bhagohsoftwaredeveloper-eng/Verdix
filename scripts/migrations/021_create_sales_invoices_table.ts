@@ -15,7 +15,7 @@ const migration: Migration = {
         due_date DATE,
         total DECIMAL(10,2) NOT NULL,
         payment_method VARCHAR(100),
-        status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned') DEFAULT 'Pending',
+        status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned', 'Partially Paid') DEFAULT 'Pending',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

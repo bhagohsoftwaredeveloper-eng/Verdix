@@ -55,7 +55,7 @@ function CustomerRow({ customer }: { customer: CustomerWithBalance }) {
       </TableCell>
       <TableCell className="text-center">{customer.invoiceCount}</TableCell>
       <TableCell className="text-right font-semibold">
-        {customer.balance > 0 ? `₱${Number(customer.balance).toFixed(2)}` : '-'}
+        {customer.balance > 0 ? `₱${Number(customer.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
       </TableCell>
     </TableRow>
   );

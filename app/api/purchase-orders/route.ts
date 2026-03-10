@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../lib/mysql';
 import { getExternalApiConfig } from '../../../lib/external-api-config';
 import { syncPurchaseTransaction } from '../../../lib/services/external-accounting-api';
+import { calculatePurchaseCosts } from '../../../lib/purchase-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -181,6 +182,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Server-side cost calculation
+    const calculations = calculatePurchaseCosts(items, shipping || 0);
+    const finalTotal = calculations.grandTotal;
+    const finalVatAmount = calculations.vatAmount;
+
     // Generate order ID
     const orderId = `po_${Date.now()}`;
 
@@ -200,13 +206,13 @@ export async function POST(request: NextRequest) {
       supplierId,
       supplierName,
       formattedDate,
-      total || 0,
+      finalTotal,
       paymentMethod || '',
       (purchaseType === 'Receive') ? 'Received' : (status || 'Pending'),
       reference || null,
       shipping || 0,
       orderedBy || null,
-      vatAmount || 0
+      finalVatAmount
     ]);
 
     // Insert order items
@@ -256,15 +262,31 @@ export async function POST(request: NextRequest) {
 
     // Auto-Receive Logic: Update Inventory if type is 'Receive'
     if (purchaseType === 'Receive') {
-       const updateStockQuery = `UPDATE products SET stock = stock + ? WHERE id = ?`;
-       for (const item of items) {
-         // Update stock
-         await query(updateStockQuery, [item.quantity, item.productId]);
+       const [defaultLevel]: any = await query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
+       const defaultLevelId = defaultLevel[0]?.id;
+       const updateProductQuery = `UPDATE products SET stock = stock + ?, cost = ?, price = ?, updated_at = NOW() WHERE id = ?`;
+       
+       for (const calculatedItem of calculations.items) {
+         // Find original item to get sellingPrice (calculations.items only has landedCost details)
+         const originalItem = items.find((i: any) => i.productId === calculatedItem.productId);
+         const sellingPrice = Number(originalItem?.sellingPrice || 0);
          
-         // Optionally update warehouse if provided and not set? 
-         // For now, we only increment stock as requested.
-         // If a warehouse is specified, we might want to ensure the product is assigned there?
-         // Ignoring warehouse update to avoid overriding existing assignments without explicit confirmation.
+         // Update stock, cost (landed cost), and selling price
+         await query(updateProductQuery, [
+           calculatedItem.quantity, 
+           calculatedItem.landedCostPerUnit, 
+           sellingPrice,
+           calculatedItem.productId
+         ]);
+
+         // Also update/insert default price level to ensure it reflects in POS
+         if (defaultLevelId && sellingPrice > 0) {
+            await query(`
+                INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
+                VALUES (?, ?, ?, 0) 
+                ON DUPLICATE KEY UPDATE price = VALUES(price)
+            `, [calculatedItem.productId, defaultLevelId, sellingPrice]);
+         }
        }
     }
 

@@ -17,6 +17,8 @@ interface ReceiptViewProps {
         transactionDate?: Date; // Add support for date if available
         cashierName?: string;
         pointsEarned?: number;
+        terminalMin?: string;
+        terminalSerialNumber?: string;
     };
     settings?: SystemSettings | null;
 }
@@ -39,6 +41,8 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 <div>{settings?.address || 'General Merchandise'}</div>
                 {settings?.contactNumber && <div>{settings.contactNumber}</div>}
                 {settings?.tin && <div>VAT REG TIN: {settings.tin}</div>}
+                <div>MIN: {saleDetails.terminalMin || settings?.minNumber || '1234567890'}</div>
+                <div>S/N: {saleDetails.terminalSerialNumber || settings?.serialNumber || '0987654321-11'}</div>
                 <div className="text-[10px]">{format(currentDate, 'PP p')}</div>
             </div>
 

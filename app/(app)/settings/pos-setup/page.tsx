@@ -20,6 +20,7 @@ import { TerminalSettingsDialog } from './terminal-settings-dialog';
 
 interface PosSettings {
   businessName: string;
+  operatedBy?: string | null;
   logoPath: string | null;
   transactionPrefix: string;
   address: string | null;
@@ -55,6 +56,7 @@ interface PosSettings {
 export default function PosSetupPage() {
   const [settings, setSettings] = useState<PosSettings>({
     businessName: '',
+    operatedBy: '',
     logoPath: null,
     transactionPrefix: 'TXN',
     address: '',
@@ -301,6 +303,16 @@ export default function PosSetupPage() {
                 value={settings.businessName}
                 onChange={(e) => setSettings(prev => ({ ...prev, businessName: e.target.value }))}
                 placeholder="Enter your business name"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="operatedBy">Operated By</Label>
+              <Input
+                id="operatedBy"
+                value={settings.operatedBy || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, operatedBy: e.target.value }))}
+                placeholder="Enter operated by (e.g., Facunla Enterprise Inc.)"
               />
             </div>
 

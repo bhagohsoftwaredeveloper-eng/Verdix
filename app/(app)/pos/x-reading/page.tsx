@@ -32,31 +32,100 @@ interface XReadingData {
   cashierId: string;
   terminalId: string;
   shiftStatus: string;
+  businessName?: string;
+  operatedBy?: string | null;
+  address?: string;
+  tin?: string;
+  contactNumber?: string;
+  email?: string;
 }
 
 function XReadingReportView({ data }: { data: XReadingData }) {
     const { toast } = useToast();
 
-    const handlePrint = () => {
-        // X-Reading doesn't finalize or reset totals - just prints the intermediate report
-        window.print();
-        toast({
-            title: "X-Reading Printed",
-            description: "Cashier shift report has been printed."
-        });
+    const handlePrint = async () => {
+        try {
+            // Check if we should use thermal printing or browser printing
+            const settingsResponse = await fetch(getApiUrl('/pos-settings'));
+            const settingsResult = await settingsResponse.json();
+            const settings = settingsResult.success ? settingsResult.data : {};
+
+            if (settings.printMode === 'escpos' || settings.printMode === 'usb') {
+                const { XReadingGenerator } = await import('@/lib/x-reading-generator');
+                const generator = new XReadingGenerator();
+                
+                // Ensure the print data has all business settings
+                const printData = {
+                    ...data,
+                    businessName: settings.businessName,
+                    operatedBy: settings.operatedBy,
+                    address: settings.address,
+                    tin: settings.tin,
+                    contactNumber: settings.contactNumber,
+                    email: settings.email
+                };
+
+                const uint8Array = generator.generate(printData);
+                
+                // Assuming there's a global window.electron or similar for thermal printing in this project
+                if ((window as any).electron) {
+                    await (window as any).electron.printThermal(uint8Array);
+                    toast({
+                        title: "X-Reading Printed",
+                        description: "Thermal receipt has been sent to printer."
+                    });
+                    return;
+                }
+            }
+
+
+            // Fallback to browser print
+            window.print();
+            toast({
+                title: "X-Reading Printed",
+                description: "Cashier shift report has been printed."
+            });
+        } catch (error) {
+            console.error('Print error:', error);
+            toast({
+                title: "Print Error",
+                description: "Failed to print X-reading report.",
+                variant: "destructive"
+            });
+        }
     };
+
 
     return (
         <div className="max-w-4xl mx-auto p-6 space-y-6">
-            <div className="text-center space-y-2">
-                <h1 className="text-3xl font-bold">X-Reading Report</h1>
-                <p className="text-lg text-muted-foreground">
-                    Cashier Shift Report - {data.cashierName} ({data.terminalId})
-                </p>
-                <div className="text-sm text-muted-foreground space-y-1">
-                    <p>Shift Start: {data.shiftStart ? format(new Date(data.shiftStart), 'PPP p') : 'Not started'}</p>
-                    <p>Shift End: {data.shiftEnd ? format(new Date(data.shiftEnd), 'PPP p') : 'In progress'}</p>
-                    <p>Report Generated: {format(new Date(data.reportDate), 'PPP p')}</p>
+            <div className="text-center space-y-2 border-b pb-6">
+                <h2 className="text-xl font-bold uppercase">{data.businessName || 'POS SYSTEM'}</h2>
+                {data.operatedBy && <p className="text-sm">Operated by: {data.operatedBy}</p>}
+                {data.address && <p className="text-sm">{data.address}</p>}
+                {data.tin && <p className="text-sm">VAT REG TIN: {data.tin}</p>}
+                {(data.contactNumber || data.email) && (
+                    <p className="text-sm">
+                        {data.contactNumber} {data.email && `| ${data.email}`}
+                    </p>
+                )}
+                <div className="pt-4">
+                    <h1 className="text-2xl font-bold">X-READING REPORT</h1>
+                </div>
+                <div className="text-sm text-muted-foreground space-y-1 pt-2">
+                    <p>Report Date: {format(new Date(data.reportDate), 'PPP')}</p>
+                    <p>Report Time: {format(new Date(data.reportDate), 'p')}</p>
+                    <p>Cashier: {data.cashierName} ({data.terminalId})</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 text-sm">
+                <div className="space-y-1">
+                    <p className="flex justify-between"><span>Shift Start:</span> <span>{data.shiftStart ? format(new Date(data.shiftStart), 'MM/dd/yy p') : '-'}</span></p>
+                    <p className="flex justify-between"><span>Shift End:</span> <span>{data.shiftEnd ? format(new Date(data.shiftEnd), 'MM/dd/yy p') : 'Active'}</span></p>
+                </div>
+                <div className="space-y-1">
+                    <p className="flex justify-between"><span>Terminal ID:</span> <span>{data.terminalId}</span></p>
+                    <p className="flex justify-between"><span>Status:</span> <span className="capitalize">{data.shiftStatus}</span></p>
                 </div>
             </div>
 
@@ -92,6 +161,26 @@ function XReadingReportView({ data }: { data: XReadingData }) {
                     <Separator />
                     <div className="flex justify-between font-bold"><span>Expected Cash in Drawer:</span> <span className="font-mono">₱{data.cashInDrawer.toFixed(2)}</span></div>
                 </div>
+
+                <div className="pt-12 pb-8 space-y-12">
+                    <div className="grid grid-cols-2 gap-12 text-center">
+                        <div className="space-y-1">
+                            <div className="border-b border-black w-48 mx-auto h-8"></div>
+                            <p className="text-sm font-bold uppercase">{data.cashierName || 'Cashier'}</p>
+                            <p className="text-xs text-muted-foreground">(Cashier Signature)</p>
+                        </div>
+                        <div className="space-y-1">
+                            <div className="border-b border-black w-48 mx-auto h-8"></div>
+                            <p className="text-sm font-bold uppercase">MANAGER</p>
+                            <p className="text-xs text-muted-foreground">(Manager Signature)</p>
+                        </div>
+                    </div>
+                    
+                    <div className="text-center space-y-2">
+                        <p className="text-sm italic text-muted-foreground">End of X-Reading Report</p>
+                        <p className="text-lg font-bold">THIS IS NOT AN OFFICIAL RECEIPT</p>
+                    </div>
+                </div>
             </div>
 
             <div className="flex justify-center space-x-4">
@@ -125,12 +214,26 @@ export default function XReadingPage() {
     const loadXReadingData = async () => {
         setLoading(true);
         try {
+            // Fetch business settings first
+            const settingsResponse = await fetch(getApiUrl('/pos-settings'));
+            const settingsResult = await settingsResponse.json();
+            const settings = settingsResult.success ? settingsResult.data : {};
+
             // Load the most recent active shift X-reading for the current cashier
-            // In a real implementation, you'd get the current cashier from auth context
             const response = await fetch(getApiUrl('/sales/x-reading?shiftStatus=active&limit=1'));
             const result = await response.json();
+            
             if (result.success && result.data.length > 0) {
-                setXReadingData(result.data[0]);
+                // Combine shift data with business settings
+                setXReadingData({
+                    ...result.data[0],
+                    businessName: settings.businessName,
+                    operatedBy: settings.operatedBy,
+                    address: settings.address,
+                    tin: settings.tin,
+                    contactNumber: settings.contactNumber,
+                    email: settings.email
+                });
             } else {
                 // If no active shift, create a new one or show a message
                 toast({

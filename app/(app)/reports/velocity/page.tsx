@@ -16,7 +16,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Loader2, TrendingUp, TrendingDown, Printer } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, Printer, MinusCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
 import { useRef } from 'react';
@@ -40,7 +40,7 @@ interface VelocityProduct {
 export default function FastSlowMovingReportPage() {
   const [products, setProducts] = useState<VelocityProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'fast' | 'slow'>('fast');
+  const [activeTab, setActiveTab] = useState<'fast' | 'slow' | 'none'>('fast');
   
   // Default lookback 30 days
   const startDate = format(subDays(new Date(), 30), 'yyyy-MM-dd');
@@ -114,10 +114,10 @@ export default function FastSlowMovingReportPage() {
         />
 
         <Tabs value={activeTab} onValueChange={(v) => {
-            setActiveTab(v as 'fast' | 'slow');
+            setActiveTab(v as 'fast' | 'slow' | 'none');
             setPage(1); // Reset page on tab change
         }} className="w-full">
-          <TabsList className="grid w-full max-w-[400px] grid-cols-2 print:hidden">
+          <TabsList className="grid w-full max-w-[600px] grid-cols-3 print:hidden">
             <TabsTrigger value="fast" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               Fast Moving
@@ -126,15 +126,20 @@ export default function FastSlowMovingReportPage() {
               <TrendingDown className="h-4 w-4" />
               Slow Moving
             </TabsTrigger>
+            <TabsTrigger value="none" className="flex items-center gap-2">
+              <MinusCircle className="h-4 w-4" />
+              None Moving
+            </TabsTrigger>
           </TabsList>
           
             <Card className="print:border-0 print:shadow-none bg-transparent border-0 shadow-none">
               <CardHeader className="print:px-0 px-0">
-                <CardTitle>{activeTab === 'fast' ? 'Top Selling Products' : 'Slow Moving Products'}</CardTitle>
+                <CardTitle>{activeTab === 'fast' ? 'Top Selling Products' : activeTab === 'slow' ? 'Slow Moving Products' : 'None Moving Products'}</CardTitle>
                 <CardDescription>
                     {activeTab === 'fast' 
                         ? 'Highest turnover items in the last 30 days.' 
-                        : 'Lowest turnover items in the last 30 days. Consider discounting.'}
+                        : activeTab === 'slow' ? 'Lowest turnover items in the last 30 days. Consider discounting.'
+                        : 'Items with ZERO sales in the last 30 days.'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="print:px-0 px-0">
@@ -171,7 +176,7 @@ export default function FastSlowMovingReportPage() {
                             </TableCell>
                             <TableCell className="font-medium">{product.name}</TableCell>
                             <TableCell>{product.category}</TableCell>
-                            <TableCell className={`text-right font-bold ${activeTab === 'fast' ? 'text-green-600' : 'text-orange-600'}`}>
+                            <TableCell className={`text-right font-bold ${activeTab === 'fast' ? 'text-green-600' : activeTab === 'slow' ? 'text-orange-600' : 'text-red-600'}`}>
                                 {product.total_sold}
                             </TableCell>
                             <TableCell className="text-right">{formatCurrency(product.total_revenue)}</TableCell>

@@ -55,11 +55,15 @@ export async function POST(request: NextRequest) {
       // Get terminal specific receipt (OR)
       const receiptNo = await getNextReceiptNumber(terminalId);
 
+      const isCharge = typeof paymentMethod === 'string' && paymentMethod.toUpperCase() === 'CHARGE';
+      const invoiceStatus = isCharge ? 'Pending' : 'Paid';
+      const posPaymentStatus = isCharge ? 'pending' : 'completed';
+
       // 1. Insert into sales_transactions
       const insertSaleSql = `
         INSERT INTO sales_transactions (
           id, reference, receipt_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', 'POS', ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, ?, 'POS', ?, NOW(), NOW())
       `;
       await connection.query(insertSaleSql, [
         saleId,
@@ -68,6 +72,7 @@ export async function POST(request: NextRequest) {
         (customer && customer.id !== 'walk-in') ? customer.id : null,
         totalDue,
         paymentMethod,
+        invoiceStatus,
         notes || 'POS Sale'
       ]);
 
@@ -277,11 +282,33 @@ export async function POST(request: NextRequest) {
       // 3. Insert into sales_invoices (to show up in /sales reports)
       const invoiceId = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
       
+      let dueDateQuery = 'CURDATE()';
+      
+      if (isCharge && customer && customer.id !== 'walk-in') {
+          // Fetch customer's payment terms
+          const [custTermResult]: any = await connection.query(
+               'SELECT payment_terms FROM customers WHERE id = ?', 
+               [customer.id]
+          );
+          
+          if (custTermResult && custTermResult.length > 0) {
+              const terms = custTermResult[0].payment_terms; // e.g., '15 Days', '30 Days', 'Cash'
+              
+              if (terms && typeof terms === 'string') {
+                  const match = terms.match(/(\d+)/);
+                  if (match && match[1]) {
+                      const days = parseInt(match[1]);
+                      dueDateQuery = `DATE_ADD(CURDATE(), INTERVAL ${days} DAY)`;
+                  }
+              }
+          }
+      }
+      
       const insertInvoiceSql = `
         INSERT INTO sales_invoices (
           id, reference, receipt_number, customer_id, invoice_date, due_date, total, payment_method,
           status, transaction_source, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', 'POS', ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, CURDATE(), ${dueDateQuery}, ?, ?, ?, 'POS', ?, NOW(), NOW())
       `;
       await connection.query(insertInvoiceSql, [
         invoiceId,
@@ -290,6 +317,7 @@ export async function POST(request: NextRequest) {
         (customer && customer.id !== 'walk-in') ? customer.id : null,
         totalDue,
         paymentMethod,
+        invoiceStatus,
         notes || 'POS Sale'
       ]);
 
@@ -300,7 +328,7 @@ export async function POST(request: NextRequest) {
           subtotal, tax_amount, discount_amount, total_amount, payment_method, 
           payment_status, payment_details_id, payment_validated_at,
           notes, transaction_time, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, 'completed', ?, NOW(), ?, NOW(), NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), NOW(), NOW())
       `;
       
       const posNotes = `Tendered: ₱${(body.amountTendered || totalDue).toFixed(2)}, Change: ₱${(body.change || 0).toFixed(2)}${notes ? ' - ' + notes : ''}`;
@@ -316,6 +344,7 @@ export async function POST(request: NextRequest) {
         body.discountAmount || 0,
         totalDue,
         paymentMethod,
+        posPaymentStatus,
         paymentDetailsId,
         posNotes
       ]);
@@ -382,6 +411,23 @@ export async function POST(request: NextRequest) {
         change || 0,
         paymentDetails?.notes || null
       ]);
+
+      // 6.5 Record in customer_payments if customer exists
+      if (customer && customer.id !== 'walk-in') {
+        const cPaymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await connection.query(`
+          INSERT INTO customer_payments (
+            id, customer_id, payment_type, payment_date, amount, reference, note, created_at, updated_at
+          ) VALUES (?, ?, ?, CURDATE(), ?, ?, ?, NOW(), NOW())
+        `, [
+          cPaymentId,
+          customer.id,
+          paymentMethod,
+          totalDue,
+          sequentialRef,
+          `POS Sale - ${isCharge ? 'Charged to Account' : 'Paid at POS'}`
+        ]);
+      }
 
       // 7. Loyalty Points Redemption
       if (customer && customer.id !== 'walk-in' && paymentMethod === 'POINTS' && paymentDetails?.pointsUsed > 0) {

@@ -15,7 +15,7 @@ const migration: Migration = {
         date DATETIME NOT NULL,
         total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         payment_method VARCHAR(100),
-        status ENUM('Pending', 'Approved', 'Paid', 'Shipped', 'Received', 'Failed') DEFAULT 'Pending',
+        status ENUM('Pending', 'Approved', 'Paid', 'Shipped', 'Received', 'Failed', 'Partially Paid') DEFAULT 'Pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,

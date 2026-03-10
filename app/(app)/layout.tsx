@@ -67,7 +67,6 @@ import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', permission: 'view_dashboard' },
-  { href: '/pos', icon: Monitor, label: 'Point of Sale', permission: 'access_pos' },
   { href: '/products', icon: Package, label: 'Products', permission: 'manage_products' },
 ];
 

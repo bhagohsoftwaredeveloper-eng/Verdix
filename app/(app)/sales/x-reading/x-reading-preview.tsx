@@ -119,7 +119,9 @@ export function XReadingPreview({ data, printerFormat = '58mm', businessSettings
       {/* Business Header */}
       <div style={styles.headerDiv}>
         <div style={styles.headerTitle}>{businessSettings?.businessName || 'MY BUSINESS'}</div>
-        <div style={{ fontSize: '10px' }}>Operated by: {businessSettings?.businessName || 'Business Owner'}</div>
+        {businessSettings?.operatedBy && (
+            <div style={{ fontSize: '10px' }}>Operated by: {businessSettings.operatedBy}</div>
+        )}
         <div style={{ fontSize: '10px' }}>{businessSettings?.address || 'Address'}</div>
         <div style={{ fontSize: '10px' }}>VAT REG TIN: {businessSettings?.tin || '000-000-000-000'}</div>
         <div style={{ fontSize: '10px' }}>MIN: {data.min || '0987654321'}</div>
@@ -275,15 +277,17 @@ export function XReadingPreview({ data, printerFormat = '58mm', businessSettings
       </div>
       
        <div style={styles.footer}>
-         <div style={{marginBottom: '5px'}}>
-             _______________________<br/>
-             Cashier Signature
-        </div>
-        <div>
-             _______________________<br/>
-             Manager Signature
-        </div>
-         <div style={{marginTop: '5px', fontStyle: 'italic'}}>End of X-Reading Report</div>
+        <div style={{marginBottom: '10px'}}>
+              _______________________<br/>
+              <span style={{fontWeight: 'bold', fontSize: '10px'}}>{data.cashierName.toUpperCase()}</span><br/>
+              (Cashier Signature)
+         </div>
+         <div style={{marginBottom: '10px'}}>
+              _______________________<br/>
+              <span style={{fontWeight: 'bold', fontSize: '10px'}}>MANAGER</span><br/>
+              (Manager Signature)
+         </div>
+          <div style={{marginTop: '5px', fontStyle: 'italic'}}>End of X-Reading Report</div>
       </div>
     
       <div style={{ ...styles.center, ...styles.bold }}>

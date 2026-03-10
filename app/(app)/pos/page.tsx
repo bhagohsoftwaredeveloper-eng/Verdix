@@ -1688,6 +1688,8 @@ export default function POSPage() {
         onSuccess={handleSuccessfulSale}
         shiftId={currentShiftId || null}
         terminalId={selectedTerminalId}
+        terminalMin={terminals.find(t => t.id === selectedTerminalId)?.min}
+        terminalSerialNumber={terminals.find(t => t.id === selectedTerminalId)?.serialNumber}
         paymentMethods={paymentMethods}
         printMode={businessSettings?.printMode || 'browser'}
         settings={businessSettings as any} 

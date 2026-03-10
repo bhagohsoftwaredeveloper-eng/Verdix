@@ -1,32 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
 
+import { getExternalApiConfig } from '@/lib/external-api-config';
+
 /**
  * GET /api/settings/external-api
  * Retrieve external API configuration
  */
 export async function GET(request: NextRequest) {
   try {
-    const settingsQuery = `
-      SELECT setting_key, setting_value 
-      FROM external_api_settings
-    `;
+    const config = await getExternalApiConfig();
     
-    const settings = await query(settingsQuery, []);
-    
-    // Convert array of settings to object
-    const config: Record<string, any> = {};
-    settings.forEach((setting: any) => {
-      let value = setting.setting_value;
-      
-      // Parse boolean and numeric values
-      if (value === 'true') value = true;
-      else if (value === 'false') value = false;
-      else if (!isNaN(value) && value !== '') value = Number(value);
-      
-      config[setting.setting_key] = value;
-    });
-
     return NextResponse.json({
       success: true,
       config,

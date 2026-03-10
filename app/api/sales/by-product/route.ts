@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(queryParams.get('page') || '1');
     const limit = parseInt(queryParams.get('limit') || '10');
     const search = queryParams.get('search') || '';
+    const sortBy = queryParams.get('sortBy') || 'sales'; // 'sales' or 'volume'
     const offset = (page - 1) * limit;
 
     const params: any[] = [];
@@ -188,8 +189,13 @@ export async function GET(request: NextRequest) {
     const totalItems = countResult[0]?.total || 0;
 
     // 2. Get Paginated Data
+    let orderByClause = 'ORDER BY total_revenue DESC';
+    if (sortBy === 'volume') {
+      orderByClause = 'ORDER BY units_sold DESC';
+    }
+
     const paginationQuery = fullQueryWithoutLimit + `
-      ORDER BY total_revenue DESC
+      ${orderByClause}
       LIMIT ? OFFSET ?
     `;
     

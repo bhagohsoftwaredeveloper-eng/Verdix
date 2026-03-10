@@ -23,6 +23,14 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -38,7 +46,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getApiUrl } from '@/lib/api-config';
-import type { Customer } from '@/lib/types';
+import type { Customer, Sale } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertCircle } from 'lucide-react';
 
 const paymentSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
@@ -48,6 +60,10 @@ const paymentSchema = z.object({
   }),
   amount: z.coerce.number().positive('Amount must be positive'),
   note: z.string().optional(),
+  allocations: z.array(z.object({
+    invoiceId: z.string(),
+    amountAllocated: z.number().positive()
+  })).optional()
 });
 
 type PaymentFormValues = z.infer<typeof paymentSchema>;
@@ -78,6 +94,9 @@ export function AddPaymentDialog({ onSuccess }: AddPaymentDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+  const [invoices, setInvoices] = useState<Sale[]>([]);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
+  const [manualAllocations, setManualAllocations] = useState<Record<string, number>>({});
   const { toast } = useToast();
 
   const form = useForm<PaymentFormValues>({
@@ -112,12 +131,76 @@ export function AddPaymentDialog({ onSuccess }: AddPaymentDialogProps) {
     }
   }, [isOpen]);
 
+  const selectedCustomerId = form.watch('customerId');
+  const paymentAmount = form.watch('amount');
+
+  useEffect(() => {
+    if (selectedCustomerId) {
+      const fetchInvoices = async () => {
+        try {
+          setIsLoadingInvoices(true);
+          const response = await fetch(getApiUrl(`/customers/invoices/outstanding?customerId=${selectedCustomerId}`));
+          if (response.ok) {
+            const result = await response.json();
+            // Sort by earliest date first
+            const sortedInvoices = (result.data || []).sort((a: any, b: any) => 
+               new Date(a.date).getTime() - new Date(b.date).getTime()
+            );
+            setInvoices(sortedInvoices);
+          }
+        } catch (error) {
+          console.error('Failed to fetch invoices:', error);
+        } finally {
+          setIsLoadingInvoices(false);
+        }
+      };
+      fetchInvoices();
+    } else {
+      setInvoices([]);
+      setManualAllocations({});
+    }
+  }, [selectedCustomerId]);
+
+  const totalAllocated = Object.values(manualAllocations).reduce((sum, val) => sum + val, 0);
+  const remainingToAllocate = Math.max(0, (paymentAmount || 0) - totalAllocated);
+
+  const handleAllocationChange = (invoiceId: string, amount: number, maxBalance: number) => {
+    const validAmount = Math.min(amount, maxBalance);
+    setManualAllocations(prev => ({
+        ...prev,
+        [invoiceId]: validAmount <= 0 ? 0 : validAmount
+    }));
+  };
+
+  const toggleInvoice = (invoice: Sale, checked: boolean) => {
+    if (checked) {
+        // Allocate full balance or what's left of the payment
+        const balance = Number(invoice.balance);
+        const amountToAllocate = Math.min(balance, remainingToAllocate + (manualAllocations[invoice.id] || 0));
+        setManualAllocations(prev => ({
+            ...prev,
+            [invoice.id]: Number(amountToAllocate.toFixed(2))
+        }));
+    } else {
+        setManualAllocations(prev => {
+            const next = { ...prev };
+            delete next[invoice.id];
+            return next;
+        });
+    }
+  };
+
+  const allocations = Object.entries(manualAllocations)
+    .filter(([_, amount]) => amount > 0)
+    .map(([invoiceId, amountAllocated]) => ({
+      invoiceId,
+      amountAllocated
+    }));
+
   const { isSubmitting } = form.formState;
 
   async function onSubmit(values: PaymentFormValues) {
     try {
-      const reference = generateReference();
-
       const response = await fetch(getApiUrl('/customer-payments'), {
         method: 'POST',
         headers: {
@@ -128,8 +211,9 @@ export function AddPaymentDialog({ onSuccess }: AddPaymentDialogProps) {
           paymentType: values.paymentType,
           paymentDate: values.paymentDate.toISOString(),
           amount: values.amount,
-          reference,
+          reference: undefined,
           note: values.note || null,
+          allocations
         }),
       });
 
@@ -138,10 +222,11 @@ export function AddPaymentDialog({ onSuccess }: AddPaymentDialogProps) {
       if (result.success) {
         toast({
           title: 'Payment Added',
-          description: `Payment of ₱${values.amount.toFixed(2)} recorded with reference ${reference}.`,
+          description: `Payment of ${formatCurrency(values.amount)} recorded. Reference: ${result.data?.reference || 'Generated automatically'}.`,
         });
         setIsOpen(false);
         form.reset();
+        setManualAllocations({});
         if (onSuccess) {
           onSuccess();
         }
@@ -289,6 +374,87 @@ export function AddPaymentDialog({ onSuccess }: AddPaymentDialogProps) {
               )}
             />
 
+            {selectedCustomerId && invoices.length > 0 && (
+                <div className="flex flex-col gap-2 p-3 rounded-md bg-muted/50 border">
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium">Total Payment:</span>
+                        <span className="font-bold">{formatCurrency(paymentAmount || 0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium">Total Allocated:</span>
+                        <span className={cn("font-bold", totalAllocated > (paymentAmount || 0) ? "text-destructive" : "text-green-600")}>
+                            {formatCurrency(totalAllocated)}
+                        </span>
+                    </div>
+                    {remainingToAllocate > 0 && (
+                        <div className="flex justify-between items-center text-xs text-muted-foreground border-t pt-2">
+                            <span>Remaining to Allocate:</span>
+                            <span>{formatCurrency(remainingToAllocate)}</span>
+                        </div>
+                    )}
+                    {totalAllocated > (paymentAmount || 0) && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-destructive bg-destructive/10 p-1.5 rounded mt-1">
+                            <AlertCircle className="h-3 w-3" />
+                            Allocated amount exceeds total payment!
+                        </div>
+                    )}
+                </div>
+            )}
+
+             {selectedCustomerId && (invoices.length > 0 ? (
+              <div className="rounded-md border p-2">
+                 <div className="text-sm font-semibold mb-2">Manual Invoice Allocation</div>
+                 <Table className="text-xs">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[30px]"></TableHead>
+                        <TableHead>Invoice</TableHead>
+                        <TableHead className="text-right">Balance</TableHead>
+                        <TableHead className="w-[100px] text-right">Apply</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {invoices.map((invoice) => {
+                            const currentAlloc = manualAllocations[invoice.id] || 0;
+                            const isFullyAllocated = currentAlloc >= Number(invoice.balance);
+                            
+                            return (
+                                <TableRow key={invoice.id} className={cn(currentAlloc > 0 && "bg-green-50/50 dark:bg-green-900/10")}>
+                                  <TableCell className="p-2">
+                                    <Checkbox 
+                                        checked={currentAlloc > 0} 
+                                        onCheckedChange={(checked) => toggleInvoice(invoice, !!checked)}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="p-2">
+                                    <div className="font-mono">{invoice.reference || invoice.id.substring(0,8)}</div>
+                                    <div className="text-[10px] text-muted-foreground">{format(new Date(invoice.date || invoice.invoiceDate || new Date()), 'PP')}</div>
+                                  </TableCell>
+                                  <TableCell className="text-right p-2 font-medium">
+                                    {formatCurrency(Number(invoice.balance))}
+                                  </TableCell>
+                                  <TableCell className="text-right p-2">
+                                     <Input 
+                                        type="number" 
+                                        step="0.01" 
+                                        className="h-7 text-right text-xs p-1"
+                                        value={currentAlloc || ''}
+                                        placeholder="0.00"
+                                        onChange={(e) => handleAllocationChange(invoice.id, parseFloat(e.target.value) || 0, Number(invoice.balance))}
+                                     />
+                                  </TableCell>
+                                </TableRow>
+                            )
+                        })}
+                    </TableBody>
+                 </Table>
+              </div>
+            ) : !isLoadingInvoices && (
+               <div className="text-sm text-yellow-600 bg-yellow-50 p-3 rounded-md border border-yellow-200">
+                  <span className="font-semibold">Note:</span> This customer has no outstanding invoices. This payment will simply be recorded as an unallocated credit/payment history.
+               </div>
+            ))}
+
             <FormField
               control={form.control}
               name="note"
@@ -311,7 +477,7 @@ export function AddPaymentDialog({ onSuccess }: AddPaymentDialogProps) {
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || totalAllocated > (paymentAmount || 0)}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

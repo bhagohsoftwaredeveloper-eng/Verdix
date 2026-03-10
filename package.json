@@ -14,8 +14,10 @@
     "migrate": "tsx scripts/migrations/index.ts up",
     "migrate:down": "tsx scripts/migrations/index.ts down",
     "set-admin": "tsx scripts/set-super-admin.ts",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000/pos && node start-electron.js\"",
-    "electron-only": "node start-electron.js"
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000/pos && node start-electron.js --route=/pos --role=\"POS Terminal\"\"",
+    "electron-only": "node start-electron.js --route=/pos --role=\"POS Terminal\"",
+    "electron-admin-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000/dashboard && node start-electron.js --route=/dashboard --role=\"Admin Dashboard\"\"",
+    "electron-admin": "node start-electron.js --route=/dashboard --role=\"Admin Dashboard\""
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

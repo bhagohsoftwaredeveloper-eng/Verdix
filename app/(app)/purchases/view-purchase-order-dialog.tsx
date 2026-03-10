@@ -21,6 +21,7 @@ import { Printer, Building2, MapPin, Calendar, CreditCard, Box, Package2 } from 
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useProducts, useBusinessProfile } from "@/hooks/use-api";
+import { calculatePurchaseCosts } from "@/lib/purchase-utils";
 // import { Logo } from "@/components/logo"; // Removed to avoid text overlap
 
 interface ViewPurchaseOrderDialogProps {
@@ -108,10 +109,11 @@ export function ViewPurchaseOrderDialog({
                 <tr>
                     <th style="width: 40%">Description</th>
                     <th class="text-right" style="width: 10%">Rem. Qty</th>
-                    <th class="text-right" style="width: 10%">Price</th>
+                    <th class="text-right" style="width: 10%">Cost</th>
                     <th class="text-right" style="width: 10%">Qty</th>
-                    <th class="text-right" style="width: 15%">Total</th>
-                    <th class="text-right" style="width: 15%">Recv</th>
+                    <th class="text-right" style="width: 12%">Landed Cost</th>
+                    <th class="text-right" style="width: 13%">Total</th>
+                    <th class="text-right" style="width: 10%">Recv</th>
                 </tr>
             </thead>
             <tbody>
@@ -130,6 +132,10 @@ export function ViewPurchaseOrderDialog({
                         <td class="text-right">${currentStock}</td>
                         <td class="text-right">₱${item.cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td class="text-right">${item.quantity}</td>
+                        <td class="text-right" style="color: #666; font-style: italic;">₱${(() => {
+                            const results = calculatePurchaseCosts(order.items as any, order.shippingFee || 0);
+                            return (results.items[order.items.indexOf(item)]?.landedCostPerUnit || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        })()}</td>
                         <td class="text-right">₱${(item.cost * item.quantity).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td class="text-right">${
                             order.status === 'Received' || order.status === 'Paid' ? item.quantity : 
@@ -282,8 +288,9 @@ export function ViewPurchaseOrderDialog({
                 <TableRow>
                   <TableHead className="font-semibold text-zinc-700">Product Description</TableHead>
                   <TableHead className="text-center font-semibold text-zinc-700 w-[100px]">Remaining QTY</TableHead>
-                  <TableHead className="text-right font-semibold text-zinc-700 w-[120px]">Price</TableHead>
+                  <TableHead className="text-right font-semibold text-zinc-700 w-[120px]">Base Cost</TableHead>
                   <TableHead className="text-right font-semibold text-zinc-700 w-[100px]">Qty</TableHead>
+                  <TableHead className="text-right font-semibold text-zinc-700 w-[120px] italic text-muted-foreground">Landed Cost</TableHead>
                   <TableHead className="text-right font-semibold text-zinc-700 w-[120px]">Total</TableHead>
                   <TableHead className="text-right font-semibold text-zinc-700 w-[120px] bg-primary/5">Qty Recv</TableHead>
                 </TableRow>
@@ -310,6 +317,12 @@ export function ViewPurchaseOrderDialog({
                     </TableCell>
                     <TableCell className="text-right">₱{item.cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</TableCell>
                     <TableCell className="text-right">{item.quantity} <span className="text-xs text-muted-foreground">pc</span></TableCell>
+                    <TableCell className="text-right italic text-muted-foreground bg-muted/5 font-mono text-xs">
+                        ₱{(() => {
+                            const results = calculatePurchaseCosts(order.items as any, order.shippingFee || 0);
+                            return (results.items[index]?.landedCostPerUnit || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        })()}
+                    </TableCell>
                     <TableCell className="text-right font-medium">₱{(item.cost * item.quantity).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</TableCell>
                      {/* "Quantity Received" column as requested. 
                          Logic: If status is 'Received', show quantity (assuming full). 

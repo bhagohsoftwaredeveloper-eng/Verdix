@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '../../../../lib/mysql';
 import { getExternalApiConfig } from '../../../../lib/external-api-config';
 import { syncPurchaseTransaction, syncAccountsPayable } from '../../../../lib/services/external-accounting-api';
+import { calculatePurchaseCosts } from '../../../../lib/purchase-utils';
 
 export async function PATCH(
   request: NextRequest,
@@ -27,6 +28,16 @@ export async function PATCH(
       vatAmount,
       receivedItems // New field for partial/full receipt
     } = body;
+
+    // Recalculate if items or shipping updated
+    let finalTotal = total;
+    let finalVatAmount = vatAmount;
+
+    if (items && Array.isArray(items)) {
+      const calculations = calculatePurchaseCosts(items, shipping !== undefined ? shipping : 0);
+      finalTotal = calculations.grandTotal;
+      finalVatAmount = calculations.vatAmount;
+    }
 
     return await withTransaction(async (connection) => {
       // 1. Build and execute dynamic update query for the purchase order
@@ -59,9 +70,9 @@ export async function PATCH(
         updates.push('delivery_date = ?');
         paramsUpdate.push(deliveryDate || null);
       }
-      if (total !== undefined) {
+      if (finalTotal !== undefined) {
         updates.push('total = ?');
-        paramsUpdate.push(total);
+        paramsUpdate.push(finalTotal);
       }
       if (shipping !== undefined) {
         updates.push('shipping_fee = ?');
@@ -75,9 +86,9 @@ export async function PATCH(
         updates.push('payment_method = ?');
         paramsUpdate.push(paymentMethod);
       }
-      if (vatAmount !== undefined) {
+      if (finalVatAmount !== undefined) {
         updates.push('vat_amount = ?');
-        paramsUpdate.push(vatAmount);
+        paramsUpdate.push(finalVatAmount);
       }
 
       if (updates.length > 0) {
@@ -117,6 +128,23 @@ export async function PATCH(
 
       // 3. Handle Receipt Side Effects (Stock Update & Movements)
       if (status === 'Received' && receivedItems && Array.isArray(receivedItems)) {
+        // We need all items and shipping fee to calculate correct landed cost distribution
+        let allItems = items;
+        let currentShipping = shipping;
+
+        if (!allItems || currentShipping === undefined) {
+          const [po]: any = await connection.query('SELECT shipping_fee FROM purchase_orders WHERE id = ?', [id]);
+          const [pItems]: any = await connection.query('SELECT product_id as productId, quantity, cost, selling_price as sellingPrice, discount, discount_type as discountType, vat_subject as vatSubject FROM purchase_order_items WHERE purchase_order_id = ?', [id]);
+          
+          if (!allItems) allItems = pItems.map((pi: any) => ({ ...pi, vatSubject: pi.vatSubject === 1 }));
+          if (currentShipping === undefined) currentShipping = parseFloat(po[0]?.shipping_fee || '0');
+        }
+
+        const calculations = calculatePurchaseCosts(allItems, currentShipping || 0);
+
+        const [defaultLevel]: any = await connection.query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
+        const defaultLevelId = defaultLevel[0]?.id;
+
         for (const item of receivedItems) {
           // Get current stock and product details
           const [productResult]: any = await connection.query(
@@ -130,11 +158,27 @@ export async function PATCH(
             const quantityAdded = parseFloat(item.quantity || '0');
             const newStock = previousStock + quantityAdded;
 
-            // Update product stock and expiration date
+            // Find calculated landed cost for this product
+            const calculatedItem = calculations.items.find(ci => ci.productId === item.productId);
+            const landedCost = calculatedItem ? calculatedItem.landedCostPerUnit : parseFloat(item.cost || '0');
+
+            // Get selling price from current received item or the PO items
+            const sellingPrice = Number(item.sellingPrice || allItems.find((ai: any) => ai.productId === item.productId)?.sellingPrice || 0);
+
+            // Update product stock, cost (landed), selling price, and expiration date
             await connection.query(
-              'UPDATE products SET stock = ?, expiration_date = ?, updated_at = NOW() WHERE id = ?',
-              [newStock, item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null, item.productId]
+              'UPDATE products SET stock = ?, cost = ?, price = ?, expiration_date = ?, updated_at = NOW() WHERE id = ?',
+              [newStock, landedCost, sellingPrice, item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null, item.productId]
             );
+
+            // Also update/insert default price level to ensure it reflects in POS
+            if (defaultLevelId && sellingPrice > 0) {
+                await connection.query(`
+                    INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
+                    VALUES (?, ?, ?, 0) 
+                    ON DUPLICATE KEY UPDATE price = VALUES(price)
+                `, [item.productId, defaultLevelId, sellingPrice]);
+            }
 
             // Record stock movement
             const movementId = `MOV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;

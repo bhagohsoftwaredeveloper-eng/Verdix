@@ -42,7 +42,8 @@ export async function GET(request: NextRequest) {
         st.status as sale_status,
         orig_pt.order_number as original_order_number,
         orig_pt.transaction_time as original_transaction_time,
-        orig_u.display_name as original_cashier_name
+        orig_u.display_name as original_cashier_name,
+        pd.gateway_reference as payment_reference
       FROM pos_transactions pt
       LEFT JOIN users u ON pt.user_id = u.uid
       LEFT JOIN pos_terminals term ON pt.terminal_id = term.id
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN customers c ON st.customer_id = c.id
       LEFT JOIN pos_transactions orig_pt ON (pt.transaction_type = 'return' AND pt.sale_id = orig_pt.sale_id AND orig_pt.transaction_type = 'sale')
       LEFT JOIN users orig_u ON orig_pt.user_id = orig_u.uid
+      LEFT JOIN payment_details pd ON pt.payment_details_id = pd.id
       WHERE 1=1
     `;
 
@@ -211,6 +213,7 @@ export async function GET(request: NextRequest) {
         status: row.sale_status || (row.transaction_type === 'sale' ? 'Paid' : row.transaction_type === 'return' ? 'Returned' : 'Voided'),
         transactionType: row.transaction_type,
         paymentMethod: row.payment_method,
+        paymentReference: row.payment_reference,
         customer: {
           id: row.customer_id,
           name: row.customer_name || 'Walk-in Customer',

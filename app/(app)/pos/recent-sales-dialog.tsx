@@ -275,6 +275,8 @@ export function RecentSalesDialog({
                     <TableHead>SO Number</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Time</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Ref</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -282,17 +284,19 @@ export function RecentSalesDialog({
                 <TableBody>
                 {isLoading && (
                     <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                         Loading recent sales...
                     </TableCell>
                     </TableRow>
                 )}
                 {!isLoading && recentSales && recentSales.length > 0 ? (
-                    recentSales.map((sale) => (
+                    recentSales.map((sale: any) => (
                     <TableRow key={sale.id}>
                         <TableCell className="font-mono">{sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7)}</TableCell>
-                        <TableCell>{sale.customer.name}</TableCell>
+                        <TableCell>{sale.customer.name || 'Walk-in'}</TableCell>
                         <TableCell>{format(new Date(sale.date || new Date()), 'p')}</TableCell>
+                        <TableCell>{sale.paymentMethod || '-'}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{sale.paymentReference || '-'}</TableCell>
                         <TableCell className="text-right">₱{sale.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
@@ -311,7 +315,7 @@ export function RecentSalesDialog({
                 ) : (
                     !isLoading && (
                         <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center">
+                        <TableCell colSpan={7} className="h-24 text-center">
                             No recent sales found.
                         </TableCell>
                         </TableRow>

@@ -9,8 +9,11 @@ delete process.env.ELECTRON_RUN_AS_NODE;
 try {
   // require('electron') returns the path to the electron executable
   const electronPath = require('electron');
+  
+  // Pass along any arguments passed to this script
+  const args = ['.', ...process.argv.slice(2)];
 
-  const child = spawn(electronPath, ['.'], {
+  const child = spawn(electronPath, args, {
     stdio: 'inherit',
     env: process.env
   });

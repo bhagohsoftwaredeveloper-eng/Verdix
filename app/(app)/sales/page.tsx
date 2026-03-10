@@ -949,7 +949,7 @@ export default function SalesPage() {
                         {isExpanded && (
                           <TableRow key={`${rowId}-details`} className="bg-muted/30">
                             <TableCell colSpan={10} className="py-3 px-4">
-                              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 text-xs">
+                              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-10 gap-4 text-xs">
                                 <div className="flex flex-col">
                                   <span className="text-muted-foreground font-medium">Discount</span>
                                   <span className="font-semibold">{formatAmount(sale.discount)}</span>
@@ -981,6 +981,10 @@ export default function SalesPage() {
                                 <div className="flex flex-col">
                                   <span className="text-muted-foreground font-medium">Non-Vat Sales</span>
                                   <span className="font-semibold">{formatAmount(sale.nonVatSales)}</span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-muted-foreground font-medium">Payment Ref.</span>
+                                  <span className="font-semibold">{sale.paymentReference || '-'}</span>
                                 </div>
                                 <div className="flex flex-col">
                                   <span className="text-muted-foreground font-medium">Note</span>

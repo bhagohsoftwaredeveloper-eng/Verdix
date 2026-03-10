@@ -46,6 +46,7 @@ import type { Sale, PaymentMethod } from '@/lib/types';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { getApiUrl } from '@/lib/api-config';
+import { formatCurrency } from '@/lib/utils';
 
 const MOCK_PAYMENT_METHODS: PaymentMethod[] = [
     { id: 'pm_1', name: 'Cash' },
@@ -60,7 +61,6 @@ const paymentSchema = z.object({
   paymentMethod: z.string().min(1, 'Payment method is required.'),
   paymentDate: z.date(),
   reference: z.string().optional(),
-  depositAccount: z.string().min(1, 'Deposit account is required.'),
 });
 
 type PaymentFormValues = z.infer<typeof paymentSchema>;
@@ -75,8 +75,6 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
   const [isOpen, setIsOpen] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(true);
-  const [depositAccounts, setDepositAccounts] = useState<{ id: string; name: string }[]>([]);
-  const [isLoadingDepositAccounts, setIsLoadingDepositAccounts] = useState(true);
   const [showPrintConfirm, setShowPrintConfirm] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -132,7 +130,7 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
           
           <div class="amount">
             <div style="font-size: 14px; color: #666; font-weight: normal; text-transform: uppercase; margin-bottom: 5px;">Amount Paid</div>
-            ₱${amount.toFixed(2)}
+            ${formatCurrency(amount)}
           </div>
         </div>
 
@@ -162,40 +160,27 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
         setPaymentMethods(MOCK_PAYMENT_METHODS);
         setIsLoadingPaymentMethods(false);
     }, 300);
-
-    // Simulate fetching deposit accounts
-    // TODO: Fetch from real API when available
-    setIsLoadingDepositAccounts(true);
-    setTimeout(() => {
-        setDepositAccounts([
-            { id: 'da_1', name: 'Cash On Hand' },
-            { id: 'da_2', name: 'BDO Savings' },
-            { id: 'da_3', name: 'BPI Checking' },
-            { id: 'da_4', name: 'Petty Cash Fund' },
-        ]);
-        setIsLoadingDepositAccounts(false);
-    }, 300);
   }, []);
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
-      amount: sale.total,
+      amount: sale.balance !== undefined ? Number(sale.balance) : (Number(sale.total) || 0),
       paymentMethod: '',
       paymentDate: new Date(),
       reference: '',
-      depositAccount: '',
     },
   });
 
   const { isSubmitting } = form.formState;
 
   async function onSubmit(values: PaymentFormValues) {
-    if (values.amount !== sale.total) {
+    const maxAmount = sale.balance !== undefined ? Number(sale.balance) : Number(sale.total);
+    if (Number(values.amount) > maxAmount) {
         toast({
             variant: 'destructive',
             title: 'Incorrect Amount',
-            description: `Payment amount must be exactly ₱${Number(sale.total).toFixed(2)}. Partial payments will be supported in a future update.`,
+            description: `Payment amount cannot exceed the remaining balance of ${formatCurrency(maxAmount)}.`,
         });
         return;
     }
@@ -214,9 +199,12 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
         if (result.success) {
             toast({
                 title: 'Payment Recorded',
-                description: `Payment of ₱${values.amount.toFixed(2)} for invoice ${sale.id} has been successfully recorded.`,
+                description: `Payment of ${formatCurrency(values.amount)} for invoice ${sale.id} has been successfully recorded.`,
             });
-            setShowPrintConfirm(true); // Trigger confirmation dialog
+            setIsOpen(false); // Close main dialog first to avoid focus trap/freeze
+            setTimeout(() => {
+                setShowPrintConfirm(true); // Trigger confirmation dialog
+            }, 50);
         } else {
              toast({
                 variant: 'destructive',
@@ -235,9 +223,10 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {children ? children : (
+    <>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger asChild>
+          {children ? children : (
             <Button size="sm">
                 <ArrowRight className="mr-2 h-4 w-4" />
                 Record Payment
@@ -251,9 +240,21 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
             For Invoice {sale.id} - Due {sale.dueDate ? format(new Date(sale.dueDate), 'PP') : 'N/A'}
           </DialogDescription>
         </DialogHeader>
-        <div className="py-2">
-            <div className="text-4xl font-bold text-center">₱{Number(sale.total).toFixed(2)}</div>
-            <div className="text-sm text-muted-foreground text-center">Total Amount Due</div>
+        <div className="py-2 flex justify-between px-4 bg-muted/30 rounded-md">
+            <div className="text-center">
+              <div className="text-sm text-muted-foreground">Original Total</div>
+              <div className="text-lg font-semibold">{formatCurrency(Number(sale.total))}</div>
+            </div>
+            {sale.amountPaid !== undefined && sale.amountPaid > 0 && (
+              <div className="text-center">
+                <div className="text-sm text-muted-foreground">Amount Paid</div>
+                <div className="text-lg font-semibold text-green-600">{formatCurrency(Number(sale.amountPaid))}</div>
+              </div>
+            )}
+            <div className="text-center">
+              <div className="text-sm text-muted-foreground">Remaining Balance</div>
+              <div className="text-2xl font-bold text-primary">{formatCurrency(sale.balance !== undefined ? Number(sale.balance) : Number(sale.total))}</div>
+            </div>
         </div>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -307,30 +308,6 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="depositAccount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Deposit Account</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a deposit account" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {isLoadingDepositAccounts ? (
-                        <SelectItem value="loading" disabled>Loading...</SelectItem>
-                      ) : (
-                        depositAccounts?.map(account => <SelectItem key={account.id} value={account.name}>{account.name}</SelectItem>)
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
                 Cancel
@@ -349,6 +326,7 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
           </form>
         </Form>
       </DialogContent>
+      </Dialog>
 
       <AlertDialog open={showPrintConfirm} onOpenChange={setShowPrintConfirm}>
         <AlertDialogContent>
@@ -367,6 +345,6 @@ export default function RecordPaymentDialog({ sale, children, onSuccess }: Recor
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Dialog>
+    </>
   );
 }

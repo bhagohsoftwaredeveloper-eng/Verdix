@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const prevPaymentsSql = `
         SELECT SUM(amount) as total
         FROM customer_payments
-        WHERE customer_id = ? AND payment_date < ?
+        WHERE customer_id = ? AND payment_date < ? AND UPPER(payment_type) != 'CHARGE'
     `;
     const [prevPayResult]: any = await query(prevPaymentsSql, [customerId, fromDate]);
     const prevPaymentsTotal = parseFloat(prevPayResult?.total || 0);
@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     const invoicesSql = `
         SELECT 
             id, 
+            reference,
             invoice_date as date, 
             'Invoice' as type, 
             total as amount, 
@@ -59,22 +60,42 @@ export async function GET(request: NextRequest) {
     // Payments
     const paymentsSql = `
         SELECT 
-            id, 
-            payment_date as date, 
-            'Payment' as type, 
+            cp.id, 
+            cp.reference,
+            cp.payment_date as date, 
+            cp.payment_type as type, 
             0 as amount, 
-            amount as credit, 
+            CASE WHEN UPPER(cp.payment_type) = 'CHARGE' THEN 0 ELSE cp.amount END as credit, 
             'Paid' as status,
-            reference as description
-        FROM customer_payments
-        WHERE customer_id = ? AND payment_date BETWEEN ? AND ?
+            cp.reference as payment_ref,
+            si.reference as invoice_ref,
+            si.id as allocatedInvoiceId,
+            cp.note
+        FROM customer_payments cp
+        LEFT JOIN sales_invoices si ON cp.note LIKE CONCAT('%#', si.id, '.') OR cp.note LIKE CONCAT('%#', si.id) OR cp.note LIKE CONCAT('%#', si.id, '.%')
+        WHERE cp.customer_id = ? AND cp.payment_date BETWEEN ? AND ?
     `;
     const payments: any[] = await query(paymentsSql, [customerId, fromDate, toDate]);
 
     // 3. Combine and Sort
     const transactions = [
         ...invoices.map(inv => ({ ...inv, debit: parseFloat(inv.amount), credit: 0 })),
-        ...payments.map(pay => ({ ...pay, debit: 0, credit: parseFloat(pay.credit) }))
+        ...payments.map(pay => {
+            let description = 'Payment';
+            if (pay.invoice_ref) {
+                description += ` - Invoice #${pay.invoice_ref}`;
+            }
+            if (pay.payment_ref) {
+                description += ` (Ref: ${pay.payment_ref})`;
+            }
+            return {
+                ...pay,
+                type: 'Payment',
+                description,
+                debit: 0,
+                credit: parseFloat(pay.credit)
+            };
+        })
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // 4. Calculate Running Balance

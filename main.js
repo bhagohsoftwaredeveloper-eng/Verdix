@@ -5,6 +5,21 @@ const printerSdk = require('./printer-sdk');
 function createWindow() {
   const isDev = !app.isPackaged;
   
+  // Parse command line arguments
+  // Arguments usually look like: [path-to-electron, current-dir, --route=/dashboard, --role=Admin]
+  const args = process.argv;
+  let startRoute = '/pos';
+  let roleName = 'POS Terminal';
+
+  args.forEach(arg => {
+    if (arg.startsWith('--route=')) {
+      startRoute = arg.split('=')[1];
+    }
+    if (arg.startsWith('--role=')) {
+      roleName = arg.split('=')[1];
+    }
+  });
+
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -13,13 +28,13 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    title: "Stock Pilot - POS Terminal",
+    title: `Stock Pilot - ${roleName}`,
     autoHideMenuBar: true,
     icon: path.join(__dirname, 'public/favicon.ico')
   });
 
-  // Load the POS specific route
-  const startUrl = 'http://localhost:3000/pos'; 
+  // Load the specific route
+  const startUrl = `http://localhost:3000${startRoute}`; 
 
   win.loadURL(startUrl);
 

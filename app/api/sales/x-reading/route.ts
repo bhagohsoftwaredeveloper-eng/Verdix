@@ -40,9 +40,12 @@ export async function GET(request: NextRequest) {
         sales.min_sale_id,
         sales.max_sale_id,
         COALESCE(sales.void_amount, 0) as void_amount,
-        COALESCE(sales.refund_amount, 0) as refund_amount
+        COALESCE(sales.refund_amount, 0) as refund_amount,
+        pt_term.min_number as terminal_min,
+        pt_term.serial_number as terminal_sn
       FROM shifts s
       LEFT JOIN users u ON s.user_id = u.uid
+      LEFT JOIN pos_terminals pt_term ON s.terminal_id = pt_term.id
       LEFT JOIN (
           SELECT 
               pt.shift_id,
@@ -152,8 +155,8 @@ export async function GET(request: NextRequest) {
         maxSaleId: shift.max_sale_id ? String(shift.max_sale_id).padStart(12, '0') : '0000000000000',
         voidAmount: parseFloat(shift.void_amount || 0),
         refundAmount: parseFloat(shift.refund_amount || 0),
-        min: '0987654321', // Placeholder or fetch from settings
-        sn: '1234567890-01', // Placeholder or fetch from settings
+        min: shift.terminal_min || '',
+        sn: shift.terminal_sn || '',
       };
     }));
 

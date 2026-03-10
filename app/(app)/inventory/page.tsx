@@ -34,9 +34,22 @@ import { getProducts } from '../products/actions';
 import { adjustStock } from './history/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useEffect, useMemo } from 'react';
-import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown } from 'lucide-react';
+import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: { product: Product, children: React.ReactNode, defaultReason?: string, onSuccess?: () => void }) {
   const { toast } = useToast();
@@ -523,8 +536,141 @@ function ProductSkeleton() {
   );
 }
 
+function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: ProductWithChildren, onSuccess?: () => void }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const hasChildren = productGroup.children && productGroup.children.length > 0;
+
+  const displayStock = productGroup.stock;
+  const stockStatus =
+    displayStock === 0
+      ? 'out-of-stock'
+      : displayStock < productGroup.reorderPoint
+      ? 'low-stock'
+      : 'in-stock';
+
+  const badgeVariant =
+    stockStatus === 'out-of-stock'
+      ? 'destructive'
+      : stockStatus === 'low-stock'
+      ? 'secondary'
+      : 'default';
+  const badgeText =
+    stockStatus === 'out-of-stock'
+      ? 'Out of Stock'
+      : stockStatus === 'low-stock'
+      ? 'Low Stock'
+      : 'In Stock';
+
+  return (
+    <>
+      <TableRow className={cn(hasChildren && isExpanded ? "border-b-0" : "")}>
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-2">
+            {hasChildren && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setIsExpanded(!isExpanded)}
+              >
+                <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+              </Button>
+            )}
+            {!hasChildren && <div className="w-6" />}
+            {productGroup.name}
+            {hasChildren && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                Group
+              </Badge>
+            )}
+          </div>
+        </TableCell>
+        <TableCell>{productGroup.sku}</TableCell>
+        <TableCell>
+          <span className="font-medium">{displayStock}</span> <span className="text-muted-foreground text-xs">{productGroup.unitOfMeasure}</span>
+        </TableCell>
+        <TableCell>
+          <Badge variant={badgeVariant} className="text-xs">{badgeText}</Badge>
+        </TableCell>
+        <TableCell className="text-muted-foreground">{productGroup.reorderPoint}</TableCell>
+        <TableCell className="text-right whitespace-nowrap">
+          <div className="flex justify-end gap-2">
+            <StockAdjustmentDialog product={productGroup} onSuccess={onSuccess}>
+              <Button variant="outline" size="sm" className="h-8">
+                <Pencil className="mr-2 h-3 w-3" />
+                Adjust
+              </Button>
+            </StockAdjustmentDialog>
+            <StockAdjustmentDialog product={productGroup} defaultReason="Physical Count" onSuccess={onSuccess}>
+              <Button variant="outline" size="sm" className="h-8">
+                <ClipboardCheck className="mr-2 h-3 w-3" />
+                Count
+              </Button>
+            </StockAdjustmentDialog>
+          </div>
+        </TableCell>
+      </TableRow>
+      {isExpanded && hasChildren && productGroup.children!.map((child) => {
+          const childStockStatus =
+            child.stock === 0
+              ? 'out-of-stock'
+              : child.stock < child.reorderPoint
+              ? 'low-stock'
+              : 'in-stock';
+
+          const childBadgeVariant =
+            childStockStatus === 'out-of-stock'
+              ? 'destructive'
+              : childStockStatus === 'low-stock'
+              ? 'secondary'
+              : 'default';
+          const childBadgeText =
+            childStockStatus === 'out-of-stock'
+              ? 'Out of Stock'
+              : childStockStatus === 'low-stock'
+              ? 'Low Stock'
+              : 'In Stock';
+
+          return (
+            <TableRow key={child.id} className="bg-muted/30">
+              <TableCell className="font-medium pl-8">
+                <div className="flex items-center gap-2 text-sm">
+                  <CornerDownRight className="h-4 w-4 text-muted-foreground" />
+                  {child.name}
+                </div>
+              </TableCell>
+              <TableCell className="text-sm">{child.sku}</TableCell>
+              <TableCell className="text-sm">
+                 <span className="font-medium">{child.stock}</span> <span className="text-muted-foreground text-xs">{child.unitOfMeasure}</span>
+              </TableCell>
+              <TableCell>
+                 <Badge variant={childBadgeVariant} className="text-xs">{childBadgeText}</Badge>
+              </TableCell>
+              <TableCell className="text-muted-foreground text-sm">{child.reorderPoint}</TableCell>
+              <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <StockAdjustmentDialog product={child} onSuccess={onSuccess}>
+                      <Button variant="outline" size="icon" className="h-8 w-8" title="Adjust">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </StockAdjustmentDialog>
+                    <StockAdjustmentDialog product={child} defaultReason="Physical Count" onSuccess={onSuccess}>
+                      <Button variant="outline" size="icon" className="h-8 w-8" title="Count">
+                        <ClipboardCheck className="h-4 w-4" />
+                      </Button>
+                    </StockAdjustmentDialog>
+                  </div>
+              </TableCell>
+            </TableRow>
+          );
+      })}
+    </>
+  );
+}
+
 export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -604,38 +750,81 @@ export default function InventoryPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Inventory Stock Levels</CardTitle>
-        <CardDescription>
-          View and update your product stock levels. Products are grouped by parent with expandable child products.
-        </CardDescription>
-        <div className="pt-4">
-          <div className="relative">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <CardTitle>Inventory Stock Levels</CardTitle>
+            <CardDescription>
+              View and update your product stock levels. Products are grouped by parent with expandable child products.
+            </CardDescription>
+          </div>
+        </div>
+        <div className="pt-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
+          <div className="relative w-full sm:w-[400px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
               placeholder="Search by product name, SKU, brand, or category..."
-              className="pl-8 w-full sm:w-1/3"
+              className="pl-8 w-full"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'cards' | 'table')} className="w-full sm:w-auto">
+            <TabsList className="grid w-full sm:w-[200px] grid-cols-2">
+              <TabsTrigger value="table">
+                <List className="h-4 w-4 mr-2" />
+                Table
+              </TabsTrigger>
+              <TabsTrigger value="cards">
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Cards
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {isLoading ? (
-            Array.from({ length: 5 }).map((_, i) => <ProductSkeleton key={i} />)
-          ) : (
-            paginatedProducts.map((productGroup) => (
-              <ProductGroup key={productGroup.id} productGroup={productGroup} onSuccess={fetchProducts} />
-            ))
-          )}
-          {!isLoading && filteredProducts.length === 0 && (
-            <div className="md:col-span-2 text-center py-12 text-muted-foreground">
-              No products found.
+        {isLoading ? (
+          viewMode === 'cards' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {Array.from({ length: 5 }).map((_, i) => <ProductSkeleton key={i} />)}
             </div>
-          )}
-        </div>
+          ) : (
+             <div className="space-y-4">
+               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+             </div>
+          )
+        ) : filteredProducts.length === 0 ? (
+           <div className="text-center py-12 text-muted-foreground">
+             No products found.
+           </div>
+        ) : viewMode === 'cards' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {paginatedProducts.map((productGroup) => (
+              <ProductGroup key={productGroup.id} productGroup={productGroup} onSuccess={fetchProducts} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[300px]">Product Name</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Reorder At</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedProducts.map((productGroup) => (
+                  <ProductTableRowGroup key={productGroup.id} productGroup={productGroup} onSuccess={fetchProducts} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
         
         {!isLoading && totalProducts > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t">

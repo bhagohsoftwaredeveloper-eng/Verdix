@@ -33,6 +33,7 @@ export async function GET(
         si.payment_method,
         si.status,
         si.notes,
+        si.amount_paid,
         si.created_at
       FROM sales_invoices si
       LEFT JOIN customers c ON si.customer_id = c.id
@@ -78,6 +79,8 @@ export async function GET(
       invoiceDate: invoice.invoice_date,
       dueDate: invoice.due_date,
       total: parseFloat(invoice.total),
+      amountPaid: parseFloat(invoice.amount_paid || 0),
+      balance: parseFloat(invoice.total) - parseFloat(invoice.amount_paid || 0),
       paymentMethod: invoice.payment_method,
       status: invoice.status,
       notes: invoice.notes,

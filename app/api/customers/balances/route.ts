@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
         c.contact_number AS contactNumber,
         c.payment_terms AS paymentTerms,
         COUNT(si.id) AS invoiceCount,
-        SUM(si.total) AS balance
+        SUM(si.total - COALESCE(si.amount_paid, 0)) AS balance
       FROM customers c
       JOIN sales_invoices si ON c.id = si.customer_id
-      WHERE si.status = 'Pending'
+      WHERE si.status != 'Paid' AND COALESCE(si.amount_paid, 0) < si.total
     `;
 
     const params: any[] = [];

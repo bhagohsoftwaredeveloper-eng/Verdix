@@ -44,6 +44,8 @@ interface TenderDialogProps {
     onSuccess: (paymentMethod: string, amount: number) => void;
     shiftId: string | null;
     terminalId: string;
+    terminalMin?: string;
+    terminalSerialNumber?: string;
     paymentMethods: { id: string; name: string; isReferenceRequired?: boolean }[];
     printMode: 'browser' | 'escpos' | 'usb' | 'native';
     settings?: SystemSettings | null;
@@ -95,6 +97,8 @@ export function TenderDialog({
     onSuccess,
     shiftId,
     terminalId,
+    terminalMin,
+    terminalSerialNumber,
     paymentMethods = [],
     printMode,
     settings
@@ -103,7 +107,7 @@ export function TenderDialog({
     const [amountTendered, setAmountTendered] = useState('');
     const [referenceInput, setReferenceInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
-    const [view, setView] = useState<'tender' | 'receipt' | 'change'>('tender');
+    const [view, setView] = useState<'tender' | 'receipt' | 'change' | 'print_prompt'>('tender');
     const [completedSale, setCompletedSale] = useState<any>(null);
     const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
     const { toast } = useToast();
@@ -310,7 +314,9 @@ export function TenderDialog({
                 orderNumber: result.data.orderNumber,
                 amountTendered: finalAmountTendered, // Ensure this is available for receipt
                 pointsEarned: result.data.pointsEarned || 0,
-                transactionId: result.data.posTransId // Add transaction ID if needed
+                transactionId: result.data.posTransId, // Add transaction ID if needed
+                terminalMin,
+                terminalSerialNumber
             };
 
             console.log('Final Sale Details for Receipt:', saleDetails);
@@ -328,14 +334,8 @@ export function TenderDialog({
                  // We don't print or close yet. We wait for user interaction in Change View.
             } else {
                  // Standard flow for non-cash or exact cash
-                 // Auto-print immediately
-                 handlePrintReceipt(saleDetails);
-
-                 // Small delay to ensure print command is sent before closing/clearing
-                 setTimeout(() => {
-                     onSuccess(selectedMethod, totalDue);
-                     onOpenChange(false);
-                 }, 2000);
+                 // Transition to Print Prompt instead of auto-printing
+                 setView('print_prompt');
             }
 
         } catch (error: any) {
@@ -354,15 +354,25 @@ export function TenderDialog({
     const handleCompleteChange = async () => {
         if (!completedSale) return;
 
-        // Print using new handler
-        await handlePrintReceipt(completedSale);
+        // Transition to Print Prompt after showing change
+        setView('print_prompt');
+    }
 
-        // Close
-        setTimeout(() => {
+    const handleConfirmPrint = async (shouldPrint: boolean) => {
+        if (!completedSale) return;
+
+        if (shouldPrint) {
+            await handlePrintReceipt(completedSale);
+            // Small delay to ensure print command is sent
+            setTimeout(() => {
+                onSuccess(selectedMethod, totalDue);
+                onOpenChange(false);
+            }, 500);
+        } else {
             onSuccess(selectedMethod, totalDue);
             onOpenChange(false);
-        }, 1000);
-    }
+        }
+    };
     
     const handleSmartPrint = () => {
         if (completedSale) {
@@ -432,9 +442,35 @@ export function TenderDialog({
                         </div>
                         
                         <div className="w-full">
-                            <Button size="lg" className="w-full h-16 text-xl font-bold" onClick={handleCompleteChange} autoFocus>
+                                <Button size="lg" className="w-full h-16 text-xl font-bold" onClick={handleCompleteChange} autoFocus>
+                                    Next
+                                </Button>
+                        </div>
+                    </div>
+                ) : view === 'print_prompt' && completedSale ? (
+                    <div className="flex flex-col items-center justify-center p-6 space-y-8 animate-in zoom-in-95 duration-200">
+                        <div className="text-center space-y-2">
+                            <h2 className="text-2xl font-bold uppercase tracking-widest text-muted-foreground">Print Receipt?</h2>
+                            <p className="text-muted-foreground">Would you like to print a receipt for this transaction?</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 w-full">
+                            <Button 
+                                variant="outline" 
+                                size="lg" 
+                                className="h-16 text-xl font-bold" 
+                                onClick={() => handleConfirmPrint(false)}
+                            >
+                                No
+                            </Button>
+                            <Button 
+                                size="lg" 
+                                className="h-16 text-xl font-bold" 
+                                onClick={() => handleConfirmPrint(true)}
+                                autoFocus
+                            >
                                 <Printer className="mr-2 h-6 w-6" />
-                                Print & Next
+                                Yes
                             </Button>
                         </div>
                     </div>

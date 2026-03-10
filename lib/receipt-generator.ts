@@ -37,6 +37,8 @@ export class ReceiptGenerator {
         pointsEarned?: number;
         transactionDate?: Date;
         cashierName?: string;
+        terminalMin?: string;
+        terminalSerialNumber?: string;
     }, settings?: SystemSettings | null): Uint8Array {
 
         const { items, customer, totalDue, change, paymentMethod, orderNumber, amountTendered, pointsEarned } = sale;
@@ -59,12 +61,16 @@ export class ReceiptGenerator {
 
         const bizName = settings?.businessName?.trim() || 'STOCK PILOT';
         const address = settings?.address?.trim() || 'General Merchandise';
+        const minNumber = sale.terminalMin || settings?.minNumber || '1234567890';
+        const serialNumber = sale.terminalSerialNumber || settings?.serialNumber || '0987654321-11';
         
         enc.bold(true).line(centerRow(bizName)).bold(false);
         enc.line(centerRow(address));
         
         if (settings?.contactNumber) enc.line(centerRow(settings.contactNumber));
         if (settings?.tin)           enc.line(centerRow(`VAT REG TIN: ${settings.tin}`));
+        enc.line(centerRow(`MIN: ${minNumber}`));
+        enc.line(centerRow(`S/N: ${serialNumber}`));
         enc.line(centerRow(dateStr));
         enc.newline();
 
@@ -222,6 +228,8 @@ export class ReceiptGenerator {
         const bizName = settings?.businessName || "NICOLE'S SUPERMARKET";
         const address = settings?.address || 'Paniqui, Tarlac';
         const tin = settings?.tin || '123-456-789-00000';
+        const minNumber = data.terminalMin || settings?.minNumber || '1234567890';
+        const serialNumber = data.terminalSerialNumber || settings?.serialNumber || '0987654321-11';
 
         // ── HEADER ──────────────────────────────────────────────────────────
         // Mirrors: headerDiv > headerTitle (center, bold)
@@ -229,8 +237,8 @@ export class ReceiptGenerator {
         enc.line(center('Operated by: Facunla Enterprise Inc.'));
         enc.line(center(address));
         enc.line(center(`VAT REG TIN: ${tin}`));
-        enc.line(center('MIN: 1234567890'));
-        enc.line(center('S/N: 0987654321-11'));
+        enc.line(center(`MIN: ${minNumber}`));
+        enc.line(center(`S/N: ${serialNumber}`));
 
         // ── TITLE ────────────────────────────────────────────────────────────
         // Mirrors: sectionTitle (center, bold, marginTop:5px)

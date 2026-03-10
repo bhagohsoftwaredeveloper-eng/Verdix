@@ -5,9 +5,9 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { PurchaseOrder, Product, Warehouse, TaxRate } from '@/lib/types';
-import { mockSuppliers } from '@/lib/data';
-import { getWarehouses } from '../products/actions';
+import { getWarehouses, getCategories, getBrands, getSubcategories, getSuppliers } from '../products/actions';
+import { calculatePurchaseCosts, calculateMarkupPercentage, calculateSuggestedPrice } from '../../../lib/purchase-utils';
+import { PurchaseOrder, Product, Warehouse, TaxRate, SystemSettings, Category, Brand, PriceLevel } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -312,6 +312,50 @@ export function AddPurchaseOrderDialog({
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const { user } = useUser();
 
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+  const [priceLevels, setPriceLevels] = useState<PriceLevel[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [subcategories, setSubcategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    // Fetch settings
+    fetch(getApiUrl('/pos-settings'))
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setSystemSettings(data.data);
+      });
+
+    // Fetch price levels
+    fetch(getApiUrl('/price-levels'))
+      .then(res => res.json())
+      .then(data => {
+        if (data || data.success) {
+           const levels = Array.isArray(data) ? data : data.data;
+           setPriceLevels(levels || []);
+        }
+      });
+      
+    // Fetch markup entities
+    const fetchMarkups = async () => {
+        try {
+            const [cats, brnds, subs, sups] = await Promise.all([
+                getCategories(),
+                getBrands(),
+                getSubcategories(),
+                getSuppliers()
+            ]);
+            setCategories(cats || []);
+            setBrands(brnds || []);
+            setSubcategories(subs || []);
+            setSuppliers(sups || []);
+        } catch (error) {
+            console.error('Error fetching markup entities:', error);
+        }
+    };
+    fetchMarkups();
+  }, []);
+
   useEffect(() => {
     // Fetch suppliers dynamically on mount
     import('../products/actions').then(mod => {
@@ -349,6 +393,7 @@ export function AddPurchaseOrderDialog({
 
   const [total, setTotal] = useState(0);
   const [vatTotal, setVatTotal] = useState(0);
+  const [purchaseResults, setPurchaseResults] = useState<any>(null);
 
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [activeTaxRate, setActiveTaxRate] = useState<TaxRate | null>(null);
@@ -381,38 +426,25 @@ export function AddPurchaseOrderDialog({
     return () => subscription.unsubscribe();
   }, [activeTaxRate]); 
 
-  const calculateTotal = (items: any[], shipping?: number) => {
-    const taxRate = activeTaxRate ? Number(activeTaxRate.rate) : 0;
-    
-    let subtotal = 0;
-    let vatAmount = 0;
+  const calculateTotal = (items: any[], shipping?: number | string) => {
+    const results = calculatePurchaseCosts(
+      (items || []).map(item => ({
+        ...item,
+        productId: item.productId || '',
+        productName: item.productName || '',
+        quantity: Number(item.quantity) || 0,
+        cost: Number(item.cost) || 0,
+        discount: Number(item.discount) || 0,
+        discountType: item.discountType || 'amount',
+        vatSubject: !!item.vatSubject,
+      })),
+      Number(shipping) || 0,
+      activeTaxRate ? Number(activeTaxRate.rate) : 12
+    );
 
-    (items || []).forEach((item: any) => {
-          const cost = item?.cost || 0;
-          const quantity = item?.quantity || 0;
-          const discount = item?.discount || 0;
-          const discountType = item?.discountType || 'amount';
-          const isVatSubject = item?.vatSubject || false;
-          
-          let itemTotal = cost * quantity;
-          if (discountType === 'percentage') {
-             itemTotal = itemTotal - (itemTotal * (discount / 100));
-          } else {
-             itemTotal = itemTotal - discount;
-          }
-          
-          subtotal += itemTotal;
-
-          if (isVatSubject) {
-             // Inclusive VAT calculation: Total * (Rate / (100 + Rate))
-             vatAmount += itemTotal * (taxRate / (100 + taxRate));
-          }
-    });
-    
-    const shippingCost = shipping || 0;
-    setVatTotal(vatAmount);
-    // VAT is "Included" so we don't add it to the total (Price is Gross)
-    setTotal(subtotal + shippingCost);
+    setVatTotal(results.vatAmount);
+    setTotal(results.grandTotal);
+    setPurchaseResults(results);
   };
 
   // Load warehouses
@@ -564,48 +596,29 @@ export function AddPurchaseOrderDialog({
         throw new Error('Supplier not found');
       }
 
-      const taxRate = activeTaxRate ? Number(activeTaxRate.rate) : 0;
-      let calculatedVatAmount = 0;
-      
-      const items = (values.items || []).map((item: any) => {
-          const cost = item.cost;
-          const quantity = item.quantity;
-          const discount = item.discount || 0;
-          const discountType = item.discountType;
-          let itemTotal = cost * quantity;
-          if (discountType === 'percentage') {
-             itemTotal = itemTotal - (itemTotal * (discount / 100));
-          } else {
-             itemTotal = itemTotal - discount;
-          }
-
-          if (item.vatSubject) {
-              // Inclusive VAT calculation
-              calculatedVatAmount += itemTotal * (taxRate / (100 + taxRate));
-          }
-
-          return {
+      const calculations = calculatePurchaseCosts(
+        (values.items || []).map((item: any) => ({
+          ...item,
           productId: item.productId,
           productName: item.productName,
           quantity: item.quantity,
           cost: item.cost,
-          sellingPrice: item.sellingPrice,
           discount: item.discount,
           discountType: item.discountType,
           vatSubject: item.vatSubject,
-          expirationDate: item.expirationDate,
-          barcode: item.barcode,
-          currentStock: item.currentStock,
-        }
-      });
-
+          sellingPrice: Number(item.sellingPrice) || 0,
+        })),
+        values.shipping || 0,
+        activeTaxRate ? Number(activeTaxRate.rate) : 12
+      );
+      
       const orderData = {
         supplierId: values.supplierId,
         supplierName: supplier.name,
         date: new Date(values.issueDate).toISOString(), // Use form date
-        items: items,
-        total: total, // Check if total here matches our state total (inc VAT)
-        vatAmount: calculatedVatAmount,
+        items: calculations.items, // Use processed items with landedCost
+        total: calculations.grandTotal, 
+        vatAmount: calculations.vatAmount,
         paymentMethod: values.paymentMethod,
         status: editOrder ? undefined : 'Pending', // Don't reset status on edit
         reference: values.reference,
@@ -940,10 +953,12 @@ export function AddPurchaseOrderDialog({
                             <TableHead className='w-[8%] text-center h-10'>Qty</TableHead>
                             <TableHead className='w-[10%] text-right h-10'>Cost</TableHead>
                             <TableHead className='w-[10%] text-right h-10'>Sell Price</TableHead>
-                            <TableHead className='w-[10%] text-center h-10'>Discount</TableHead>
-                            <TableHead className='w-[5%] text-center h-10'>VAT</TableHead>
-                            <TableHead className='w-[12%] text-left h-10'>Expiry</TableHead>
-                            <TableHead className='w-[15%] text-right pr-4 h-10'>Total</TableHead>
+                            <TableHead className='w-[8%] text-right h-10 italic text-blue-600'>Suggested</TableHead>
+                            <TableHead className='w-[8%] text-center h-10'>Discount</TableHead>
+                            <TableHead className='w-[3%] text-center h-10'>VAT</TableHead>
+                            <TableHead className='w-[8%] text-left h-10'>Expiry</TableHead>
+                            <TableHead className='w-[10%] text-right h-10 italic text-muted-foreground'>Landed Cost</TableHead>
+                            <TableHead className='w-[10%] text-right pr-4 h-10'>Line Total</TableHead>
                             <TableHead className='w-[5%] h-10'></TableHead>
                             </TableRow>
                         </TableHeader>
@@ -957,7 +972,28 @@ export function AddPurchaseOrderDialog({
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                fields.map((field, index) => (
+                                fields.map((field, index) => {
+                                    const landedCostPerUnit = purchaseResults?.items[index]?.landedCostPerUnit || 0;
+                                    const product = products.find(p => p.id === field.productId);
+                                    
+                                    const { markup, source } = calculateMarkupPercentage(
+                                        { 
+                                            category: product?.category, 
+                                            subcategory: product?.subcategory, 
+                                            brand: product?.brand,
+                                            supplierId: form.watch('supplierId')
+                                        },
+                                        systemSettings,
+                                        categories,
+                                        subcategories,
+                                        brands,
+                                        suppliers
+                                    );
+
+                                    const defaultLevel = priceLevels.find(l => l.isDefault) || priceLevels[0];
+                                    const suggestedPrice = calculateSuggestedPrice(landedCostPerUnit, markup, defaultLevel);
+                                    
+                                    return (
                             <TableRow key={field.id} className="group bg-white hover:bg-muted/5">
                                 <TableCell className="font-medium pl-4 py-2 border-r">
                                     <div className="text-sm font-semibold">{field.productName}</div>
@@ -1015,6 +1051,34 @@ export function AddPurchaseOrderDialog({
                                     />
                                     )}
                                 />
+                                </TableCell>
+                                <TableCell className="py-2 text-right border-r bg-blue-50/10">
+                                   <div className="flex flex-col items-end justify-center">
+                                     <div className="flex items-center gap-1">
+                                       <span className="text-sm font-bold text-blue-600 font-mono">
+                                         ₱{suggestedPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                       </span>
+                                       <Button
+                                         type="button"
+                                         variant="ghost"
+                                         size="icon"
+                                         className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-100/50 rounded-full"
+                                         onClick={() => {
+                                            form.setValue(`items.${index}.sellingPrice`, parseFloat(suggestedPrice.toFixed(2)));
+                                            toast({
+                                              title: "Price Updated",
+                                              description: `Suggested price of ₱${suggestedPrice.toFixed(2)} applied to ${field.productName}`,
+                                            });
+                                         }}
+                                         title={`Apply suggested price (Markup: ${markup}% from ${source})`}
+                                       >
+                                         <Wand2 className="h-4 w-4" />
+                                       </Button>
+                                     </div>
+                                     <span className="text-[9px] text-blue-500/70 uppercase font-medium">
+                                       {source}: {markup}%
+                                     </span>
+                                   </div>
                                 </TableCell>
                                 <TableCell className="py-2 text-right border-r">
                                 <div className="flex items-center gap-1 justify-center">
@@ -1087,26 +1151,16 @@ export function AddPurchaseOrderDialog({
                                     )}
                                 />
                                 </TableCell>
-                                <TableCell className="text-right py-2 pr-4 font-mono font-medium">
-                                    {(() => {
-                                        const cost = form.watch(`items.${index}.cost`) || 0;
-                                        const qty = form.watch(`items.${index}.quantity`) || 0;
-                                        const disc = form.watch(`items.${index}.discount`) || 0;
-                                        const type = form.watch(`items.${index}.discountType`) || 'amount';
-                                        let total = cost * qty;
-                                        if(type === 'percentage') {
-                                            total = total - (total * (disc / 100));
-                                        } else {
-                                            total = total - disc;
-                                        }
-                                        return `₱${total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                                    })()}
+                                <TableCell className="text-right py-2 text-xs font-mono text-muted-foreground italic bg-muted/5 border-r">
+                                    ₱{landedCostPerUnit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </TableCell>
-                                <TableCell className="py-2 flex items-center justify-end gap-1">
-                                    {/* Wand Icon (Auto-fill quantity) */}
+                                <TableCell className="text-right py-2 pr-4 font-mono font-medium border-r">
+                                    ₱{(purchaseResults?.items[index]?.lineTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </TableCell>
+                                <TableCell className="py-2 text-center h-10">
+                                  <div className="flex items-center gap-1 justify-center">
                                     {(() => {
                                             const rop = fields[index].reorderPoint || 0;
-                                            // User requested to base suggestion on Reorder Point directly (treating it as order qty)
                                             const suggested = rop; 
                                             const hasRop = rop > 0;
                                             
@@ -1145,17 +1199,20 @@ export function AddPurchaseOrderDialog({
                                                 </Button>
                                             );
                                     })()}
-                                <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
-                                    onClick={() => remove(index)}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
+                                        onClick={() => remove(index)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </TableCell>
                             </TableRow>
-                            )))}
+                                    );
+                                })
+                            )}
                         </TableBody>
                         </table>
                       </div>

@@ -339,14 +339,16 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
       return;
     }
 
-    if (customer?.paymentTerms) {
+    // Handle "Charge" or similar term-based methods
+    if (watchedPaymentMethod?.toLowerCase() === 'charge' && customer?.paymentTerms) {
       const terms = customer.paymentTerms.toLowerCase();
-      if (terms === 'due on receipt') {
+      if (terms.includes('due on receipt')) {
         calculatedDueDate = watchedInvoiceDate;
       } else {
-        const netMatch = terms.match(/net (\d+)/);
-        if (netMatch) {
-          const days = parseInt(netMatch[1], 10);
+        // More flexible parsing: look for any number in the terms
+        const match = terms.match(/(\d+)/);
+        if (match) {
+          const days = parseInt(match[1], 10);
           calculatedDueDate = addDays(new Date(watchedInvoiceDate), days).toISOString().split('T')[0];
         }
       }

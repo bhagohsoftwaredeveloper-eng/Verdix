@@ -121,7 +121,21 @@ export function XReadingDialog({
 
       try {
           const generator = new XReadingGenerator();
-          const bytes = generator.generate(reportData as any);
+          
+          // Merge business details into report data for the generator
+          const printData = {
+              ...reportData,
+              businessName: businessSettings?.businessName,
+              operatedBy: businessSettings?.operatedBy,
+              address: businessSettings?.address,
+              tin: businessSettings?.tin,
+              contactNumber: businessSettings?.contactNumber,
+              email: businessSettings?.email,
+              min: reportData?.min,
+              sn: reportData?.sn
+          };
+
+          const bytes = generator.generate(printData as any);
           await print(bytes);
           toast({ title: "Success", description: "X-Reading report sent to printer." });
       } catch (error) {

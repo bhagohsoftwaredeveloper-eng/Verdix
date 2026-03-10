@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
 import {
   Card,
   CardContent,
@@ -47,8 +47,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye, Check, ChevronsUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye, Check, ChevronsUpDown, ArrowUpRight, ArrowDownRight, Scale, Receipt } from 'lucide-react';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
 import { DateRange } from "react-day-picker";
@@ -60,6 +60,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 // --- Shared Types & Helpers ---
 
@@ -72,6 +73,12 @@ function OutstandingInvoices() {
     const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
     const [invoices, setInvoices] = useState<Sale[]>([]);
     const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
+    const [pagination, setPagination] = useState({
+        currentPage: 1,
+        totalPages: 1,
+        pageSize: 10,
+        totalItems: 0
+    });
     const { toast } = useToast();
 
     const fetchOutstandingInvoices = async () => {
@@ -81,10 +88,21 @@ function OutstandingInvoices() {
             if (searchCustomer) params.append('search', searchCustomer);
             if (dateRange.from) params.append('from', dateRange.from.toISOString());
             if (dateRange.to) params.append('to', dateRange.to.toISOString());
+            params.append('page', pagination.currentPage.toString());
+            params.append('limit', pagination.pageSize.toString());
 
             const response = await fetch(getApiUrl(`/customers/invoices/outstanding?${params.toString()}`));
             const result = await response.json();
-            if (result.success) setInvoices(result.data);
+            if (result.success) {
+                setInvoices(result.data);
+                if (result.pagination) {
+                    setPagination(prev => ({
+                        ...prev,
+                        totalPages: result.pagination.totalPages,
+                        totalItems: result.pagination.totalItems || result.pagination.total // Backend uses total
+                    }));
+                }
+            }
             else throw new Error(result.error);
         } catch (error) {
             console.error('Error fetching invoices:', error);
@@ -97,7 +115,7 @@ function OutstandingInvoices() {
     useEffect(() => {
         const timer = setTimeout(fetchOutstandingInvoices, 500);
         return () => clearTimeout(timer);
-    }, [searchCustomer, dateRange]);
+    }, [searchCustomer, dateRange, pagination.currentPage, pagination.pageSize]);
 
     const analytics = useMemo(() => {
         let totalOutstanding = 0;
@@ -131,7 +149,7 @@ function OutstandingInvoices() {
                         <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">₱{analytics.totalOutstanding.toFixed(2)}</div>
+                        <div className="text-2xl font-bold">{formatCurrency(analytics.totalOutstanding)}</div>
                         <p className="text-xs text-muted-foreground">Across {analytics.totalCount} invoices</p>
                     </CardContent>
                 </Card>
@@ -141,7 +159,7 @@ function OutstandingInvoices() {
                         <AlertCircle className="h-4 w-4 text-destructive" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-destructive">₱{analytics.overdueAmount.toFixed(2)}</div>
+                        <div className="text-2xl font-bold text-destructive">{formatCurrency(analytics.overdueAmount)}</div>
                         <p className="text-xs text-muted-foreground">{analytics.overdueCount} overdue invoices</p>
                     </CardContent>
                 </Card>
@@ -178,7 +196,7 @@ function OutstandingInvoices() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Invoice ID</TableHead>
+                                <TableHead>Invoice Reference</TableHead>
                                 <TableHead>Customer</TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Due Date</TableHead>
@@ -196,12 +214,12 @@ function OutstandingInvoices() {
                                 const status = getStatusInfo(invoice);
                                 return (
                                     <TableRow key={invoice.id}>
-                                        <TableCell className="font-mono">{invoice.id}</TableCell>
+                                        <TableCell className="font-mono">{invoice.reference || invoice.id}</TableCell>
                                         <TableCell>{invoice.customer.name}</TableCell>
                                         <TableCell>{format(new Date(invoice.invoiceDate || invoice.date || new Date()), 'PP')}</TableCell>
                                         <TableCell>{invoice.dueDate ? format(new Date(invoice.dueDate), 'PP') : 'N/A'}</TableCell>
                                         <TableCell><Badge variant={status.variant}>{status.text}</Badge></TableCell>
-                                        <TableCell className="text-right">₱{Number(invoice.total).toFixed(2)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(Number(invoice.total))}</TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-2">
                                                 <RecordPaymentDialog sale={invoice}>
@@ -221,6 +239,16 @@ function OutstandingInvoices() {
                             })}
                         </TableBody>
                     </Table>
+                    <div className="py-4">
+                        <DataTablePagination 
+                            currentPage={pagination.currentPage}
+                            totalPages={pagination.totalPages}
+                            pageSize={pagination.pageSize}
+                            totalItems={pagination.totalItems}
+                            setPage={(page) => setPagination(prev => ({ ...prev, currentPage: page }))}
+                            setPageSize={(size) => setPagination(prev => ({ ...prev, pageSize: size, currentPage: 1 }))}
+                        />
+                    </div>
                 </CardContent>
             </Card>
         </div>
@@ -234,6 +262,12 @@ function PaymentHistory() {
      const [search, setSearch] = useState('');
      const [date, setDate] = useState<DateRange | undefined>(undefined);
      const [paymentType, setPaymentType] = useState('All');
+     const [pagination, setPagination] = useState({
+        currentPage: 1,
+        totalPages: 1,
+        pageSize: 10,
+        totalItems: 0
+     });
      const { toast } = useToast();
 
      const fetchPayments = async () => {
@@ -244,10 +278,21 @@ function PaymentHistory() {
             if (date?.from) params.append('from', date.from.toISOString());
             if (date?.to) params.append('to', date.to.toISOString());
             if (paymentType && paymentType !== 'All') params.append('paymentType', paymentType);
+            params.append('page', pagination.currentPage.toString());
+            params.append('limit', pagination.pageSize.toString());
 
             const response = await fetch(getApiUrl(`/customers/payments?${params.toString()}`));
             const result = await response.json();
-            if (result.success) setPayments(result.data);
+            if (result.success) {
+                setPayments(result.data);
+                if (result.pagination) {
+                    setPagination(prev => ({
+                        ...prev,
+                        totalPages: result.pagination.totalPages,
+                        totalItems: result.pagination.total
+                    }));
+                }
+            }
             else throw new Error(result.error);
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch payment history' });
@@ -259,7 +304,7 @@ function PaymentHistory() {
     useEffect(() => {
         const timer = setTimeout(fetchPayments, 500);
         return () => clearTimeout(timer);
-    }, [search, date, paymentType]);
+    }, [search, date, paymentType, pagination.currentPage, pagination.pageSize]);
 
     return (
         <div className="space-y-4">
@@ -350,7 +395,7 @@ function PaymentHistory() {
                                                 {payment.paymentType}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right font-bold text-green-600">₱{Number(payment.amount).toFixed(2)}</TableCell>
+                                        <TableCell className="text-right font-bold text-green-600">{formatCurrency(Number(payment.amount))}</TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-1">
                                                 <Button 
@@ -377,6 +422,16 @@ function PaymentHistory() {
                             </TableBody>
                         </Table>
                     </div>
+                    <div className="py-4">
+                        <DataTablePagination 
+                            currentPage={pagination.currentPage}
+                            totalPages={pagination.totalPages}
+                            pageSize={pagination.pageSize}
+                            totalItems={pagination.totalItems}
+                            setPage={(page) => setPagination(prev => ({ ...prev, currentPage: page }))}
+                            setPageSize={(size) => setPagination(prev => ({ ...prev, pageSize: size, currentPage: 1 }))}
+                        />
+                    </div>
                 </CardContent>
             </Card>
         </div>
@@ -387,21 +442,12 @@ function PaymentHistory() {
 function StatementOfAccount() {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [selectedCustomer, setSelectedCustomer] = useState<string>('');
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: undefined, to: undefined }); // Changed plain object to DateRange | undefined
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: undefined, to: undefined });
     const [soaData, setSoaData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [openCustomer, setOpenCustomer] = useState(false); // State for Combobox
+    const [openCustomer, setOpenCustomer] = useState(false);
     const { toast } = useToast();
 
-    // Import components locally if possible, but since this is inside a function, we need to ensure imports are at top level.
-    // However, I will use the imports added at the top of the file in the next step or assume they are available if I edit the whole file. 
-    // Since this is a partial replace, I'll rely on the top-level imports being present (I need to add them).
-    // Actually, I should probably update the imports FIRST or do it in one go.
-    // Let's do the imports first in a separate replace call if needed, or simply assume I will add them.
-    // Wait, replace_file_content replaces a block. I should probably use multi_replace to handle imports and this component.
-
-    // Let's stick to replacing this component and then I'll add imports.
-    
     useEffect(() => {
         fetch(getApiUrl('/customers')).then(res => res.json()).then(res => {
             if(res.success) setCustomers(res.data);
@@ -431,30 +477,190 @@ function StatementOfAccount() {
         }
     }
 
+    const summary = useMemo(() => {
+        if (!soaData) return null;
+        const totalDebit = soaData.transactions.reduce((sum: number, t: any) => sum + Number(t.debit || 0), 0);
+        const totalCredit = soaData.transactions.reduce((sum: number, t: any) => sum + Number(t.credit || 0), 0);
+        const netChange = totalDebit - totalCredit;
+        return { totalDebit, totalCredit, netChange };
+    }, [soaData]);
+
+    const groupedTransactions = useMemo<{ groups: any[], unallocated: any[] }>(() => {
+        if (!soaData?.transactions) return { groups: [], unallocated: [] };
+        
+        const groups: any[] = [];
+        const invoiceMap = new Map<string, any>();
+        const unallocated: any[] = [];
+
+        soaData.transactions.forEach((t: any) => {
+            if (t.type === 'Invoice' || t.type === 'Sales') {
+                const group = { ...t, payments: [] };
+                groups.push(group);
+                invoiceMap.set(t.id, group);
+            } else if (t.type === 'Payment') {
+                if (t.allocatedInvoiceId && invoiceMap.has(t.allocatedInvoiceId)) {
+                    invoiceMap.get(t.allocatedInvoiceId).payments.push(t);
+                } else {
+                    unallocated.push(t);
+                }
+            } else {
+                groups.push(t);
+            }
+        });
+
+        return { groups, unallocated };
+    }, [soaData]);
+
     const handlePrint = () => {
         if (!soaData) return;
         
-        // Simple print: Open a new window with the SOA content styled for print
-        const printContent = document.getElementById('soa-print-section');
-        if (!printContent) return;
-
+        const customer = customers.find(c => c.id === selectedCustomer);
         const printWindow = window.open('', '', 'height=800,width=800');
         if (!printWindow) return;
 
         printWindow.document.write('<html><head><title>Statement of Account</title>');
         printWindow.document.write('<style>');
         printWindow.document.write(`
-            body { font-family: sans-serif; padding: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
+            @page { size: auto; margin: 20mm; }
+            body { font-family: "Inter", -apple-system, sans-serif; color: #1a1a1a; margin: 0; padding: 0; }
+            .container { max-width: 800px; margin: 0 auto; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 2px solid #f0f0f0; padding-bottom: 20px; }
+            .company-info h1 { margin: 0; color: #111; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
+            .company-info p { margin: 4px 0; color: #666; font-size: 13px; }
+            .statement-title { text-align: right; }
+            .statement-title h2 { margin: 0; color: #000; font-size: 20px; }
+            .statement-title p { margin: 4px 0; color: #666; font-size: 12px; }
+            
+            .client-info { display: flex; justify-content: space-between; margin-bottom: 30px; }
+            .info-box h3 { margin: 0 0 8px 0; font-size: 12px; color: #888; text-transform: uppercase; }
+            .info-box p { margin: 2px 0; font-size: 14px; font-weight: 500; }
+            
+            .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; background: #f9fafb; }
+            .summary-table td { padding: 12px; border: 1px solid #e5e7eb; font-size: 13px; }
+            .summary-label { color: #666; }
+            .summary-value { text-align: right; font-weight: 600; }
+            
+            table.main-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            table.main-table th { background-color: #f3f4f6; color: #374151; font-weight: 600; font-size: 12px; text-transform: uppercase; padding: 10px; border: 1px solid #e5e7eb; text-align: left; }
+            table.main-table td { padding: 10px; border: 1px solid #e5e7eb; font-size: 12px; }
             .text-right { text-align: right; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .meta { display: flex; justify-content: space-between; margin-bottom: 20px; }
-            .total-row { font-weight: bold; background-color: #f9f9f9; }
+            .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+            
+            .footer { margin-top: 50px; }
+            .signatures { display: flex; justify-content: space-between; margin-top: 60px; }
+            .sig-line { border-top: 1px solid #000; width: 200px; text-align: center; padding-top: 8px; font-size: 11px; }
+            .generation-info { text-align: center; color: #999; font-size: 10px; margin-top: 40px; }
         `);
         printWindow.document.write('</style></head><body>');
-        printWindow.document.write(printContent.innerHTML);
+        printWindow.document.write(`
+            <div class="container">
+                <div class="header">
+                    <div class="company-info">
+                        <h1>Stock Pilot</h1>
+                        <p>Business Solutions & Inventory Management</p>
+                        <p>123 Business Avenue, Suite 100</p>
+                        <p>Contact: +63 912 345 6789 | email@stockpilot.com</p>
+                    </div>
+                    <div class="statement-title">
+                        <h2>STATEMENT OF ACCOUNT</h2>
+                        <p>Period: ${format(new Date(soaData.period.from), 'PP')} - ${format(new Date(soaData.period.to), 'PP')}</p>
+                    </div>
+                </div>
+
+                <div class="client-info">
+                    <div class="info-box">
+                        <h3>BILL TO</h3>
+                        <p>${customer?.name || 'Valued Customer'}</p>
+                        <p>${customer?.address || 'N/A'}</p>
+                        <p>TIN: ${customer?.tin || 'N/A'}</p>
+                    </div>
+                    <div class="info-box" style="text-align: right;">
+                        <h3>DETAILS</h3>
+                        <p>Date Generated: ${format(new Date(), 'PPP')}</p>
+                        <p>Currency: PHP</p>
+                    </div>
+                </div>
+
+                <table class="summary-table">
+                    <tr>
+                        <td class="summary-label">Opening Balance</td>
+                        <td class="summary-value">${formatCurrency(Number(soaData.startingBalance))}</td>
+                        <td class="summary-label">Total Charges</td>
+                        <td class="summary-value">${formatCurrency(summary?.totalDebit || 0)}</td>
+                    </tr>
+                    <tr>
+                        <td class="summary-label">Total Payments</td>
+                        <td class="summary-value">${formatCurrency(summary?.totalCredit || 0)}</td>
+                        <td class="summary-label" style="background:#edf2f7">Ending Balance</td>
+                        <td class="summary-value" style="background:#edf2f7; font-size: 16px;">${formatCurrency(Number(soaData.endingBalance))}</td>
+                    </tr>
+                </table>
+
+                <table class="main-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Reference</th>
+                            <th class="text-right">Debit</th>
+                            <th class="text-right">Credit</th>
+                            <th class="text-right">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="5" style="background: #fdfdfd">Beginning Balance</td>
+                            <td class="text-right" style="background: #fdfdfd; font-weight: 600;">${formatCurrency(Number(soaData.startingBalance))}</td>
+                        </tr>
+                        ${groupedTransactions.groups.map((group: any) => `
+                            <tr style="background: #f9fafb;">
+                                <td>${format(new Date(group.date), 'MMM dd, yyyy')}</td>
+                                <td><strong>${group.type}</strong>${group.description ? ` - ${group.description}` : ''}</td>
+                                <td class="font-mono">${group.reference || group.id.substring(0, 8)}</td>
+                                <td class="text-right">${group.debit > 0 ? formatCurrency(Number(group.debit)) : '-'}</td>
+                                <td class="text-right">-</td>
+                                <td class="text-right" style="font-weight: 600;">${formatCurrency(Number(group.runningBalance))}</td>
+                            </tr>
+                            ${group.payments.map((p: any) => `
+                                <tr>
+                                    <td style="padding-left: 25px; color: #666;">${format(new Date(p.date), 'MMM dd, yyyy')}</td>
+                                    <td style="padding-left: 25px; color: #666;">└─ Payment: ${p.type} ${p.invoice_ref ? `(Invoice #${p.invoice_ref})` : (p.note ? `(${p.note})` : '')}</td>
+                                    <td class="font-mono" style="color: #666;">${p.reference || p.id.substring(0, 8)}</td>
+                                    <td class="text-right">-</td>
+                                    <td class="text-right" style="color: #059669;">${formatCurrency(Number(p.credit))}</td>
+                                    <td class="text-right" style="color: #666;">${formatCurrency(Number(p.runningBalance))}</td>
+                                </tr>
+                            `).join('')}
+                        `).join('')}
+                        ${groupedTransactions.unallocated.length > 0 ? `
+                            <tr><td colspan="6" style="background: #f3f4f6; font-size: 10px; font-weight: bold; text-transform: uppercase;">Unallocated Payments</td></tr>
+                            ${groupedTransactions.unallocated.map((p: any) => `
+                                <tr>
+                                    <td>${format(new Date(p.date), 'MMM dd, yyyy')}</td>
+                                    <td>${p.type} ${p.description ? ` - ${p.description}` : ''}</td>
+                                    <td class="font-mono">${p.reference || p.id.substring(0, 8)}</td>
+                                    <td class="text-right">-</td>
+                                    <td class="text-right" style="color: #059669;">${formatCurrency(Number(p.credit))}</td>
+                                    <td class="text-right">${formatCurrency(Number(p.runningBalance))}</td>
+                                </tr>
+                            `).join('')}
+                        ` : ''}
+                    </tbody>
+                </table>
+
+                <div class="footer">
+                    <p style="font-size: 11px; color: #666; font-style: italic;">Note: Please review this statement and notify us of any discrepancies within 7 days.</p>
+                    <div class="signatures">
+                        <div class="sig-line">Prepared By</div>
+                        <div class="sig-line">Approved By</div>
+                        <div class="sig-line">Received By / Date</div>
+                    </div>
+                    <div class="generation-info">
+                        System generated by Stock Pilot on ${format(new Date(), 'PPpp')}
+                    </div>
+                </div>
+            </div>
+        `);
         printWindow.document.write('</body></html>');
         printWindow.document.close();
         printWindow.print();
@@ -566,68 +772,199 @@ function StatementOfAccount() {
             </Card>
 
             {soaData && (
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle>Statement Preview</CardTitle>
-                        <Button variant="outline" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> Print SOA</Button>
-                    </CardHeader>
-                    <CardContent>
-                        <div id="soa-print-section" className="border p-8 rounded-md bg-white text-black text-sm">
-                            <div className="header border-b pb-4 mb-4">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                         <h1 className="text-2xl font-bold uppercase tracking-wide">Statement of Account</h1>
-                                         <p className="text-muted-foreground mt-1">Stock Pilot Inc.</p>
-                                    </div>
-                                    <div className="text-right">
-                                         <h3 className="font-semibold text-lg">{customers.find(c => c.id === selectedCustomer)?.name}</h3>
-                                         <p className="text-sm text-gray-500">Statement Period: <br/>{format(new Date(soaData.period.from), 'MMM dd, yyyy')} - {format(new Date(soaData.period.to), 'MMM dd, yyyy')}</p>
-                                    </div>
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="grid gap-4 md:grid-cols-4">
+                        <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/10 border-blue-100 dark:border-blue-900/20">
+                            <CardContent className="p-4 flex items-center gap-4">
+                                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg w-9 h-9 flex items-center justify-center">
+                                    <span className="text-xl font-bold text-blue-600 dark:text-blue-400">₱</span>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase">Beginning</p>
+                                    <p className="text-lg font-bold">{formatCurrency(Number(soaData.startingBalance))}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/10 border-orange-100 dark:border-orange-900/20">
+                            <CardContent className="p-4 flex items-center gap-4">
+                                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                                    <ArrowUpRight className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase">Total Charges</p>
+                                    <p className="text-lg font-bold">{formatCurrency(summary?.totalDebit || 0)}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-green-50 to-white dark:from-green-900/10 border-green-100 dark:border-green-900/20">
+                            <CardContent className="p-4 flex items-center gap-4">
+                                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                                    <ArrowDownRight className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase">Total Payments</p>
+                                    <p className="text-lg font-bold text-green-600 dark:text-green-400">-{formatCurrency(summary?.totalCredit || 0)}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-gradient-to-br from-primary/5 to-white dark:from-primary/10 border-primary/20">
+                            <CardContent className="p-4 flex items-center gap-4">
+                                <div className="p-2 bg-primary/10 rounded-lg">
+                                    <Scale className="h-5 w-5 text-primary" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase">Net Ending</p>
+                                    <p className="text-lg font-bold text-primary">{formatCurrency(Number(soaData.endingBalance))}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card className="border-none shadow-xl bg-white/50 backdrop-blur-sm">
+                        <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+                            <div>
+                                <CardTitle className="text-xl">Statement Preview</CardTitle>
+                                <CardDescription>Period: {format(new Date(soaData.period.from), 'PP')} - {format(new Date(soaData.period.to), 'PP')}</CardDescription>
+                            </div>
+                            <Button variant="outline" onClick={handlePrint} className="shadow-sm hover:bg-primary hover:text-white transition-all">
+                                <Printer className="mr-2 h-4 w-4" /> Print SOA
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
+                                            <TableHead className="w-[120px] font-semibold py-4 pl-6">Date</TableHead>
+                                            <TableHead className="font-semibold py-4">Description</TableHead>
+                                            <TableHead className="w-[150px] font-semibold py-4">Reference</TableHead>
+                                            <TableHead className="text-right font-semibold py-4">Debit</TableHead>
+                                            <TableHead className="text-right font-semibold py-4">Credit</TableHead>
+                                            <TableHead className="text-right font-semibold py-4 pr-6">Balance</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        <TableRow className="bg-gray-50/30 hover:bg-gray-50/50">
+                                            <TableCell className="pl-6 text-muted-foreground">-</TableCell>
+                                            <TableCell className="font-medium">Beginning Balance</TableCell>
+                                            <TableCell className="text-muted-foreground">-</TableCell>
+                                            <TableCell className="text-right">-</TableCell>
+                                            <TableCell className="text-right">-</TableCell>
+                                            <TableCell className="text-right font-bold pr-6">{formatCurrency(Number(soaData.startingBalance))}</TableCell>
+                                        </TableRow>
+                                        {groupedTransactions.groups.map((group: any, i: number) => (
+                                            <Fragment key={group.id}>
+                                                <TableRow className="group hover:bg-muted/30 transition-colors bg-blue-50/20">
+                                                    <TableCell className="pl-6 py-4 text-muted-foreground font-medium text-xs">
+                                                        {format(new Date(group.date), 'MMM dd, yyy')}
+                                                    </TableCell>
+                                                    <TableCell className="py-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2 h-2 rounded-full bg-orange-400" />
+                                                            <span className="font-semibold text-foreground">{group.type}</span>
+                                                            {group.description && <span className="text-muted-foreground hidden sm:inline text-xs">- {group.description}</span>}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="py-4 font-mono text-[10px]">
+                                                        <ViewInvoiceDialog invoiceId={group.id}>
+                                                            <Button variant="link" className="h-auto p-0 text-blue-600 hover:text-blue-800 font-mono text-xs">
+                                                                {group.reference || group.id.substring(0, 8)}
+                                                            </Button>
+                                                        </ViewInvoiceDialog>
+                                                    </TableCell>
+                                                    <TableCell className="text-right py-4 font-semibold text-sm">
+                                                        {formatCurrency(Number(group.debit))}
+                                                    </TableCell>
+                                                    <TableCell className="text-right py-4">-</TableCell>
+                                                    <TableCell className="text-right py-4 font-bold pr-6">
+                                                        {formatCurrency(Number(group.runningBalance))}
+                                                    </TableCell>
+                                                </TableRow>
+                                                {group.payments.map((p: any) => (
+                                                    <TableRow key={p.id} className="border-l-2 border-l-green-400/30 hover:bg-green-50/10 transition-colors">
+                                                        <TableCell className="pl-8 py-2 text-muted-foreground font-medium text-[10px]">
+                                                            {format(new Date(p.date), 'MMM dd, yyy')}
+                                                        </TableCell>
+                                                        <TableCell className="py-2">
+                                                            <div className="flex items-center gap-2 pl-4">
+                                                                <span className="text-muted-foreground text-xs opacity-50">└─</span>
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                                                                <span className="font-medium text-foreground text-xs">Payment: {p.type}</span>
+                                                                {p.invoice_ref ? (
+                                                                    <span className="text-muted-foreground text-[10px] italic ml-1"> (for Invoice #{p.invoice_ref})</span>
+                                                                ) : p.note && (
+                                                                    <span className="text-muted-foreground text-[10px] italic">({p.note})</span>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="py-2 font-mono text-[10px]">
+                                                            <ViewPaymentDialog payment={{id: p.id, reference: p.reference, amount: p.credit, paymentDate: p.date, customerName: customers.find(c => c.id === selectedCustomer)?.name || 'Valued Customer', paymentType: p.type}}>
+                                                                <Button variant="link" className="h-auto p-0 text-green-600 hover:text-green-800 font-mono text-[10px]">
+                                                                    {p.reference || p.id.substring(0, 8)}
+                                                                </Button>
+                                                            </ViewPaymentDialog>
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-2">-</TableCell>
+                                                        <TableCell className="text-right py-2 font-medium text-green-600 text-sm">
+                                                            {formatCurrency(Number(p.credit))}
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-2 font-medium pr-6 text-muted-foreground text-xs">
+                                                            {formatCurrency(Number(p.runningBalance))}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </Fragment>
+                                        ))}
+                                        {groupedTransactions.unallocated.length > 0 && (
+                                            <Fragment key="unallocated-section">
+                                                <TableRow className="bg-gray-100/50">
+                                                    <TableCell colSpan={6} className="text-[10px] font-bold uppercase tracking-wider pl-6 py-2 text-muted-foreground">Unallocated Payments</TableCell>
+                                                </TableRow>
+                                                {groupedTransactions.unallocated.map((p: any) => (
+                                                    <TableRow key={p.id} className="group hover:bg-muted/30 transition-colors">
+                                                        <TableCell className="pl-6 py-4 text-muted-foreground font-medium text-xs">
+                                                            {format(new Date(p.date), 'MMM dd, yyy')}
+                                                        </TableCell>
+                                                        <TableCell className="py-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="w-2 h-2 rounded-full bg-green-400" />
+                                                                <span className="font-medium text-foreground">{p.type}</span>
+                                                                {p.description && <span className="text-muted-foreground hidden sm:inline text-xs">- {p.description}</span>}
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="py-4 font-mono text-[10px]">
+                                                           <ViewPaymentDialog payment={{id: p.id, reference: p.reference, amount: p.credit, paymentDate: p.date, customerName: customers.find(c => c.id === selectedCustomer)?.name || 'Valued Customer', paymentType: p.type}}>
+                                                                <Button variant="link" className="h-auto p-0 text-green-600 hover:text-green-800 font-mono text-xs">
+                                                                    {p.reference || p.id.substring(0, 8)}
+                                                                </Button>
+                                                            </ViewPaymentDialog>
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-4">-</TableCell>
+                                                        <TableCell className="text-right py-4 font-medium text-green-600">
+                                                            {formatCurrency(Number(p.credit))}
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-4 font-bold pr-6">
+                                                            {formatCurrency(Number(p.runningBalance))}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </Fragment>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            <div className="p-6 bg-muted/20 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <div className="text-xs text-muted-foreground italic">
+                                    Generated on {format(new Date(), 'PPpp')}
+                                </div>
+                                <div className="flex items-center gap-2 text-xl font-bold">
+                                    <span className="text-sm font-medium text-muted-foreground uppercase">Statement Ending Balance:</span>
+                                    <span className="text-primary">{formatCurrency(Number(soaData.endingBalance))}</span>
                                 </div>
                             </div>
-
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-muted hover:bg-muted">
-                                        <TableHead className="w-[120px] font-bold text-black">Date</TableHead>
-                                        <TableHead className="font-bold text-black">Description</TableHead>
-                                        <TableHead className="w-[100px] font-bold text-black">Reference</TableHead>
-                                        <TableHead className="text-right font-bold text-black">Debit</TableHead>
-                                        <TableHead className="text-right font-bold text-black">Credit</TableHead>
-                                        <TableHead className="text-right font-bold text-black">Balance</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                                        <TableCell>-</TableCell>
-                                        <TableCell className="font-medium">Beginning Balance</TableCell>
-                                        <TableCell>-</TableCell>
-                                        <TableCell className="text-right">-</TableCell>
-                                        <TableCell className="text-right">-</TableCell>
-                                        <TableCell className="text-right font-bold">₱{Number(soaData.startingBalance).toFixed(2)}</TableCell>
-                                    </TableRow>
-                                    {soaData.transactions.map((t: any, i: number) => (
-                                        <TableRow key={i}>
-                                            <TableCell>{format(new Date(t.date), 'MMM dd, yyyy')}</TableCell>
-                                            <TableCell>{t.type}</TableCell>
-                                            <TableCell className="font-mono text-xs">{t.reference || t.id.substr(0,8)}</TableCell>
-                                            <TableCell className="text-right">{t.debit > 0 ? `₱${Number(t.debit).toFixed(2)}` : '-'}</TableCell>
-                                            <TableCell className="text-right">{t.credit > 0 ? `₱${Number(t.credit).toFixed(2)}` : '-'}</TableCell>
-                                            <TableCell className="text-right font-medium">₱{Number(t.runningBalance).toFixed(2)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                    <TableRow className="bg-muted/50 font-bold border-t-2 border-black/10 hover:bg-muted/50">
-                                        <TableCell colSpan={5} className="text-right text-base">Ending Balance</TableCell>
-                                        <TableCell className="text-right text-base text-primary">₱{Number(soaData.endingBalance).toFixed(2)}</TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
-                             <div className="mt-8 text-xs text-gray-400 text-center">
-                                Generated on {format(new Date(), 'PPpp')}
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                </div>
             )}
         </div>
     )

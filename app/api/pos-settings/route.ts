@@ -4,12 +4,27 @@ import { query } from '../../../lib/mysql';
 // GET endpoint to fetch POS settings
 export async function GET(request: NextRequest) {
   try {
-    // Ensure new columns exist (idempotent migration)
-    await query(`ALTER TABLE pos_settings
-      ADD COLUMN IF NOT EXISTS operated_by VARCHAR(255) NULL,
-      ADD COLUMN IF NOT EXISTS min_number VARCHAR(100) NULL,
-      ADD COLUMN IF NOT EXISTS serial_number VARCHAR(100) NULL
-    `).catch(() => {}); // Ignore error if columns already exist
+    // Ensure new columns exist by checking metadata directly
+    const columns = [
+      { name: 'operated_by', type: 'VARCHAR(255) NULL' },
+      { name: 'min_number', type: 'VARCHAR(100) NULL' },
+      { name: 'serial_number', type: 'VARCHAR(100) NULL' }
+    ];
+
+    const currentColumnsResult = await query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'pos_settings' AND TABLE_SCHEMA = DATABASE()"
+    );
+    const existingColumns = new Set(currentColumnsResult.map((c: any) => c.COLUMN_NAME));
+
+    for (const col of columns) {
+      if (!existingColumns.has(col.name)) {
+        try {
+          await query(`ALTER TABLE pos_settings ADD COLUMN ${col.name} ${col.type}`);
+        } catch (e) {
+          // Ignored
+        }
+      }
+    }
 
     const sql = `
       SELECT
@@ -116,7 +131,8 @@ export async function POST(request: NextRequest) {
         enableNegativeInventory,
         enableCashCountAuth, cashCountAuthUsername, cashCountAuthPassword,
         showQuantityInSearch,
-        enablePriceEditAuth, priceEditAuthUsername, priceEditAuthPassword
+        enablePriceEditAuth, priceEditAuthUsername, priceEditAuthPassword,
+        operatedBy, minNumber, serialNumber
       } = body;
 
       const insertSQL = `
@@ -132,9 +148,10 @@ export async function POST(request: NextRequest) {
           paper_size, print_mode, enable_negative_inventory,
           enable_cash_count_auth, cash_count_auth_username, cash_count_auth_password,
           show_quantity_in_search,
-          enable_price_edit_auth, price_edit_auth_username, price_edit_auth_password
+          enable_price_edit_auth, price_edit_auth_username, price_edit_auth_password,
+          operated_by, min_number, serial_number
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
@@ -172,7 +189,10 @@ export async function POST(request: NextRequest) {
         showQuantityInSearch ?? true,
         enablePriceEditAuth ?? false,
         priceEditAuthUsername || null,
-        priceEditAuthPassword || null
+        priceEditAuthPassword || null,
+        operatedBy || null,
+        minNumber || null,
+        serialNumber || null
       ]);
     } else {
       // Update existing settings - Dynamic Update

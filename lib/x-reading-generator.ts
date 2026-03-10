@@ -3,13 +3,16 @@ import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import { format } from 'date-fns';
 import { XReadingData } from './types';
 
+const W = 32;
+
 export class XReadingGenerator {
     private encoder: any;
 
     constructor() {
         this.encoder = new ReceiptPrinterEncoder({
             language: 'esc-pos',
-            codepageMapping: 'epson'
+            codepageMapping: 'epson',
+            width: W
         });
     }
 
@@ -30,8 +33,20 @@ export class XReadingGenerator {
             refundAmount,
             min,
             sn,
-            cashDenominations
+            cashDenominations,
+            businessName,
+            operatedBy,
+            address,
+            tin,
+            contactNumber,
+            email
         } = data;
+
+        const center = (text: any) => {
+            const str = String(text || '').substring(0, W);
+            const pad = Math.max(0, Math.floor((W - str.length) / 2));
+            return ' '.repeat(pad) + str;
+        };
 
         const dateStr = format(new Date(reportDate), 'MMMM d, yyyy');
         const timeStr = format(new Date(reportDate), 'h:mm a');
@@ -44,24 +59,26 @@ export class XReadingGenerator {
             return `${absVal.toFixed(2)}${sign}`;
         };
 
-        let encoder = this.encoder
+        const enc = this.encoder
             .initialize()
-            .codepage('cp437')
-            .align('center')
-            .bold(true)
-            .line('TESSA\'S RESTAURANT') // Placeholder, ideally should come from settings
-            .bold(false)
-            .line('Operated by: CBR Foods, Inc.')
-            .line('VAT REG TIN: 321-654-987-00000')
-            .line(`MIN: ${min || '0987654321'}`)
-            .line(`S/N: ${sn || '1234567890-01'}`)
-            .newline()
-            .bold(true)
-            .line('X-READING REPORT')
-            .bold(false)
-            .newline()
-            .align('left')
-            .table(
+            .codepage('cp437');
+        
+        enc.bold(true).line(center(businessName?.toUpperCase() || 'POS SYSTEM')).bold(false);
+        if (operatedBy) enc.line(center(`Operated by: ${operatedBy}`));
+        if (address) enc.line(center(address));
+        if (tin) enc.line(center(`VAT REG TIN: ${tin}`));
+        if (contactNumber) enc.line(center(`Contact: ${contactNumber}`));
+        if (email) enc.line(center(`Email: ${email}`));
+        
+        enc.line(center(`MIN: ${min || '0987654321'}`))
+           .line(center(`S/N: ${sn || '1234567890-01'}`))
+           .newline()
+           .bold(true)
+           .line(center('X-READING REPORT'))
+           .bold(false)
+           .newline()
+           .align('left')
+           .table(
                 [
                     { width: 12, align: 'left' },
                     { width: 20, align: 'right' }
@@ -71,6 +88,7 @@ export class XReadingGenerator {
                     ['Report Time:', timeStr]
                 ]
             )
+
             .newline()
             .table(
                 [
@@ -196,10 +214,10 @@ export class XReadingGenerator {
              );
         
         if (!cashDenominations || cashDenominations.length === 0) {
-            encoder.line('No denomination data');
+            enc.line('No denomination data');
         }
 
-        encoder
+        enc
              .line('--------------------------------')
              .table(
                  [
@@ -211,10 +229,21 @@ export class XReadingGenerator {
              .line('--------------------------------')
              .newline()
              .align('center')
+             .line('_______________________')
+             .line(`${data.cashierName || 'Cashier'}`)
+             .line('(Cashier Signature)')
+             .newline()
+             .line('_______________________')
+             .line('Manager Signature')
+             .newline()
              .line('End of X-Reading Report')
+             .newline()
+             .bold(true)
+             .line('THIS IS NOT AN OFFICIAL RECEIPT')
+             .bold(false)
              .newline()
              .cut();
 
-        return encoder.encode();
+        return enc.encode();
     }
 }

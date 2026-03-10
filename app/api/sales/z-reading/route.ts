@@ -195,6 +195,18 @@ export async function GET(request: NextRequest) {
 
         const reportDate = startDate ? new Date(startDate) : new Date();
         
+        // Fetch terminal MIN and SN
+        let terminalMin = '';
+        let terminalSn = '';
+        if (terminalId && terminalId !== 'all') {
+            const termSql = `SELECT min_number, serial_number FROM pos_terminals WHERE id = ?`;
+            const [termResult] = await query(termSql, [terminalId]) as any[];
+            if (termResult) {
+                terminalMin = termResult.min_number;
+                terminalSn = termResult.serial_number;
+            }
+        }
+
         const generatedReading = {
             id: `PREVIEW`,
             date: format(new Date(), 'yyyy-MM-dd HH:mm:ss'),
@@ -217,6 +229,8 @@ export async function GET(request: NextRequest) {
             cashInDrawer: cashInDrawer,
             cashierName: 'Admin',
             terminalId: terminalId,
+            terminalMin: terminalMin || '',
+            terminalSerialNumber: terminalSn || '',
             minSaleId: salesResult?.min_sale_id || '',
             maxSaleId: salesResult?.max_sale_id || '',
             minVoidId: voidSeqResult?.min_void_id || '',
@@ -240,7 +254,9 @@ export async function GET(request: NextRequest) {
         // ==========================================
         
         let querySql = `
-            SELECT * FROM z_readings
+            SELECT z.*, pt.min_number AS terminal_min, pt.serial_number AS terminal_sn
+            FROM z_readings z
+            LEFT JOIN pos_terminals pt ON z.terminal_id = pt.id
             WHERE 1=1
         `;
         const queryParams: any[] = [];
@@ -329,6 +345,8 @@ export async function GET(request: NextRequest) {
                 cashInDrawer: parseFloat(row.cash_in_drawer),
                 cashierName: row.cashier_name,
                 terminalId: row.terminal_id,
+                terminalMin: row.terminal_min || '',
+                terminalSerialNumber: row.terminal_sn || '',
                 minSaleId: row.min_sale_id || '',
                 maxSaleId: row.max_sale_id || '',
                 minVoidId: row.min_void_id || '',
@@ -637,6 +655,18 @@ export async function POST(request: NextRequest) {
 
 
 
+        // Fetch terminal MIN and SN for POST generated reading
+        let terminalMin = '';
+        let terminalSn = '';
+        if (terminalId && terminalId !== 'all') {
+            const termSql = `SELECT min_number, serial_number FROM pos_terminals WHERE id = ?`;
+            const [termResult] = await query(termSql, [terminalId]) as any[];
+            if (termResult) {
+                terminalMin = termResult.min_number;
+                terminalSn = termResult.serial_number;
+            }
+        }
+
         const generatedReading = {
             id: String(readingNumber),
             date: String(endDate),
@@ -662,6 +692,8 @@ export async function POST(request: NextRequest) {
             cashInDrawer: safeParseFloat(cashInDrawer),
             cashierName: String(cashierName),
             terminalId: String(terminalId),
+            terminalMin: terminalMin || '',
+            terminalSerialNumber: terminalSn || '',
             minSaleId: minSaleId ? String(minSaleId) : '',
             maxSaleId: maxSaleId ? String(maxSaleId) : '',
             minVoidId: minVoidId ? String(minVoidId) : '',

@@ -79,6 +79,7 @@ export interface Customer {
   discount?: number;
   creditLimit?: number;
   priceLevelId?: string;
+  tin?: string;
 }
 
 export interface Supplier {
@@ -118,6 +119,8 @@ export interface Sale {
   items: SaleItem[];
   total: number;
   formattedTotal?: string;
+  amountPaid?: number;
+  balance?: number;
   paymentMethod: string;
   status: 'Paid' | 'Pending' | 'Failed' | 'Shipped' | 'Delivered' | 'Returned' | 'Voided' | 'To Deliver' | 'Fully Delivered';
   orderNumber?: number;
@@ -155,6 +158,7 @@ export interface PurchaseOrder {
   deliveryDate?: string; // or Date
   receivedTotal?: number;
   referenceNumber?: string;
+  paidAmount: number;
 }
 
 export interface BadOrder {
@@ -285,10 +289,13 @@ export interface StockMovement {
 export interface SystemSettings {
   id?: string;
   businessName?: string;
+  operatedBy?: string | null;
   address?: string;
   contactNumber?: string;
   tin?: string;
   email?: string;
+  minNumber?: string | null;
+  serialNumber?: string | null;
   logoPath?: string;
   printMode?: 'browser' | 'escpos' | 'usb';
   currencySymbol: string;
@@ -437,6 +444,8 @@ export interface ZReadingData {
   cashInDrawer: number;
   cashierName?: string;
   terminalId?: string;
+  terminalMin?: string;
+  terminalSerialNumber?: string;
   minSaleId?: string;
   maxSaleId?: string;
   minVoidId?: string;
@@ -487,4 +496,10 @@ export interface XReadingData {
   refundAmount?: number;
   min?: string;
   sn?: string;
+  businessName?: string;
+  operatedBy?: string | null;
+  address?: string;
+  tin?: string;
+  contactNumber?: string;
+  email?: string;
 }

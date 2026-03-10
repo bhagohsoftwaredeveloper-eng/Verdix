@@ -53,6 +53,7 @@ import './051_create_cash_transfers_table.ts';
 import './052_add_expiration_date_fields.ts';
 import './053_alter_payment_methods_add_require_reference.ts';
 import './054_add_payment_reference_to_sales_tables.ts';
+import './055_add_partially_paid_status.ts';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

@@ -12,10 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Wallet } from 'lucide-react';
+import { Search, Wallet, Clock, AlertTriangle, Calendar } from 'lucide-react';
 import { getSuppliersWithBalance, SupplierWithBalance } from '../actions';
 import { MakePaymentDialog } from '../payment-dialog';
 import { SupplierTransactionDialog } from './supplier-transaction-dialog';
+import { differenceInDays, format } from 'date-fns';
 
 export default function SupplierBalancePage() {
   const [suppliers, setSuppliers] = useState<SupplierWithBalance[]>([]);
@@ -55,11 +56,44 @@ export default function SupplierBalancePage() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-bold text-red-600">
                  ₱{totalPayable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <p className="text-xs text-muted-foreground">
                  Total outstanding debt
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Overdue (30+ Days)</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                 ₱{suppliers
+                   .filter(s => s.oldestInvoiceDate && differenceInDays(new Date(), new Date(s.oldestInvoiceDate)) >= 30)
+                   .reduce((acc, s) => acc + s.balance, 0)
+                   .toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                 Critical outstanding balance
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Awaiting Payment</CardTitle>
+              <Clock className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                 {suppliers.filter(s => s.balance > 0).length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                 Suppliers with balance
               </p>
             </CardContent>
           </Card>
@@ -87,8 +121,8 @@ export default function SupplierBalancePage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Supplier</TableHead>
+                <TableHead>Oldest Invoice</TableHead>
                 <TableHead>Total Purchases</TableHead>
-                <TableHead>Total Payments</TableHead>
                 <TableHead className="text-right">Current Balance</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
@@ -110,8 +144,17 @@ export default function SupplierBalancePage() {
                 suppliers.map((supplier) => (
                   <TableRow key={supplier.id}>
                     <TableCell className="font-medium">{supplier.name}</TableCell>
+                    <TableCell>
+                       {supplier.oldestInvoiceDate ? (
+                         <div className="flex flex-col">
+                            <span className="text-xs">{format(new Date(supplier.oldestInvoiceDate), 'MMM dd, yyyy')}</span>
+                            <span className={`text-[10px] ${differenceInDays(new Date(), new Date(supplier.oldestInvoiceDate)) >= 30 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                               {differenceInDays(new Date(), new Date(supplier.oldestInvoiceDate))} days ago
+                            </span>
+                         </div>
+                       ) : '-'}
+                    </TableCell>
                     <TableCell>₱{supplier.totalPurchases.toLocaleString()}</TableCell>
-                    <TableCell>₱{supplier.totalPayments.toLocaleString()}</TableCell>
                     <TableCell className={`text-right font-bold ${supplier.balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                         ₱{supplier.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>

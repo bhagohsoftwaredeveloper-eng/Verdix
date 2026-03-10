@@ -23,6 +23,7 @@ import { Loader2, Eye, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { getApiUrl } from '@/lib/api-config';
+import { formatCurrency } from '@/lib/utils';
 
 interface ViewInvoiceDialogProps {
   invoiceId: string;
@@ -177,13 +178,13 @@ export default function ViewInvoiceDialog({ invoiceId, children }: ViewInvoiceDi
               <td>${item.productName}</td>
               <td>${item.sku || '-'}</td>
               <td class="text-right">${item.quantity}</td>
-              <td class="text-right">₱${item.price.toFixed(2)}</td>
-              <td class="text-right">₱${item.total.toFixed(2)}</td>
+              <td class="text-right">${formatCurrency(item.price)}</td>
+              <td class="text-right">${formatCurrency(item.total)}</td>
             </tr>
           `).join('')}
           <tr class="total-row">
             <td colspan="4" class="text-right">Total</td>
-            <td class="text-right">₱${invoice.total.toFixed(2)}</td>
+            <td class="text-right">${formatCurrency(invoice.total)}</td>
           </tr>
         </tbody>
       </table>
@@ -284,8 +285,8 @@ export default function ViewInvoiceDialog({ invoiceId, children }: ViewInvoiceDi
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.productName}</TableCell>
                       <TableCell className="text-right">{item.quantity} <span className="text-xs text-muted-foreground">{item.uom}</span></TableCell>
-                      <TableCell className="text-right">₱{item.price.toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-medium">₱{item.total.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(item.price)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(item.total)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -297,11 +298,11 @@ export default function ViewInvoiceDialog({ invoiceId, children }: ViewInvoiceDi
                 <div className="w-1/2 sm:w-1/3 space-y-2">
                     <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Subtotal</span>
-                        <span>₱{calculateSubtotal().toFixed(2)}</span>
+                        <span>{formatCurrency(calculateSubtotal())}</span>
                     </div>
                      <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
                         <span>Total</span>
-                        <span>₱{invoice.total.toFixed(2)}</span>
+                        <span>{formatCurrency(invoice.total)}</span>
                     </div>
                 </div>
             </div>

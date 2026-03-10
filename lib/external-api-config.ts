@@ -31,15 +31,64 @@ export const DEFAULT_EXTERNAL_API_CONFIG: ExternalApiConfig = {
  * Get external API configuration from environment or database
  */
 export async function getExternalApiConfig(): Promise<ExternalApiConfig> {
+  // If running on the server, query the database directly for better efficiency and to avoid relative URL issues
+  if (typeof window === 'undefined') {
+    try {
+      const { query } = await import('./mysql');
+      const settings = await query('SELECT setting_key, setting_value FROM external_api_settings', []);
+      
+      if (!settings || settings.length === 0) {
+        return DEFAULT_EXTERNAL_API_CONFIG;
+      }
+
+      // Convert array of settings to object
+      const config: any = { ...DEFAULT_EXTERNAL_API_CONFIG };
+      settings.forEach((setting: any) => {
+        let value = setting.setting_value;
+        
+        // Match key format from DB (snake_case) to config object (camelCase)
+        const keyMap: Record<string, string> = {
+          'enabled': 'enabled',
+          'api_endpoint': 'apiEndpoint',
+          'auth_type': 'authType',
+          'api_key': 'apiKey',
+          'bearer_token': 'bearerToken',
+          'timeout': 'timeout',
+          'retry_attempts': 'retryAttempts',
+          'retry_delay': 'retryDelay',
+          'sync_mode': 'syncMode',
+          'on_error_action': 'onErrorAction'
+        };
+
+        const configKey = keyMap[setting.setting_key];
+        if (configKey) {
+          // Parse boolean and numeric values
+          if (value === 'true') value = true;
+          else if (value === 'false') value = false;
+          else if (!isNaN(value) && value !== '' && (configKey === 'timeout' || configKey === 'retry_attempts' || configKey === 'retry_delay')) {
+            value = Number(value);
+          }
+          config[configKey] = value;
+        }
+      });
+
+      return config;
+    } catch (error) {
+      console.error('Failed to query external API config from database:', error);
+      return DEFAULT_EXTERNAL_API_CONFIG;
+    }
+  }
+
+  // Client-side fallback: Try to fetch from API settings endpoint using absolute URL if possible
   try {
-    // Try to fetch from API settings endpoint
-    const response = await fetch('/api/settings/external-api');
+    const { getApiUrl } = await import('./api-config');
+    const response = await fetch(getApiUrl('/settings/external-api'));
     if (response.ok) {
       const data = await response.json();
       return data.config || DEFAULT_EXTERNAL_API_CONFIG;
     }
   } catch (error) {
-    console.error('Failed to fetch external API config:', error);
+    console.error('Failed to fetch external API config via API:', error);
   }
   
   // Fallback to default config

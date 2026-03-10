@@ -6,10 +6,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id: invoiceId } = await params;
     const body = await request.json();
-    const { amount, paymentMethod, reference, depositAccount, paymentDate } = body;
+    const { amount, paymentMethod, reference, paymentDate } = body;
 
     // Validate request
-    if (!invoiceId || !amount || !paymentMethod || !depositAccount) {
+    if (!invoiceId || !amount || !paymentMethod) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return await withTransaction(async (connection) => {
         // 1. Verify invoice exists and get current details
-        const [invoiceResult]: any = await connection.query('SELECT total, status FROM sales_invoices WHERE id = ?', [invoiceId]);
+        const [invoiceResult]: any = await connection.query('SELECT total, status, amount_paid FROM sales_invoices WHERE id = ?', [invoiceId]);
 
         if (!invoiceResult || invoiceResult.length === 0) {
             throw new Error('Invoice not found');
@@ -31,12 +31,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const invoice = invoiceResult[0];
 
         // 2. Check if already paid
-        if (invoice.status === 'Paid') {
+        if (invoice.status === 'Paid' || Number(invoice.amount_paid) >= Number(invoice.total)) {
             return NextResponse.json(
-                { success: false, error: 'Invoice is already paid' },
+                { success: false, error: 'Invoice is already fully paid' },
                 { status: 400 }
             );
         }
+
+        const currentAmountPaid = Number(invoice.amount_paid || 0);
+        const paymentAmount = Number(amount);
+        const newAmountPaid = currentAmountPaid + paymentAmount;
 
         // 3. Record the payment in customer_payments table
         // We need to fetch the customer_id from the invoice first
@@ -45,6 +49,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const paymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
+        let finalReference = reference;
+        
+        if (!finalReference) {
+           // Generate sequential reference
+           const [maxRefResult]: any = await connection.query(
+               "SELECT MAX(CAST(reference AS UNSIGNED)) as max_ref FROM customer_payments WHERE reference REGEXP '^[0-9]+$'"
+           );
+           
+           let nextRef = 1;
+           if (maxRefResult && maxRefResult.length > 0 && maxRefResult[0].max_ref !== null) {
+               nextRef = parseInt(maxRefResult[0].max_ref, 10) + 1;
+           }
+           finalReference = nextRef.toString().padStart(6, '0');
+        }
+
         const insertPaymentSql = `
             INSERT INTO customer_payments (
                 id, customer_id, payment_type, payment_date, amount, reference, note, created_at, updated_at
@@ -62,23 +81,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             paymentMethod,
             new Date(paymentDate || Date.now()),
             amount,
-            reference || `Ref: ${invoiceId}`, // Fallback if no reference provided
-            `Payment for Invoice #${invoiceId}. Deposit to: ${depositAccount}`,
+            finalReference,
+            `Payment for Invoice #${invoiceId}.`,
         ]);
 
         // 4. Update Invoice Status
-        // For now, assuming full payment matches total. 
-        // If amount >= total, mark as Paid.
-        // Ideally we should track "amount_paid" on the invoice to handle partials.
-        // But the schema provided earlier didn't explicitly show "amount_paid" column in sales_invoices, 
-        // so we'll just update status to 'Paid' for now as the UI enforces full payment.
+        const newStatus = newAmountPaid >= Number(invoice.total) ? 'Paid' : 'Pending';
         
         const updateInvoiceSql = `
             UPDATE sales_invoices 
-            SET status = 'Paid', updated_at = NOW()
+            SET amount_paid = ?, status = ?, updated_at = NOW()
             WHERE id = ?
         `;
-        await connection.query(updateInvoiceSql, [invoiceId]);
+        await connection.query(updateInvoiceSql, [newAmountPaid, newStatus, invoiceId]);
 
         return NextResponse.json({
             success: true,

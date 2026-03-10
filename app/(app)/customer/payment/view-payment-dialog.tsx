@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Eye, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { printPaymentReceipt } from '@/lib/print-payment-receipt';
+import { formatCurrency } from '@/lib/utils';
 
 interface ViewPaymentDialogProps {
   payment: {
@@ -71,7 +72,7 @@ export default function ViewPaymentDialog({ payment, children }: ViewPaymentDial
             </div>
             <div className="text-right">
               <p className="font-semibold text-muted-foreground text-xs uppercase">Amount</p>
-              <p className="font-bold text-lg text-green-600">₱{Number(payment.amount).toFixed(2)}</p>
+              <p className="font-bold text-lg text-green-600">{formatCurrency(payment.amount)}</p>
             </div>
           </div>
 

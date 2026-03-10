@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import Link from 'next/link';
-import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users } from 'lucide-react';
+import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart } from 'lucide-react';
 
 export default function ReportsPage() {
   return (
@@ -112,6 +112,30 @@ export default function ReportsPage() {
                   Sales by Product
                 </CardTitle>
                 <CardDescription>Product performance analysis with units sold and revenue breakdown.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/top-volume">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart className="h-5 w-5 text-indigo-500" />
+                  Top by Volume
+                </CardTitle>
+                <CardDescription>Highest selling items based on quantity sold.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/top-sales">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LineChart className="h-5 w-5 text-rose-500" />
+                  Top by Sales
+                </CardTitle>
+                <CardDescription>Highest revenue generating items.</CardDescription>
               </CardHeader>
             </Card>
           </Link>

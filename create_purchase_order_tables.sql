@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   payment_method VARCHAR(100),
-  status ENUM('Pending', 'Approved', 'Paid', 'Shipped', 'Received', 'Failed', 'Cancelled') DEFAULT 'Pending',
+  status ENUM('Pending', 'Approved', 'Paid', 'Shipped', 'Received', 'Failed', 'Cancelled', 'Partially Paid') DEFAULT 'Pending',
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

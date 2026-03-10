@@ -57,8 +57,8 @@ export class ZReadingGenerator {
         const address = settings?.address || 'Paniqui, Tarlac';
         const tin = settings?.tin || '123-456-789-00000';
         const operatedBy = settings?.operatedBy || 'Facunla Enterprise Inc.';
-        const minNumber = settings?.minNumber || '1234567890';
-        const serialNumber = settings?.serialNumber || '0987654321-11';
+        const minNumber = data.terminalMin || settings?.minNumber || '1234567890';
+        const serialNumber = data.terminalSerialNumber || settings?.serialNumber || '0987654321-11';
 
         // ── HEADER ──────────────────────────────────────────────────────────
         enc.bold(true).line(center(bizName)).bold(false);

@@ -21,6 +21,8 @@ export type ZReadingData = {
   cashInDrawer: number;
   cashierName?: string;
   terminalId?: string;
+  terminalMin?: string;
+  terminalSerialNumber?: string;
   minSaleId?: string;
   maxSaleId?: string;
   minVoidId?: string;
@@ -45,6 +47,7 @@ export type BusinessSettings = {
   operatedBy?: string;
   minNumber?: string;
   serialNumber?: string;
+  email?: string;
 };
 
 interface ZReadingPreviewProps {
@@ -138,12 +141,14 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
     <div style={styles.container} ref={ref} className="printable-area">
       {/* Business Header */}
       <div style={styles.headerDiv}>
-        <div style={styles.headerTitle}>{businessSettings?.businessName || 'NICOLE\'S SUPERMARKET'}</div>
-        <div style={{ fontSize: '10px' }}>Operated by: {businessSettings?.operatedBy || 'Facunla Enterprise Inc.'}</div>
+        <div style={styles.headerTitle}>{businessSettings?.businessName || 'MY BUSINESS'}</div>
+        {businessSettings?.operatedBy && (
+            <div style={{ fontSize: '10px' }}>Operated by: {businessSettings.operatedBy}</div>
+        )}
         <div style={{ fontSize: '10px' }}>{businessSettings?.address || 'Paniqui, Tarlac'}</div>
         <div style={{ fontSize: '10px' }}>VAT REG TIN: {businessSettings?.tin || '123-456-789-00000'}</div>
-        <div style={{ fontSize: '10px' }}>MIN: {businessSettings?.minNumber || '1234567890'}</div>
-        <div style={{ fontSize: '10px' }}>S/N: {businessSettings?.serialNumber || '0987654321-11'}</div>
+        <div style={{ fontSize: '10px' }}>MIN: {data.terminalMin || businessSettings?.minNumber || '1234567890'}</div>
+        <div style={{ fontSize: '10px' }}>S/N: {data.terminalSerialNumber || businessSettings?.serialNumber || '0987654321-11'}</div>
       </div>
 
       <div style={styles.sectionTitle}>
