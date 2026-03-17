@@ -19,7 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Eye, X } from 'lucide-react';
+import { Search, Eye, X, Printer } from 'lucide-react';
 import { useBadOrders } from '@/hooks/use-api';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -42,6 +42,7 @@ import { ViewBadOrderDialog } from './view-bad-order-dialog';
 import { RecordBadOrderDialog } from './record-bad-order-dialog';
 import { BadOrderStats } from './bad-order-stats';
 import { useBadOrderStats } from '@/hooks/use-api';
+import { printBadOrder } from '@/lib/print-bad-order';
 
 function BadOrderSkeleton() {
   return (
@@ -165,6 +166,7 @@ export default function BadOrdersPage() {
             <TableHeader>
               <TableRow className="hover:bg-transparent bg-muted/50">
                 <TableHead className="font-semibold text-foreground">Bad Order ID</TableHead>
+                <TableHead className="font-semibold text-foreground">Supplier</TableHead>
                 <TableHead className="font-semibold text-foreground">Report Date</TableHead>
                 <TableHead className="font-semibold text-foreground text-right">Total Value</TableHead>
                 <TableHead className="font-semibold text-foreground text-center">Status</TableHead>
@@ -194,6 +196,7 @@ export default function BadOrdersPage() {
                   <TableCell className="font-medium">
                     {order.id.substring(0, 8).toUpperCase()}
                   </TableCell>
+                  <TableCell>{order.supplierName || '-'}</TableCell>
                   <TableCell>{format(new Date(order.reportDate), 'MMM dd, yyyy')}</TableCell>
                   <TableCell className="text-right font-medium">
                     ₱{order.totalAffectedValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
@@ -209,14 +212,22 @@ export default function BadOrdersPage() {
                   </TableCell>
                   <TableCell>{order.reportedBy || '-'}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => setViewingOrder(order)}
-                    >
-                      <Eye className="h-3 w-3" />
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setViewingOrder(order)}
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-primary"
+                        onClick={() => printBadOrder(order)}
+                      >
+                        <Printer className="h-3 w-3" />
+                      </Button>
                   </TableCell>
                 </TableRow>
               );

@@ -14,6 +14,9 @@ export async function GET(
         id,
         name,
         is_active AS isActive,
+        require_reference AS isReferenceRequired,
+        points_amount AS pointsAmount,
+        currency_equivalent AS currencyEquivalent,
         created_at AS createdAt
       FROM payment_methods
       WHERE id = ?
@@ -50,7 +53,7 @@ export async function PUT(
   try {
     const { id: paymentMethodId } = await params;
     const body = await request.json();
-    const { name, isActive, isReferenceRequired } = body;
+    const { name, isActive, isReferenceRequired, pointsAmount, currencyEquivalent } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json(
@@ -63,7 +66,9 @@ export async function PUT(
       UPDATE payment_methods SET
         name = ?,
         is_active = ?,
-        require_reference = ?
+        require_reference = ?,
+        points_amount = ?,
+        currency_equivalent = ?
       WHERE id = ?
     `;
 
@@ -71,6 +76,8 @@ export async function PUT(
       name.trim(),
       isActive ?? true,
       isReferenceRequired ?? false,
+      pointsAmount,
+      currencyEquivalent,
       paymentMethodId
     ]);
 
@@ -84,7 +91,7 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       message: 'Payment method updated successfully',
-      data: { id: paymentMethodId, name: name.trim(), isActive: isActive ?? true, isReferenceRequired: isReferenceRequired ?? false },
+      data: { id: paymentMethodId, name: name.trim(), isActive: isActive ?? true, isReferenceRequired: isReferenceRequired ?? false, pointsAmount, currencyEquivalent },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {

@@ -302,7 +302,7 @@ export default function POSPage() {
   const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
   
   // Payment Methods
-  const [paymentMethods, setPaymentMethods] = useState<{id: string; name: string; isActive: boolean}[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<{id: string; name: string; isActive: boolean; isReferenceRequired?: boolean; pointsAmount?: number; currencyEquivalent?: number}[]>([]);
   
   const [showQuantityInSearch, setShowQuantityInSearch] = useState(true);
   
@@ -1282,6 +1282,21 @@ export default function POSPage() {
 
 
 
+  const pointsMethod = useMemo(() => {
+    return paymentMethods.find(pm => pm.name.toUpperCase() === 'POINTS');
+  }, [paymentMethods]);
+
+  const pointsRate = useMemo(() => {
+    if (!pointsMethod || !pointsMethod.pointsAmount || !pointsMethod.currencyEquivalent) {
+        return 1; // Default 1:1
+    }
+    return Number(pointsMethod.currencyEquivalent) / Number(pointsMethod.pointsAmount);
+  }, [pointsMethod]);
+
+  const customerPoints = (selectedCustomer as any)?.current_points || (selectedCustomer as any)?.loyaltyPoints || 0;
+  const customerPointsValue = Number(customerPoints) * pointsRate;
+
+  // Header Actions
   const headerActions = [
     { icon: Pencil, label: 'Edit Item', fKey: 'F1', action: handleOpenEditDialog, className: "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100 hover:border-blue-200" },
     { icon: X, label: 'Line Void', fKey: 'F2', action: handleCancelSale, className: "bg-red-50 text-red-700 hover:bg-red-100 border-red-100 hover:border-red-200" },
@@ -1629,7 +1644,7 @@ export default function POSPage() {
                     
                      {/* Individual Payment Buttons Removed as per request to move selection to dialog */}
                      {/* <div className="grid grid-cols-2 gap-3">
-                        {paymentMethods.map((method) => (
+                        {paymentMethods.filter(m => m.isActive).map((method) => (
                             <Button
                                 key={method.id}
                                 variant="outline"
@@ -1693,6 +1708,9 @@ export default function POSPage() {
         paymentMethods={paymentMethods}
         printMode={businessSettings?.printMode || 'browser'}
         settings={businessSettings as any} 
+        onTriggerCustomerSelection={() => {
+          setIsCustomerSelectOpen(true);
+        }}
       />
       <EditItemDialog
         isOpen={isEditItemOpen}
@@ -1795,6 +1813,7 @@ export default function POSPage() {
         isOpen={isRecentSalesOpen} 
         onOpenChange={setIsRecentSalesOpen} 
         printMode={businessSettings?.printMode || 'browser'}
+        settings={businessSettings as any}
       />
       <VoidSalesDialog isOpen={isVoidSalesOpen} onOpenChange={setIsVoidSalesOpen} />
       <ReturnSalesDialog 

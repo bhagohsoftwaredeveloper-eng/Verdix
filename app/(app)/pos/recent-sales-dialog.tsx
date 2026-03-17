@@ -38,6 +38,7 @@ interface RecentSalesDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   printMode: 'browser' | 'escpos' | 'usb' | 'native';
+  settings?: SystemSettings | null;
 }
 
 
@@ -66,12 +67,12 @@ function ReceiptPrintView({
         })),
         customer: sale.customer,
         totalDue: sale.total,
-        change: 0, // Not stored in Sale, assuming 0 for reprint or check transaction details if available
+        change: sale.change || 0,
         paymentMethod: sale.paymentMethod,
         orderNumber: sale.orderNumber ? String(sale.orderNumber) : sale.id, // Ensure string
-        amountTendered: sale.total, // Assume exact payment
+        amountTendered: sale.amountTendered || sale.total,
         transactionDate: sale.date ? new Date(sale.date) : new Date(),
-        cashierName: sale.salesPerson, // Or fetch from sale.salesPersonId
+        cashierName: sale.cashierName || sale.salesPerson, // Or fetch from sale.salesPersonId
         pointsEarned: sale.pointsEarned || 0
     };
 
@@ -98,13 +99,14 @@ function ReceiptPrintView({
 export function RecentSalesDialog({
   isOpen,
   onOpenChange,
-  printMode
+  printMode,
+  settings: initialSettings
 }: RecentSalesDialogProps) {
   const [step, setStep] = useState<'loading' | 'auth' | 'list'>('loading');
   const [saleToPrint, setSaleToPrint] = useState<Sale | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [posSettings, setPosSettings] = useState<any>(null);
+  const [posSettings, setPosSettings] = useState<SystemSettings | null>(initialSettings || null);
   const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
   const { toast } = useToast();
   const authSucceededRef = useRef(false);
@@ -116,7 +118,17 @@ export function RecentSalesDialog({
         setIsLoading(true);
         setSaleToPrint(null);
         
-        // Fetch settings first to determine step
+        if (initialSettings) {
+            setPosSettings(initialSettings);
+            if (initialSettings.enableRecentSalesAuth) {
+                setStep('auth');
+            } else {
+                setStep('list');
+            }
+            return;
+        }
+
+        // Fetch settings if not provided
         fetch(getApiUrl(`/pos-settings?_t=${Date.now()}`), { cache: 'no-store' })
           .then(res => res.json())
           .then(result => {
@@ -215,12 +227,14 @@ export function RecentSalesDialog({
                 discount: 0
             })),
             totalDue: sale.total,
-            change: 0,
+            change: sale.change || 0,
             paymentMethod: sale.paymentMethod,
             orderNumber: String(sale.orderNumber || sale.id),
-            customer: sale.customer
+            customer: sale.customer,
+            amountTendered: sale.amountTendered || sale.total,
+            cashierName: sale.cashierName || sale.salesPerson
         };
-        const bytes = generator.generateReceipt(receiptData);
+        const bytes = generator.generateReceipt(receiptData, posSettings);
         await print(bytes);
         toast({ title: "Re-printed", description: "Receipt sent to printer." });
     } catch (e) {

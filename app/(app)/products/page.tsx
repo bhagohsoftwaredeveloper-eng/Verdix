@@ -26,6 +26,7 @@ import { ManageCategoriesDialog } from './ManageCategoriesDialog';
 import { EditProductDialog } from './edit-product-dialog';
 import { ManagePriceLevelsDialog } from './ManagePriceLevelsDialog';
 import { ManageSuppliersDialog } from './ManageSuppliersDialog';
+import { ManageShelfLocationsDialog } from './ManageShelfLocationsDialog';
 
 import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart, MoreVertical, Edit, Eye, Copy, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, Fragment, useEffect, useCallback, Suspense } from 'react';
@@ -142,6 +143,9 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
         </TableCell>
         <TableCell className="hidden md:table-cell text-center">
           {product.warehouseName || '—'}
+        </TableCell>
+        <TableCell className="hidden md:table-cell text-center">
+          {product.shelfLocationName || '—'}
         </TableCell>
         <TableCell className="text-right">
           <DropdownMenu>
@@ -277,6 +281,7 @@ function ProductSkeleton() {
       <TableCell className="hidden md:table-cell text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
       <TableCell className="hidden md:table-cell text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 mx-auto" /></TableCell>
+      <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 mx-auto" /></TableCell>
       <TableCell className="text-right"><div className='flex gap-2 justify-end'><Skeleton className="h-8 w-8 rounded-full" /></div></TableCell>
     </TableRow>
   );
@@ -304,6 +309,7 @@ function ProductsContent() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all');
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('all');
+  const [selectedShelfLocation, setSelectedShelfLocation] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>(filter === 'low-stock' ? 'low-stock' : 'all');
 
   // Pending Filters (Inside Dialog)
@@ -311,6 +317,7 @@ function ProductsContent() {
   const [tempCategory, setTempCategory] = useState('all');
   const [tempSupplier, setTempSupplier] = useState('all');
   const [tempWarehouse, setTempWarehouse] = useState('all');
+  const [tempShelfLocation, setTempShelfLocation] = useState('all');
   const [tempStatus, setTempStatus] = useState(filter === 'low-stock' ? 'low-stock' : 'all');
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -329,6 +336,7 @@ function ProductsContent() {
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const [isPriceLevelsOpen, setIsPriceLevelsOpen] = useState(false);
   const [isSuppliersOpen, setIsSuppliersOpen] = useState(false);
+  const [isShelfLocationsOpen, setIsShelfLocationsOpen] = useState(false);
 
   const loadProducts = useCallback(async (page = currentPage, size = pageSize) => {
     setIsLoadingProducts(true);
@@ -339,6 +347,7 @@ function ProductsContent() {
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
         supplier: selectedSupplier !== 'all' ? selectedSupplier : undefined,
         warehouse: selectedWarehouse !== 'all' ? selectedWarehouse : undefined,
+        shelfLocation: selectedShelfLocation !== 'all' ? selectedShelfLocation : undefined,
         status: selectedStatus !== 'all' ? selectedStatus : undefined,
       };
 
@@ -355,7 +364,7 @@ function ProductsContent() {
     } finally {
       setIsLoadingProducts(false);
     }
-  }, [currentPage, pageSize, searchTerm, selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedStatus]);
+  }, [currentPage, pageSize, searchTerm, selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus]);
 
   useEffect(() => {
     loadProducts(currentPage, pageSize);
@@ -390,8 +399,8 @@ function ProductsContent() {
   }, [searchTerm]);
 
   const filtersActive = useMemo(() => {
-    return selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedStatus !== 'all' || searchTerm !== '';
-  }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedStatus, searchTerm]);
+    return selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedShelfLocation !== 'all' || selectedStatus !== 'all' || searchTerm !== '';
+  }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, searchTerm]);
 
   const productTree = useMemo(() => {
     if (!products) return [];
@@ -466,6 +475,9 @@ function ProductsContent() {
                 <DropdownMenuItem onSelect={() => setTimeout(() => setIsSuppliersOpen(true), 0)}>
                   Manage Suppliers
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTimeout(() => setIsShelfLocationsOpen(true), 0)}>
+                  Manage Shelf Locations
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             
@@ -494,6 +506,12 @@ function ProductsContent() {
                 onSupplierAdded={() => loadProducts(currentPage, pageSize)}
                 trigger={<span className="sr-only">Open Suppliers</span>}
             />
+            <ManageShelfLocationsDialog 
+                open={isShelfLocationsOpen}
+                onOpenChange={setIsShelfLocationsOpen}
+                onLocationAdded={() => loadProducts(currentPage, pageSize)}
+                trigger={<span className="sr-only">Open Shelf Locations</span>}
+            />
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="gap-2" onClick={() => {
@@ -502,15 +520,16 @@ function ProductsContent() {
                    setTempCategory(selectedCategory);
                    setTempSupplier(selectedSupplier);
                    setTempWarehouse(selectedWarehouse);
+                   setTempShelfLocation(selectedShelfLocation);
                    setTempStatus(selectedStatus);
                 }}>
                    <span className="sr-only">Open filters</span>
                    <Settings className="h-4 w-4 mr-2" />
                    Filter Products
-                   {(selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedStatus !== 'all') && (
+                   {(selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedShelfLocation !== 'all' || selectedStatus !== 'all') && (
                        <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center">
                            {
-                               [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedStatus].filter(v => v !== 'all').length
+                               [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus].filter(v => v !== 'all').length
                            }
                        </Badge>
                    )}
@@ -593,6 +612,23 @@ function ProductsContent() {
                   </div>
 
                   <div className="grid gap-2">
+                    <Label htmlFor="shelf-filter">Shelf Location</Label>
+                    <Select value={tempShelfLocation} onValueChange={setTempShelfLocation}>
+                      <SelectTrigger id="shelf-filter">
+                        <SelectValue placeholder="All Shelves" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Shelves</SelectItem>
+                        {productOptions?.shelfLocations?.map((shelf: any) => (
+                          <SelectItem key={shelf.id} value={shelf.id}>
+                            {shelf.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
                     <Label htmlFor="status-filter">Status</Label>
                     <Select value={tempStatus} onValueChange={setTempStatus}>
                       <SelectTrigger id="status-filter">
@@ -613,6 +649,7 @@ function ProductsContent() {
                        setTempCategory('all');
                        setTempSupplier('all');
                        setTempWarehouse('all');
+                       setTempShelfLocation('all');
                        setTempStatus('all');
                    }}>Reset</Button>
                    <Button onClick={() => {
@@ -620,6 +657,7 @@ function ProductsContent() {
                        setSelectedCategory(tempCategory);
                        setSelectedSupplier(tempSupplier);
                        setSelectedWarehouse(tempWarehouse);
+                       setSelectedShelfLocation(tempShelfLocation);
                        setSelectedStatus(tempStatus);
                        setIsFilterDialogOpen(false);
                    }}>Apply Filters</Button>
@@ -676,6 +714,15 @@ function ProductsContent() {
                          </Button>
                      </Badge>
                  )}
+                 {selectedShelfLocation !== 'all' && (
+                     <Badge variant="secondary" className="gap-1 pl-2">
+                         Shelf: {productOptions?.shelfLocations?.find((sl:any) => sl.id === selectedShelfLocation)?.name || 'Unknown'}
+                         <Button variant="ghost" size="icon" className="h-4 w-4 ml-1 hover:bg-transparent" onClick={() => setSelectedShelfLocation('all')}>
+                             <span className="sr-only">Remove</span>
+                             <span className="text-xs">×</span>
+                         </Button>
+                     </Badge>
+                 )}
                  {selectedStatus !== 'all' && (
                      <Badge variant="secondary" className="gap-1 pl-2">
                          Status: {selectedStatus === 'in-stock' ? 'In Stock' : selectedStatus === 'low-stock' ? 'Low Stock' : 'Out of Stock'}
@@ -694,6 +741,7 @@ function ProductsContent() {
                         setSelectedCategory('all');
                         setSelectedSupplier('all');
                         setSelectedWarehouse('all');
+                        setSelectedShelfLocation('all');
                         setSelectedStatus('all');
                     }}
                     className="h-8 text-xs text-muted-foreground"
@@ -720,6 +768,7 @@ function ProductsContent() {
                 <TableHead className="hidden md:table-cell text-right">Cost</TableHead>
                 <TableHead className="hidden md:table-cell text-right">Retail Price</TableHead>
                 <TableHead className="hidden md:table-cell text-center">Warehouse</TableHead>
+                <TableHead className="hidden md:table-cell text-center">Shelf</TableHead>
                 <TableHead>
                   Actions
                 </TableHead>

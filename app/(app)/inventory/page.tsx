@@ -2,13 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -34,7 +28,8 @@ import { getProducts } from '../products/actions';
 import { adjustStock } from './history/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useEffect, useMemo } from 'react';
-import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight } from 'lucide-react';
+import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban } from 'lucide-react';
+import { StockTransferDialog } from './StockTransferDialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -466,6 +461,12 @@ function ProductCard({ product, hasChildren = false, onSuccess }: { product: Pro
               Count
             </Button>
           </StockAdjustmentDialog>
+          <StockTransferDialog product={product} onSuccess={onSuccess}>
+            <Button variant="outline" size="sm" className="flex-1 min-w-0">
+              <MoveHorizontal className="mr-2 h-4 w-4 flex-shrink-0" />
+              Transfer
+            </Button>
+          </StockTransferDialog>
         </div>
       </CardContent>
     </Card>
@@ -607,6 +608,12 @@ function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: Produ
                 Count
               </Button>
             </StockAdjustmentDialog>
+            <StockTransferDialog product={productGroup} onSuccess={onSuccess}>
+               <Button variant="outline" size="sm" className="h-8">
+                <MoveHorizontal className="mr-2 h-3 w-3" />
+                Transfer
+              </Button>
+            </StockTransferDialog>
           </div>
         </TableCell>
       </TableRow>
@@ -659,6 +666,11 @@ function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: Produ
                         <ClipboardCheck className="h-4 w-4" />
                       </Button>
                     </StockAdjustmentDialog>
+                    <StockTransferDialog product={child} onSuccess={onSuccess}>
+                       <Button variant="outline" size="icon" className="h-8 w-8" title="Transfer">
+                        <MoveHorizontal className="h-4 w-4" />
+                      </Button>
+                    </StockTransferDialog>
                   </div>
               </TableCell>
             </TableRow>

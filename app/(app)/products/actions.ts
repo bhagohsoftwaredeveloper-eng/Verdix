@@ -13,6 +13,7 @@ export type ProductFormData = {
   subcategory?: string;
   supplier?: string;
   warehouse?: string;
+  shelfLocationId?: string;
   image?: string;
   imageFile?: File;
   unitOfMeasure: string;
@@ -54,12 +55,14 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
       SELECT p.*, 
              s_legacy.name as legacy_supplier_name, 
              w.name as warehouse_name,
+             sl.name as shelf_location_name,
              spm.supplier_id as primary_supplier_id,
              spm.supplier_specific_rop as primary_supplier_rop,
              s_primary.name as primary_supplier_name
       FROM products p
       LEFT JOIN suppliers s_legacy ON p.supplier_id = s_legacy.id
       LEFT JOIN warehouses w ON p.warehouse_id = w.id
+      LEFT JOIN shelf_locations sl ON p.shelf_location_id = sl.id
       LEFT JOIN supplier_product_mapping spm ON p.id = spm.product_id AND spm.is_primary = 1
       LEFT JOIN suppliers s_primary ON spm.supplier_id = s_primary.id
     `;
@@ -166,6 +169,8 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
 
       return {
         ...product,
+        shelfLocationId: product.shelf_location_id,
+        shelfLocationName: product.shelf_location_name,
         additionalDescription: product.additional_description,
         reorderPoint: product.reorder_point,
         primarySupplierRop: product.primary_supplier_rop,
@@ -305,6 +310,7 @@ export async function addProduct(formData: ProductFormData) {
         subcategory: formData.subcategory || null,
         supplier_id: formData.supplier || null,
         warehouse_id: formData.warehouse || null,
+        shelf_location_id: formData.shelfLocationId || null,
         stock: formData.stock || 0,
         reorder_point: formData.reorderPoint || formData.supplierMappings?.find(m => m.isPrimary)?.rop || 0,
         avg_daily_sales: 0, // Will be calculated later based on sales history
@@ -329,11 +335,11 @@ export async function addProduct(formData: ProductFormData) {
       const sql = `
         INSERT INTO products (
           id, name, description, additional_description, category, brand,
-          subcategory, supplier_id, warehouse_id, stock, reorder_point, avg_daily_sales, price, cost,
+          subcategory, supplier_id, warehouse_id, shelf_location_id, stock, reorder_point, avg_daily_sales, price, cost,
           sku, barcode, image_url, image_hint,
           unit_of_measure, parent_id, conversion_factor, income_account, expense_account,
           vat_status, availability, earns_points
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const values_array = [
@@ -346,6 +352,7 @@ export async function addProduct(formData: ProductFormData) {
         productData.subcategory,
         productData.supplier_id,
         productData.warehouse_id,
+        productData.shelf_location_id,
         productData.stock,
         productData.reorder_point,
         productData.avg_daily_sales,
@@ -537,6 +544,7 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
         barcode: formData.barcode || null,
         unit_of_measure: formData.unitOfMeasure,
         warehouse_id: formData.warehouse || null,
+        shelf_location_id: formData.shelfLocationId || null,
         conversion_factor: formData.conversionFactor || 1,
         income_account: formData.incomeAccount || null,
 
@@ -551,7 +559,7 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
         UPDATE products SET
           name = ?, description = ?, additional_description = ?, category = ?,
           brand = ?, subcategory = ?, supplier_id = ?, price = ?, cost = ?,
-          barcode = ?, unit_of_measure = ?, warehouse_id = ?, conversion_factor = ?,
+          barcode = ?, unit_of_measure = ?, warehouse_id = ?, shelf_location_id = ?, conversion_factor = ?,
           income_account = ?, expense_account = ?, vat_status = ?, availability = ?, earns_points = ?, reorder_point = ?
         WHERE id = ?
       `;
@@ -569,6 +577,7 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
         productData.barcode,
         productData.unit_of_measure,
         productData.warehouse_id,
+        productData.shelf_location_id,
         productData.conversion_factor,
         productData.income_account,
         productData.expense_account,
@@ -1342,6 +1351,23 @@ export async function setPrimarySupplier(productId: string, mappingId: string) {
   }
 }
 
+// Shelf Locations
+export async function getShelfLocations() {
+  try {
+    const sql = `SELECT * FROM shelf_locations ORDER BY name ASC`;
+    const locations = await query(sql);
+    return locations.map((s: any) => ({
+      ...s,
+      isActive: s.is_active === 1,
+      createdAt: s.created_at,
+      updatedAt: s.updated_at
+    }));
+  } catch (error) {
+    console.error('Error fetching shelf locations:', error);
+    return [];
+  }
+}
+
 // Product Options Aggregation
 export async function getProductOptions() {
   try {
@@ -1353,6 +1379,7 @@ export async function getProductOptions() {
       suppliersResult,
       accountsResult,
       warehousesResult,
+      shelfLocationsResult,
       priceLevelsResult,
       taxRatesResult
     ] = await Promise.allSettled([
@@ -1363,6 +1390,7 @@ export async function getProductOptions() {
       getSuppliers(),
       getAccounts(),
       getWarehouses(),
+      getShelfLocations(),
       getPriceLevels(),
       getTaxRates()
     ]);
@@ -1375,6 +1403,7 @@ export async function getProductOptions() {
       suppliers: suppliersResult.status === 'fulfilled' ? suppliersResult.value : [],
       accounts: accountsResult.status === 'fulfilled' ? accountsResult.value : [],
       warehouses: warehousesResult.status === 'fulfilled' ? warehousesResult.value : [],
+      shelfLocations: shelfLocationsResult.status === 'fulfilled' ? shelfLocationsResult.value : [],
       priceLevels: priceLevelsResult.status === 'fulfilled' ? priceLevelsResult.value : [],
       taxRates: taxRatesResult.status === 'fulfilled' ? taxRatesResult.value : [],
       errors: {
@@ -1385,7 +1414,24 @@ export async function getProductOptions() {
     console.error('Error fetching product options:', error);
     return {
       brands: [], categories: [], subcategories: [], units: [], suppliers: [], 
-      accounts: [], warehouses: [], priceLevels: [], taxRates: [], errors: { global: String(error) }
+      accounts: [], warehouses: [], shelfLocations: [], priceLevels: [], taxRates: [], errors: { global: String(error) }
     };
   }
+}
+
+export async function updateProductShelfLocations(updates: { productId: string; shelfLocationId: string | null }[]) {
+  return await withTransaction(async (connection) => {
+    try {
+      for (const update of updates) {
+        await connection.execute(
+          'UPDATE products SET shelf_location_id = ? WHERE id = ?',
+          [update.shelfLocationId, update.productId]
+        );
+      }
+      return { success: true, message: 'Shelf locations updated successfully' };
+    } catch (error) {
+      console.error('Error updating shelf locations in bulk:', error);
+      return { success: false, message: 'Failed to update shelf locations', error: String(error) };
+    }
+  });
 }

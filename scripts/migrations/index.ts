@@ -54,12 +54,17 @@ import './052_add_expiration_date_fields.ts';
 import './053_alter_payment_methods_add_require_reference.ts';
 import './054_add_payment_reference_to_sales_tables.ts';
 import './055_add_partially_paid_status.ts';
+import './056_update_product_sku_index.ts';
+import './057_create_stock_counts_tables.ts';
+import './058_create_shelf_locations_table.ts';
+import './059_add_locations_to_stock_counts.ts';
+import './060_alter_loyalty_points_precision.ts';
 
 // Import runner functions
-import { migrateUp, migrateDown } from './runner';
+import { migrateUp, migrateDown } from './runner.ts';
 
 // Export the runner functions for CLI usage
-export { migrateUp, migrateDown } from './runner';
+export { migrateUp, migrateDown } from './runner.ts';
 
 // CLI runner
 async function main() {

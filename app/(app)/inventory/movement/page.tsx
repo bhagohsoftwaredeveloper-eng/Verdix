@@ -45,8 +45,12 @@ function MovementRow({ movement }: { movement: StockMovement }) {
           variant={
             movement.movementType === 'sale' ? 'secondary' :
             movement.movementType === 'purchase' ? 'default' :
+            movement.movementType === 'transfer' ? 'outline' :
             'outline'
           }
+          className={cn(
+            movement.movementType === 'transfer' && "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+          )}
         >
           {typeDisplay}
         </Badge>
@@ -56,7 +60,8 @@ function MovementRow({ movement }: { movement: StockMovement }) {
           {movement.quantityChange > 0 ? '+' : ''}{movement.quantityChange}
         </Badge>
       </TableCell>
-       <TableCell className="text-right">{movement.newStock}</TableCell>
+      <TableCell className="text-right">{movement.newStock}</TableCell>
+      <TableCell className="max-w-[200px] truncate text-muted-foreground text-xs">{movement.notes}</TableCell>
     </TableRow>
   );
 }
@@ -290,6 +295,7 @@ export default function StockMovementPage() {
                 <SelectItem value="adjustment">Adjustment</SelectItem>
                 <SelectItem value="sale">Sale</SelectItem>
                 <SelectItem value="purchase">Purchase</SelectItem>
+                <SelectItem value="transfer">Transfer</SelectItem>
               </SelectContent>
             </Select>
             <Popover>
@@ -345,6 +351,7 @@ export default function StockMovementPage() {
               <TableHead>Type</TableHead>
               <TableHead>Quantity Change</TableHead>
               <TableHead className="text-right">Resulting Stock</TableHead>
+              <TableHead>Notes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -356,7 +363,7 @@ export default function StockMovementPage() {
             ) : (
               !isLoading && (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
+                  <TableCell colSpan={6} className="h-24 text-center">
                     No stock movements found for the selected criteria.
                   </TableCell>
                 </TableRow>

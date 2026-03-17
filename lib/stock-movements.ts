@@ -1,13 +1,18 @@
 import { query } from './mysql';
 import { StockMovement } from './types';
 import { v4 as uuidv4 } from 'uuid';
+import mysql from 'mysql2/promise';
 
 /**
  * Records a stock movement in the database
  * @param movement The stock movement data to record
+ * @param connection Optional connection for transaction support
  * @returns The recorded movement with generated ID and timestamps
  */
-export async function recordStockMovement(movement: Omit<StockMovement, 'id' | 'createdAt' | 'updatedAt'>): Promise<StockMovement> {
+export async function recordStockMovement(
+  movement: Omit<StockMovement, 'id' | 'createdAt' | 'updatedAt'>,
+  connection?: mysql.PoolConnection | mysql.Pool
+): Promise<StockMovement> {
   const id = uuidv4();
 
   const sql = `
@@ -30,7 +35,11 @@ export async function recordStockMovement(movement: Omit<StockMovement, 'id' | '
     movement.notes || null,
   ];
 
-  await query(sql, params);
+  if (connection) {
+    await connection.query(sql, params);
+  } else {
+    await query(sql, params);
+  }
 
   return {
     ...movement,
@@ -246,10 +255,15 @@ export async function updateStockAndRecordMovement(
   movementType: 'sale' | 'purchase' | 'adjustment' | 'return' | 'transfer',
   referenceId?: string,
   referenceType?: 'sale' | 'purchase' | 'adjustment' | 'return' | 'transfer',
-  notes?: string
+  notes?: string,
+  connection?: mysql.PoolConnection | mysql.Pool
 ): Promise<StockMovement> {
   // Get current product info
-  const productResult = await query('SELECT name, stock FROM products WHERE id = ?', [productId]);
+  const productSql = 'SELECT name, stock FROM products WHERE id = ?';
+  const productResult = connection 
+    ? (await connection.query(productSql, [productId]))[0] as any[]
+    : await query(productSql, [productId]);
+    
   if (!productResult || productResult.length === 0) {
     throw new Error(`Product with ID ${productId} not found`);
   }
@@ -259,7 +273,12 @@ export async function updateStockAndRecordMovement(
   const newStock = previousStock + quantityChange;
 
   // Update product stock
-  await query('UPDATE products SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newStock, productId]);
+  const updateSql = 'UPDATE products SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+  if (connection) {
+    await connection.query(updateSql, [newStock, productId]);
+  } else {
+    await query(updateSql, [newStock, productId]);
+  }
 
   // Record the movement
   return await recordStockMovement({
@@ -272,5 +291,47 @@ export async function updateStockAndRecordMovement(
     referenceId,
     referenceType,
     notes,
-  });
+  }, connection);
+}
+
+/**
+ * Records stock movements for a transfer between warehouses
+ * @param transferId The transfer ID (reference)
+ * @param sourceProductId The source product ID
+ * @param targetProductId The target product ID
+ * @param quantity The quantity transferred (positive)
+ * @param notes Optional notes
+ * @param connection Optional connection for transaction support
+ */
+export async function recordTransferMovements(
+  transferId: string,
+  sourceProductId: string,
+  targetProductId: string,
+  quantity: number,
+  notes?: string,
+  connection?: mysql.PoolConnection | mysql.Pool
+): Promise<{ sourceMovement: StockMovement; targetMovement: StockMovement }> {
+  // 1. Record OUT movement from source
+  const sourceMovement = await updateStockAndRecordMovement(
+    sourceProductId,
+    -quantity,
+    'transfer',
+    transferId,
+    'transfer',
+    `Transfer to product ${targetProductId}${notes ? ': ' + notes : ''}`,
+    connection
+  );
+
+  // 2. Record IN movement to target
+  const targetMovement = await updateStockAndRecordMovement(
+    targetProductId,
+    quantity,
+    'transfer',
+    transferId,
+    'transfer',
+    `Transfer from product ${sourceProductId}${notes ? ': ' + notes : ''}`,
+    connection
+  );
+
+  return { sourceMovement, targetMovement };
 }

@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
         products.reorder_point as reorderPoint,
         products.avg_daily_sales as avgDailySales,
         products.expiration_date as expirationDate,
+        products.warehouse_id as warehouseId,
+        products.shelf_location_id as shelfLocationId,
         products.created_at,
         products.updated_at
       FROM products

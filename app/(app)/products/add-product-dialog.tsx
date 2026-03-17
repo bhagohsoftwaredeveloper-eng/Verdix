@@ -37,13 +37,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, PlusCircle, Loader2, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
-import { Category, Brand, UnitOfMeasure, Product, Supplier, Account, TaxRate, SystemSettings } from '@/lib/types';
+import { Category, Brand, UnitOfMeasure, Product, Supplier, TaxRate, SystemSettings } from '@/lib/types';
 
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getCategories, getBrands, getSubcategories, getUnitsOfMeasure, addProduct, getSuppliers, getAccounts, getAccountsByType, getWarehouses } from './actions';
+import { getCategories, getBrands, getSubcategories, getUnitsOfMeasure, addProduct, getSuppliers, getWarehouses } from './actions';
 import { ManageCategoriesDialog } from './ManageCategoriesDialog';
 import { ManageBrandsDialog } from './ManageBrandsDialog';
 import { ManageSubcategoriesDialog } from './ManageSubcategoriesDialog';
@@ -51,12 +51,11 @@ import { ManageUnitOfMeasureDialog } from './ManageUnitOfMeasureDialog';
 
 
 
-import { ManageAccountsDialog } from './ManageAccountsDialog';
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
 import { ManageSuppliersDialog } from './ManageSuppliersDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Trash2, Star } from 'lucide-react';
+import { ManageShelfLocationsDialog } from './ManageShelfLocationsDialog';
 
 
 
@@ -88,6 +87,7 @@ const productSchema = z.object({
   subcategory: z.string().optional(),
   supplier: z.string().optional(),
   warehouse: z.string().optional(),
+  shelfLocationId: z.string().optional(),
   unitOfMeasure: z.string().min(1, 'Unit of measure is required'),
   stock: z.coerce.number().int().nonnegative('Initial stock must be a non-negative integer'),
   reorderPoint: z.coerce.number().int().nonnegative().optional().default(0),
@@ -139,12 +139,10 @@ export function AddProductDialog({
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
-  const [incomeAccounts, setIncomeAccounts] = useState<Account[]>([]);
-  const [expenseAccounts, setExpenseAccounts] = useState<Account[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]); // Using any for now to avoid cross-file type issues
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
+  const [shelfLocations, setShelfLocations] = useState<any[]>([]);
+  const [isLoadingShelfLocations, setIsLoadingShelfLocations] = useState(false);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
 
@@ -180,6 +178,7 @@ export function AddProductDialog({
       subcategory: '',
       supplier: '',
       warehouse: '',
+      shelfLocationId: '',
       unitOfMeasure: '',
       stock: 0,
       reorderPoint: 0,
@@ -218,6 +217,7 @@ export function AddProductDialog({
       setUnitsOfMeasure(externalProductOptions.units || []);
       setSuppliers(externalProductOptions.suppliers || []);
       setWarehouses(externalProductOptions.warehouses || []);
+      setShelfLocations(externalProductOptions.shelfLocations || []);
       setPriceLevels(externalProductOptions.priceLevels || []);
       setTaxRates(externalProductOptions.taxRates || []);
 
@@ -233,18 +233,6 @@ export function AddProductDialog({
           }
       }
 
-      // Handle accounts
-      const accountsData = externalProductOptions.accounts || [];
-      setAccounts(accountsData);
-      setIncomeAccounts(accountsData.filter((a: Account) => a.type === 'income'));
-      setExpenseAccounts(accountsData.filter((a: Account) => a.type === 'expense'));
-
-      // Set default accounts
-      const defaultIncome = accountsData.find((a: Account) => a.name === 'General Sales' && a.type === 'income');
-      if (defaultIncome) form.setValue('incomeAccount', defaultIncome.id);
-
-      const defaultExpense = accountsData.find((a: Account) => a.name === 'General Products Purchased' && a.type === 'expense');
-      if (defaultExpense) form.setValue('expenseAccount', defaultExpense.id);
     }
   }, [externalProductOptions, form, appendPriceLevel]); // Added appendPriceLevel dep
 
@@ -603,12 +591,6 @@ export function AddProductDialog({
                       Price Levels
                     </TabsTrigger>
                     <TabsTrigger 
-                      value="accounts"
-                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
-                    >
-                      Accounts
-                    </TabsTrigger>
-                    <TabsTrigger 
                       value="conversion"
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                     >
@@ -961,6 +943,46 @@ export function AddProductDialog({
 
                       <FormField
                         control={form.control}
+                        name="shelfLocationId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Shelf Location (Optional)</FormLabel>
+                            <div className="flex gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a shelf location" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {isLoadingShelfLocations ? (
+                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : (
+                                    shelfLocations?.map((location: any) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <ManageShelfLocationsDialog 
+                                onLocationAdded={(newLocationId?: string) => {
+                                  if (onOptionsRefresh) onOptionsRefresh();
+                                  if (newLocationId) {
+                                    form.setValue('shelfLocationId', newLocationId, { shouldValidate: true, shouldDirty: true });
+                                  }
+                                }}
+                                trigger={
+                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                }
+                              />
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
                         name="unitOfMeasure"
                         render={({ field }) => (
                           <FormItem>
@@ -1015,6 +1037,9 @@ export function AddProductDialog({
                           )}
                         />
                       )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <FormField
                         control={form.control}
                         name="stock"
@@ -1062,102 +1087,6 @@ export function AddProductDialog({
                   
 
 
-                  <TabsContent value="accounts" className="space-y-4 p-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="incomeAccount"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Income Account (Optional)</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select income account" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {isLoadingAccounts ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    incomeAccounts?.map((account: Account) => (
-                                      <SelectItem key={account.id} value={account.id}>
-                                        {account.name} {account.code ? `(${account.code})` : ''}
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <ManageAccountsDialog 
-                                onAccountAdded={(newAccount) => {
-                                    if (newAccount.type === 'income') {
-                                        getAccountsByType('income').then(setIncomeAccounts);
-                                        form.setValue('incomeAccount', newAccount.id);
-                                    }
-                                }}
-                                onAccountUpdated={() => {
-                                    getAccountsByType('income').then(setIncomeAccounts);
-                                }}
-                                trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                }
-                              />
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="expenseAccount"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Expense Account (Optional)</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select expense account" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {isLoadingAccounts ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    expenseAccounts?.map((account: Account) => (
-                                      <SelectItem key={account.id} value={account.id}>
-                                        {account.name} {account.code ? `(${account.code})` : ''}
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <ManageAccountsDialog 
-                                onAccountAdded={(newAccount) => {
-                                    if (newAccount.type === 'expense') {
-                                        getAccountsByType('expense').then(setExpenseAccounts);
-                                        form.setValue('expenseAccount', newAccount.id);
-                                    }
-                                }}
-                                onAccountUpdated={() => {
-                                    getAccountsByType('expense').then(setExpenseAccounts);
-                                }}
-                                trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                }
-                              />
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </TabsContent>
                   <TabsContent value="conversion" className="space-y-4 p-6">
                     {/* Conversion Factors Section */}
                     <div className="space-y-4">

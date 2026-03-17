@@ -25,11 +25,15 @@ export async function GET(request: NextRequest) {
         st.created_at,
         pt.terminal_id,
         pt.order_number,
+        u.display_name as cashier_name,
+        pd.amount_tendered,
+        pd.change_given,
         (SELECT SUM(points) FROM point_history ph WHERE ph.transaction_reference = pt.id AND ph.transaction_type = 'purchase') as points_earned,
         pd.gateway_reference as payment_reference
       FROM sales_transactions st
       JOIN pos_transactions pt ON st.id = pt.sale_id
       LEFT JOIN customers c ON st.customer_id = c.id
+      LEFT JOIN users u ON pt.user_id = u.uid
       LEFT JOIN payment_details pd ON pt.payment_details_id = pd.id
       WHERE LOWER(st.status) NOT IN ('voided', 'returned')
     `;
@@ -103,6 +107,9 @@ export async function GET(request: NextRequest) {
           orderNumber: sale.order_number,
           paymentReference: sale.payment_reference,
           pointsEarned: sale.points_earned ? parseFloat(sale.points_earned) : 0,
+          amountTendered: sale.amount_tendered ? parseFloat(sale.amount_tendered) : parseFloat(sale.total),
+          change: sale.change_given ? parseFloat(sale.change_given) : 0,
+          cashierName: sale.cashier_name || 'Admin',
           items: items.map((item: any) => ({
             product: {
               id: item.product_id,

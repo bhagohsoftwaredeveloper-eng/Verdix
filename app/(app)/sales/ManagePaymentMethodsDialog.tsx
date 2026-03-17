@@ -63,7 +63,7 @@ function DataExistDialog({ isOpen, onClose }: { isOpen: boolean, onClose: () => 
   );
 }
 
-export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }: { onSave: (name: string, isReferenceRequired: boolean) => Promise<void>, children: React.ReactNode, open?: boolean, onOpenChange?: (open: boolean) => void }) {
+export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }: { onSave: (name: string, isReferenceRequired: boolean, pointsAmount?: number, currencyEquivalent?: number) => Promise<void>, children: React.ReactNode, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalOpen;
@@ -71,6 +71,8 @@ export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }:
 
   const [name, setName] = useState('');
   const [isReferenceRequired, setIsReferenceRequired] = useState(false);
+  const [pointsAmount, setPointsAmount] = useState<string>('1');
+  const [currencyEquivalent, setCurrencyEquivalent] = useState<string>('1');
   const [isSaving, setIsSaving] = useState(false);
   const [isDataExistOpen, setIsDataExistOpen] = useState(false);
   const { toast } = useToast();
@@ -86,7 +88,9 @@ export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }:
     }
     setIsSaving(true);
     try {
-      await onSave(name, isReferenceRequired);
+      const pAmount = name.toUpperCase() === 'POINTS' ? parseFloat(pointsAmount) || 1 : undefined;
+      const cEquiv = name.toUpperCase() === 'POINTS' ? parseFloat(currencyEquivalent) || 1 : undefined;
+      await onSave(name, isReferenceRequired, pAmount, cEquiv);
       toast({
         title: 'Payment Method Added',
         description: `Payment method "${name}" has been successfully saved.`,
@@ -164,10 +168,12 @@ export function AddPaymentMethodDialog({ onSave, children, open, onOpenChange }:
   );
 }
 
-function PaymentMethodDialog({ paymentMethod, onSave, children, disabled }: { paymentMethod?: PaymentMethod, onSave: (name: string, isReferenceRequired: boolean) => Promise<void>, children: React.ReactNode, disabled?: boolean }) {
+function PaymentMethodDialog({ paymentMethod, onSave, children, disabled }: { paymentMethod?: PaymentMethod, onSave: (name: string, isReferenceRequired: boolean, pointsAmount?: number, currencyEquivalent?: number) => Promise<void>, children: React.ReactNode, disabled?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState(paymentMethod?.name || '');
   const [isReferenceRequired, setIsReferenceRequired] = useState(paymentMethod?.isReferenceRequired || false);
+  const [pointsAmount, setPointsAmount] = useState<string>(paymentMethod?.pointsAmount?.toString() || '1');
+  const [currencyEquivalent, setCurrencyEquivalent] = useState<string>(paymentMethod?.currencyEquivalent?.toString() || '1');
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -176,6 +182,8 @@ function PaymentMethodDialog({ paymentMethod, onSave, children, disabled }: { pa
     if (isOpen) {
         setName(paymentMethod?.name || '');
         setIsReferenceRequired(paymentMethod?.isReferenceRequired || false);
+        setPointsAmount(paymentMethod?.pointsAmount?.toString() || '1');
+        setCurrencyEquivalent(paymentMethod?.currencyEquivalent?.toString() || '1');
     }
   }, [isOpen, paymentMethod]);
 
@@ -190,7 +198,9 @@ function PaymentMethodDialog({ paymentMethod, onSave, children, disabled }: { pa
     }
     setIsSaving(true);
     try {
-      await onSave(name, isReferenceRequired);
+      const pAmount = name.toUpperCase() === 'POINTS' ? parseFloat(pointsAmount) || 1 : undefined;
+      const cEquiv = name.toUpperCase() === 'POINTS' ? parseFloat(currencyEquivalent) || 1 : undefined;
+      await onSave(name, isReferenceRequired, pAmount, cEquiv);
       toast({
         title: paymentMethod ? 'Payment Method Updated' : 'Payment Method Added',
         description: `Payment method "${name}" has been successfully saved.`,
@@ -267,7 +277,7 @@ function PaymentMethodRow({ paymentMethod, onUpdate, onDelete, paymentMethods }:
   const { toast } = useToast();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const handleUpdate = async (name: string, isReferenceRequired: boolean) => {
+  const handleUpdate = async (name: string, isReferenceRequired: boolean, pointsAmount?: number, currencyEquivalent?: number) => {
     // Check if another payment method with same name already exists (excluding current one)
     const existingMethod = paymentMethods.find(method =>
       method.id !== paymentMethod.id && method.name.toLowerCase() === name.toLowerCase()
@@ -288,7 +298,7 @@ function PaymentMethodRow({ paymentMethod, onUpdate, onDelete, paymentMethods }:
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, isReferenceRequired }),
+        body: JSON.stringify({ name, isReferenceRequired, pointsAmount, currencyEquivalent }),
       });
 
       const result = await response.json();
@@ -449,7 +459,7 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
     }
   }, [isOpen]);
 
-  const handleAddMethod = async (name: string, isReferenceRequired: boolean) => {
+  const handleAddMethod = async (name: string, isReferenceRequired: boolean, pointsAmount?: number, currencyEquivalent?: number) => {
     // Check if payment method with same name already exists
     const existingMethod = paymentMethods.find(method =>
       method.name.toLowerCase() === name.toLowerCase()
@@ -470,7 +480,7 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, isReferenceRequired }),
+        body: JSON.stringify({ name, isReferenceRequired, pointsAmount, currencyEquivalent }),
       });
 
       const result = await response.json();

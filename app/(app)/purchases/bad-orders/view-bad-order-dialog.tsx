@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Printer } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -30,6 +30,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
+import { printBadOrder } from '@/lib/print-bad-order';
 
 interface ViewBadOrderDialogProps {
   badOrder: any;
@@ -295,6 +296,11 @@ export function ViewBadOrderDialog({
         </div>
 
         <DialogFooter>
+          <Button variant="outline" onClick={() => printBadOrder(badOrder)} disabled={isSubmitting}>
+             <Printer className="mr-2 h-4 w-4" />
+             Print Report
+          </Button>
+          <div className="flex-1" />
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Close
           </Button>

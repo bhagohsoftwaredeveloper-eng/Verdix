@@ -33,6 +33,10 @@ export interface Product {
   warehouseName?: string;
   warehouseId?: string;
 
+  // Shelf Location
+  shelfLocationId?: string | null;
+  shelfLocationName?: string | null;
+
   // Parent/Child relationship
   parentId?: string | null;
   conversionFactor?: number;
@@ -128,6 +132,9 @@ export interface Sale {
   shipping?: number;
   pointsEarned?: number;
   receiptNo?: string;
+  amountTendered?: number;
+  change?: number;
+  cashierName?: string;
 }
 
 export interface PurchaseOrder {
@@ -206,6 +213,8 @@ export interface PaymentMethod {
   id: string;
   name: string;
   isReferenceRequired?: boolean;
+  pointsAmount?: number;
+  currencyEquivalent?: number;
 }
 
 export interface Warehouse {
@@ -214,6 +223,15 @@ export interface Warehouse {
   location?: string;
   isActive?: boolean;
   createdAt?: string;
+}
+
+export interface ShelfLocation {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SalesPerson {
@@ -308,6 +326,15 @@ export interface SystemSettings {
   enablePriceEditAuth?: boolean;
   priceEditAuthUsername?: string | null;
   priceEditAuthPassword?: string | null;
+  enableRecentSalesAuth?: boolean;
+  recentSalesAuthUsername?: string | null;
+  recentSalesAuthPassword?: string | null;
+  enableLineVoidAuth?: boolean;
+  lineVoidAuthUsername?: string | null;
+  lineVoidAuthPassword?: string | null;
+  enableVoidReturnAuth?: boolean;
+  voidAuthUsername?: string | null;
+  voidAuthPassword?: string | null;
 }
 
 export interface User {

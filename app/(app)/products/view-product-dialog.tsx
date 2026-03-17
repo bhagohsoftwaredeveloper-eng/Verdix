@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Product } from '@/lib/types';
-import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Eye, PlusCircle } from 'lucide-react';
@@ -55,106 +54,124 @@ export function ViewProductDialog({ product, onProductUpdated, products, onChild
                     )}
                 </DialogHeader>
 
-                <div className="grid md:grid-cols-2 gap-8 py-4">
-                    <Image
-                        src={product.imageUrl || "https://picsum.photos/seed/default-product/400/300"}
-                        alt={product.name}
-                        width={600}
-                        height={600}
-                        className="rounded-lg object-cover w-full aspect-square"
-                    />
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-2 gap-6">
-                            <DetailItem label="Brand" value={product.brand} />
-                            <DetailItem label="Category" value={product.category} />
-                            {product.subcategory && <DetailItem label="Subcategory" value={product.subcategory} />}
-                            {product.supplierName && <DetailItem label="Supplier" value={product.supplierName} />}
-                            <DetailItem label="SKU" value={<Badge variant="outline">{product.sku}</Badge>} />
-                            {product.barcode && <DetailItem label="Barcode" value={<Badge variant="outline">{product.barcode}</Badge>} />}
-                            {product.vatStatus && <DetailItem label="VAT Status" value={<Badge variant="secondary">{product.vatStatus}</Badge>} />}
-                            {product.availability && <DetailItem label="Availability" value={<Badge variant={product.availability === 'in-stock' ? 'default' : 'destructive'}>{product.availability}</Badge>} />}
-                        </div>
-                        <Separator />
-                        <div className="grid grid-cols-2 gap-6">
-                            <DetailItem label="Price" value={typeof product.price === 'number' ? `₱${product.price.toFixed(2)}` : 'N/A'} />
-                            <DetailItem label="Cost" value={product.cost && typeof product.cost === 'number' ? `₱${product.cost.toFixed(2)}` : 'N/A'} />
-                        </div>
-                        <Separator />
-                        <div className="grid grid-cols-2 gap-6">
-                            <DetailItem label="Current Stock" value={product.stock} />
-                            <DetailItem label="Reorder Point" value={product.reorderPoint} />
-                            <DetailItem label="Unit of Measure" value={product.unitOfMeasure} />
-                            {product.parentId && <DetailItem label="Parent Product" value="Child Unit" />}
-                            <DetailItem label="Avg. Daily Sales" value={product.avgDailySales || 0} />
-                            {product.warehouseName && <DetailItem label="Warehouse" value={product.warehouseName} />}
-                            {product.expirationDate && <DetailItem label="Expiration Date" value={<span className="text-orange-600">{new Date(product.expirationDate).toLocaleDateString()}</span>} />}
-                            {product.createdAt && <DetailItem label="Created" value={new Date(product.createdAt).toLocaleDateString()} />}
-                            {product.updatedAt && <DetailItem label="Last Updated" value={new Date(product.updatedAt).toLocaleDateString()} />}
-                        </div>
-
-                        {(product.incomeAccount || product.expenseAccount) && (
-                            <>
-                                <Separator />
+                <div className="space-y-8 py-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {/* Section 1: Identity & Classification */}
+                        <div className="space-y-6">
+                            <div>
+                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Classification</h3>
                                 <div className="space-y-4">
-                                    <h3 className="text-lg font-medium">Accounting</h3>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        {product.incomeAccount && <DetailItem label="Income Account" value={product.incomeAccount} />}
-                                        {product.expenseAccount && <DetailItem label="Expense Account" value={product.expenseAccount} />}
-                                    </div>
+                                    <DetailItem label="Brand" value={product.brand} />
+                                    <DetailItem label="Category" value={product.category} />
+                                    {product.subcategory && <DetailItem label="Subcategory" value={product.subcategory} />}
+                                    {product.supplierName && <DetailItem label="Supplier" value={product.supplierName} />}
                                 </div>
-                            </>
-                        )}
+                            </div>
+                        </div>
 
-                        {product.priceLevels && product.priceLevels.length > 0 && (
-                            <>
-                                <Separator />
+                        {/* Section 2: Codes & Inventory */}
+                        <div className="space-y-6">
+                            <div>
+                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Codes & Inventory</h3>
                                 <div className="space-y-4">
-                                    <h3 className="text-lg font-medium">Price Levels</h3>
+                                    <DetailItem label="SKU" value={<Badge variant="outline" className="font-mono">{product.sku}</Badge>} />
+                                    {product.barcode && <DetailItem label="Barcode" value={<Badge variant="outline" className="font-mono">{product.barcode}</Badge>} />}
+                                    <DetailItem label="Current Stock" value={<span className={product.stock <= (product.reorderPoint || 0) ? "text-destructive font-bold" : "font-bold"}>{product.stock}</span>} />
+                                    <DetailItem label="Unit of Measure" value={product.unitOfMeasure} />
+                                    <DetailItem label="Availability" value={<Badge variant={product.availability === 'in-stock' ? 'default' : 'destructive'}>{product.availability}</Badge>} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 3: Financials & Logistics */}
+                        <div className="space-y-6">
+                            <div>
+                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Pricing & Logistics</h3>
+                                <div className="space-y-4">
+                                    <DetailItem label="Retail Price" value={typeof product.price === 'number' ? `₱${product.price.toFixed(2)}` : 'N/A'} />
+                                    <DetailItem label="Cost" value={product.cost && typeof product.cost === 'number' ? `₱${product.cost.toFixed(2)}` : 'N/A'} />
+                                    {product.vatStatus && <DetailItem label="VAT Status" value={<Badge variant="secondary">{product.vatStatus}</Badge>} />}
+                                    {product.reorderPoint && <DetailItem label="Reorder Point" value={product.reorderPoint} />}
+                                    {product.warehouseName && <DetailItem label="Warehouse" value={product.warehouseName} />}
+                                    {product.shelfLocationName && <DetailItem label="Shelf Location" value={product.shelfLocationName} />}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* More Info */}
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Additional Info</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <DetailItem label="Avg. Daily Sales" value={product.avgDailySales || 0} />
+                                {product.expirationDate && <DetailItem label="Expiration Date" value={<span className="text-orange-600 font-medium">{new Date(product.expirationDate).toLocaleDateString()}</span>} />}
+                                {product.createdAt && <DetailItem label="Created" value={new Date(product.createdAt).toLocaleDateString()} />}
+                                {product.updatedAt && <DetailItem label="Last Updated" value={new Date(product.updatedAt).toLocaleDateString()} />}
+                            </div>
+                        </div>
+
+                        {/* Accounting */}
+                        {(product.incomeAccount || product.expenseAccount) && (
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Accounting</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {product.incomeAccount && <DetailItem label="Income Account" value={product.incomeAccount} />}
+                                    {product.expenseAccount && <DetailItem label="Expense Account" value={product.expenseAccount} />}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {( (product.priceLevels && product.priceLevels.length > 0) || (product.conversionFactors && product.conversionFactors.length > 0) ) && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {product.priceLevels && product.priceLevels.length > 0 && (
+                                <div className="space-y-4">
+                                    <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Price Levels</h3>
                                     <div className="grid gap-2">
                                         {product.priceLevels.map((pl, index) => (
-                                            <div key={index} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                                                <span className="font-medium">Price Level {index + 1}</span>
-                                                <Badge variant="outline">₱{pl.price.toFixed(2)}</Badge>
+                                            <div key={index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg border border-border">
+                                                <span className="text-sm font-medium">Price Level {index + 1}</span>
+                                                <Badge variant="outline" className="font-semibold text-primary">₱{pl.price.toFixed(2)}</Badge>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                            </>
-                        )}
+                            )}
 
-                        {(() => {
-                          const hasConversionFactors = product.conversionFactors && product.conversionFactors.length > 0;
-                          const isChildProduct = product.parentId && products;
-                          const parentProduct = isChildProduct ? products?.find(p => p.id === product.parentId) : null;
-                          const childConversion = parentProduct?.conversionFactors?.find(cf => cf.unit === product.unitOfMeasure);
+                            {(() => {
+                                const hasConversionFactors = product.conversionFactors && product.conversionFactors.length > 0;
+                                const isChildProduct = product.parentId && products;
+                                const parentProduct = isChildProduct ? products?.find(p => p.id === product.parentId) : null;
+                                const childConversion = parentProduct?.conversionFactors?.find(cf => cf.unit === product.unitOfMeasure);
 
-                          if (hasConversionFactors || childConversion) {
-                            return (
-                              <>
-                                <Separator />
-                                <div className="space-y-4">
-                                  <h3 className="text-lg font-medium">Conversion Factors</h3>
-                                  <div className="grid gap-2">
-                                    {hasConversionFactors && product.conversionFactors?.map((cf, index) => (
-                                      <div key={index} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                                        <span className="font-medium">{cf.unit}</span>
-                                        <Badge variant="outline">{cf.factor}x</Badge>
-                                      </div>
-                                    ))}
-                                    {childConversion && parentProduct && (
-                                      <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                                        <span className="font-medium">{parentProduct.unitOfMeasure} to {product.unitOfMeasure}</span>
-                                        <Badge variant="outline">1 = {childConversion.factor}</Badge>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </>
-                            );
-                          }
-                          return null;
-                        })()}
-                    </div>
+                                if (hasConversionFactors || childConversion) {
+                                    return (
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Conversion Units</h3>
+                                            <div className="grid gap-2">
+                                                {hasConversionFactors && product.conversionFactors?.map((cf, index) => (
+                                                    <div key={index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg border border-border">
+                                                        <span className="text-sm font-medium">{cf.unit}</span>
+                                                        <Badge variant="outline" className="font-semibold">{cf.factor}x</Badge>
+                                                    </div>
+                                                ))}
+                                                {childConversion && parentProduct && (
+                                                    <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg border border-border">
+                                                        <span className="text-sm font-medium">{parentProduct.unitOfMeasure} to {product.unitOfMeasure}</span>
+                                                        <Badge variant="outline" className="font-semibold">1 = {childConversion.factor}</Badge>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+                        </div>
+                    )}
                 </div>
 
                 <DialogFooter className="sm:justify-between">

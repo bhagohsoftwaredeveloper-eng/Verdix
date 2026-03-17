@@ -34,9 +34,9 @@ import {
 } from '@/components/ui/select';
 import { Loader2, X, Search, Trash2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useProducts } from '@/hooks/use-api';
+import { useProducts, useSuppliers } from '@/hooks/use-api';
 import { useUser } from '@/hooks/use-user';
-import { Product } from '@/lib/types';
+import { Product, Supplier } from '@/lib/types';
 import { getApiUrl } from '@/lib/api-config';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
@@ -65,6 +65,8 @@ const badOrderItemSchema = z.object({
 
 const badOrderSchema = z.object({
   reportedBy: z.string().min(1, 'Reported by is required'),
+  supplierId: z.string().optional().nullable(),
+  supplierName: z.string().optional().nullable(),
   notes: z.string().optional(),
   items: z.array(badOrderItemSchema).min(1, 'At least one item is required'),
 });
@@ -296,10 +298,14 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
   
   const { toast } = useToast();
 
+  const { suppliers } = useSuppliers();
+
   const form = useForm<BadOrderFormValues>({
     resolver: zodResolver(badOrderSchema),
     defaultValues: {
       reportedBy: '',
+      supplierId: null,
+      supplierName: null,
       notes: '',
       items: [],
     },
@@ -380,8 +386,8 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
         },
         body: JSON.stringify({
           purchaseOrderId: null,
-          supplierId: null,
-          supplierName: null,
+          supplierId: values.supplierId,
+          supplierName: values.supplierName,
           reportedBy: values.reportedBy,
           reportDate: new Date().toISOString(),
           items: formattedItems,
@@ -455,7 +461,41 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
                           )}
                       />
                   </div>
-                  <div className="col-span-3 flex items-center justify-end pr-4 text-muted-foreground text-sm">
+                  <div className="col-span-1 space-y-3">
+                      <FormField
+                          control={form.control}
+                          name="supplierId"
+                          render={({ field }) => (
+                          <FormItem className="space-y-1">
+                              <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier (Optional)</FormLabel>
+                              <Select 
+                                onValueChange={(val) => {
+                                  field.onChange(val);
+                                  const supplier = suppliers.find(s => s.id === val);
+                                  form.setValue('supplierName', supplier?.name || null);
+                                }} 
+                                value={field.value || ""}
+                              >
+                                  <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                        <SelectValue placeholder="Select supplier" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      <SelectItem value="none">None</SelectItem>
+                                      {suppliers.map((supplier) => (
+                                          <SelectItem key={supplier.id} value={supplier.id}>
+                                              {supplier.name}
+                                          </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                              <FormMessage className="text-xs" />
+                          </FormItem>
+                          )}
+                      />
+                  </div>
+                  <div className="col-span-2 flex items-center justify-end pr-4 text-muted-foreground text-sm">
                       <div className="bg-amber-100 text-amber-800 px-3 py-1.5 rounded-md flex items-center gap-2 border border-amber-200">
                           <AlertTriangle className="h-4 w-4" />
                           Items recorded here will be deducted from active inventory.

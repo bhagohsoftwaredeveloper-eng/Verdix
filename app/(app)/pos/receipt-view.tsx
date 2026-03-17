@@ -15,8 +15,12 @@ interface ReceiptViewProps {
         orderNumber?: string;
         amountTendered?: number;
         transactionDate?: Date; // Add support for date if available
+        pointsUsedCount?: number;
+        pointsUsedValue?: number;
+        pointsBalance?: number;
         cashierName?: string;
         pointsEarned?: number;
+        pointsUsed?: number;
         terminalMin?: string;
         terminalSerialNumber?: string;
     };
@@ -96,23 +100,55 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
             <div className="border-t border-black my-2"></div>
 
             <div className="space-y-1">
+                {saleDetails.pointsUsedValue && saleDetails.pointsUsedValue > 0 ? (
+                    <>
+                        <div className="flex justify-between font-bold">
+                            <span>Points Value to Redeem:</span>
+                            <span>-{formatCurrency(saleDetails.pointsUsedValue)}</span>
+                        </div>
+                        <div className="flex justify-between font-bold">
+                            <span>Net Balance Due:</span>
+                            <span>{formatCurrency(totalDue - saleDetails.pointsUsedValue)}</span>
+                        </div>
+                    </>
+                ) : null}
+
                 <div className="flex justify-between font-bold">
-                    <span>{paymentMethod}:</span>
-                    <span>{paymentMethod === 'CASH' ? formatCurrency(saleDetails.amountTendered || (totalDue + change)) : formatCurrency(totalDue)}</span>
+                    <span>{saleDetails.pointsUsedValue && saleDetails.pointsUsedValue > 0 ? 'Cash Tendered:' : paymentMethod + ':'}</span>
+                    <span>{formatCurrency(saleDetails.amountTendered || (totalDue + change))}</span>
                 </div>
-                {paymentMethod === 'CASH' && (
-                        <div className="flex justify-between">
+
+                {change > 0 && (
+                    <div className="flex justify-between font-bold">
                         <span>Change:</span>
                         <span>{formatCurrency(change)}</span>
                     </div>
                 )}
-                {saleDetails.pointsEarned && saleDetails.pointsEarned > 0 ? (
-                    <div className="flex justify-between font-bold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
-                        <span>Points Earned:</span>
-                        <span>{saleDetails.pointsEarned} pts</span>
+            </div>
+
+                {(saleDetails.pointsEarned && saleDetails.pointsEarned > 0) || (saleDetails.pointsUsedCount && saleDetails.pointsUsedCount > 0) || (saleDetails.pointsBalance !== undefined) ? (
+                    <div className="mt-2 pt-2 border-t border-dashed border-black">
+                        <div className="text-center font-bold mb-1">LOYALTY STATEMENT</div>
+                        {saleDetails.pointsUsedCount && saleDetails.pointsUsedCount > 0 && (
+                            <div className="flex justify-between">
+                                <span>Used Points:</span>
+                                <span>{saleDetails.pointsUsedCount.toLocaleString()} pts</span>
+                            </div>
+                        )}
+                        {saleDetails.pointsEarned && saleDetails.pointsEarned > 0 && (
+                            <div className="flex justify-between">
+                                <span>Earned Points:</span>
+                                <span>{saleDetails.pointsEarned.toLocaleString()} pts</span>
+                            </div>
+                        )}
+                        {saleDetails.pointsBalance !== undefined && (
+                            <div className="flex justify-between font-bold">
+                                <span>New Balance:</span>
+                                <span>{Number(saleDetails.pointsBalance).toLocaleString()} pts</span>
+                            </div>
+                        )}
                     </div>
                 ) : null}
-            </div>
                 <div className="text-center mt-6">
                 <div>Thank you for your purchase!</div>
                 <div style={{fontSize: '9px'}}>Pos System by Bhagoh</div>

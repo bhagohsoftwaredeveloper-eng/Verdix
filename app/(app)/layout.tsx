@@ -72,6 +72,9 @@ const navItems = [
 
 const inventoryNavItems = [
   { href: '/inventory', label: 'Stock Levels' },
+  { href: '/inventory/transfer-board', label: 'Stock Transfer Board' },
+  { href: '/inventory/shelf-board', label: 'Shelf Transfer Board' },
+  { href: '/inventory/stock-counts', label: 'Stock Counts (Snapshots)' },
   { href: '/inventory/history', label: 'Adjustment History' },
   { href: '/inventory/movement', label: 'Stock Movement' },
 ]

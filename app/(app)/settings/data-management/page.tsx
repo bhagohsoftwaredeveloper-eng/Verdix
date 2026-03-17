@@ -59,6 +59,10 @@ export default function DataManagementPage() {
   // Backup states
   const [backups, setBackups] = useState<BackupFile[]>([]);
   const [creatingBackup, setCreatingBackup] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [backupToRestore, setBackupToRestore] = useState<string | null>(null);
+  const [restoreConfirmText, setRestoreConfirmText] = useState('');
   const [schedule, setSchedule] = useState<BackupSchedule>({
     enabled: false,
     frequency: 'daily',
@@ -457,6 +461,44 @@ export default function DataManagementPage() {
     window.location.href = getApiUrl(`/settings/backup/download/${filename}`);
   };
 
+  const openRestoreDialog = (filename: string) => {
+    setBackupToRestore(filename);
+    setRestoreConfirmText('');
+    setRestoreDialogOpen(true);
+  };
+
+  const handleRestore = async () => {
+    if (!backupToRestore) return;
+    setRestoringBackup(true);
+    try {
+      const res = await fetch(getApiUrl('/settings/backup/restore'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: backupToRestore })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({
+          title: "Restore Successful",
+          description: data.message,
+        });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Restore Failed",
+        description: error.message || "Failed to restore database",
+        variant: "destructive",
+      });
+    } finally {
+      setRestoringBackup(false);
+      setRestoreDialogOpen(false);
+      setBackupToRestore(null);
+      setRestoreConfirmText('');
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -799,13 +841,24 @@ export default function DataManagementPage() {
                                     </span>
                                  </div>
                               </div>
-                              <Button 
-                                 size="sm" 
-                                 variant="ghost" 
-                                 onClick={() => downloadBackup(file.name)}
-                              >
-                                 <Download className="h-4 w-4" />
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => openRestoreDialog(file.name)}
+                                  className="text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                                  title="Restore this backup"
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => downloadBackup(file.name)}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
                            </div>
                         ))
                      )}
@@ -1004,10 +1057,10 @@ export default function DataManagementPage() {
                <div className="border border-red-200 rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
                  <div className="flex items-center justify-between">
                     <div>
-                       <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Clear Sales Data</h3>
-                       <p className="text-sm text-red-700 dark:text-red-300">
-                          Deletes all sales transactions, sales items, shifts, and Z-readings.
-                       </p>
+                        <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Clear Sales Data</h3>
+                        <p className="text-sm text-red-700 dark:text-red-300">
+                           Deletes all sales transactions (POS, Orders, Invoices), payments, shifts, Z-readings, and customer point history.
+                        </p>
                     </div>
                     <Button variant="destructive" onClick={() => openResetDialog('clear_sales')}>
                        <Trash2 className="mr-2 h-4 w-4" /> Clear Sales
@@ -1032,10 +1085,10 @@ export default function DataManagementPage() {
                <div className="border border-red-200 rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
                  <div className="flex items-center justify-between">
                     <div>
-                       <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Delete Inventory</h3>
-                       <p className="text-sm text-red-700 dark:text-red-300">
-                          Deletes ALL products and stock history.
-                       </p>
+                        <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Delete Inventory</h3>
+                        <p className="text-sm text-red-700 dark:text-red-300">
+                           Deletes ALL products, stock history, adjustments, and price levels.
+                        </p>
                     </div>
                     <Button variant="destructive" onClick={() => openResetDialog('clear_inventory')}>
                        <Trash2 className="mr-2 h-4 w-4" /> Delete Inventory
@@ -1079,6 +1132,40 @@ export default function DataManagementPage() {
                disabled={resetConfirmText !== 'CONFIRM' || resetLoading}
             >
               {resetLoading ? "Resetting..." : "Confirm Reset"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-orange-600">Restore Database?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will overwrite your current database with the data from <span className="font-bold">{backupToRestore}</span>. 
+              All data added after this backup was created will be permanently lost.
+            </AlertDialogDescription>
+            <div className="py-2">
+                <Label htmlFor="restore-confirm-text" className="text-xs text-muted-foreground mb-1 block">
+                   Type <span className="font-bold text-orange-600">RESTORE</span> to proceed
+                </Label>
+                <Input 
+                   id="restore-confirm-text"
+                   value={restoreConfirmText}
+                   onChange={(e) => setRestoreConfirmText(e.target.value)}
+                   placeholder="Type RESTORE"
+                   autoComplete="off"
+                />
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+               className="bg-orange-600 text-white hover:bg-orange-700"
+               onClick={handleRestore}
+               disabled={restoreConfirmText !== 'RESTORE' || restoringBackup}
+            >
+              {restoringBackup ? "Restoring..." : "Confirm Restore"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

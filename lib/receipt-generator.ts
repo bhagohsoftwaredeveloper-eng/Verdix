@@ -35,13 +35,16 @@ export class ReceiptGenerator {
         orderNumber?: string;
         amountTendered?: number;
         pointsEarned?: number;
+        pointsUsedCount?: number;
         transactionDate?: Date;
         cashierName?: string;
         terminalMin?: string;
         terminalSerialNumber?: string;
+        pointsUsedValue?: number;
+        pointsBalance?: number;
     }, settings?: SystemSettings | null): Uint8Array {
 
-        const { items, customer, totalDue, change, paymentMethod, orderNumber, amountTendered, pointsEarned } = sale;
+        const { items, customer, totalDue, change, paymentMethod, orderNumber, amountTendered, pointsEarned, pointsUsedCount } = sale;
         const subTotal      = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
         const totalDiscount = items.reduce((acc, item) => acc + (item.price * item.quantity * (item.discount || 0)) / 100, 0);
         const vatAmount     = (totalDue / 1.12) * 0.12;
@@ -161,22 +164,38 @@ export class ReceiptGenerator {
         enc.line(padRow('VAT (12%):', this.fmt(vatAmount)));
 
         // ─── PAYMENT (solid border above) ────────────────────────────────
-        // Matches: border-t border-black my-2  then  flex justify-between font-bold
         enc.rule({ style: 'single' });
 
-        const cashAmt = paymentMethod === 'CASH'
-            ? (amountTendered || (totalDue + change))
-            : totalDue;
-        enc.bold(true).line(this.row(`${paymentMethod}:`, this.fmt(cashAmt))).bold(false);
+        if (sale.pointsUsedValue && sale.pointsUsedValue > 0) {
+            enc.bold(true).line(this.row('Points Redeemed:', `-${this.fmt(sale.pointsUsedValue)}`)).bold(false);
+            enc.bold(true).line(this.row('Net Balance Due:', this.fmt(totalDue - sale.pointsUsedValue))).bold(false);
+            enc.bold(true).line(this.row('Cash Tendered:', this.fmt(amountTendered || (totalDue + change)))).bold(false);
+        } else {
+            const cashLabel = paymentMethod === 'POINTS' ? 'Cash Tendered:' : `${paymentMethod}:`;
+            enc.bold(true).line(this.row(cashLabel, this.fmt(amountTendered || (totalDue + change)))).bold(false);
+        }
 
-        if (paymentMethod === 'CASH') {
-            enc.line(this.row('Change:', this.fmt(change)));
+        if (change > 0) {
+            enc.bold(true).line(this.row('Change:', this.fmt(change))).bold(false);
         }
 
         // ─── POINTS (dashed border above, if any) ────────────────────────
-        if (pointsEarned && pointsEarned > 0) {
+        if ((pointsEarned && pointsEarned > 0) || (sale.pointsUsedCount && sale.pointsUsedCount > 0) || (sale.pointsBalance !== undefined)) {
             enc.line('-'.repeat(COLS));
-            enc.bold(true).line(this.row('Points Earned:', `${pointsEarned} pts`)).bold(false);
+            enc.align('center').bold(true).line('LOYALTY STATEMENT').bold(false).align('left');
+            
+            if (sale.pointsUsedCount && sale.pointsUsedCount > 0) {
+                enc.line(this.row('Points Used:', `${sale.pointsUsedCount.toLocaleString()} pts`));
+            }
+            if (pointsEarned && pointsEarned > 0) {
+                enc.line(this.row('Points Earned:', `${pointsEarned.toLocaleString()} pts`));
+            }
+            if (sale.pointsBalance !== undefined) {
+                enc.bold(true).line(this.row('New Balance:', `${Number(sale.pointsBalance).toLocaleString()} pts`)).bold(false);
+            } else if (customer) {
+                const balance = (customer as any).current_points || (customer as any).loyaltyPoints || 0;
+                enc.bold(true).line(this.row('New Balance:', `${Number(balance).toLocaleString()} pts`)).bold(false);
+            }
         }
 
         // ─── FOOTER (centered) ────────────────────────────────────────────

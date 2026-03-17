@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
 import { format } from 'date-fns';
 
+const safeParseFloat = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    return parseFloat(val);
+}
+
+const safeInt = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    // Handle BigInt
+    if (typeof val === 'bigint') return Number(val);
+    return parseInt(val);
+}
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -213,20 +225,23 @@ export async function GET(request: NextRequest) {
             reportDate: new Date(),
             businessName,
             address: businessAddress,
-            grossSales: adjustedGrossSales,
-            returns: returns,
-            discounts: discounts,
-            netSales: finalNetSales,
-            vatSales: vatableSales,
-            vatAmount: vatAmount,
+            grossSales: safeParseFloat(adjustedGrossSales),
+            returns: safeParseFloat(returns),
+            discounts: safeParseFloat(discounts),
+            netSales: safeParseFloat(finalNetSales),
+            vatSales: safeParseFloat(vatableSales),
+            vatAmount: safeParseFloat(vatAmount),
             vatExempt: 0.00,
             zeroRated: 0.00,
             nonVat: 0.00,
-            paymentMethods: paymentMethods,
-            transactionCount: parseInt(salesResult?.transaction_count || 0),
-            startingCash: startingCash,
-            cashSales: cashSales,
-            cashInDrawer: cashInDrawer,
+            paymentMethods: paymentMethods.map((pm: any) => ({
+                name: String(pm.name),
+                amount: safeParseFloat(pm.amount)
+            })),
+            transactionCount: safeInt(salesResult?.transaction_count),
+            startingCash: safeParseFloat(startingCash),
+            cashSales: safeParseFloat(cashSales),
+            cashInDrawer: safeParseFloat(cashInDrawer),
             cashierName: 'Admin',
             terminalId: terminalId,
             terminalMin: terminalMin || '',
@@ -237,10 +252,10 @@ export async function GET(request: NextRequest) {
             maxVoidId: voidSeqResult?.max_void_id || '',
             minReturnId: returnSeqResult?.min_return_id || '',
             maxReturnId: returnSeqResult?.max_return_id || '',
-            previousReading,
-            runningTotal,
-            voidAmount: voidAmount,
-            vatAdjustment: 0.00 // Placeholder for now
+            previousReading: safeParseFloat(previousReading),
+            runningTotal: safeParseFloat(runningTotal),
+            voidAmount: safeParseFloat(voidAmount),
+            vatAdjustment: 0.00 
         };
         
         return NextResponse.json({
@@ -329,20 +344,23 @@ export async function GET(request: NextRequest) {
                 reportDate: new Date(row.report_date),
                 businessName, 
                 address: businessAddress,
-                grossSales: parseFloat(row.gross_sales),
-                returns: parseFloat(row.returns),
-                discounts: parseFloat(row.discounts),
-                netSales: parseFloat(row.net_sales),
-                vatSales: parseFloat(row.net_sales) / 1.12, // Recalculate if not stored
-                vatAmount: parseFloat(row.vat_amount),
+                grossSales: safeParseFloat(row.gross_sales),
+                returns: safeParseFloat(row.returns),
+                discounts: safeParseFloat(row.discounts),
+                netSales: safeParseFloat(row.net_sales),
+                vatSales: safeParseFloat(row.net_sales) / 1.12, 
+                vatAmount: safeParseFloat(row.vat_amount),
                 vatExempt: 0,
                 zeroRated: 0,
                 nonVat: 0,
-                paymentMethods: paymentMethods,
-                transactionCount: row.transaction_count,
-                startingCash: parseFloat(row.starting_cash),
-                cashSales: parseFloat(row.cash_sales),
-                cashInDrawer: parseFloat(row.cash_in_drawer),
+                paymentMethods: paymentMethods.map((pm: any) => ({
+                    name: String(pm.name),
+                    amount: safeParseFloat(pm.amount)
+                })),
+                transactionCount: safeInt(row.transaction_count),
+                startingCash: safeParseFloat(row.starting_cash),
+                cashSales: safeParseFloat(row.cash_sales),
+                cashInDrawer: safeParseFloat(row.cash_in_drawer),
                 cashierName: row.cashier_name,
                 terminalId: row.terminal_id,
                 terminalMin: row.terminal_min || '',
@@ -353,8 +371,8 @@ export async function GET(request: NextRequest) {
                 maxVoidId: row.max_void_id || '',
                 minReturnId: row.min_return_id || '',
                 maxReturnId: row.max_return_id || '',
-                previousReading: 0, // Not stored
-                runningTotal: 0     // Not stored
+                previousReading: 0, 
+                runningTotal: 0     
              };
         });
 
@@ -638,21 +656,6 @@ export async function POST(request: NextRequest) {
             const [prevResult] = await query(prevSql, prevParams) as any[];
             previousReading = parseFloat(prevResult?.previous_total || 0);
         }
-
-
-        const safeParseFloat = (val: any) => {
-             if (val === null || val === undefined) return 0;
-             return parseFloat(val);
-        }
-
-        const safeInt = (val: any) => {
-             if (val === null || val === undefined) return 0;
-             // Handle BigInt
-             if (typeof val === 'bigint') return Number(val);
-             return parseInt(val);
-        }
-
-
 
 
         // Fetch terminal MIN and SN for POST generated reading

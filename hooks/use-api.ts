@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Product, Sale, Customer, PaymentMethod, PurchaseOrder } from '@/lib/types';
+import { Product, Sale, Customer, PaymentMethod, PurchaseOrder, Supplier } from '@/lib/types';
 import { getApiUrl } from '@/lib/api-config';
 
 export interface UseProductsResult {
@@ -496,4 +496,68 @@ export function useBadOrderStats() {
   }, []);
 
   return { stats, loading, refetch: fetchStats };
+}
+
+export interface UseSuppliersResult {
+  suppliers: Supplier[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
+
+export function useSuppliers(search?: string, page: number = 1, limit: number = 100): UseSuppliersResult {
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [pagination, setPagination] = useState({ total: 0, limit: 100, offset: 0, hasMore: false });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchSuppliers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const offset = (page - 1) * limit;
+      const params = new URLSearchParams();
+      if (search) {
+        params.append('search', search);
+      }
+      params.append('limit', limit.toString());
+      params.append('offset', offset.toString());
+
+      const response = await fetch(getApiUrl(`/suppliers?${params.toString()}`), {
+        cache: 'no-store'
+      });
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch suppliers');
+      }
+
+      setSuppliers(result.data || []);
+      if (result.pagination) {
+        setPagination(result.pagination);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error fetching suppliers:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSuppliers();
+  }, [search, page, limit]);
+
+  const refetch = () => {
+    fetchSuppliers();
+  };
+
+  return { suppliers, loading, error, refetch, pagination };
 }

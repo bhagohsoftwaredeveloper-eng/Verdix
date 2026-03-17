@@ -430,8 +430,9 @@ export async function POST(request: NextRequest) {
       }
 
       // 7. Loyalty Points Redemption
-      if (customer && customer.id !== 'walk-in' && paymentMethod === 'POINTS' && paymentDetails?.pointsUsed > 0) {
-          const pointsToDeduct = parseFloat(paymentDetails.pointsUsed);
+      const pointsUsedValue = paymentDetails?.pointsUsed ? parseFloat(paymentDetails.pointsUsed) : 0;
+      if (customer && customer.id !== 'walk-in' && pointsUsedValue > 0) {
+          const pointsToDeduct = pointsUsedValue;
           
           // Verify balance again & get loyalty ID
           const [custRows]: any = await connection.query(
@@ -464,16 +465,20 @@ export async function POST(request: NextRequest) {
           );
       }
 
-      // 8. Loyalty Points Awarding
+      // 8. Loyalty Points Awarding - ONLY if no points were redeemed
       let totalPointsEarned = 0;
       if (
         loyaltySettings && 
         loyaltySettings.length > 0 && 
         customer && 
-        customer.id !== 'walk-in' && 
-        eligiblePointsAmount > 0
+        customer.id !== 'walk-in' &&
+        pointsUsedValue === 0 // Skip if points were redeemed
       ) {
-          const settings = loyaltySettings[0];
+          // Adjust eligible amount
+          const finalEligibleAmount = eligiblePointsAmount;
+          
+          if (finalEligibleAmount > 0) {
+              const settings = loyaltySettings[0];
           // Calculate points: (Eligible Amount / Amount Threshold) * Equivalent Points
           // Defaulting to 0 if settings are missing to avoid NaN
           const threshold = parseFloat(settings.amount) || 0;
@@ -482,8 +487,8 @@ export async function POST(request: NextRequest) {
           console.log('Loyalty Debug:', { eligiblePointsAmount, threshold, equivalent, settings });
 
           if (threshold > 0 && equivalent > 0) {
-              const pointsEarned = Math.floor(eligiblePointsAmount / threshold) * equivalent;
-              console.log('Points Earned Calculated:', pointsEarned);
+              const pointsEarned = Math.floor(finalEligibleAmount / threshold) * equivalent;
+              console.log('Points Earned Calculated:', pointsEarned, 'on basis:', finalEligibleAmount);
 
               if (pointsEarned > 0) {
                   totalPointsEarned = pointsEarned;
@@ -534,6 +539,7 @@ export async function POST(request: NextRequest) {
               }
           }
       }
+  }
 
       // 8. Log successful payment
       await connection.query(`
@@ -554,9 +560,15 @@ export async function POST(request: NextRequest) {
       const [orderResult]: any = await connection.query('SELECT order_number FROM pos_transactions WHERE id = ?', [posTransId]);
       const orderNumber = orderResult[0]?.order_number;
 
+      const [updatedLoyalty]: any = await connection.query(
+        'SELECT current_points FROM customer_loyalty WHERE customer_id = ? LIMIT 1',
+        [customer.id]
+      );
+      const pointsRemaining = updatedLoyalty && updatedLoyalty.length > 0 ? updatedLoyalty[0].current_points : 0;
+
       return NextResponse.json({
         success: true,
-        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber, pointsEarned: totalPointsEarned },
+        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber, pointsEarned: totalPointsEarned, pointsRemaining },
         message: 'Transaction saved successfully'
       });
     });

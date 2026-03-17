@@ -8,7 +8,11 @@ export async function GET(request: NextRequest) {
     const columns = [
       { name: 'operated_by', type: 'VARCHAR(255) NULL' },
       { name: 'min_number', type: 'VARCHAR(100) NULL' },
-      { name: 'serial_number', type: 'VARCHAR(100) NULL' }
+      { name: 'serial_number', type: 'VARCHAR(100) NULL' },
+      { name: 'low_stock_threshold', type: 'INT DEFAULT 10' },
+      { name: 'enable_email_notifications', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'notification_email', type: 'VARCHAR(255) NULL' },
+      { name: 'enable_push_notifications', type: 'BOOLEAN DEFAULT TRUE' }
     ];
 
     const currentColumnsResult = await query(
@@ -69,7 +73,11 @@ export async function GET(request: NextRequest) {
         price_edit_auth_password AS priceEditAuthPassword,
         operated_by AS operatedBy,
         min_number AS minNumber,
-        serial_number AS serialNumber
+        serial_number AS serialNumber,
+        low_stock_threshold AS lowStockThreshold,
+        enable_email_notifications AS enableEmailNotifications,
+        notification_email AS notificationEmail,
+        enable_push_notifications AS enablePushNotifications
       FROM pos_settings
       LIMIT 1
     `;
@@ -132,7 +140,8 @@ export async function POST(request: NextRequest) {
         enableCashCountAuth, cashCountAuthUsername, cashCountAuthPassword,
         showQuantityInSearch,
         enablePriceEditAuth, priceEditAuthUsername, priceEditAuthPassword,
-        operatedBy, minNumber, serialNumber
+        operatedBy, minNumber, serialNumber,
+        lowStockThreshold, enableEmailNotifications, notificationEmail, enablePushNotifications
       } = body;
 
       const insertSQL = `
@@ -149,9 +158,10 @@ export async function POST(request: NextRequest) {
           enable_cash_count_auth, cash_count_auth_username, cash_count_auth_password,
           show_quantity_in_search,
           enable_price_edit_auth, price_edit_auth_username, price_edit_auth_password,
-          operated_by, min_number, serial_number
+          operated_by, min_number, serial_number,
+          low_stock_threshold, enable_email_notifications, notification_email, enable_push_notifications
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
@@ -192,7 +202,11 @@ export async function POST(request: NextRequest) {
         priceEditAuthPassword || null,
         operatedBy || null,
         minNumber || null,
-        serialNumber || null
+        serialNumber || null,
+        lowStockThreshold || 10,
+        enableEmailNotifications ?? false,
+        notificationEmail || null,
+        enablePushNotifications ?? true
       ]);
     } else {
       // Update existing settings - Dynamic Update
@@ -235,7 +249,11 @@ export async function POST(request: NextRequest) {
         priceEditAuthPassword: 'price_edit_auth_password',
         operatedBy: 'operated_by',
         minNumber: 'min_number',
-        serialNumber: 'serial_number'
+        serialNumber: 'serial_number',
+        lowStockThreshold: 'low_stock_threshold',
+        enableEmailNotifications: 'enable_email_notifications',
+        notificationEmail: 'notification_email',
+        enablePushNotifications: 'enable_push_notifications'
       };
 
       const updates: string[] = [];

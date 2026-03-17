@@ -18,7 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Printer } from 'lucide-react';
+import { Loader2, Printer, User, Star, Info } from 'lucide-react';
 import type { SaleItem } from './page';
 import type { Customer } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -46,9 +46,10 @@ interface TenderDialogProps {
     terminalId: string;
     terminalMin?: string;
     terminalSerialNumber?: string;
-    paymentMethods: { id: string; name: string; isReferenceRequired?: boolean }[];
+    paymentMethods: { id: string; name: string; isReferenceRequired?: boolean; pointsAmount?: number; currencyEquivalent?: number }[];
     printMode: 'browser' | 'escpos' | 'usb' | 'native';
     settings?: SystemSettings | null;
+    onTriggerCustomerSelection?: () => void;
 }
 
 
@@ -101,7 +102,8 @@ export function TenderDialog({
     terminalSerialNumber,
     paymentMethods = [],
     printMode,
-    settings
+    settings,
+    onTriggerCustomerSelection
 }: TenderDialogProps) {
     const [selectedMethod, setSelectedMethod] = useState(paymentMethod);
     const [amountTendered, setAmountTendered] = useState('');
@@ -109,8 +111,21 @@ export function TenderDialog({
     const [isProcessing, setIsProcessing] = useState(false);
     const [view, setView] = useState<'tender' | 'receipt' | 'change' | 'print_prompt'>('tender');
     const [completedSale, setCompletedSale] = useState<any>(null);
+    const [pointsToRedeemInput, setPointsToRedeemInput] = useState<string>('');
     const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
     const { toast } = useToast();
+    const pointsInputRef = useRef<HTMLInputElement>(null);
+
+    const pointsMethod = useMemo(() => {
+        return paymentMethods.find(pm => pm.name.toUpperCase() === 'POINTS');
+    }, [paymentMethods]);
+
+    const pointsRate = useMemo(() => {
+        if (!pointsMethod || !pointsMethod.pointsAmount || !pointsMethod.currencyEquivalent) {
+            return 1; // Default 1:1
+        }
+        return Number(pointsMethod.currencyEquivalent) / Number(pointsMethod.pointsAmount);
+    }, [pointsMethod]);
 
     // Sync local state when prop changes (dialog opens)
     useEffect(() => {
@@ -131,15 +146,63 @@ export function TenderDialog({
 
     const isCashPayment = selectedMethod?.toUpperCase() === 'CASH';
 
-    // UX: Always pre-fill amount with total due for all methods
+    // UX: Reset points when opening or switching methods
+    // Modified: Use a ref to track what triggered the reset to avoid resetting when totalDue changes while open
+    const lastOpenRef = useRef(false);
+    const lastMethodRef = useRef(selectedMethod);
     useEffect(() => {
-        if (isOpen && totalDue > 0) {
-            setAmountTendered(totalDue.toFixed(2));
+        const justOpened = isOpen && !lastOpenRef.current;
+        const methodChanged = selectedMethod !== lastMethodRef.current;
+
+        if (justOpened || methodChanged) {
+            if (selectedMethod?.toUpperCase() === 'POINTS') {
+                setPointsToRedeemInput('');
+                setAmountTendered(totalDue.toFixed(2));
+                
+                // Auto-focus points input after a short delay
+                setTimeout(() => {
+                    pointsInputRef.current?.focus();
+                }, 100);
+            } else {
+                setAmountTendered(totalDue.toFixed(2));
+                setPointsToRedeemInput('');
+            }
         }
-    }, [isOpen, totalDue]);
+        lastOpenRef.current = isOpen;
+        lastMethodRef.current = selectedMethod;
+    }, [isOpen, totalDue, selectedMethod]);
+
+    const customerPoints = Number((customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0);
+    const pointsToRedeemValueRaw = useMemo(() => parseFloat(pointsToRedeemInput) || 0, [pointsToRedeemInput]);
+    
+    // Capped by BOTH totalDue and actual available points (Strict 1:1)
+    const pointsToRedeemValue = useMemo(() => Math.min(pointsToRedeemValueRaw, totalDue, customerPoints), [pointsToRedeemValueRaw, totalDue, customerPoints]);
+    
+    // The actual points to be deducted (1:1 ratio)
+    const pointsToRedeemCount = pointsToRedeemValue;
 
     const amountTenderedNum = useMemo(() => parseFloat(amountTendered) || 0, [amountTendered]);
-    const change = useMemo(() => amountTenderedNum - totalDue, [amountTenderedNum, totalDue]);
+    
+    const balanceRemaining = useMemo(() => {
+        return Math.max(0, totalDue - pointsToRedeemValue);
+    }, [totalDue, pointsToRedeemValue]);
+
+    // Sync amountTendered with balanceRemaining when points change
+    // Modified: Only auto-sync if amountTendered is empty or was previously exactly equal to the old balance
+    const lastBalanceRef = useRef(balanceRemaining);
+    useEffect(() => {
+        if (selectedMethod?.toUpperCase() === 'POINTS') {
+            const isDefaultAmount = amountTendered === '' || parseFloat(amountTendered) === lastBalanceRef.current;
+            if (isDefaultAmount) {
+                setAmountTendered(balanceRemaining.toFixed(2));
+            }
+        }
+        lastBalanceRef.current = balanceRemaining;
+    }, [balanceRemaining, selectedMethod, amountTendered]);
+
+    const change = useMemo(() => {
+        return Math.max(0, amountTenderedNum - balanceRemaining);
+    }, [amountTenderedNum, balanceRemaining]);
 
     const isReferenceRequired = useMemo(() => {
         if (!selectedMethod) return false;
@@ -213,19 +276,29 @@ export function TenderDialog({
     const handleConfirmPayment = async () => {
         
         // Strict Point Validation
+        const availablePoints = (customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0;
+        
         if (selectedMethod === 'POINTS') {
-            const currentPoints = (customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0;
-            if (amountTenderedNum > currentPoints) {
+            if (amountTenderedNum < balanceRemaining) {
                 toast({
-                    title: "Insufficient Points",
-                    description: `Customer only has ${currentPoints} points.`,
+                    title: "Insufficient Cash",
+                    description: `Remaining balance is ₱${balanceRemaining.toFixed(2)}. Please enter enough cash.`,
                     variant: "destructive"
                 });
                 return;
             }
         }
 
-        const finalAmountTendered = isCashPayment ? amountTenderedNum : totalDue;
+        if (pointsToRedeemValue > (Number(availablePoints) * pointsRate)) {
+            toast({
+                title: "Insufficient Points",
+                description: `Customer only has ${Number(availablePoints).toFixed(0)} points.`,
+                variant: "destructive"
+            });
+            return;
+        }
+
+        const finalAmountTendered = isCashPayment ? amountTenderedNum : balanceRemaining;
 
         if (isCashPayment && finalAmountTendered < totalDue) {
              toast({
@@ -267,9 +340,9 @@ export function TenderDialog({
                         }
                         return acc;
                     }, 0),
-                    amountTendered: finalAmountTendered,
-                    change: finalAmountTendered - totalDue,
-                    paymentMethod: selectedMethod, // Use state: selectedMethod
+                    amountTendered: selectedMethod === 'POINTS' ? (pointsToRedeemValue + amountTenderedNum) : finalAmountTendered,
+                    change: selectedMethod === 'POINTS' ? (amountTenderedNum - balanceRemaining) : (finalAmountTendered - totalDue),
+                    paymentMethod: selectedMethod === 'POINTS' && balanceRemaining > 0 ? 'POINTS + CASH' : selectedMethod, 
                     items: items.map(item => ({
                         id: item.id,
                         name: item.name,
@@ -281,8 +354,8 @@ export function TenderDialog({
                     customer: customer || { id: 'walk-in', name: 'Walk-in Customer' },
                     status: 'completed',
                     paymentDetails: {
-                        pointsUsed: selectedMethod === 'POINTS' ? finalAmountTendered : 0, // 1 Point = 1 Peso
-                        pointsConversionRate: selectedMethod === 'POINTS' ? 1 : 0,
+                        pointsUsed: pointsToRedeemCount, 
+                        pointsConversionRate: pointsRate,
                         gatewayReference: isReferenceRequired ? referenceInput : undefined
                     },
                     currentUser: { ...currentUser, id: currentUser?.id || 'admin' }, // Ensure ID exists
@@ -306,17 +379,21 @@ export function TenderDialog({
             });
 
             const saleDetails = {
-                items,
-                customer,
+                items: [...items],
+                customer: customer || { id: 'walk-in', name: 'Walk-in' } as any,
                 totalDue,
-                change: finalAmountTendered - totalDue,
+                change,
                 paymentMethod: selectedMethod,
-                orderNumber: result.data.orderNumber,
-                amountTendered: finalAmountTendered, // Ensure this is available for receipt
-                pointsEarned: result.data.pointsEarned || 0,
-                transactionId: result.data.posTransId, // Add transaction ID if needed
-                terminalMin,
-                terminalSerialNumber
+                orderNumber: result.data.orderNumber.toString(),
+                amountTendered: amountTendered !== '' ? Number(amountTendered) : totalDue,
+                transactionDate: new Date(),
+                cashierName: currentUser?.display_name || currentUser?.username || 'Admin',
+                pointsEarned: result.data.pointsEarned,
+                pointsUsedCount: pointsToRedeemCount,
+                pointsUsedValue: pointsToRedeemValue,
+                pointsBalance: result.data.pointsRemaining,
+                terminalMin: terminalMin || settings?.minNumber,
+                terminalSerialNumber: terminalSerialNumber || settings?.serialNumber
             };
 
             console.log('Final Sale Details for Receipt:', saleDetails);
@@ -327,9 +404,9 @@ export function TenderDialog({
 
             // Auto-print logic moved or handled here based on flow
             
-            // If Cash and Change > 0, show Change View, do NOT close/print yet (unless we want to background print)
+            // If Change > 0, show Change View, do NOT close/print yet (unless we want to background print)
             // User requested: Enter Amount -> Dialog Change -> Print
-            if (isCashPayment && (finalAmountTendered - totalDue) > 0) {
+            if (change > 0) {
                  setView('change');
                  // We don't print or close yet. We wait for user interaction in Change View.
             } else {
@@ -385,7 +462,8 @@ export function TenderDialog({
             setView('tender');
             setCompletedSale(null);
             setIsProcessing(false);
-            // Amount tendered is now handled by the specific pre-fill effect above
+            setPointsToRedeemInput(''); 
+            setAmountTendered(totalDue.toFixed(2));
             setReferenceInput('');
             // Auto-confirm removed to allow amount entry for all methods
         }
@@ -417,14 +495,6 @@ export function TenderDialog({
         return Array.from(amounts).filter(a => a >= total).sort((a, b) => a - b).slice(0, 4);
     }
 
-    // Parse for display comparison - defined at top of handleConfirmPayment now (for logic), but we need it for render.
-    // Actually, handleConfirmPayment has its own scope.
-    // But getQuickAmounts is outside.
-    // The lint error said: 'Cannot redeclare block-scoped variable'. 
-    // Wait, earlier I added `const amountTenderedNum` inside `handleConfirmPayment`.
-    // And also `const amountTenderedNum` in the component body?
-    // Let's check line 659.
-    
     const amountTenderedFloat = parseFloat(amountTendered) || 0;
 
     return (
@@ -501,50 +571,132 @@ export function TenderDialog({
                                 </Select>
                             </div>
 
-                            <div className="text-center">
-                                <p className="text-sm text-muted-foreground">Total Amount Due</p>
-                                <p className="text-5xl font-bold text-primary">₱{totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            {/* Manual Points Input field when method is POINTS - MOVED TO TOP */}
+                            {selectedMethod === 'POINTS' && (
+                                <div className="space-y-4">
+                                    {(!customer || (customer as any).id === 'walk-in') ? (
+                                        <div className="bg-purple-50 p-6 rounded-xl border-2 border-dashed border-purple-200 flex flex-col items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div className="p-3 bg-white rounded-full shadow-sm text-purple-600">
+                                                <User className="h-6 w-6" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="font-bold text-purple-900">Points Redemption requires a Customer</p>
+                                                <p className="text-sm text-purple-600/70">Please select a customer to see available points.</p>
+                                            </div>
+                                            <Button 
+                                                onClick={onTriggerCustomerSelection}
+                                                className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-8 shadow-lg shadow-purple-200"
+                                            >
+                                                Select Customer
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3 bg-purple-50 p-4 rounded-xl border border-purple-200 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div className="flex justify-between items-center px-1">
+                                                <Label htmlFor="manualPoints" className="text-purple-900 font-bold text-base flex items-center gap-2">
+                                                    <Star className="h-4 w-4 text-purple-600 fill-purple-600" />
+                                                    Points Value to Redeem
+                                                </Label>
+                                                <span className="text-[10px] font-bold text-purple-600 bg-white px-2 py-0.5 rounded-full border border-purple-100 shadow-sm">
+                                                    Available: {customerPoints.toLocaleString()} (₱{customerPoints.toFixed(2)})
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <div className="relative flex-1">
+                                                    <Input
+                                                        id="manualPoints"
+                                                        ref={pointsInputRef}
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={pointsToRedeemInput}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                                setPointsToRedeemInput(val);
+                                                            }
+                                                        }}
+                                                        placeholder="0"
+                                                        className="h-12 text-xl font-bold border-purple-300 focus-visible:ring-purple-500 bg-white pl-4"
+                                                    />
+                                                </div>
+                                                <Button 
+                                                    variant="secondary"
+                                                    className="bg-purple-600 text-white hover:bg-purple-700 h-12 px-6 font-bold shadow-md shadow-purple-100 transition-all active:scale-95"
+                                                    onClick={() => {
+                                                        const maxPossibleValue = Math.min(totalDue, customerPoints);
+                                                        setPointsToRedeemInput(maxPossibleValue.toFixed(2));
+                                                    }}
+                                                >
+                                                    Redeem All
+                                                </Button>
+                                            </div>
+                                            <p className="text-[10px] text-purple-600 font-bold px-1 flex items-center gap-1">
+                                                <Info className="h-3 w-3" />
+                                                1 Point = ₱1.00 (Strict 1:1)
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Payment Summary Box */}
+                            <div className="space-y-4">
+                                <div className="text-center p-6 bg-primary/5 rounded-2xl border-2 border-primary/10 mb-2">
+                                    <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Due</p>
+                                    <p className="text-5xl font-black text-primary">₱{totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    
+                                    {pointsToRedeemValue > 0 && (
+                                        <div className="mt-4 pt-4 border-t border-primary/10 text-sm space-y-2 animate-in fade-in duration-300">
+                                            <div className="flex justify-between items-center text-foreground font-black text-lg">
+                                                <span>Net Balance Due:</span>
+                                                <span>₱{balanceRemaining.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
-                            {/* Allow input for ALL methods */}
-                            <div className="space-y-2">
-                                <Label htmlFor="amountTendered" className="text-base">Amount Tendered</Label>
-                                <Input
-                                    id="amountTendered"
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={amountTendered}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                                            setAmountTendered(value);
-                                        }
-                                    }}
-                                    placeholder="0.00"
-                                    className="h-12 text-2xl text-right font-bold text-foreground [&:not(:placeholder-shown)]:text-foreground"
-                                    style={{ color: 'hsl(var(--foreground))' }}
-                                    autoFocus
-                                    onFocus={(e) => e.target.select()}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            if (!isProcessing) {
-                                                const val = parseFloat(amountTendered) || 0;
-                                                // Allow submit if val >= total OR distinct method
-                                                if (selectedMethod === 'POINTS' && val <= ((customer as any)?.current_points || 0)) {
-                                                    // Reference check handled in handleConfirmPayment
-                                                    handleConfirmPayment();
-                                                } else if (selectedMethod !== 'POINTS' && val >= totalDue) {
-                                                    // Reference check handled in handleConfirmPayment
-                                                    handleConfirmPayment();
+                            {/* Amount Tendered Section - Always show for Points and Cash */}
+                            {(selectedMethod === 'CASH' || selectedMethod === 'POINTS' || balanceRemaining > 0) && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="amountTendered" className="text-base font-bold">
+                                        {selectedMethod === 'POINTS' ? 'Cash Balance Tendered' : 'Amount Tendered'}
+                                    </Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="amountTendered"
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={amountTendered}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                                    setAmountTendered(value);
                                                 }
-                                            }
-                                        }
-                                    }}
-                                />
-                            </div>
+                                            }}
+                                            placeholder="0.00"
+                                            className="h-14 text-3xl text-right font-black text-foreground [&:not(:placeholder-shown)]:text-foreground pr-4 border-2 focus-visible:ring-primary/30"
+                                            style={{ color: 'hsl(var(--foreground))' }}
+                                            autoFocus={selectedMethod !== 'POINTS'}
+                                            onFocus={(e) => e.target.select()}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (!isProcessing) {
+                                                        handleConfirmPayment();
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    {selectedMethod === 'POINTS' && balanceRemaining > 0 && (
+                                        <p className="text-xs text-right text-muted-foreground mt-1 font-medium italic">
+                                            Please enter the cash amount given by the customer for the remaining balance.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
 
-                            {/* Inline Change Display REMOVED - Moved to separate view */}
 
                             {/* Reference Input */}
                             {isReferenceRequired && (
@@ -569,37 +721,16 @@ export function TenderDialog({
                                 </div>
                             )}
 
-                            {/* Points UI */}
-                            {selectedMethod === 'POINTS' && customer && (
-                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-blue-800">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-sm font-semibold">Available Points:</span>
-                                        <span className="font-mono text-lg font-bold">{(customer as any).current_points || (customer as any).loyaltyPoints || 0}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs">Conversion Rate:</span>
-                                        <span className="text-xs font-mono">1 Point = ₱1.00</span>
-                                    </div>
-                                    <div className="flex justify-between items-center border-t border-blue-200 pt-2">
-                                        <span className="text-sm font-semibold">Max Redeemable:</span>
-                                        <span className="font-mono text-lg font-bold">₱{((customer as any).current_points || (customer as any).loyaltyPoints || 0).toFixed(2)}</span>
-                                    </div>
-                                    
-                                    {amountTenderedFloat > 0 && amountTenderedFloat > ((customer as any).current_points || (customer as any).loyaltyPoints || 0) && (
-                                        <div className="mt-2 text-xs text-red-600 font-bold bg-red-50 p-2 rounded border border-red-200 flex items-center gap-1">
-                                            <span>⚠️ Insufficient Points</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
                             {totalDue > 0 && selectedMethod === 'CASH' && (
                                 <div className="grid grid-cols-4 gap-2">
-                                    {getQuickAmounts(totalDue).map(amount => (
-                                        <Button key={amount} variant="outline" onClick={() => handleQuickAmount(amount)}>₱{amount}</Button>
+                                    {getQuickAmounts(balanceRemaining || totalDue).map(amount => (
+                                        <Button key={amount} variant="outline" onClick={() => handleQuickAmount(amount)} className="h-10 font-bold">₱{amount}</Button>
                                     ))}
                                 </div>
                             )}
+
+                            {/* Split Payment Removed - Integrated into main manual flow */}
 
                             <DialogFooter className="mt-6 sm:justify-between gap-4">
                                 <Button
@@ -614,9 +745,9 @@ export function TenderDialog({
                                     onClick={handleConfirmPayment}
                                     disabled={
                                         isProcessing || 
-                                        !amountTendered || 
-                                        (selectedMethod === 'CASH' && parseFloat(amountTendered) < totalDue) ||
-                                        (selectedMethod === 'POINTS' && parseFloat(amountTendered) > ((customer as any)?.current_points || 0)) ||
+                                        (!amountTendered && balanceRemaining > 0) || 
+                                        ((selectedMethod === 'CASH' || selectedMethod === 'POINTS') && parseFloat(amountTendered) < balanceRemaining) ||
+                                        (pointsToRedeemValue > (Number((customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0) * pointsRate)) ||
                                         (isReferenceRequired && !referenceInput.trim())
                                     }
                                     className="w-full sm:w-auto min-w-[140px] font-bold text-lg h-12 shadow-md shadow-primary/20"

@@ -12,24 +12,26 @@ export async function GET(
 
     const sql = `
       SELECT
-        id,
-        name,
-        contact_number,
-        active,
-        sales_person,
-        sales_area,
-        sales_group,
-        loyalty_points,
-        payment_terms,
-        address,
-        billing_address,
-        discount,
-        credit_limit,
-        price_level_id,
-        created_at,
-        updated_at
-      FROM customers
-      WHERE id = ?
+        c.id,
+        c.name,
+        c.contact_number,
+        c.active,
+        c.sales_person,
+        c.sales_area,
+        c.sales_group,
+        COALESCE(cl.current_points, c.loyalty_points) AS loyalty_points,
+        cl.current_points AS current_points,
+        c.payment_terms,
+        c.address,
+        c.billing_address,
+        c.discount,
+        c.credit_limit,
+        c.price_level_id,
+        c.created_at,
+        c.updated_at
+      FROM customers c
+      LEFT JOIN customer_loyalty cl ON c.id = cl.customer_id
+      WHERE c.id = ?
     `;
 
     const customers = await query(sql, [customerId]);

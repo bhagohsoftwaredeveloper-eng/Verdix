@@ -35,14 +35,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { PlusCircle, Pencil, Loader2, X, Plus, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
-import { Category, Product, Brand, UnitOfMeasure, Supplier, Account, TaxRate, SystemSettings } from '@/lib/types';
+import { Category, Product, Brand, UnitOfMeasure, Supplier, TaxRate, SystemSettings } from '@/lib/types';
 
 import { ManageCategoriesDialog } from './ManageCategoriesDialog';
 import { ManageBrandsDialog } from './ManageBrandsDialog';
 import { ManageSubcategoriesDialog } from './ManageSubcategoriesDialog';
 import { ManageUnitOfMeasureDialog } from './ManageUnitOfMeasureDialog';
 import { ManageSuppliersDialog } from './ManageSuppliersDialog';
-import { ManageAccountsDialog } from './ManageAccountsDialog';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -50,6 +49,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
+import { ManageShelfLocationsDialog } from './ManageShelfLocationsDialog';
 
 function CurrencyIcon({ className }: { className?: string }) {
   return (
@@ -67,7 +67,7 @@ function CurrencyIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-import { updateProduct, getBrands, getCategories, getSubcategories, getUnitsOfMeasure, getSuppliers, getAccounts, getWarehouses } from './actions';
+import { updateProduct, getBrands, getCategories, getSubcategories, getUnitsOfMeasure, getSuppliers, getWarehouses } from './actions';
 
 
 
@@ -82,6 +82,7 @@ const productSchema = z.object({
   subcategory: z.string().optional(),
   supplier: z.string().optional(),
   warehouse: z.string().optional(),
+  shelfLocationId: z.string().optional(),
   isSerialized: z.boolean().default(false),
   unitOfMeasure: z.string().min(1, 'Unit of measure is required'),
   reorderPoint: z.coerce.number().int().nonnegative().optional().default(0),
@@ -127,8 +128,9 @@ export function EditProductDialog({
   const [subcategories, setSubcategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<UnitOfMeasure[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [shelfLocations, setShelfLocations] = useState<any[]>([]);
+  const [isLoadingShelfLocations, setIsLoadingShelfLocations] = useState(false);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
@@ -160,8 +162,8 @@ export function EditProductDialog({
       setSubcategories(externalProductOptions.subcategories || []);
       setUnits(externalProductOptions.units || []);
       setSuppliers(externalProductOptions.suppliers || []);
-      setAccounts(externalProductOptions.accounts || []);
       setWarehouses(externalProductOptions.warehouses || []);
+      setShelfLocations(externalProductOptions.shelfLocations || []);
       setPriceLevels(externalProductOptions.priceLevels || []);
       setTaxRates(externalProductOptions.taxRates || []);
       setIsLoadingPriceLevels(false);
@@ -178,6 +180,7 @@ export function EditProductDialog({
       incomeAccount: product.incomeAccount ?? '',
       expenseAccount: product.expenseAccount ?? '',
       warehouse: product.warehouse ?? '',
+      shelfLocationId: product.shelfLocationId ?? '',
       subcategory: product.subcategory ?? '', // Handle null
       supplier: product.supplier ?? '', // Handle null
       unitOfMeasure: product.unitOfMeasure ?? '', // Handle null
@@ -222,6 +225,7 @@ export function EditProductDialog({
           incomeAccount: product.incomeAccount ?? '',
           expenseAccount: product.expenseAccount ?? '',
           warehouse: product.warehouseId ?? product.warehouse ?? '',
+          shelfLocationId: product.shelfLocationId ?? '',
           reorderPoint: product.reorderPoint ?? 0,
           subcategory: product.subcategory ?? '', // Handle null
           supplier: product.supplier ?? '', // Handle null
@@ -544,12 +548,6 @@ export function EditProductDialog({
                         Price Levels
                       </TabsTrigger>
                       <TabsTrigger 
-                        value="accounts"
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
-                      >
-                        Accounts
-                      </TabsTrigger>
-                      <TabsTrigger 
                         value="conversion"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                       >
@@ -856,9 +854,56 @@ export function EditProductDialog({
                             </FormItem>
                           )}
                         />
+
+                        <FormField
+                          control={form.control}
+                          name="shelfLocationId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Shelf Location (Optional)</FormLabel>
+                              <div className="flex gap-2">
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a shelf location" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {isLoadingShelfLocations ? (
+                                      <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                    ) : (
+                                      shelfLocations?.map((location: any) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                <ManageShelfLocationsDialog 
+                                  onLocationAdded={(newLocationId?: string) => {
+                                    if (onOptionsRefresh) onOptionsRefresh();
+                                    if (newLocationId) {
+                                      form.setValue('shelfLocationId', newLocationId, { shouldValidate: true, shouldDirty: true });
+                                    }
+                                  }}
+                                  trigger={
+                                      <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                          <Plus className="h-4 w-4" />
+                                      </Button>
+                                  }
+                                />
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
                       
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <FormItem>
+                          <FormLabel>Initial Stock</FormLabel>
+                          <FormControl>
+                            <Input type="number" value={product.stock || 0} disabled />
+                          </FormControl>
+                          <FormDescription>Stock is updated via transactions.</FormDescription>
+                        </FormItem>
                          <FormField
                           control={form.control}
                           name="reorderPoint"
@@ -927,90 +972,6 @@ export function EditProductDialog({
                           )}
                         />
 
-                      </div>
-                    </TabsContent>
-                    <TabsContent value="accounts" className="space-y-4 p-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="incomeAccount"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Income Account (Optional)</FormLabel>
-                              <div className="flex gap-2">
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select income account" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {accounts?.filter(account => account.type === 'income').map((account: Account) => (
-                                      <SelectItem key={account.id} value={account.id}>
-                                        {account.name} {account.code ? `(${account.code})` : ''}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <ManageAccountsDialog 
-                                  onAccountAdded={(newAccount) => {
-                                      onOptionsRefresh?.();
-                                      if (newAccount.type === 'income') {
-                                          form.setValue('incomeAccount', newAccount.id);
-                                      }
-                                  }}
-                                  onAccountUpdated={() => onOptionsRefresh?.()}
-                                  trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="expenseAccount"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Expense Account (Optional)</FormLabel>
-                              <div className="flex gap-2">
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select expense account" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {accounts?.filter(account => account.type === 'expense').map((account: Account) => (
-                                      <SelectItem key={account.id} value={account.id}>
-                                        {account.name} {account.code ? `(${account.code})` : ''}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <ManageAccountsDialog 
-                                  onAccountAdded={(newAccount) => {
-                                      onOptionsRefresh?.();
-                                      if (newAccount.type === 'expense') {
-                                          form.setValue('expenseAccount', newAccount.id);
-                                      }
-                                  }}
-                                  onAccountUpdated={() => onOptionsRefresh?.()}
-                                  trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
                       </div>
                     </TabsContent>
 

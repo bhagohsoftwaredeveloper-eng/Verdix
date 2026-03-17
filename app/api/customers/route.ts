@@ -11,33 +11,35 @@ export async function GET(request: NextRequest) {
 
     let sql = `
       SELECT
-        id,
-        name,
-        contact_number AS contactNumber,
-        active,
-        sales_person AS salesPerson,
-        sales_area AS salesArea,
-        sales_group AS salesGroup,
-        loyalty_points AS loyaltyPoints,
-        payment_terms AS paymentTerms,
-        address,
-        billing_address AS billingAddress,
-        discount,
-        credit_limit AS creditLimit,
-        price_level_id AS priceLevelId,
-        created_at AS createdAt,
-        updated_at AS updatedAt
-      FROM customers
+        c.id,
+        c.name,
+        c.contact_number AS contactNumber,
+        c.active,
+        c.sales_person AS salesPerson,
+        c.sales_area AS salesArea,
+        c.sales_group AS salesGroup,
+        COALESCE(cl.current_points, c.loyalty_points) AS loyaltyPoints,
+        cl.current_points AS current_points,
+        c.payment_terms AS paymentTerms,
+        c.address,
+        c.billing_address AS billingAddress,
+        c.discount,
+        c.credit_limit AS creditLimit,
+        c.price_level_id AS priceLevelId,
+        c.created_at AS createdAt,
+        c.updated_at AS updatedAt
+      FROM customers c
+      LEFT JOIN customer_loyalty cl ON c.id = cl.customer_id
       WHERE 1=1
     `;
     const params: any[] = [];
 
     if (search) {
-      sql += ' AND (name LIKE ? OR contact_number LIKE ?)';
+      sql += ' AND (c.name LIKE ? OR c.contact_number LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    sql += ' ORDER BY c.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const customers = await query(sql, params);
