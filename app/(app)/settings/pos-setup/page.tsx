@@ -51,6 +51,7 @@ interface PosSettings {
   enablePriceEditAuth?: boolean;
   priceEditAuthUsername?: string | null;
   priceEditAuthPassword?: string | null;
+  isTrainingMode?: boolean;
 }
 
 export default function PosSetupPage() {
@@ -86,7 +87,8 @@ export default function PosSetupPage() {
     showQuantityInSearch: true,
     enablePriceEditAuth: false,
     priceEditAuthUsername: '',
-    priceEditAuthPassword: ''
+    priceEditAuthPassword: '',
+    isTrainingMode: false
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -481,6 +483,64 @@ export default function PosSetupPage() {
                 checked={settings.enableNegativeInventory}
                 onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableNegativeInventory: checked }))}
               />
+            </div>
+          </CardContent>
+        </Card>
+
+
+        {/* BIR Compliance (RMO 24-2023) */}
+        <Card className="border-blue-200 bg-blue-50/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-700">
+              <FileText className="h-5 w-5" />
+              BIR Compliance (RMO 24-2023)
+            </CardTitle>
+            <CardDescription>Features required for BIR Cashering / POS System compliance</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="isTrainingMode" className="text-blue-900 font-semibold">Training Mode</Label>
+                <p className="text-sm text-blue-700/70">
+                  Transactions made in Training Mode are tagged and excluded from official totals. 
+                  <br /><span className="text-xs font-bold text-red-600 font-mono">WARNING: TURN OFF BEFORE ACTUAL DEPLOYMENT</span>
+                </p>
+              </div>
+              <Switch
+                id="isTrainingMode"
+                checked={!!settings.isTrainingMode}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, isTrainingMode: checked }))}
+                className="data-[state=checked]:bg-blue-600"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-blue-100">
+              <div className="space-y-0.5">
+                <Label className="text-blue-900 font-semibold">Electronic Journal (e-Journal)</Label>
+                <p className="text-sm text-blue-700/70">
+                  Generate daily transaction logs for BIR audit (RMO No. 24-2023)
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Input 
+                   type="date" 
+                   defaultValue={new Date().toISOString().split('T')[0]} 
+                   className="w-[150px] bg-white"
+                   id="ejournal-date"
+                />
+                <Button 
+                   variant="outline" 
+                   size="sm" 
+                   className="border-blue-200 text-blue-700 hover:bg-blue-100"
+                   onClick={() => {
+                      const date = (document.getElementById('ejournal-date') as HTMLInputElement)?.value;
+                      if (!date) return;
+                      window.open(getApiUrl(`/sales/ejournal?date=${date}&terminalId=all`), '_blank');
+                   }}
+                >
+                   Download .txt
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

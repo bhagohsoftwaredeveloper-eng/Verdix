@@ -46,6 +46,7 @@ interface TenderDialogProps {
     terminalId: string;
     terminalMin?: string;
     terminalSerialNumber?: string;
+    isTrainingMode?: boolean;
     paymentMethods: { id: string; name: string; isReferenceRequired?: boolean; pointsAmount?: number; currencyEquivalent?: number }[];
     printMode: 'browser' | 'escpos' | 'usb' | 'native';
     settings?: SystemSettings | null;
@@ -100,6 +101,7 @@ export function TenderDialog({
     terminalId,
     terminalMin,
     terminalSerialNumber,
+    isTrainingMode,
     paymentMethods = [],
     printMode,
     settings,
@@ -393,7 +395,8 @@ export function TenderDialog({
                 pointsUsedValue: pointsToRedeemValue,
                 pointsBalance: result.data.pointsRemaining,
                 terminalMin: terminalMin || settings?.minNumber,
-                terminalSerialNumber: terminalSerialNumber || settings?.serialNumber
+                terminalSerialNumber: terminalSerialNumber || settings?.serialNumber,
+                isTrainingMode: isTrainingMode
             };
 
             console.log('Final Sale Details for Receipt:', saleDetails);

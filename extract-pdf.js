@@ -1,11 +1,18 @@
 const fs = require('fs');
-const pdfParse = require('pdf-parse');
 
-let dataBuffer = fs.readFileSync('lib/sdk/ESC Windows SDK.pdf');
+async function extract() {
+  const { PDFParse } = await import('pdf-parse');
+  
+  let dataBuffer = fs.readFileSync('RMO No. 24-2023.pdf');
+  
+  try {
+    const parser = new PDFParse({ data: dataBuffer });
+    const data = await parser.getText();
+    fs.writeFileSync('rmo_content.txt', data.text);
+    console.log('PDF extracted to rmo_content.txt');
+  } catch (err) {
+    console.error("Extraction failed:", err);
+  }
+}
 
-pdfParse(dataBuffer).then(function(data) {
-  fs.writeFileSync('lib/sdk/manual.txt', data.text);
-  console.log('PDF extracted to manual.txt');
-}).catch(function(err) {
-  console.error("PDF extraction failed", err);
-});
+extract();

@@ -75,9 +75,10 @@ export async function GET(request: NextRequest) {
         }
 
         const salesBaseSql = `
-           FROM sales_transactions st
-           JOIN pos_transactions pt ON st.id = pt.sale_id
-           WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        FROM sales_transactions st
+        JOIN pos_transactions pt ON st.id = pt.sale_id
+        WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        AND pt.is_training = 0
            ${dateCondition}
            ${terminalCondition}
         `;
@@ -98,6 +99,7 @@ export async function GET(request: NextRequest) {
           FROM sales_transactions st
           JOIN pos_transactions pt ON st.id = pt.sale_id
           WHERE st.status = 'Returned'
+          AND pt.is_training = 0
           ${dateCondition}
           ${terminalCondition}
         `;
@@ -112,6 +114,7 @@ export async function GET(request: NextRequest) {
             FROM sales_transactions st
             JOIN pos_transactions pt ON st.id = pt.sale_id
             WHERE st.status IN ('Void', 'Voided', 'Cancelled')
+            AND pt.is_training = 0
             ${dateCondition}
             ${terminalCondition}
         `;
@@ -126,6 +129,7 @@ export async function GET(request: NextRequest) {
            FROM pos_transactions pt
            LEFT JOIN sales_transactions st ON pt.sale_id = st.id
            WHERE pt.transaction_type = 'return'
+           AND pt.is_training = 0
            ${dateCondition.replace(/st\.invoice_date/g, 'pt.created_at').replace(/st\.created_at/g, 'pt.created_at')}
            ${terminalCondition}
         `;
@@ -138,6 +142,7 @@ export async function GET(request: NextRequest) {
           FROM sales_transactions st
           JOIN pos_transactions pt ON st.id = pt.sale_id
           WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+          AND pt.is_training = 0
           ${dateCondition}
           ${terminalCondition}
           GROUP BY st.payment_method
@@ -211,11 +216,11 @@ export async function GET(request: NextRequest) {
         let terminalMin = '';
         let terminalSn = '';
         if (terminalId && terminalId !== 'all') {
-            const termSql = `SELECT min_number, serial_number FROM pos_terminals WHERE id = ?`;
+            const termSql = `SELECT terminal_min, terminal_serial_number FROM pos_terminals WHERE id = ?`;
             const [termResult] = await query(termSql, [terminalId]) as any[];
             if (termResult) {
-                terminalMin = termResult.min_number;
-                terminalSn = termResult.serial_number;
+                terminalMin = termResult.terminal_min;
+                terminalSn = termResult.terminal_serial_number;
             }
         }
 
@@ -255,7 +260,9 @@ export async function GET(request: NextRequest) {
             previousReading: safeParseFloat(previousReading),
             runningTotal: safeParseFloat(runningTotal),
             voidAmount: safeParseFloat(voidAmount),
-            vatAdjustment: 0.00 
+            vatAdjustment: 0.00,
+            zCounter: safeInt(0), // Preview uses 0 or fetches from terminal? 
+            resetCounter: safeInt(0)
         };
         
         return NextResponse.json({
@@ -269,7 +276,7 @@ export async function GET(request: NextRequest) {
         // ==========================================
         
         let querySql = `
-            SELECT z.*, pt.min_number AS terminal_min, pt.serial_number AS terminal_sn
+            SELECT z.*, pt.terminal_min AS terminal_min, pt.terminal_serial_number AS terminal_sn
             FROM z_readings z
             LEFT JOIN pos_terminals pt ON z.terminal_id = pt.id
             WHERE 1=1
@@ -372,7 +379,9 @@ export async function GET(request: NextRequest) {
                 minReturnId: row.min_return_id || '',
                 maxReturnId: row.max_return_id || '',
                 previousReading: 0, 
-                runningTotal: 0     
+                runningTotal: 0,
+                zCounter: safeInt(row.z_counter),
+                resetCounter: safeInt(row.reset_counter)
              };
         });
 
@@ -462,6 +471,7 @@ export async function POST(request: NextRequest) {
         FROM sales_transactions st
         JOIN pos_transactions pt ON st.id = pt.sale_id
         WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        AND pt.is_training = 0
         ${dateCondition}
         ${terminalCondition}
         `;
@@ -483,6 +493,7 @@ export async function POST(request: NextRequest) {
         FROM sales_transactions st
         JOIN pos_transactions pt ON st.id = pt.sale_id
         WHERE st.status = 'Returned'
+        AND pt.is_training = 0
         ${dateCondition}
         ${terminalCondition}
         `;
@@ -495,6 +506,7 @@ export async function POST(request: NextRequest) {
         FROM sales_transactions st
         JOIN pos_transactions pt ON st.id = pt.sale_id
         WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        AND pt.is_training = 0
         ${dateCondition}
         ${terminalCondition}
         GROUP BY st.payment_method
@@ -510,6 +522,7 @@ export async function POST(request: NextRequest) {
             FROM sales_transactions st
             JOIN pos_transactions pt ON st.id = pt.sale_id
             WHERE st.status IN ('Void', 'Voided', 'Cancelled')
+            AND pt.is_training = 0
             ${dateCondition}
             ${terminalCondition}
         `;
@@ -524,6 +537,7 @@ export async function POST(request: NextRequest) {
            FROM pos_transactions pt
            LEFT JOIN sales_transactions st ON pt.sale_id = st.id
            WHERE pt.transaction_type = 'return'
+           AND pt.is_training = 0
            ${dateCondition.replace(/st\.invoice_date/g, 'pt.created_at').replace(/st\.created_at/g, 'pt.created_at')}
            ${terminalCondition}
         `;
@@ -580,14 +594,35 @@ export async function POST(request: NextRequest) {
             amount: parseFloat(p.amount)
         }));
 
+        // Fetch terminal MIN, SN and counters
+        let terminalMin = '';
+        let terminalSn = '';
+        let zCounter = 0;
+        let resetCounter = 0;
+        
+        if (terminalId && terminalId !== 'all') {
+            // Update Z-Counter
+            await query(`UPDATE pos_terminals SET z_counter = z_counter + 1 WHERE id = ?`, [terminalId]);
+            
+            const termSql = `SELECT terminal_min, terminal_serial_number, z_counter, reset_counter FROM pos_terminals WHERE id = ?`;
+            const [termResult] = await query(termSql, [terminalId]) as any[];
+            if (termResult) {
+                terminalMin = termResult.terminal_min;
+                terminalSn = termResult.terminal_serial_number;
+                zCounter = termResult.z_counter;
+                resetCounter = termResult.reset_counter;
+            }
+        }
+
         // 4. Insert into DB
         const insertSql = `
             INSERT INTO z_readings (
                 reading_number, report_date, terminal_id, cashier_name,
                 gross_sales, returns, discounts, net_sales, vat_amount,
                 payment_methods, transaction_count, starting_cash, cash_sales, cash_in_drawer, min_sale_id, max_sale_id,
-                min_void_id, max_void_id, min_return_id, max_return_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                min_void_id, max_void_id, min_return_id, max_return_id,
+                z_counter, reset_counter
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         
         await query(insertSql, [
@@ -610,7 +645,9 @@ export async function POST(request: NextRequest) {
             minVoidId, 
             maxVoidId, 
             minReturnId, 
-            maxReturnId
+            maxReturnId,
+            zCounter,
+            resetCounter
         ]);
 
         // Retreive the last inserted ID provided by mysql usually, OR just return what we calculated.
@@ -658,17 +695,8 @@ export async function POST(request: NextRequest) {
         }
 
 
-        // Fetch terminal MIN and SN for POST generated reading
-        let terminalMin = '';
-        let terminalSn = '';
-        if (terminalId && terminalId !== 'all') {
-            const termSql = `SELECT min_number, serial_number FROM pos_terminals WHERE id = ?`;
-            const [termResult] = await query(termSql, [terminalId]) as any[];
-            if (termResult) {
-                terminalMin = termResult.min_number;
-                terminalSn = termResult.serial_number;
-            }
-        }
+        // Fetch terminal MIN and SN for POST generated reading (if not already fetched)
+        // (Moved to earlier in function for Z-Counter logic)
 
         const generatedReading = {
             id: String(readingNumber),
@@ -706,7 +734,9 @@ export async function POST(request: NextRequest) {
             previousReading: safeParseFloat(previousReading),
             runningTotal: safeParseFloat(previousReading + finalNetSales),
             voidAmount: safeParseFloat(voidAmount),
-            vatAdjustment: 0.00
+            vatAdjustment: 0.00,
+            zCounter: safeInt(zCounter),
+            resetCounter: safeInt(resetCounter)
         };
 
         return NextResponse.json({ success: true, data: [generatedReading] });

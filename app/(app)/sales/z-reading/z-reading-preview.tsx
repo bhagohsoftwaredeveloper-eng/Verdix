@@ -33,6 +33,8 @@ export type ZReadingData = {
   runningTotal?: number;
   voidAmount?: number;
   vatAdjustment?: number;
+  zCounter?: number;
+  resetCounter?: number;
 };
 
 type PrinterFormat = '58mm' | '80mm';
@@ -201,11 +203,11 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
         </div>
          <div style={styles.row}>
           <span>Reset Counter No.</span>
-          <span>0</span>
+          <span>{data.resetCounter || 0}</span>
         </div>
          <div style={styles.row}>
           <span>Z Counter No. :</span>
-          <span>1</span>
+          <span>{data.zCounter || 0}</span>
         </div>
       </div>
 

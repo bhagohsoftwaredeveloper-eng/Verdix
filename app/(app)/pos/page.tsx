@@ -287,6 +287,7 @@ export default function POSPage() {
   const [isLineVoidAuthOpen, setIsLineVoidAuthOpen] = useState(false);
   const [priceEditAuthCredentials, setPriceEditAuthCredentials] = useState<{username?: string | null, password?: string | null} | null>(null);
   const [isPriceEditAuthOpen, setIsPriceEditAuthOpen] = useState(false);
+  const [isTrainingMode, setIsTrainingMode] = useState(false);
 
   const [isInsufficientStockOpen, setIsInsufficientStockOpen] = useState(false);
   const [insufficientItems, setInsufficientItems] = useState<SaleItem[]>([]);
@@ -403,6 +404,7 @@ export default function POSPage() {
                   username: result.data.priceEditAuthUsername,
                   password: result.data.priceEditAuthPassword
               });
+              setIsTrainingMode(result.data.isTrainingMode || false);
               setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
               setBusinessSettings(result.data);
           }
@@ -1610,7 +1612,7 @@ export default function POSPage() {
                                 <div className="flex justify-between">
                                     <span>Vat amount:</span>
                                     <span className="font-mono">{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                </div>
+                                 </div>
                                  <div className="flex justify-between font-bold text-foreground">
                                     <span>Amount due:</span>
                                     <span className="font-mono text-primary">{totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
@@ -1689,6 +1691,14 @@ export default function POSPage() {
         />
       )}
 
+      {isTrainingMode && (
+         <div className="bg-blue-600 text-white py-1 px-4 text-center font-bold text-sm animate-pulse z-50 flex items-center justify-center gap-2">
+            <Ban className="h-4 w-4" />
+            BIR TRAINING MODE ACTIVE - TRANSACTIONS ARE NOT OFFICIAL
+            <Ban className="h-4 w-4" />
+         </div>
+      )}
+
       <TenderDialog
         isOpen={isTenderDialogOpen}
         onOpenChange={setIsTenderDialogOpen}
@@ -1705,6 +1715,7 @@ export default function POSPage() {
         terminalId={selectedTerminalId}
         terminalMin={terminals.find(t => t.id === selectedTerminalId)?.min}
         terminalSerialNumber={terminals.find(t => t.id === selectedTerminalId)?.serialNumber}
+        isTrainingMode={isTrainingMode}
         paymentMethods={paymentMethods}
         printMode={businessSettings?.printMode || 'browser'}
         settings={businessSettings as any} 

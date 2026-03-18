@@ -23,6 +23,7 @@ interface ReceiptViewProps {
         pointsUsed?: number;
         terminalMin?: string;
         terminalSerialNumber?: string;
+        isTrainingMode?: boolean;
     };
     settings?: SystemSettings | null;
 }
@@ -51,8 +52,8 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
             </div>
 
             <div className="mb-2 border-b border-dashed border-black pb-2">
-                <div>Sale Details</div>
-                <div className="font-bold">Order #: {saleDetails.orderNumber || 'N/A'}</div>
+                <div className="font-bold text-center border-y border-black py-1 mb-1 uppercase">CASH SALE</div>
+                <div className="font-bold">SI NO.: {(saleDetails.orderNumber || '000000').padStart(6, '0')}</div>
                 <div>Cust: {customer?.name || 'Walk-in'}</div>
                 <div>Cashier: {saleDetails.cashierName || 'Admin'}</div>
             </div>
@@ -152,6 +153,13 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 <div className="text-center mt-6">
                 <div>Thank you for your purchase!</div>
                 <div style={{fontSize: '9px'}}>Pos System by Bhagoh</div>
+                {saleDetails.isTrainingMode && (
+                    <div className="mt-4 border-2 border-black p-2 bg-gray-100 text-center font-bold text-[10px] leading-tight flex flex-col gap-1">
+                        <div>*** TRAINING MODE ***</div>
+                        <div>THIS IS NOT A CASH SALE/OFFICIAL RECEIPT.</div>
+                        <div>PLEASE REQUEST FROM SELLER YOUR CASH SALE/OFFICIAL RECEIPT</div>
+                    </div>
+                )}
             </div>
         </div>
     );

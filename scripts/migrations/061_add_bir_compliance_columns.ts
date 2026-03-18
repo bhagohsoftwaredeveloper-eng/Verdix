@@ -1,0 +1,73 @@
+import { registerMigration, Migration } from './runner';
+import { query } from '../../lib/mysql';
+
+export const migration: Migration = {
+  name: '061_add_bir_compliance_columns',
+  timestamp: '2026-03-17_16-20-00',
+  
+  async up() {
+    console.log('Running migration: 061_add_bir_compliance_columns');
+    
+    // Add columns to pos_settings
+    const settingsColumns = [
+      'is_training_mode BOOLEAN DEFAULT FALSE',
+      'last_ejournal_export TIMESTAMP NULL'
+    ];
+
+    for (const col of settingsColumns) {
+      try {
+        await query(`ALTER TABLE pos_settings ADD COLUMN ${col}`);
+        console.log(`✅ Added ${col.split(' ')[0]} to pos_settings`);
+      } catch (e: any) {
+        if (e.code === 'ER_DUP_COLUMN_NAME' || e.errno === 1060) {
+          console.log(`⚠️ Column ${col.split(' ')[0]} already exists in pos_settings`);
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    // Add columns to pos_terminals
+    const terminalColumns = [
+      'z_counter INT DEFAULT 0',
+      'reset_counter INT DEFAULT 0',
+      'terminal_min VARCHAR(50)',
+      'terminal_serial_number VARCHAR(50)',
+      "or_next_reference VARCHAR(50) DEFAULT '00000000'"
+    ];
+
+    for (const col of terminalColumns) {
+      try {
+        await query(`ALTER TABLE pos_terminals ADD COLUMN ${col}`);
+        console.log(`✅ Added ${col.split(' ')[0]} to pos_terminals`);
+      } catch (e: any) {
+        if (e.code === 'ER_DUP_COLUMN_NAME' || e.errno === 1060) {
+          console.log(`⚠️ Column ${col.split(' ')[0]} already exists in pos_terminals`);
+        } else {
+          throw e;
+        }
+      }
+    }
+  },
+  
+  async down() {
+    console.log('Rolling back migration: 061_add_bir_compliance_columns');
+    
+    await query(`
+      ALTER TABLE pos_settings
+      DROP COLUMN is_training_mode,
+      DROP COLUMN last_ejournal_export
+    `);
+    
+    await query(`
+      ALTER TABLE pos_terminals
+      DROP COLUMN z_counter,
+      DROP COLUMN reset_counter,
+      DROP COLUMN terminal_min,
+      DROP COLUMN terminal_serial_number,
+      DROP COLUMN or_next_reference
+    `);
+  }
+};
+
+registerMigration(migration);

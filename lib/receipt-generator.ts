@@ -40,6 +40,7 @@ export class ReceiptGenerator {
         cashierName?: string;
         terminalMin?: string;
         terminalSerialNumber?: string;
+        isTrainingMode?: boolean;
         pointsUsedValue?: number;
         pointsBalance?: number;
     }, settings?: SystemSettings | null): Uint8Array {
@@ -77,14 +78,13 @@ export class ReceiptGenerator {
         enc.line(centerRow(dateStr));
         enc.newline();
 
-        // ─── SALE DETAILS (left-aligned, dashed border below) ────────────
-        // Matches: mb-2 border-b border-dashed pb-2
-        enc.align('left');
-        enc.line('Sale Details');
-        enc.bold(true).line(`Order #: ${orderNumber || 'N/A'}`).bold(false);
+        // ─── CASH SALE HEADER ───────────────────────────────────────────
+        enc.align('center').bold(true).line('CASH SALE').bold(false).align('left');
+        const formattedOrderNo = (orderNumber || '000000').padStart(6, '0');
+        enc.bold(true).line(`SI NO.: ${formattedOrderNo}`).bold(false);
         enc.line(`Cust: ${customer?.name || 'Walk-in'}`);
         enc.line(`Cashier: ${sale.cashierName || 'Admin'}`);
-        enc.line('-'.repeat(COLS)); // dashed border (border-b border-dashed)
+        enc.line('-'.repeat(COLS)); // dashed border
 
         // ─── ITEM TABLE HEADER ────────────────────────────────────────────
         const pad = ' '; 
@@ -204,6 +204,17 @@ export class ReceiptGenerator {
         enc.align('center');
         enc.line('Thank you for your purchase!');
         enc.line('Pos System by Bhagoh');
+
+        if (sale.isTrainingMode) {
+            enc.newline();
+            enc.bold(true).line('*** TRAINING MODE ***').bold(false);
+            enc.line('THIS IS NOT A CASH SALE/');
+            enc.line('OFFICIAL RECEIPT.');
+            enc.line('PLEASE REQUEST FROM SELLER');
+            enc.line('YOUR CASH SALE/');
+            enc.line('OFFICIAL RECEIPT');
+        }
+
         enc.newline().newline().newline();
         enc.cut();
 
@@ -282,8 +293,8 @@ export class ReceiptGenerator {
         enc.line(row('End. VOID #:',      stripLead(data.maxVoidId)));
         enc.line(row('Beg. RETURN #:',    stripLead(data.minReturnId || '0')));
         enc.line(row('End. RETURN #:',    stripLead(data.maxReturnId || '0')));
-        enc.line(row('Reset Counter No.', '0'));
-        enc.line(row('Z Counter No. :',   '1'));
+        enc.line(row('Reset Counter No.', stripLead(data.resetCounter)));
+        enc.line(row('Z Counter No. :',   stripLead(data.zCounter)));
 
         // ── SALES TOTALS ─────────────────────────────────────────────────────
         // Mirrors: DashedLine + section

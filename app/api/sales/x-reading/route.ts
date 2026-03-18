@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
         sales.max_sale_id,
         COALESCE(sales.void_amount, 0) as void_amount,
         COALESCE(sales.refund_amount, 0) as refund_amount,
-        pt_term.min_number as terminal_min,
-        pt_term.serial_number as terminal_sn
+        pt_term.terminal_min as terminal_min,
+        pt_term.terminal_serial_number as terminal_sn
       FROM shifts s
       LEFT JOIN users u ON s.user_id = u.uid
       LEFT JOIN pos_terminals pt_term ON s.terminal_id = pt_term.id
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
               SUM(CASE WHEN pt.transaction_type = 'void' THEN pt.total_amount ELSE 0 END) as void_amount,
               SUM(CASE WHEN pt.transaction_type = 'refund' THEN pt.total_amount ELSE 0 END) as refund_amount
           FROM pos_transactions pt
+          WHERE pt.is_training = 0
           GROUP BY pt.shift_id
       ) sales ON s.id = sales.shift_id
       WHERE 1=1
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest) {
         const payments = await query(`
             SELECT payment_method as name, SUM(total_amount) as amount
             FROM pos_transactions
-            WHERE shift_id = ? AND transaction_type = 'sale'
+            WHERE shift_id = ? AND transaction_type = 'sale' AND is_training = 0
             GROUP BY payment_method
         `, [shift.id]);
         

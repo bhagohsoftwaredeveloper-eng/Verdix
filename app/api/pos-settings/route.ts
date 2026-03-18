@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
       { name: 'low_stock_threshold', type: 'INT DEFAULT 10' },
       { name: 'enable_email_notifications', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'notification_email', type: 'VARCHAR(255) NULL' },
-      { name: 'enable_push_notifications', type: 'BOOLEAN DEFAULT TRUE' }
+      { name: 'enable_push_notifications', type: 'BOOLEAN DEFAULT TRUE' },
+      { name: 'is_training_mode', type: 'BOOLEAN DEFAULT FALSE' }
     ];
 
     const currentColumnsResult = await query(
@@ -77,7 +78,8 @@ export async function GET(request: NextRequest) {
         low_stock_threshold AS lowStockThreshold,
         enable_email_notifications AS enableEmailNotifications,
         notification_email AS notificationEmail,
-        enable_push_notifications AS enablePushNotifications
+        enable_push_notifications AS enablePushNotifications,
+        is_training_mode AS isTrainingMode
       FROM pos_settings
       LIMIT 1
     `;
@@ -253,7 +255,8 @@ export async function POST(request: NextRequest) {
         lowStockThreshold: 'low_stock_threshold',
         enableEmailNotifications: 'enable_email_notifications',
         notificationEmail: 'notification_email',
-        enablePushNotifications: 'enable_push_notifications'
+        enablePushNotifications: 'enable_push_notifications',
+        isTrainingMode: 'is_training_mode'
       };
 
       const updates: string[] = [];

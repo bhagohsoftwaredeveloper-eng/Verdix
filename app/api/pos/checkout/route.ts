@@ -34,11 +34,16 @@ export async function POST(request: NextRequest) {
     const auditLogId = `PAL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
     return await withTransaction(async (connection) => {
-      // Fetch Loyalty Settings
-      const [loyaltySettings]: any = await connection.query(
+      // Fetch Loyalty & Training Mode Settings
+      const [loyaltyRows]: any = await connection.query(
         'SELECT * FROM loyalty_points_settings LIMIT 1'
       );
+      const [posSettingsRows]: any = await connection.query(
+        'SELECT is_training_mode FROM pos_settings LIMIT 1'
+      );
       
+      const loyaltySettings = loyaltyRows || [];
+      const isTrainingMode = posSettingsRows?.[0]?.is_training_mode || false;
       let eligiblePointsAmount = 0;
 
       // Log payment initiation
@@ -62,8 +67,8 @@ export async function POST(request: NextRequest) {
       // 1. Insert into sales_transactions
       const insertSaleSql = `
         INSERT INTO sales_transactions (
-          id, reference, receipt_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, ?, 'POS', ?, NOW(), NOW())
+          id, reference, receipt_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, is_training, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, ?, 'POS', ?, ?, NOW(), NOW())
       `;
       await connection.query(insertSaleSql, [
         saleId,
@@ -73,7 +78,8 @@ export async function POST(request: NextRequest) {
         totalDue,
         paymentMethod,
         invoiceStatus,
-        notes || 'POS Sale'
+        notes || 'POS Sale',
+        isTrainingMode
       ]);
 
       // 2. Insert into sale_items and update stock
@@ -307,8 +313,8 @@ export async function POST(request: NextRequest) {
       const insertInvoiceSql = `
         INSERT INTO sales_invoices (
           id, reference, receipt_number, customer_id, invoice_date, due_date, total, payment_method,
-          status, transaction_source, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, CURDATE(), ${dueDateQuery}, ?, ?, ?, 'POS', ?, NOW(), NOW())
+          status, transaction_source, notes, is_training, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), ${dueDateQuery}, ?, ?, ?, 'POS', ?, ?, NOW(), NOW())
       `;
       await connection.query(insertInvoiceSql, [
         invoiceId,
@@ -318,7 +324,8 @@ export async function POST(request: NextRequest) {
         totalDue,
         paymentMethod,
         invoiceStatus,
-        notes || 'POS Sale'
+        notes || 'POS Sale',
+        isTrainingMode
       ]);
 
       // 4. Insert into pos_transactions with payment details reference
@@ -327,8 +334,8 @@ export async function POST(request: NextRequest) {
           id, sale_id, shift_id, user_id, terminal_id, transaction_type,
           subtotal, tax_amount, discount_amount, total_amount, payment_method, 
           payment_status, payment_details_id, payment_validated_at,
-          notes, transaction_time, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), NOW(), NOW())
+          notes, is_training, transaction_time, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, NOW(), NOW(), NOW())
       `;
       
       const posNotes = `Tendered: ₱${(body.amountTendered || totalDue).toFixed(2)}, Change: ₱${(body.change || 0).toFixed(2)}${notes ? ' - ' + notes : ''}`;
@@ -346,7 +353,8 @@ export async function POST(request: NextRequest) {
         paymentMethod,
         posPaymentStatus,
         paymentDetailsId,
-        posNotes
+        posNotes,
+        isTrainingMode
       ]);
 
       // 5. Insert items into sales_invoice_items and pos_transaction_items

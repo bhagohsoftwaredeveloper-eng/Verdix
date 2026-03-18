@@ -59,6 +59,10 @@ import './057_create_stock_counts_tables.ts';
 import './058_create_shelf_locations_table.ts';
 import './059_add_locations_to_stock_counts.ts';
 import './060_alter_loyalty_points_precision.ts';
+import './061_add_bir_compliance_columns.ts';
+import './062_add_counters_to_z_readings.ts';
+import './063_add_is_training_to_pos_transactions.ts';
+import './064_add_is_training_to_all_sales_tables.ts';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner.ts';

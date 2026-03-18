@@ -125,7 +125,7 @@ export async function getNextReceiptNumber(terminalId?: string): Promise<string>
     if (terminalId) {
       // 1. Increment terminal-specific OR
       await connection.query(
-        `UPDATE pos_terminals SET or_next_reference = LPAD(CAST(or_next_reference AS UNSIGNED) + 1, 8, '0') WHERE id = ?`,
+        `UPDATE pos_terminals SET or_next_reference = LPAD(CAST(or_next_reference AS UNSIGNED) + 1, 6, '0') WHERE id = ?`,
         [terminalId]
       );
       
@@ -142,7 +142,7 @@ export async function getNextReceiptNumber(terminalId?: string): Promise<string>
     } else {
       // 1. Increment global receipt number
       await connection.query(
-        `UPDATE transaction_references SET receipt_number = LPAD(CAST(receipt_number AS UNSIGNED) + 1, 8, '0') WHERE id = 1`
+        `UPDATE transaction_references SET receipt_number = LPAD(CAST(receipt_number AS UNSIGNED) + 1, 6, '0') WHERE id = 1`
       );
       
       // 2. Fetch the new value
