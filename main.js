@@ -20,6 +20,11 @@ function createWindow() {
     }
   });
 
+  // Set App User Model ID for Windows Taskbar icon
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.stockpilot.pos');
+  }
+
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -28,10 +33,14 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    title: `Stock Pilot - ${roleName}`,
+    title: `Stockpilot - ${roleName}`,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, 'public/favicon.ico')
+    icon: path.join(__dirname, 'public', 'Stockpilot.png'),
+    fullscreen: true,
+    frame: false
   });
+
+  win.setIcon(path.join(__dirname, 'public', 'Stockpilot.png'));
 
   // Load the specific route
   const startUrl = `http://localhost:3000${startRoute}`; 
@@ -74,21 +83,45 @@ function createWindow() {
   });
 }
 
+// Window Controls IPC Handlers
+ipcMain.handle('window:minimize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.minimize();
+});
+
+ipcMain.handle('window:maximize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    if (win.isFullScreen()) {
+      win.setFullScreen(false);
+    } else if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
+  }
+});
+
+ipcMain.handle('window:close', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.close();
+});
+
+// Printer SDK IPC Handlers
+ipcMain.handle('printer:connect', async (event, portSetting) => {
+  return await printerSdk.connectPrinter(portSetting);
+});
+
+ipcMain.handle('printer:print', async (event, buffer) => {
+  return await printerSdk.printData(buffer);
+});
+
+ipcMain.handle('printer:disconnect', async (event) => {
+  return await printerSdk.disconnectPrinter();
+});
+
 app.whenReady().then(() => {
   createWindow();
-
-  // Register Printer SDK IPC Handlers
-  ipcMain.handle('printer:connect', async (event, portSetting) => {
-    return await printerSdk.connectPrinter(portSetting);
-  });
-
-  ipcMain.handle('printer:print', async (event, buffer) => {
-    return await printerSdk.printData(buffer);
-  });
-
-  ipcMain.handle('printer:disconnect', async (event) => {
-    return await printerSdk.disconnectPrinter();
-  });
 });
 
 app.on('window-all-closed', () => {

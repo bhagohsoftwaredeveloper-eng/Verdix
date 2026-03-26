@@ -72,9 +72,8 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center bg-secondary/50">
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader className="text-center">
-           <div className="flex items-center justify-center gap-2 mb-4">
-                <Logo className="size-8 text-primary" />
-                <h1 className="text-3xl font-semibold font-headline">StockPilot</h1>
+           <div className="flex items-center justify-center mb-4">
+                <Logo size={80} />
             </div>
           <CardTitle className="text-2xl">Create an Account</CardTitle>
           <CardDescription>Enter your information to create an account</CardDescription>

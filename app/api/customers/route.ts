@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
         c.credit_limit AS creditLimit,
         c.price_level_id AS priceLevelId,
         c.created_at AS createdAt,
-        c.updated_at AS updatedAt
+        c.updated_at AS updatedAt,
+        (SELECT COALESCE(SUM(total - COALESCE(amount_paid, 0)), 0) FROM sales_invoices WHERE customer_id = c.id AND status != 'Paid') AS balance
       FROM customers c
       LEFT JOIN customer_loyalty cl ON c.id = cl.customer_id
       WHERE 1=1

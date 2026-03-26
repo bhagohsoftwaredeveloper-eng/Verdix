@@ -5,6 +5,12 @@ import ClientLayout from '../components/client-layout';
 export const metadata = {
   title: 'StockPilot',
   description: 'Point of Sales + Inventory Management',
+  icons: {
+    icon: [
+      { url: '/Stockpilot.png' }
+    ],
+    apple: '/Stockpilot.png',
+  },
 };
 
 // import { Inter } from 'next/font/google';

@@ -4,6 +4,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { WindowControls } from '@/components/window-controls';
 import {
   SidebarProvider,
   Sidebar,
@@ -63,6 +64,7 @@ import { Badge } from '@/components/ui/badge';
 import { getProducts, getLowStockAlerts } from './products/actions';
 import { Product } from '@/lib/types';
 import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
+import { Logo } from '@/components/logo';
 
 
 const navItems = [
@@ -204,13 +206,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <Sidebar className="non-printable border-r" collapsible="icon">
         <SidebarHeader className="h-20 border-b border-sidebar-border sticky top-0 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl z-10 px-6 justify-center shadow-sm">
-          <div className="flex items-center gap-4 transition-all duration-300 group-data-[collapsible=icon]:justify-center">
-            <div className="p-2.5 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl shadow-sm ring-1 ring-primary/20 group-data-[collapsible=icon]:p-2">
-              <Package2 className="size-7 text-primary group-data-[collapsible=icon]:size-5" />
-            </div>
+          <div className="flex items-center gap-3 transition-all duration-300 group-data-[collapsible=icon]:justify-center">
+            <Logo variant="icon" size={36} />
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-               <h1 className="text-xl font-bold font-headline tracking-tight text-sidebar-foreground">StockPilot</h1>
-               <span className="text-[10px] uppercase font-semibold text-primary/70 tracking-[0.15em] mt-0.5">Enterprise</span>
+               <h1 className="text-xl font-extrabold font-headline tracking-tight text-sidebar-foreground">Stockpilot</h1>
+               <span className="text-[10px] uppercase font-bold text-primary tracking-[0.2em] mt-0.5 opacity-90">Enterprise</span>
             </div>
           </div>
         </SidebarHeader>
@@ -456,11 +456,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="sticky top-0 z-30 flex items-center h-16 gap-4 px-4 border-b bg-background/80 backdrop-blur-sm sm:px-6 non-printable">
-          <SidebarTrigger />
-          <AppBreadcrumbs />
+
+        <header className="sticky top-0 z-30 flex items-center h-16 gap-4 px-4 border-b bg-background/80 backdrop-blur-sm sm:px-6 non-printable window-drag">
+          <div className="flex items-center gap-4 window-no-drag">
+            <SidebarTrigger />
+            <AppBreadcrumbs />
+          </div>
           <div className="flex-1" />
-           <NotificationsBell />
+          <div className="flex items-center gap-2">
+            <NotificationsBell />
+            <WindowControls />
+          </div>
         </header>
         <main className="flex-1 p-4 overflow-auto sm:p-6">
           {children}

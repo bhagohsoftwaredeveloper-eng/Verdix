@@ -224,6 +224,19 @@ export async function POST(request: NextRequest) {
         shift_status,
         created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        report_date = VALUES(report_date),
+        shift_end = VALUES(shift_end),
+        gross_sales = VALUES(gross_sales),
+        returns = VALUES(returns),
+        discounts = VALUES(discounts),
+        net_sales = VALUES(net_sales),
+        vat_amount = VALUES(vat_amount),
+        payment_methods = VALUES(payment_methods),
+        transaction_count = VALUES(transaction_count),
+        cash_sales = VALUES(cash_sales),
+        cash_in_drawer = VALUES(cash_in_drawer),
+        shift_status = VALUES(shift_status)
     `;
 
     const formatDate = (date: any) => {

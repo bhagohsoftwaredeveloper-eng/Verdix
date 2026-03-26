@@ -204,6 +204,7 @@ export default function POSPage() {
   // Terminal State
   const [terminals, setTerminals] = useState<any[]>([]);
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>('');
+  const [isEndingShift, setIsEndingShift] = useState(false);
   const { setTheme } = useTheme();
 
   useEffect(() => {
@@ -330,7 +331,8 @@ export default function POSPage() {
       isShutdownConfirmOpen ||
       isInsufficientStockOpen ||
       isProductSearchOpen ||
-      showEndShiftReport;
+      showEndShiftReport ||
+      isEndingShift;
 
     if (!isAnyDialogOpen && isPosLoggedIn && shiftActive) {
       // Small timeout to allow dialogs to fully unmount/close
@@ -1019,10 +1021,11 @@ export default function POSPage() {
   
   // Redefining handleEndShift with expected signature, I'll update the Dialog next.
   const handleConfirmEndShift = async (data: { actualCash: number; cashDifference: number; notes: string; cashDenominations: any[] }) => {
-      if (!currentShiftId) {
-          toast({ title: "Error", description: "No active shift found", variant: "destructive" });
+      if (!currentShiftId || isEndingShift) {
           return;
       }
+      
+      setIsEndingShift(true);
 
       try {
           const response = await fetch(getApiUrl('/pos/shifts'), {
@@ -1081,12 +1084,17 @@ export default function POSPage() {
                   
                   if (xReadingResult.success && xReadingResult.data.length > 0) {
                       const xData = xReadingResult.data[0];
+                      // Generate a more unique reading number with a timestamp suffix to avoid ER_DUP_ENTRY
+                      // Use a simpler regex to avoid triggering CSS parser misinterpretation
+                      const timestampSuffix = new Date().toISOString().replace(/\D/g, '').slice(-6);
+                      const readingNo = `X-${(xData.id || currentShiftId).substring(0, 10).toUpperCase()}-${timestampSuffix}`;
+                      
                       // Save X-Reading Record
                       await fetch(getApiUrl('/sales/x-reading'), {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                              readingNumber: `X-${xData.id.substring(0, 8).toUpperCase()}`, // Generate a reading number
+                              readingNumber: readingNo,
                               reportDate: xData.reportDate,
                               shiftStart: xData.shiftStart,
                               shiftEnd: xData.shiftEnd, // Shift is now ended
@@ -1132,6 +1140,8 @@ export default function POSPage() {
       } catch (error: any) {
            console.error("End shift error:", error);
            toast({ title: "Error", description: "Failed to end shift: " + error.message, variant: "destructive" });
+      } finally {
+          setIsEndingShift(false);
       }
   };
 
@@ -1561,9 +1571,9 @@ export default function POSPage() {
         {/* Right Section: Totals & Payments */}
         <div className="w-96 bg-background border-l shadow-2xl z-20 flex flex-col h-full">
             {/* Cashier Profile */}
-            <div className="p-6 border-b flex flex-col items-center gap-2 bg-muted/10">
+            <div className="border-b flex flex-col items-center bg-muted/10">
                  {businessSettings?.logoPath ? (
-                     <div className="relative w-20 h-20 mb-2">
+                     <div className="relative w-20 h-20 my-6">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img 
                             src={businessSettings.logoPath} 
@@ -1572,11 +1582,11 @@ export default function POSPage() {
                         />
                      </div>
                  ) : (
-                     <div className="bg-primary text-white py-2 w-[350px] flex items-center justify-center rounded-md mb-2">
-                         <span className="text-2xl uppercase font-bold leading-none tracking-tight text-center">STOCK PILOT</span>
+                     <div className="bg-primary text-white py-8 w-full flex items-center justify-center mb-6 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)]">
+                         <span className="text-4xl uppercase font-black leading-none tracking-widest text-center drop-shadow-lg">STOCK PILOT</span>
                      </div>
                   )}
-                 <div className="text-center">
+                 <div className="text-center px-6 pb-6">
                     <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>
                     <p className="text-xs text-muted-foreground mt-1 font-mono">{currentTerminalName}</p>
                  </div>
@@ -1593,7 +1603,7 @@ export default function POSPage() {
                         {totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                     </div>
                     {/* Detailed Breakdown Card */}
-                    <Card className="mx-4 mt-12 bg-muted/30 border-dashed">
+                    <Card className="mx-4 mt-12 bg-background border shadow-[4px_4px_0px_0px_rgba(0,0,0,0.05)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.05)]">
                         <CardContent className="p-4">
                             <div className="grid grid-cols-1 gap-y-2 text-sm text-muted-foreground">
                                 <div className="flex justify-between">

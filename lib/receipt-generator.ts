@@ -78,8 +78,9 @@ export class ReceiptGenerator {
         enc.line(centerRow(dateStr));
         enc.newline();
 
-        // ─── CASH SALE HEADER ───────────────────────────────────────────
-        enc.align('center').bold(true).line('CASH SALE').bold(false).align('left');
+        // ─── SALE HEADER ───────────────────────────────────────────
+        const title = paymentMethod?.toUpperCase() === 'CHARGE' ? 'CHARGE SLIP' : 'CASH SALE';
+        enc.align('center').bold(true).line(title).bold(false).align('left');
         const formattedOrderNo = (orderNumber || '000000').padStart(6, '0');
         enc.bold(true).line(`SI NO.: ${formattedOrderNo}`).bold(false);
         enc.line(`Cust: ${customer?.name || 'Walk-in'}`);

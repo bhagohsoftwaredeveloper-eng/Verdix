@@ -11,7 +11,7 @@ export function ReportHeader({ title, subtitle, period }: ReportHeaderProps) {
     <div className="hidden print:block mb-8">
       <div className="flex justify-between items-start border-b pb-4 mb-4">
         <div>
-          <h1 className="text-3xl font-bold uppercase tracking-wide text-primary/80">Stock Pilot</h1>
+          <h1 className="text-3xl font-bold uppercase tracking-wide text-primary/80">Stockpilot</h1>
           <p className="text-sm text-muted-foreground">Inventory Management System</p>
         </div>
         <div className="text-right">

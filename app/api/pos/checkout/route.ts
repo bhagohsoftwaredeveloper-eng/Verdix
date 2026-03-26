@@ -27,6 +27,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'User ID is required' }, { status: 400 });
     }
 
+    if (paymentMethod?.toUpperCase() === 'CHARGE' && (!customer || customer.id === 'walk-in')) {
+      return NextResponse.json({ success: false, error: 'Customer is required for Charge to Account' }, { status: 400 });
+    }
+
     // Generate IDs
     const saleId = `SALE-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const posTransId = `PT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;

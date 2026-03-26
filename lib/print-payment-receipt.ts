@@ -34,7 +34,7 @@ export const printPaymentReceipt = (
   printWindow.document.write(`
     <div class="header">
       <div class="title">OFFICIAL RECEIPT</div>
-      <div class="subtitle">Stock Pilot POS System</div>
+      <div class="subtitle">Stockpilot POS System</div>
     </div>
 
     <div class="content">

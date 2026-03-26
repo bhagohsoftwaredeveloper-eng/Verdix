@@ -737,241 +737,238 @@ export function EditProductDialog({
                       </div>
                     </TabsContent>
                     <TabsContent value="inventory" className="space-y-4 p-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="vatStatus"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>VAT Status</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value} defaultValue="YES (Subject to 12% VAT)">
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select VAT status" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {taxRates.map((rate) => (
-                                    <SelectItem key={rate.id} value={rate.name}>
-                                      {rate.name} {rate.rate > 0 ? `(${rate.rate}%)` : ''}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="availability"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Availability</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value} defaultValue="Available">
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select availability" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="Available">Available</SelectItem>
-                                  <SelectItem value="Unavailable">Unavailable</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="supplier"
-                          render={({ field }) => (
-                            <FormItem>
-                              <div className="flex items-center justify-between">
-                                <FormLabel>Supplier (Optional)</FormLabel>
-                              </div>
-                              <div className="flex gap-2">
-                                <Select onValueChange={field.onChange} value={field.value}>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="vatStatus"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>VAT Status</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} defaultValue="YES (Subject to 12% VAT)">
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder="Select a supplier" />
+                                      <SelectValue placeholder="Select VAT status" />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    {suppliers?.map((supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
-                                <ManageSuppliersDialog 
-                                  onSupplierAdded={() => {
-                                      getSuppliers().then(setSuppliers);
-                                  }}
-                                  trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="warehouse"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Warehouse (Optional)</FormLabel>
-                              <div className="flex gap-2">
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a warehouse" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
-                                <ManageWarehousesDialog 
-                                  onChange={() => {
-                                      getWarehouses().then(setWarehouses);
-                                  }}
-                                  trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="shelfLocationId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Shelf Location (Optional)</FormLabel>
-                              <div className="flex gap-2">
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a shelf location" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {isLoadingShelfLocations ? (
-                                      <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                    ) : (
-                                      shelfLocations?.map((location: any) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                                <ManageShelfLocationsDialog 
-                                  onLocationAdded={(newLocationId?: string) => {
-                                    if (onOptionsRefresh) onOptionsRefresh();
-                                    if (newLocationId) {
-                                      form.setValue('shelfLocationId', newLocationId, { shouldValidate: true, shouldDirty: true });
-                                    }
-                                  }}
-                                  trigger={
-                                      <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                          <Plus className="h-4 w-4" />
-                                      </Button>
-                                  }
-                                />
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <FormItem>
-                          <FormLabel>Initial Stock</FormLabel>
-                          <FormControl>
-                            <Input type="number" value={product.stock || 0} disabled />
-                          </FormControl>
-                          <FormDescription>Stock is updated via transactions.</FormDescription>
-                        </FormItem>
-                         <FormField
-                          control={form.control}
-                          name="reorderPoint"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Reorder Point</FormLabel>
-                              <FormControl>
-                                <Input type="number" placeholder="0" value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="cost"
-                          render={({ field }) => (
-                            <FormItem>
-                              <div className="flex items-center justify-between h-6">
-                                <FormLabel>Cost (₱)</FormLabel>
-                              </div>
-                              <FormControl>
-                                <Input type="number" step="0.01" placeholder="e.g., 50.00" value={field.value || ''} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="unitOfMeasure"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Unit of Measure</FormLabel>
-                              <div className="flex gap-2">
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a unit" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {units?.map((uom: UnitOfMeasure) => (
-                                      <SelectItem key={uom.id} value={uom.name}>
-                                        {uom.name} ({uom.abbreviation})
+                                    {taxRates.map((rate) => (
+                                      <SelectItem key={rate.id} value={rate.name}>
+                                        {rate.name} {rate.rate > 0 ? `(${rate.rate}%)` : ''}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
-                                <ManageUnitOfMeasureDialog 
-                                  onUnitAdded={() => {
-                                      getUnitsOfMeasure().then(setUnits);
-                                  }}
-                                  trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                              </div>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="availability"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Availability</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} defaultValue="Available">
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select availability" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="Available">Available</SelectItem>
+                                    <SelectItem value="Unavailable">Unavailable</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
 
+                          <FormField
+                            control={form.control}
+                            name="supplier"
+                            render={({ field }) => (
+                              <FormItem>
+                                <div className="flex items-center justify-between">
+                                  <FormLabel>Supplier (Optional)</FormLabel>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select a supplier" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      {suppliers?.map((supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                  <ManageSuppliersDialog 
+                                    onSupplierAdded={() => {
+                                        getSuppliers().then(setSuppliers);
+                                    }}
+                                    trigger={
+                                      <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                          <Plus className="h-4 w-4" />
+                                      </Button>
+                                    }
+                                  />
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="warehouse"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Warehouse (Optional)</FormLabel>
+                                <div className="flex gap-2">
+                                  <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select a warehouse" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      {warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                  <ManageWarehousesDialog 
+                                    onChange={() => {
+                                        getWarehouses().then(setWarehouses);
+                                    }}
+                                    trigger={
+                                      <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                          <Plus className="h-4 w-4" />
+                                      </Button>
+                                    }
+                                  />
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="shelfLocationId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Shelf Location (Optional)</FormLabel>
+                                <div className="flex gap-2">
+                                  <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select a shelf location" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      {isLoadingShelfLocations ? (
+                                        <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                      ) : (
+                                        shelfLocations?.map((location: any) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                  <ManageShelfLocationsDialog 
+                                    onLocationAdded={(newLocationId?: string) => {
+                                      if (onOptionsRefresh) onOptionsRefresh();
+                                      if (newLocationId) {
+                                        form.setValue('shelfLocationId', newLocationId, { shouldValidate: true, shouldDirty: true });
+                                      }
+                                    }}
+                                    trigger={
+                                        <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                            <Plus className="h-4 w-4" />
+                                        </Button>
+                                    }
+                                  />
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="unitOfMeasure"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Unit of Measure</FormLabel>
+                                <div className="flex gap-2">
+                                  <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select a unit" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      {units?.map((uom: UnitOfMeasure) => (
+                                        <SelectItem key={uom.id} value={uom.name}>
+                                          {uom.name} ({uom.abbreviation})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <ManageUnitOfMeasureDialog 
+                                    onUnitAdded={() => {
+                                        getUnitsOfMeasure().then(setUnits);
+                                    }}
+                                    trigger={
+                                      <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
+                                          <Plus className="h-4 w-4" />
+                                      </Button>
+                                    }
+                                  />
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <Label>Initial Stock</Label>
+                            <div>
+                              <Input type="number" value={product.stock || 0} disabled />
+                            </div>
+                            <p className="text-sm text-muted-foreground">Stock is updated via transactions.</p>
+                          </div>
+                           <FormField
+                            control={form.control}
+                            name="reorderPoint"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Reorder Point</FormLabel>
+                                <FormControl>
+                                  <Input type="number" placeholder="0" value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="cost"
+                            render={({ field }) => (
+                              <FormItem>
+                                <div className="flex items-center justify-between h-6">
+                                  <FormLabel>Cost (₱)</FormLabel>
+                                </div>
+                                <FormControl>
+                                  <Input type="number" step="0.01" placeholder="e.g., 50.00" value={field.value || ''} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
                       </div>
                     </TabsContent>
 

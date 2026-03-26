@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         ...headers,
       },
       body: JSON.stringify({
-        source: 'Stock Pilot',
+        source: 'Stockpilot',
         timestamp: new Date().toISOString(),
         products: products,
         totalProducts: products.length

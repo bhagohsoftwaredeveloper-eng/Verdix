@@ -52,7 +52,9 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
             </div>
 
             <div className="mb-2 border-b border-dashed border-black pb-2">
-                <div className="font-bold text-center border-y border-black py-1 mb-1 uppercase">CASH SALE</div>
+                <div className="font-bold text-center border-y border-black py-1 mb-1 uppercase">
+                    {paymentMethod?.toUpperCase() === 'CHARGE' ? 'CHARGE SLIP' : 'CASH SALE'}
+                </div>
                 <div className="font-bold">SI NO.: {(saleDetails.orderNumber || '000000').padStart(6, '0')}</div>
                 <div>Cust: {customer?.name || 'Walk-in'}</div>
                 <div>Cashier: {saleDetails.cashierName || 'Admin'}</div>

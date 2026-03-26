@@ -18,7 +18,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Printer, User, Star, Info } from 'lucide-react';
+import { Loader2, Printer, User, Star, Info, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { SaleItem } from './page';
 import type { Customer } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -147,6 +148,7 @@ export function TenderDialog({
     }, [paymentMethods, selectedMethod]);
 
     const isCashPayment = selectedMethod?.toUpperCase() === 'CASH';
+    const isChargePayment = selectedMethod?.toUpperCase() === 'CHARGE';
 
     // UX: Reset points when opening or switching methods
     // Modified: Use a ref to track what triggered the reset to avoid resetting when totalDue changes while open
@@ -502,7 +504,7 @@ export function TenderDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-lg overflow-hidden flex flex-col p-0" onInteractOutside={(e) => e.preventDefault()}>
                 {view === 'receipt' && completedSale ? (
                     <ReceiptActionView saleDetails={completedSale} onNewSale={handleNewSale} onPrint={handleSmartPrint} settings={settings} />
                 ) : view === 'change' && completedSale ? (
@@ -549,19 +551,29 @@ export function TenderDialog({
                     </div>
                 ) : (
                     <>
-                        <DialogHeader>
-                            <DialogTitle>Tender Payment</DialogTitle>
-                            <DialogDescription>Finalize the transaction.</DialogDescription>
+                        <DialogHeader className="p-6 pb-0">
+                            <DialogTitle className="text-2xl font-bold">Tender Payment</DialogTitle>
+                            <DialogDescription className="text-muted-foreground">Finalize the transaction.</DialogDescription>
                         </DialogHeader>
-                        <div className="py-4 space-y-6">
+                        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                            {isChargePayment && (!customer || (customer as any).id === 'walk-in') && (
+                                <Alert className="bg-orange-50 border-orange-200 text-orange-900 border-2 animate-in fade-in slide-in-from-top-4 duration-500">
+                                    <AlertCircle className="h-5 w-5 text-orange-600" />
+                                    <AlertTitle className="font-bold text-orange-900">Charge to Account - Customer Required</AlertTitle>
+                                    <AlertDescription className="text-orange-700 font-medium">
+                                        Please select a customer to proceed with this charge.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
                             {/* Payment Method Selector */}
-                            <div className="space-y-2">
-                                <Label htmlFor="paymentMethod" className="text-base">Payment Method</Label>
+                            <div className="space-y-3">
+                                <Label htmlFor="paymentMethod" className="text-lg font-medium">Payment Method</Label>
                                 <Select 
                                     value={selectedMethod} 
                                     onValueChange={setSelectedMethod}
                                 >
-                                    <SelectTrigger className="w-full h-10">
+                                    <SelectTrigger className="w-full h-12 text-lg">
                                         <SelectValue placeholder="Select Payment Method" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -573,8 +585,9 @@ export function TenderDialog({
                                     </SelectContent>
                                 </Select>
                             </div>
+                            <div className="h-4" /> {/* Spacer */}
 
-                            {/* Manual Points Input field when method is POINTS - MOVED TO TOP */}
+                            {/* Manual Points Input field when method is POINTS */}
                             {selectedMethod === 'POINTS' && (
                                 <div className="space-y-4">
                                     {(!customer || (customer as any).id === 'walk-in') ? (
@@ -642,8 +655,53 @@ export function TenderDialog({
                                 </div>
                             )}
 
+                            {isChargePayment && (
+                                <div className="space-y-4">
+                                    {(!customer || (customer as any).id === 'walk-in') ? (
+                                        <div className="bg-orange-50 p-6 rounded-xl border-2 border-dashed border-orange-200 flex flex-col items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div className="p-3 bg-white rounded-full shadow-sm text-orange-600">
+                                                <User className="h-6 w-6" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="font-bold text-orange-900">Charge to Account requires a Customer</p>
+                                                <p className="text-sm text-orange-600/70">Please select a customer to proceed with charging.</p>
+                                            </div>
+                                            <Button 
+                                                onClick={onTriggerCustomerSelection}
+                                                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-8 shadow-lg shadow-orange-200"
+                                            >
+                                                Select Customer
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3 bg-orange-50 p-4 rounded-xl border border-orange-200 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div className="flex justify-between items-center px-1">
+                                                <Label className="text-orange-900 font-bold text-base flex items-center gap-2">
+                                                    <Info className="h-4 w-4 text-orange-600" />
+                                                    Account Details
+                                                </Label>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-white p-3 rounded-lg border border-orange-100 shadow-sm">
+                                                    <p className="text-[10px] text-orange-600 font-bold uppercase">Credit Limit</p>
+                                                    <p className="text-lg font-black text-orange-900">₱{(customer as any).creditLimit?.toLocaleString() || '0.00'}</p>
+                                                </div>
+                                                <div className="bg-white p-3 rounded-lg border border-orange-100 shadow-sm">
+                                                    <p className="text-[10px] text-orange-600 font-bold uppercase">Current Balance</p>
+                                                    <p className="text-lg font-black text-orange-900">₱{(customer as any).balance?.toLocaleString() || '0.00'}</p>
+                                                </div>
+                                            </div>
+                                            <p className="text-[10px] text-orange-600 font-bold px-1 flex items-center gap-1">
+                                                <Info className="h-3 w-3" />
+                                                This transaction will be added to the customer's account balance.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Payment Summary Box */}
-                            <div className="space-y-4">
+                            <div className="space-y-4 pt-2">
                                 <div className="text-center p-6 bg-primary/5 rounded-2xl border-2 border-primary/10 mb-2">
                                     <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Due</p>
                                     <p className="text-5xl font-black text-primary">₱{totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -660,7 +718,7 @@ export function TenderDialog({
                             </div>
 
                             {/* Amount Tendered Section - Always show for Points and Cash */}
-                            {(selectedMethod === 'CASH' || selectedMethod === 'POINTS' || balanceRemaining > 0) && (
+                            {(selectedMethod === 'CASH' || selectedMethod === 'POINTS' || (balanceRemaining > 0 && !isChargePayment)) && (
                                 <div className="space-y-2">
                                     <Label htmlFor="amountTendered" className="text-base font-bold">
                                         {selectedMethod === 'POINTS' ? 'Cash Balance Tendered' : 'Amount Tendered'}
@@ -748,10 +806,11 @@ export function TenderDialog({
                                     onClick={handleConfirmPayment}
                                     disabled={
                                         isProcessing || 
-                                        (!amountTendered && balanceRemaining > 0) || 
+                                        (!amountTendered && balanceRemaining > 0 && !isChargePayment) || 
                                         ((selectedMethod === 'CASH' || selectedMethod === 'POINTS') && parseFloat(amountTendered) < balanceRemaining) ||
                                         (pointsToRedeemValue > (Number((customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0) * pointsRate)) ||
-                                        (isReferenceRequired && !referenceInput.trim())
+                                        (isReferenceRequired && !referenceInput.trim()) ||
+                                        (isChargePayment && (!customer || (customer as any).id === 'walk-in'))
                                     }
                                     className="w-full sm:w-auto min-w-[140px] font-bold text-lg h-12 shadow-md shadow-primary/20"
                                 >

@@ -93,8 +93,8 @@ export default function LoginPage() {
       <div className="flex items-center justify-center py-12 px-6 bg-background">
         <div className="mx-auto grid w-full max-w-[400px] gap-6 animate-fade-in">
           <div className="flex flex-col items-center mb-6 space-y-2">
-             <div className="p-3 bg-primary/10 rounded-2xl mb-2">
-                <Logo className="size-10 text-primary" />
+             <div className="flex justify-center mb-6">
+                <Logo size={120} />
              </div>
              <div className="space-y-1 text-center">
                 <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome back</h1>
@@ -189,9 +189,8 @@ export default function LoginPage() {
          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 text-center p-12 text-slate-100/90 space-y-8 animate-fade-in delay-150">
              <div className="w-full max-w-lg space-y-4 backdrop-blur-sm bg-white/5 p-8 rounded-2xl border border-white/10 shadow-2xl">
                  <div className="flex justify-center mb-4">
-                    <Logo className="size-16 text-indigo-400 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
+                    <Logo className="size-24 text-indigo-400 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
                  </div>
-                 <h2 className="text-3xl font-bold tracking-tight text-white drop-shadow-md">Stock Pilot</h2>
                  <p className="text-slate-300 text-lg leading-relaxed">
                     The modern operating system for your retail business. Powerful inventory management, seamless POS, and intelligent analytics.
                  </p>
