@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import Link from 'next/link';
-import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart } from 'lucide-react';
+import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart } from 'lucide-react';
 
 export default function ReportsPage() {
   return (
@@ -96,7 +96,7 @@ export default function ReportsPage() {
             <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Receipt className="h-5 w-5 text-blue-600" />
+                  <PhilippinePeso className="h-5 w-5 text-blue-600" />
                   Sales Summary
                 </CardTitle>
                 <CardDescription>Overall sales transactions with revenue, profit, and tax analysis.</CardDescription>
@@ -172,6 +172,52 @@ export default function ReportsPage() {
                   Sales by Customer
                 </CardTitle>
                 <CardDescription>Customer purchase history with credit sales and outstanding balances.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+      </div>
+
+      {/* Purchases Reports Section */}
+      <div className="space-y-2 mt-8">
+        <h2 className="text-2xl font-bold tracking-tight">Purchases Reports</h2>
+        <p className="text-muted-foreground">
+          Analyze procurement activity, supplier spending, and product costs.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Link href="/reports/purchases/summary">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5 text-blue-600" />
+                  Purchases Summary
+                </CardTitle>
+                <CardDescription>Overview of all purchase orders with status and payment tracking.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/purchases/by-supplier">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-indigo-600" />
+                  Purchases by Supplier
+                </CardTitle>
+                <CardDescription>Spending analysis per supplier with order frequency and last purchase.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/purchases/by-product">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package2 className="h-5 w-5 text-green-600" />
+                  Purchases by Product
+                </CardTitle>
+                <CardDescription>Detailed breakdown of item procurement with cost and quantity analysis.</CardDescription>
               </CardHeader>
             </Card>
           </Link>

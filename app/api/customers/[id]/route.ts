@@ -175,49 +175,43 @@ export async function DELETE(
     const { getConnection } = await import('../../../../lib/mysql');
     connection = await getConnection();
 
-    // Temporarily disable foreign key checks
-    await connection.execute('SET FOREIGN_KEY_CHECKS = 0');
-    console.log('Foreign key checks disabled');
-
-    // Check for related records that might prevent deletion
-    const relatedChecks = [
-      { table: 'sales_orders', sql: 'SELECT COUNT(*) as count FROM sales_orders WHERE customer_id = ?', desc: 'sales orders' },
-      { table: 'sales_invoices', sql: 'SELECT COUNT(*) as count FROM sales_invoices WHERE customer_id = ?', desc: 'sales invoices' },
-      { table: 'customer_payments', sql: 'SELECT COUNT(*) as count FROM customer_payments WHERE customer_id = ?', desc: 'customer payments' },
-      { table: 'customer_loyalty', sql: 'SELECT COUNT(*) as count FROM customer_loyalty WHERE customer_id = ?', desc: 'loyalty records' },
-      { table: 'sales_transactions', sql: 'SELECT COUNT(*) as count FROM sales_transactions WHERE customer_id = ?', desc: 'sales transactions' },
+    // Check for related records that prevent deletion
+    const tablesToCheck = [
+      { table: 'sales_orders', desc: 'sales orders' },
+      { table: 'sales_invoices', desc: 'sales invoices' },
+      { table: 'customer_payments', desc: 'customer payments' },
+      { table: 'sales_transactions', desc: 'sales transactions' },
     ];
 
-    for (const check of relatedChecks) {
-      try {
-        const [rows] = await connection.execute(check.sql, [customerId]);
-        const result = Array.isArray(rows) ? rows[0] : rows;
-        console.log(`${check.desc}: ${(result as any).count} records`);
-      } catch (checkError) {
-        console.error(`Error checking ${check.desc}:`, checkError);
+    for (const check of tablesToCheck) {
+      const checkSql = `SELECT COUNT(*) as count FROM ${check.table} WHERE customer_id = ?`;
+      const [rows] = await connection.execute(checkSql, [customerId]);
+      const result = Array.isArray(rows) ? rows[0] : rows;
+      if ((result as any).count > 0) {
+        // Re-enable foreign key checks before returning
+        await connection.execute('SET FOREIGN_KEY_CHECKS = 1');
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: `Cannot delete customer because they have existing ${check.desc}.` 
+          },
+          { status: 400 }
+        );
       }
     }
 
-    // Delete related records first to ensure clean deletion
+    // If we reach here, there are no blocking transactions.
+    // We can still delete loyalty records as they are non-financial metadata.
     const deleteRelated = [
       'DELETE FROM point_history WHERE customer_loyalty_id IN (SELECT id FROM customer_loyalty WHERE customer_id = ?)',
       'DELETE FROM customer_loyalty WHERE customer_id = ?',
-      'DELETE FROM customer_payments WHERE customer_id = ?',
-      'DELETE FROM sales_invoice_items WHERE sales_invoice_id IN (SELECT id FROM sales_invoices WHERE customer_id = ?)',
-      'DELETE FROM sales_invoices WHERE customer_id = ?',
-      'DELETE FROM sales_order_items WHERE sales_order_id IN (SELECT id FROM sales_orders WHERE customer_id = ?)',
-      'DELETE FROM sales_orders WHERE customer_id = ?',
-      'UPDATE sales_transactions SET customer_id = NULL WHERE customer_id = ?',
     ];
 
     for (const deleteSql of deleteRelated) {
       try {
-        const result = await connection.execute(deleteSql, [customerId]);
-        const affectedRows = (result[0] as any).affectedRows || 0;
-        console.log(`Deleted/updated related records: ${affectedRows} affected`);
+        await connection.execute(deleteSql, [customerId]);
       } catch (deleteError) {
-        console.error('Error deleting related records:', deleteError);
-        // Continue with other deletions
+        console.error('Error deleting related metadata:', deleteError);
       }
     }
 

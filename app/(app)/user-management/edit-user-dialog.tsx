@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -98,14 +98,41 @@ export function EditUserDialog({
   const { isSubmitting } = form.formState;
   const watchedUserType = form.watch('userType');
 
+  const lastUserTypeRef = useRef(user.userType);
+  const isInitializingRef = useRef(true);
+
   useEffect(() => {
-    if (watchedUserType === 'Cashier' && open) {
-      const currentPermissions = form.getValues('permissions');
-      if (!currentPermissions.includes('access_pos')) {
-        form.setValue('permissions', [...currentPermissions, 'access_pos']);
+    if (open) {
+      if (isInitializingRef.current) {
+        lastUserTypeRef.current = user.userType;
+        isInitializingRef.current = false;
+        return;
       }
+
+      if (watchedUserType !== lastUserTypeRef.current) {
+        if (watchedUserType === 'Admin') {
+          form.setValue('permissions', ALL_PERMISSIONS.map(p => p.id));
+        } else if (watchedUserType === 'Staff') {
+          form.setValue('permissions', [
+            'view_dashboard',
+            'manage_products',
+            'manage_inventory',
+            'view_sales',
+            'manage_customers',
+            'manage_suppliers',
+            'view_reports'
+          ]);
+        } else if (watchedUserType === 'Cashier') {
+          form.setValue('permissions', ['access_pos']);
+        } else if (watchedUserType === 'User') {
+          form.setValue('permissions', ['view_dashboard']);
+        }
+        lastUserTypeRef.current = watchedUserType;
+      }
+    } else {
+      isInitializingRef.current = true;
     }
-  }, [watchedUserType, form, open]);
+  }, [watchedUserType, form, open, user.userType]);
 
   async function onSubmit(values: FormValues) {
     try {
@@ -169,7 +196,7 @@ export function EditUserDialog({
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
                   <FormControl>
-                    <Input type="text" placeholder="Full name" {...field} className="bg-white" />
+                    <Input type="text" placeholder="Full name" {...field} value={field.value ?? ''} className="bg-white" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -182,7 +209,7 @@ export function EditUserDialog({
                 <FormItem>
                   <FormLabel>Username</FormLabel>
                   <FormControl>
-                    <Input type="text" placeholder="username" {...field} className="bg-white" />
+                    <Input type="text" placeholder="username" {...field} value={field.value ?? ''} className="bg-white" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -218,7 +245,7 @@ export function EditUserDialog({
                 <FormItem>
                   <FormLabel>Password (leave blank to keep current)</FormLabel>
                   <FormControl>
-                    <Input type="password" {...field} placeholder="New password" className="bg-white" />
+                    <Input type="password" {...field} value={field.value ?? ''} placeholder="New password" className="bg-white" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

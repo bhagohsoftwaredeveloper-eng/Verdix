@@ -47,7 +47,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye, Check, ChevronsUpDown, ArrowUpRight, ArrowDownRight, Scale, Receipt } from 'lucide-react';
+import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye, Check, ChevronsUpDown, ArrowUpRight, ArrowDownRight, Scale, Receipt, FileSpreadsheet, Loader2, Filter, X } from 'lucide-react';
+
+
 import { cn, formatCurrency } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
@@ -269,6 +271,10 @@ function PaymentHistory() {
         totalItems: 0
      });
      const { toast } = useToast();
+     const [isExporting, setIsExporting] = useState(false);
+     const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+
+
 
      const fetchPayments = async () => {
         try {
@@ -301,6 +307,168 @@ function PaymentHistory() {
         }
     };
 
+    const fetchPaymentMethods = async () => {
+        try {
+            const response = await fetch(getApiUrl('/payment-methods?activeOnly=true'));
+            const result = await response.json();
+            if (result.success) {
+                setPaymentMethods(result.data);
+            }
+        } catch (error) {
+            console.error('Error fetching payment methods:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchPaymentMethods();
+    }, []);
+
+    const fetchAllPaymentsForExport = async () => {
+
+        try {
+            const params = new URLSearchParams();
+            if (search) params.append('search', search);
+            if (date?.from) params.append('from', date.from.toISOString());
+            if (date?.to) params.append('to', date.to.toISOString());
+            if (paymentType && paymentType !== 'All') params.append('paymentType', paymentType);
+            params.append('page', '1');
+            params.append('limit', '1000000'); // Fetch all
+
+            const response = await fetch(getApiUrl(`/customers/payments?${params.toString()}`));
+            const result = await response.json();
+            if (result.success) return result.data;
+            return [];
+        } catch (error) {
+            console.error('Error fetching payments for export:', error);
+            return [];
+        }
+    };
+
+    const exportToCSV = async () => {
+        try {
+            setIsExporting(true);
+            const allPayments = await fetchAllPaymentsForExport();
+            if (allPayments.length === 0) {
+                toast({ variant: 'destructive', title: 'No Data', description: 'No payments found to export.' });
+                return;
+            }
+
+            const headers = ['Reference', 'Customer', 'Date', 'Payment Type', 'Amount'];
+            const rows = allPayments.map((p: any) => [
+                p.reference,
+                p.customerName,
+                format(new Date(p.paymentDate), 'yyyy-MM-dd'),
+                p.paymentType,
+                p.amount.toString()
+            ]);
+
+            const csvContent = [
+                headers.join(','),
+                ...rows.map((row: any[]) => row.map(cell => `"${cell}"`).join(','))
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `customer_payments_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+            link.click();
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const exportToPDF = async () => {
+        try {
+            setIsExporting(true);
+            const allPayments = await fetchAllPaymentsForExport();
+            if (allPayments.length === 0) {
+                toast({ variant: 'destructive', title: 'No Data', description: 'No payments found to export.' });
+                return;
+            }
+
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) return;
+
+            // Fetch Business Name
+            let businessName = 'BUSINESS NAME';
+            try {
+                const settingsRes = await fetch(getApiUrl('/pos-settings'));
+                const settings = await settingsRes.json();
+                if (settings.success && settings.data?.businessName) {
+                    businessName = settings.data.businessName;
+                }
+            } catch (e) {}
+
+            const startDate = date?.from ? format(date.from, 'PP') : 'All Time';
+            const endDate = date?.to ? format(date.to, 'PP') : 'All Time';
+            const period = date?.from ? `${startDate} - ${endDate}` : 'All Time';
+
+            const content = `
+                <html>
+                <head>
+                    <title>Customer Payment History</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; font-size: 12px; }
+                        .header { text-align: center; margin-bottom: 20px; }
+                        .business-name { font-size: 18px; font-weight: bold; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                        .text-right { text-align: right; }
+                        .footer { margin-top: 20px; font-size: 10px; color: #666; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div class="business-name">${businessName}</div>
+                        <div>Customer Payment History Report</div>
+                        <div>Period: ${period}</div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Customer</th>
+                                <th>Date</th>
+                                <th>Payment Type</th>
+                                <th class="text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${allPayments.map((p: any) => `
+                                <tr>
+                                    <td>${p.reference}</td>
+                                    <td>${p.customerName}</td>
+                                    <td>${format(new Date(p.paymentDate), 'MMM dd, yyyy')}</td>
+                                    <td>${p.paymentType}</td>
+                                    <td class="text-right">${formatCurrency(Number(p.amount))}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="4" class="text-right">Total</th>
+                                <th class="text-right">${formatCurrency(allPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0))}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    <div class="footer">Generated on ${format(new Date(), 'PPpp')}</div>
+                </body>
+                </html>
+            `;
+
+            printWindow.document.write(content);
+            printWindow.document.close();
+            setTimeout(() => {
+                printWindow.print();
+            }, 500);
+
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+
     useEffect(() => {
         const timer = setTimeout(fetchPayments, 500);
         return () => clearTimeout(timer);
@@ -308,68 +476,130 @@ function PaymentHistory() {
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-lg border shadow-sm">
-                <div className="flex gap-2">
-                    <Button variant="outline"><FileDown className="mr-2 h-4 w-4"/> Export</Button>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-lg border shadow-sm mb-4">
+                <div className="flex flex-1 items-center gap-2 w-full">
+                    <div className="relative w-full sm:w-72">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Search payments..." className="pl-8 text-sm h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+                    </div>
+
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="relative h-9">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter
+                                {((date?.from || date?.to) || (paymentType !== 'All')) && (
+                                    <Badge 
+                                        variant="default" 
+                                        className="ml-2 h-4 min-w-4 rounded-full p-0 px-1 flex items-center justify-center bg-primary text-primary-foreground text-[10px]"
+                                    >
+                                        {(date?.from || date?.to ? 1 : 0) + (paymentType !== 'All' ? 1 : 0)}
+                                    </Badge>
+                                )}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-4" align="start">
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between border-b pb-2 mb-2">
+                                    <h4 className="font-semibold text-sm">Filters</h4>
+                                    {((date?.from || date?.to) || (paymentType !== 'All')) && (
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            onClick={() => {
+                                                setDate(undefined);
+                                                setPaymentType('All');
+                                            }}
+                                            className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        >
+                                            <X className="mr-1 h-3 w-3" />
+                                            Clear all
+                                        </Button>
+                                    )}
+                                </div>
+                                <div className="grid gap-4">
+                                    <div className="grid gap-1.5">
+                                        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Date Range</label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                id="date"
+                                                variant={"outline"}
+                                                size="sm"
+                                                className={cn(
+                                                    "w-full justify-start text-left font-normal h-9",
+                                                    !date && "text-muted-foreground"
+                                                )}
+                                                >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {date?.from ? (
+                                                    date.to ? (
+                                                    <>
+                                                        {format(date.from, "LLL dd, y")} -{" "}
+                                                        {format(date.to, "LLL dd, y")}
+                                                    </>
+                                                    ) : (
+                                                    format(date.from, "LLL dd, y")
+                                                    )
+                                                ) : (
+                                                    <span>Pick a date range</span>
+                                                )}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                initialFocus
+                                                mode="range"
+                                                defaultMonth={date?.from}
+                                                selected={date}
+                                                onSelect={setDate}
+                                                numberOfMonths={2}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Payment Type</label>
+                                        <Select value={paymentType} onValueChange={setPaymentType}>
+                                            <SelectTrigger className="w-full h-9"><SelectValue placeholder="All" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="All">All Payments</SelectItem>
+                                                {paymentMethods.map(method => (
+                                                    <SelectItem key={method.id} value={method.name}>{method.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                 </div>
-                <div className="relative w-full sm:w-72">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Search..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+
+                <div className="flex gap-2 sm:ml-auto">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-9" disabled={isExporting}>
+                                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4"/>}
+                                Export
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={exportToCSV}>
+                                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                Export to CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={exportToPDF}>
+                                <FileText className="mr-2 h-4 w-4" />
+                                Export to PDF
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
+
              <Card>
-                <CardContent className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-                        <div className="grid gap-2">
-                             <label className="text-xs font-semibold text-muted-foreground uppercase">Date Range</label>
-                             <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                    id="date"
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !date && "text-muted-foreground"
-                                    )}
-                                    >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {date?.from ? (
-                                        date.to ? (
-                                        <>
-                                            {format(date.from, "LLL dd, y")} -{" "}
-                                            {format(date.to, "LLL dd, y")}
-                                        </>
-                                        ) : (
-                                        format(date.from, "LLL dd, y")
-                                        )
-                                    ) : (
-                                        <span>Pick a date</span>
-                                    )}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                    initialFocus
-                                    mode="range"
-                                    defaultMonth={date?.from}
-                                    selected={date}
-                                    onSelect={setDate}
-                                    numberOfMonths={2}
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                        <div className="grid gap-2">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase">Payment Type</label>
-                            <Select value={paymentType} onValueChange={setPaymentType}>
-                                <SelectTrigger className="w-full"><SelectValue placeholder="All" /></SelectTrigger>
-                                <SelectContent>
-                                    {['All', 'Cash', 'Bank Transfer', 'Check', 'GCash', 'PayMaya', 'Credit Card', 'Debit Card', 'Other'].map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <div className="h-8"></div>
+                <CardContent className="p-0">
                     <div className="rounded-md border">
                         <Table>
                             <TableHeader>
@@ -435,7 +665,7 @@ function PaymentHistory() {
                 </CardContent>
             </Card>
         </div>
-    )
+    );
 }
 
 // --- Statement of Account Component ---

@@ -425,6 +425,7 @@ export function ManageSuppliersDialog({
     loadSuppliers();
   }, []);
 
+  const showTrigger = trigger !== null;
   const dialogTrigger = trigger || (
     <Button variant="outline">
         <Users className="mr-2 h-4 w-4" />
@@ -434,9 +435,11 @@ export function ManageSuppliersDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {dialogTrigger}
-      </DialogTrigger>
+      {showTrigger && (
+        <DialogTrigger asChild>
+          {dialogTrigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-4xl !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
         <DialogHeader>
           <DialogTitle>Manage Suppliers</DialogTitle>

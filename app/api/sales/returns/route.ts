@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         terminalId || null,
         -totalAmount, // Negative since it's a return/outflow of money from business
         -totalAmount,
-        reason || 'Sales Return'
+        reason || 'Merchandise Credit'
       ]);
 
       const insertItemSql = `

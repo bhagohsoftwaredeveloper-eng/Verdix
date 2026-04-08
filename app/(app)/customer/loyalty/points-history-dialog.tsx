@@ -9,7 +9,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Table,
@@ -40,8 +39,17 @@ interface PointsHistoryDialogProps {
   customerName: string;
 }
 
-export function PointsHistoryDialog({ customerLoyaltyId, customerName }: PointsHistoryDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function PointsHistoryDialog({
+  customerLoyaltyId,
+  customerName,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: PointsHistoryDialogProps & { open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = openProp !== undefined;
+  const isOpen = isControlled ? openProp : internalOpen;
+  const setIsOpen = isControlled ? (onOpenChangeProp ?? setInternalOpen) : setInternalOpen;
+
   const [history, setHistory] = useState<PointHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -114,11 +122,6 @@ export function PointsHistoryDialog({ customerLoyaltyId, customerName }: PointsH
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" title="View Points History">
-          <History className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Points History - {customerName}</DialogTitle>

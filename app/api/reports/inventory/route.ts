@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
     const lowStock = searchParams.get('lowStock');
+    const search = searchParams.get('search');
 
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
@@ -25,6 +26,12 @@ export async function GET(request: NextRequest) {
 
     if (lowStock === 'true') {
       conditions.push('p.stock <= p.reorder_point');
+    }
+
+    if (search) {
+      conditions.push('(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)');
+      const searchVal = `%${search}%`;
+      params.push(searchVal, searchVal, searchVal);
     }
 
     if (conditions.length > 0) {

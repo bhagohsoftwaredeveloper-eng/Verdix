@@ -128,7 +128,7 @@ export default function AdjustmentReportPage() {
               period={`${startDate} to ${endDate}`}
           />
 
-          <div className="rounded-md border mb-4">
+          <div className="rounded-md border mb-4 print:border-none print:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>

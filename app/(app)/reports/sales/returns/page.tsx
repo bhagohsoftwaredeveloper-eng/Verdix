@@ -68,12 +68,12 @@ export default function ReturnedSalesPage() {
     if (!searchTerm.trim()) return true;
     const search = searchTerm.toLowerCase();
     return (
-      record.soNo?.toLowerCase().includes(search) ||
-      record.orNo?.toLowerCase().includes(search) ||
-      record.soldByCashier?.toLowerCase().includes(search) ||
-      record.returnedByCashier?.toLowerCase().includes(search) ||
-      record.overrideBy?.toLowerCase().includes(search) ||
-      record.note?.toLowerCase().includes(search)
+      String(record.soNo || '').toLowerCase().includes(search) ||
+      String(record.orNo || '').toLowerCase().includes(search) ||
+      String(record.soldByCashier || '').toLowerCase().includes(search) ||
+      String(record.returnedByCashier || '').toLowerCase().includes(search) ||
+      String(record.overrideBy || '').toLowerCase().includes(search) ||
+      String(record.note || '').toLowerCase().includes(search)
     );
   });
 
@@ -107,26 +107,28 @@ export default function ReturnedSalesPage() {
       if (toDate) {
         params.append('endDate', format(toDate, 'yyyy-MM-dd'));
       }
-      params.append('transactionType', 'return');
+      params.append('status', 'Returned');
 
       const response = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
       const result = await response.json();
       if (result.success) {
-        const mappedRecords = result.data.map((tx: any) => ({
-          soNo: tx.originalOrderNumber || 'N/A',
-          orNo: tx.orderNumber || 'N/A',
-          transDate: tx.originalTransactionTime || '',
-          soldByCashier: tx.originalCashierName || 'N/A',
-          returnedDate: tx.date || '',
-          returnedByCashier: tx.cashier || 'N/A',
-          overrideBy: tx.customer?.name || 'admin',
-          salesAmount: Math.abs(tx.total || 0),
-          cost: Math.abs(tx.cost || 0),
-          profit: tx.profit || 0,
-          vatableSales: Math.abs(tx.vatableSales || 0),
-          vatAmount: Math.abs(tx.taxAmount || 0),
-          note: tx.notes || ''
-        }));
+        const mappedRecords = result.data
+          .filter((tx: any) => tx.transactionType === 'return')
+          .map((tx: any) => ({
+            soNo: tx.originalOrderNumber || 'N/A',
+            orNo: tx.orderNumber || 'N/A',
+            transDate: tx.originalTransactionTime || '',
+            soldByCashier: tx.originalCashierName || 'N/A',
+            returnedDate: tx.date || '',
+            returnedByCashier: tx.cashier || 'N/A',
+            overrideBy: tx.customer?.name || 'admin',
+            salesAmount: Math.abs(tx.total || 0),
+            cost: Math.abs(tx.cost || 0),
+            profit: tx.profit || 0,
+            vatableSales: Math.abs(tx.vatableSales || 0),
+            vatAmount: Math.abs(tx.taxAmount || 0),
+            note: tx.notes || ''
+          }));
         setRecords(mappedRecords);
       }
     } catch (error) {
@@ -583,9 +585,12 @@ export default function ReturnedSalesPage() {
               </div>
             )
           ) : (
-          <Table className="w-full text-sm">
-            <TableHeader>
-              <TableRow className="bg-muted/50">
+          <Table 
+            className="w-full text-sm"
+            wrapperClassName="h-[600px] relative"
+          >
+            <TableHeader className="bg-muted">
+              <TableRow className="bg-muted hover:bg-muted">
                 <TableHead className="py-2 px-3">SO No.</TableHead>
                 <TableHead className="py-2 px-2">OR No.</TableHead>
                 <TableHead className="py-2 px-2">Trans Date</TableHead>

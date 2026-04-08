@@ -179,8 +179,15 @@ function CategoryRow({ category, onCategoryUpdated, onCategoryDeleted }: { categ
               <span className="sr-only">Edit</span>
             </Button>
           </CategoryDialog>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 text-muted-foreground transition-colors hover:text-destructive" />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 hover:bg-muted" 
+            onClick={handleDelete}
+            disabled={category.productCount !== undefined && category.productCount > 0}
+            title={category.productCount !== undefined && category.productCount > 0 ? "Cannot delete category with products assigned" : "Delete category"}
+          >
+            <Trash2 className={`h-4 w-4 ${category.productCount !== undefined && category.productCount > 0 ? 'text-muted-foreground/50' : 'text-muted-foreground transition-colors hover:text-destructive'}`} />
             <span className="sr-only">Delete</span>
           </Button>
         </div>
@@ -240,6 +247,7 @@ export function ManageCategoriesDialog({ trigger, onCategoryAdded, open, onOpenC
     }
   };
 
+  const showTrigger = trigger !== null;
   const dialogTrigger = trigger || (
     <Button variant="outline">
       <ListTree className="mr-2 h-4 w-4" />
@@ -248,10 +256,12 @@ export function ManageCategoriesDialog({ trigger, onCategoryAdded, open, onOpenC
   );
 
   return (
-     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        {dialogTrigger}
-      </DialogTrigger>
+     <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {showTrigger && (
+        <DialogTrigger asChild>
+          {dialogTrigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-3xl !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
         <DialogHeader>
           <DialogTitle>Manage Categories</DialogTitle>

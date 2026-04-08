@@ -441,7 +441,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                     <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
                                 </div>
                                 <FormControl>
-                                <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
+                                <Input className="h-8 bg-white text-xs" {...field} />
                                 </FormControl>
                             </FormItem>
                             )}

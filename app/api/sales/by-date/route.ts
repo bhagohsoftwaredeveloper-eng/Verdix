@@ -9,6 +9,9 @@ export async function GET(request: NextRequest) {
     const terminalId = searchParams.get('terminalId');
     const interval = searchParams.get('interval') || 'daily'; // daily, hourly, monthly
     const paymentType = searchParams.get('paymentType');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = (page - 1) * limit;
 
     const params: any[] = [];
     let whereClause = "WHERE pt.transaction_type = 'sale' AND pt.payment_status = 'completed'";
@@ -33,24 +36,30 @@ export async function GET(request: NextRequest) {
     }
 
     // Determine grouping and date format
-    let groupBy = "";
     let selectDate = "";
     
     switch (interval) {
         case 'hourly':
             selectDate = "DATE_FORMAT(pt.transaction_time, '%Y-%m-%d %H:00:00')";
-            groupBy = "GROUP BY DATE_FORMAT(pt.transaction_time, '%Y-%m-%d %H:00:00')";
             break;
         case 'monthly':
             selectDate = "DATE_FORMAT(pt.transaction_time, '%Y-%m-01')";
-            groupBy = "GROUP BY DATE_FORMAT(pt.transaction_time, '%Y-%m-01')";
             break;
         case 'daily':
         default:
             selectDate = "DATE(pt.transaction_time)";
-            groupBy = "GROUP BY DATE(pt.transaction_time)";
             break;
     }
+
+    // Get total count of groups for pagination
+    const countQuery = `
+        SELECT COUNT(DISTINCT ${selectDate}) as total
+        FROM pos_transactions pt
+        ${whereClause}
+    `;
+    const countResult = await query(countQuery, params);
+    const totalCount = countResult[0]?.total || 0;
+    const totalPages = Math.ceil(totalCount / limit);
 
     const queryStr = `
         SELECT
@@ -69,11 +78,12 @@ export async function GET(request: NextRequest) {
             ) as total_cost
         FROM pos_transactions pt
         ${whereClause}
-        ${groupBy}
+        GROUP BY 1
         ORDER BY date DESC
+        LIMIT ? OFFSET ?
     `;
 
-    const result = await query(queryStr, params);
+    const result = await query(queryStr, [...params, limit, offset]);
 
     const formattedData = result.map((row: any) => {
         const date = row.date instanceof Date ? row.date.toISOString() : row.date;
@@ -82,12 +92,7 @@ export async function GET(request: NextRequest) {
         const totalCost = parseFloat(row.total_cost) || 0;
         const totalDiscount = parseFloat(row.total_discount) || 0;
         
-        // Vatable Sales = Total Revenue - Tax (assuming all are vatable for now)
-        // In a complex system, we'd sum based on item tax type. 
-        // For now, mirroring the logic in sales/details which assumes simple tax structure.
         const vatableSales = totalRevenue - totalTax;
-        
-        // Profit = Revenue - Cost - Tax
         const profit = totalRevenue - totalCost - totalTax;
 
         return {
@@ -99,9 +104,9 @@ export async function GET(request: NextRequest) {
             totalDiscount,
             vatableSales,
             vatAmount: totalTax,
-            vatExemptSales: 0, // Placeholder
-            zeroRatedSales: 0, // Placeholder
-            nonVatSales: 0,    // Placeholder
+            vatExemptSales: 0,
+            zeroRatedSales: 0,
+            nonVatSales: 0,
             cost: totalCost,
             profit
         };
@@ -110,6 +115,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
         success: true,
         data: formattedData,
+        pagination: {
+            total: totalCount,
+            page,
+            limit,
+            totalPages
+        }
     });
 
   } catch (error) {

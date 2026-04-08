@@ -6,71 +6,96 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const shiftId = searchParams.get('shiftId');
 
-    if (!shiftId) {
-      return NextResponse.json(
-        { success: false, error: 'Shift ID is required' },
-        { status: 400 }
+    if (shiftId) {
+      // 1. Get Shift Details
+      const shiftResult = await query(
+        `SELECT starting_cash, status, user_id FROM shifts WHERE id = ?`,
+        [shiftId]
       );
-    }
 
-    // 1. Get Shift Details
-    const shiftResult = await query(
-      `SELECT starting_cash, status FROM shifts WHERE id = ?`,
-      [shiftId]
-    );
-
-    if (shiftResult.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Shift not found' },
-        { status: 404 }
-      );
-    }
-
-    const startingCash = parseFloat(shiftResult[0].starting_cash || 0);
-
-    // 2. Get Cash Sales (Total Amount where payment_method = 'CASH' and type = 'sale' - 'void' - 'return'?)
-    // Simplified: Sum of total_amount for sales (positive) vs voids/returns (negative or separate)
-    // Assuming pos_transactions stores final amount. If voided, is it deleted or marked void?
-    // Looking at schema: transaction_type ENUM('sale', 'void', 'return', 'refund')
-    // For now, let's sum 'sale' where payment_method is CASH.
-    // Note: Payment method might be stored in a related payments table if multiple payments allowed, 
-    // but schema has `payment_method` column in `pos_transactions`.
-
-    const salesResult = await query(
-      `SELECT 
-         SUM(CASE WHEN transaction_type = 'sale' THEN total_amount ELSE 0 END) as total_sales,
-         SUM(CASE WHEN transaction_type IN ('void', 'return', 'refund') THEN total_amount ELSE 0 END) as total_refunds
-       FROM pos_transactions 
-       WHERE shift_id = ? AND payment_method = 'CASH'`,
-      [shiftId]
-    );
-
-    const totalCashSales = (parseFloat(salesResult[0].total_sales || 0) - parseFloat(salesResult[0].total_refunds || 0));
-
-
-    // 3. Get Cash Transfers
-    const transfersResult = await query(
-      `SELECT 
-         SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) as total_deposits,
-         SUM(CASE WHEN type = 'pickup' THEN amount ELSE 0 END) as total_pickups
-       FROM cash_transfers 
-       WHERE shift_id = ?`,
-      [shiftId]
-    );
-
-    const totalDeposits = parseFloat(transfersResult[0].total_deposits || 0);
-    const totalPickups = parseFloat(transfersResult[0].total_pickups || 0);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        startingCash,
-        cashSales: totalCashSales,
-        cashDeposits: totalDeposits,
-        cashPickups: totalPickups,
-        expectedCash: startingCash + totalCashSales + totalDeposits - totalPickups
+      if (shiftResult.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Shift not found' },
+          { status: 404 }
+        );
       }
-    });
+
+      const startingCash = parseFloat(shiftResult[0].starting_cash || 0);
+
+      // 2. Get Cash Sales
+      const salesResult = await query(
+        `SELECT 
+           SUM(CASE WHEN transaction_type = 'sale' THEN total_amount ELSE 0 END) as total_sales,
+           SUM(CASE WHEN transaction_type IN ('void', 'return', 'refund') THEN total_amount ELSE 0 END) as total_refunds
+         FROM pos_transactions 
+         WHERE shift_id = ? AND payment_method = 'CASH'`,
+        [shiftId]
+      );
+
+      const totalCashSales = (parseFloat(salesResult[0].total_sales || 0) - parseFloat(salesResult[0].total_refunds || 0));
+
+      // 3. Get Cash Transfers
+      const transfersResult = await query(
+        `SELECT 
+           SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) as total_deposits,
+           SUM(CASE WHEN type = 'pickup' THEN amount ELSE 0 END) as total_pickups
+         FROM cash_transfers 
+         WHERE shift_id = ?`,
+        [shiftId]
+      );
+
+      const totalDeposits = parseFloat(transfersResult[0].total_deposits || 0);
+      const totalPickups = parseFloat(transfersResult[0].total_pickups || 0);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          startingCash,
+          cashSales: totalCashSales,
+          cashDeposits: totalDeposits,
+          cashPickups: totalPickups,
+          expectedCash: startingCash + totalCashSales + totalDeposits - totalPickups,
+          userId: shiftResult[0].user_id,
+          status: shiftResult[0].status
+        }
+      });
+    }
+
+    // Restore: Fetch active shift for a terminal (Takeover support)
+    const terminalId = searchParams.get('terminalId');
+    const status = searchParams.get('status');
+
+    if (terminalId && status === 'active') {
+      const activeShiftResult = await query(
+        `SELECT s.id, s.user_id, s.starting_cash, u.display_name as cashier_name
+         FROM shifts s
+         LEFT JOIN users u ON s.user_id = u.uid
+         WHERE s.terminal_id = ? AND s.status = 'active'
+         ORDER BY s.created_at DESC
+         LIMIT 1`,
+        [terminalId]
+      );
+
+      if (activeShiftResult.length > 0) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            id: activeShiftResult[0].id,
+            userId: activeShiftResult[0].user_id,
+            cashierName: activeShiftResult[0].cashier_name,
+            startingCash: parseFloat(activeShiftResult[0].starting_cash || 0)
+          }
+        });
+      } else {
+        return NextResponse.json({ success: true, data: null });
+      }
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Shift ID or Terminal parameters required' },
+      { status: 400 }
+    );
+
 
   } catch (error: any) {
     console.error('Error fetching shift details:', error);
@@ -127,13 +152,36 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { shiftId, actualCash, cashDifference, notes } = body;
+    const { shiftId, actualCash, cashDifference, notes, takeoverUserId } = body;
 
-    if (!shiftId || actualCash === undefined) {
+    if (!shiftId) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: 'Missing Shift ID' },
         { status: 400 }
       );
+    }
+
+    if (takeoverUserId) {
+        // Handle Shift Takeover (Transfer ownership)
+        return await withTransaction(async (connection) => {
+            await connection.query(
+                `UPDATE shifts SET 
+                    user_id = ?, 
+                    updated_at = NOW() 
+                 WHERE id = ?`,
+                [takeoverUserId, shiftId]
+            );
+
+            return NextResponse.json({
+                success: true,
+                message: 'Shift ownership transferred successfully'
+            });
+        });
+    }
+
+    // Standard Shift End
+    if (actualCash === undefined) {
+        return NextResponse.json({ success: false, error: 'Missing actual cash' }, { status: 400 });
     }
 
     return await withTransaction(async (connection) => {

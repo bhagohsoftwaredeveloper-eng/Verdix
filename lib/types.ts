@@ -201,6 +201,7 @@ export interface Category {
   id: string;
   name: string;
   markupPercentage?: number;
+  productCount?: number;
 }
 
 export interface Brand {
@@ -301,6 +302,14 @@ export interface StockMovement {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+export interface BusinessProfile {
+  businessName: string;
+  address: string;
+  contactNumber: string;
+  email: string;
+  tin: string;
+  logoPath: string;
 }
 
 // POS-specific interfaces

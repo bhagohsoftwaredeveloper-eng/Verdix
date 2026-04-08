@@ -12,7 +12,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -71,8 +70,22 @@ interface LoyaltySetting {
   equivalent: number;
 }
 
-export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: CustomerWithLoyalty, onSuccess?: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function EditLoyaltyCardDialog({
+  customer,
+  onSuccess,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: {
+  customer: CustomerWithLoyalty;
+  onSuccess?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = openProp !== undefined;
+  const isOpen = isControlled ? openProp : internalOpen;
+  const setIsOpen = isControlled ? (onOpenChangeProp ?? setInternalOpen) : setInternalOpen;
+
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySetting[]>([]);
   const { toast } = useToast();
 
@@ -80,7 +93,14 @@ export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: Custo
     resolver: zodResolver(editLoyaltyCardSchema),
     defaultValues: {
       rfidCode: customer.rfid_code || '',
-      expiryDate: customer.expiry_date ? new Date(customer.expiry_date) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      expiryDate: (() => {
+        if (!customer.expiry_date) return new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+        const dateStr = customer.expiry_date.includes('T') || customer.expiry_date.includes(' ')
+          ? customer.expiry_date
+          : `${customer.expiry_date}T00:00:00`;
+        const date = new Date(dateStr);
+        return isNaN(date.getTime()) ? new Date() : date;
+      })(),
       pointSetting: customer.point_setting || '',
     },
   });
@@ -105,7 +125,14 @@ export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: Custo
 
       form.reset({
         rfidCode: customer.rfid_code || '',
-        expiryDate: customer.expiry_date ? new Date(customer.expiry_date) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        expiryDate: (() => {
+          if (!customer.expiry_date) return new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+          const dateStr = customer.expiry_date.includes('T') || customer.expiry_date.includes(' ')
+            ? customer.expiry_date
+            : `${customer.expiry_date}T00:00:00`;
+          const date = new Date(dateStr);
+          return isNaN(date.getTime()) ? new Date() : date;
+        })(),
         pointSetting: customer.point_setting || '',
       });
     }
@@ -120,7 +147,7 @@ export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: Custo
         },
         body: JSON.stringify({
           rfidCode: values.rfidCode,
-          expiryDate: values.expiryDate ? values.expiryDate.toISOString().split('T')[0] : null,
+          expiryDate: values.expiryDate ? format(values.expiryDate, 'yyyy-MM-dd') : null,
           pointSetting: values.pointSetting,
         }),
       });
@@ -156,11 +183,6 @@ export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: Custo
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" title="Edit Loyalty Card">
-          <Edit className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>Edit Loyalty Card</DialogTitle>
@@ -190,7 +212,7 @@ export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: Custo
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Expiry Date</FormLabel>
-                  <Popover>
+                  <Popover modal={false}>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button
@@ -209,7 +231,7 @@ export function EditLoyaltyCardDialog({ customer, onSuccess }: { customer: Custo
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-[9999]" align="start">
                       <Calendar
                         mode="single"
                         selected={field.value}

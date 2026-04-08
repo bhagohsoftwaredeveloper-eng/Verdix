@@ -83,6 +83,8 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
   const [paymentTermsList, setPaymentTermsList] = useState<any[]>([]);
   const [isLoadingPaymentTerms, setIsLoadingPaymentTerms] = useState(false);
   const [isManagePaymentTermsOpen, setIsManagePaymentTermsOpen] = useState(false);
+  const [isPaymentTermsSelectOpen, setIsPaymentTermsSelectOpen] = useState(false);
+  const [sameAsAddress, setSameAsAddress] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<CustomerFormValues>({
@@ -115,6 +117,7 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
         creditLimit: customer.creditLimit || 0,
         priceLevelId: customer.priceLevelId || '',
       });
+      setSameAsAddress(false);
       fetchPriceLevels();
       fetchLoyaltySettings();
       fetchPaymentTerms();
@@ -273,7 +276,17 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                       <FormItem>
                         <FormLabel>Address</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="e.g., 123 Main St, City, Country" {...field} rows={2} />
+                          <Textarea
+                            placeholder="e.g., 123 Main St, City, Country"
+                            {...field}
+                            rows={2}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              if (sameAsAddress) {
+                                form.setValue('billingAddress', e.target.value);
+                              }
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -284,9 +297,28 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                     name="billingAddress"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Billing Address</FormLabel>
+                        <div className="flex flex-row items-center justify-between">
+                          <FormLabel>Billing Address</FormLabel>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Same as Address</span>
+                            <Switch
+                              checked={sameAsAddress}
+                              onCheckedChange={(checked) => {
+                                setSameAsAddress(checked);
+                                if (checked) {
+                                  form.setValue('billingAddress', form.getValues('address'));
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
                         <FormControl>
-                          <Textarea placeholder="e.g., 123 Main St, City, Country" {...field} rows={2} />
+                          <Textarea
+                            placeholder="e.g., 123 Main St, City, Country"
+                            {...field}
+                            rows={2}
+                            disabled={sameAsAddress}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -301,7 +333,12 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Payment Terms</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ''}>
+                      <Select
+                        open={isPaymentTermsSelectOpen}
+                        onOpenChange={setIsPaymentTermsSelectOpen}
+                        onValueChange={field.onChange}
+                        value={field.value || ''}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select Payment Terms" />
@@ -325,7 +362,8 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  setIsManagePaymentTermsOpen(true);
+                                   setIsPaymentTermsSelectOpen(false);
+                                   setIsManagePaymentTermsOpen(true);
                                 }}
                               >
                                 <PlusCircle className="mr-2 h-4 w-4" />

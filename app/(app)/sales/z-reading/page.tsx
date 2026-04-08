@@ -23,7 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { CalendarIcon, X, Download, Image as ImageIcon, FileText, Printer, Eye } from 'lucide-react';
-// DateRange import removed
+import { DateRange } from 'react-day-picker';
 import { useToast } from '@/hooks/use-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -44,7 +44,10 @@ type BusinessSettings = {
 };
 
 export default function ZReadingPage() {
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: new Date(),
+  });
   const [terminal, setTerminal] = useState<string>('all');
   const [zReadings, setZReadings] = useState<ZReadingData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,10 +75,10 @@ export default function ZReadingPage() {
   }, []);
 
   const fetchZReadings = async () => {
-    if (!date) {
+    if (!dateRange?.from) {
         toast({
             title: 'Error',
-            description: 'Please select a date',
+            description: 'Please select a date range',
             variant: 'destructive',
         });
         return;
@@ -85,9 +88,13 @@ export default function ZReadingPage() {
     setHasSearched(true);
     try {
       const params = new URLSearchParams();
-      if (date) {
-        params.append('startDate', format(date, 'yyyy-MM-dd'));
-        params.append('endDate', format(date, 'yyyy-MM-dd'));
+      if (dateRange?.from) {
+        params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+      }
+      if (dateRange?.to) {
+        params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+      } else if (dateRange?.from) {
+        params.append('endDate', format(dateRange.from, 'yyyy-MM-dd'));
       }
       if (terminal) {
         params.append('terminalId', terminal);
@@ -257,20 +264,29 @@ export default function ZReadingPage() {
                     <Button
                         variant={"outline"}
                         className={cn(
-                            "w-[240px] justify-start text-left font-normal",
-                            !date && "text-muted-foreground"
+                            "w-[300px] justify-start text-left font-normal",
+                            !dateRange && "text-muted-foreground"
                         )}
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date ? format(date, "yyyy-MM-dd") : <span>Pick a date</span>}
+                        {dateRange?.from ? (
+                            dateRange.to ? (
+                                <>{format(dateRange.from, "yyyy-MM-dd")} - {format(dateRange.to, "yyyy-MM-dd")}</>
+                            ) : (
+                                format(dateRange.from, "yyyy-MM-dd")
+                            )
+                        ) : (
+                            <span>Pick a date range</span>
+                        )}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
-                        mode="single"
-                        selected={date}
-                        onSelect={setDate}
+                        mode="range"
+                        selected={dateRange}
+                        onSelect={setDateRange}
                         initialFocus
+                        numberOfMonths={2}
                     />
                 </PopoverContent>
             </Popover>

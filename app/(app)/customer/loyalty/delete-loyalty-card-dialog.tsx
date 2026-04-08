@@ -11,7 +11,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -32,8 +31,22 @@ interface CustomerWithLoyalty {
   updated_at: string;
 }
 
-export function DeleteLoyaltyCardDialog({ customer, onSuccess }: { customer: CustomerWithLoyalty, onSuccess?: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function DeleteLoyaltyCardDialog({
+  customer,
+  onSuccess,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: {
+  customer: CustomerWithLoyalty;
+  onSuccess?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = openProp !== undefined;
+  const isOpen = isControlled ? openProp : internalOpen;
+  const setIsOpen = isControlled ? (onOpenChangeProp ?? setInternalOpen) : setInternalOpen;
+
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
@@ -76,11 +89,6 @@ export function DeleteLoyaltyCardDialog({ customer, onSuccess }: { customer: Cus
 
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" title="Delete Loyalty Card" className="text-destructive hover:text-destructive">
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Loyalty Card</AlertDialogTitle>
@@ -95,12 +103,23 @@ export function DeleteLoyaltyCardDialog({ customer, onSuccess }: { customer: Cus
             • Point history and transactions
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        
+        {customer.last_transaction && (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl mt-4">
+            <h4 className="text-amber-800 font-bold text-sm mb-1 uppercase tracking-wider">Deletion Restricted</h4>
+            <p className="text-amber-700 text-sm leading-relaxed font-medium">
+              This loyalty card has existing transaction history (last active on {new Date(customer.last_transaction).toLocaleDateString()}). 
+              For data integrity, cards with point history cannot be deleted.
+            </p>
+          </div>
+        )}
+
+        <AlertDialogFooter className="mt-6">
           <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={handleDelete}
-            disabled={isDeleting}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            disabled={isDeleting || !!customer.last_transaction}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all font-bold"
           >
             {isDeleting ? 'Deleting...' : 'Delete Loyalty Card'}
           </AlertDialogAction>

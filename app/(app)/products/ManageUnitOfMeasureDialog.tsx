@@ -22,6 +22,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -163,13 +174,33 @@ function UnitOfMeasureRow({ unit, onUnitChanged }: { unit: UnitOfMeasure; onUnit
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
           <UnitOfMeasureDialog unit={unit} onSave={handleUpdate}>
-            <Button variant="outline" size="sm">
-              <Pencil className="mr-2 h-4 w-4" /> Edit
+            <Button variant="ghost" size="icon" title="Edit Unit">
+              <Pencil className="h-4 w-4" />
+              <span className="sr-only">Edit</span>
             </Button>
           </UnitOfMeasureDialog>
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Delete Unit">
+                <Trash2 className="h-4 w-4" />
+                <span className="sr-only">Delete</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the unit of measure "{unit.name}".
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </TableCell>
     </TableRow>
@@ -187,18 +218,22 @@ function UnitOfMeasureSkeleton() {
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
-          <Skeleton className="h-9 w-24" />
-          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-9" />
+          <Skeleton className="h-9 w-9" />
         </div>
       </TableCell>
     </TableRow>
   );
 }
 
-export function ManageUnitOfMeasureDialog({ trigger, onUnitAdded }: { trigger?: React.ReactNode, onUnitAdded?: () => void }) {
+export function ManageUnitOfMeasureDialog({ trigger, onUnitAdded, open, onOpenChange }: { trigger?: React.ReactNode, onUnitAdded?: () => void, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [units, setUnits] = useState<UnitOfMeasure[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const refreshUnits = async () => {
     try {
@@ -226,6 +261,7 @@ export function ManageUnitOfMeasureDialog({ trigger, onUnitAdded }: { trigger?: 
     }
   };
 
+  const showTrigger = trigger !== null;
   const dialogTrigger = trigger || (
     <Button variant="outline">
       <ListTree className="mr-2 h-4 w-4" />
@@ -235,9 +271,11 @@ export function ManageUnitOfMeasureDialog({ trigger, onUnitAdded }: { trigger?: 
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {dialogTrigger}
-      </DialogTrigger>
+      {showTrigger && (
+        <DialogTrigger asChild>
+          {dialogTrigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Manage Units of Measure</DialogTitle>

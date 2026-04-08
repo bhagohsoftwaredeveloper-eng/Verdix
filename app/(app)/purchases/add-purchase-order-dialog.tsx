@@ -139,7 +139,7 @@ function ProductSelector({ onSelectProduct, supplierId }: { onSelectProduct: (pr
           className="pr-10 bg-white"
         />
         <Search
-          className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
+          className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500 cursor-pointer"
           onClick={() => setSearchDialogOpen(true)}
         />
       </div>
@@ -148,8 +148,8 @@ function ProductSelector({ onSelectProduct, supplierId }: { onSelectProduct: (pr
         <DraggableSearchDialogContent className="sm:max-w-md" onClose={() => setSearchDialogOpen(false)}>
           <div data-drag-handle className="cursor-move">
             <DialogHeader>
-              <DialogTitle>Search Products</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-zinc-900">Search Products</DialogTitle>
+              <DialogDescription className="text-zinc-600">
                 Search and select a product to add to the purchase order.
               </DialogDescription>
             </DialogHeader>
@@ -181,8 +181,8 @@ function ProductSelector({ onSelectProduct, supplierId }: { onSelectProduct: (pr
                       }}
                     >
                       <div className="flex flex-col">
-                        <span className="font-medium">{product.name}</span>
-                        <span className="text-sm text-muted-foreground">
+                        <span className="font-bold text-zinc-900">{product.name}</span>
+                        <span className="text-sm text-zinc-700 font-medium">
                           SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {product.stock}
                         </span>
                       </div>
@@ -965,10 +965,10 @@ export function AddPurchaseOrderDialog({
                         <TableBody>
                             {fields.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={11} className="h-[300px] text-center text-muted-foreground flex flex-col items-center justify-center border-none">
-                                        <div className="bg-muted p-4 rounded-full mb-4"><Search className="h-8 w-8 opacity-20"/></div>
-                                        <p className="font-medium">No items added</p>
-                                        <p className="text-xs text-muted-foreground">Scan barcode or search above to add products.</p>
+                                    <TableCell colSpan={11} className="h-[300px] text-center text-zinc-600 flex flex-col items-center justify-center border-none">
+                                        <div className="bg-zinc-100 p-4 rounded-full mb-4"><Search className="h-8 w-8 text-zinc-400 opacity-50"/></div>
+                                        <p className="font-bold text-lg">No items added</p>
+                                        <p className="text-xs text-zinc-500 font-medium">Scan barcode or search above to add products.</p>
                                     </TableCell>
                                 </TableRow>
                             ) : (
@@ -996,13 +996,13 @@ export function AddPurchaseOrderDialog({
                                     return (
                             <TableRow key={field.id} className="group bg-white hover:bg-muted/5">
                                 <TableCell className="font-medium pl-4 py-2 border-r">
-                                    <div className="text-sm font-semibold">{field.productName}</div>
-                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                        <span className="font-mono">{field.barcode || '-'}</span>
+                                    <span className="font-bold text-sm text-zinc-900">{field.productName}</span>
+                                    <div className="flex items-center gap-2 text-xs text-zinc-700">
+                                        <span className="font-mono font-bold">{field.barcode || '-'}</span>
                                     </div>
                                 </TableCell>
                                 <TableCell className="py-2 text-center border-r font-mono text-xs">
-                                     <span className={(field.currentStock || 0) <= 0 ? 'text-destructive font-bold' : 'text-muted-foreground'}>
+                                     <span className={(field.currentStock || 0) <= 0 ? 'text-destructive font-black' : 'text-zinc-700 font-bold'}>
                                         {field.currentStock || 0}
                                     </span>
                                 </TableCell>
@@ -1151,7 +1151,7 @@ export function AddPurchaseOrderDialog({
                                     )}
                                 />
                                 </TableCell>
-                                <TableCell className="text-right py-2 text-xs font-mono text-muted-foreground italic bg-muted/5 border-r">
+                                <TableCell className="text-right py-2 text-xs font-mono text-zinc-700 font-bold italic bg-zinc-50 border-r">
                                     ₱{landedCostPerUnit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </TableCell>
                                 <TableCell className="text-right py-2 pr-4 font-mono font-medium border-r">
@@ -1169,7 +1169,7 @@ export function AddPurchaseOrderDialog({
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className={`h-8 w-8 transition-colors ${hasRop ? 'text-primary hover:text-primary/80' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+                                                    className={`h-8 w-8 transition-colors ${hasRop ? 'text-primary hover:text-primary/80' : 'text-zinc-400 hover:text-zinc-600'}`}
                                                     title={hasRop ? `Suggest Order Qty: ${suggested}` : "No Reorder Point set"}
                                                     onClick={(e) => {
                                                         e.preventDefault();
@@ -1202,7 +1202,7 @@ export function AddPurchaseOrderDialog({
                                     <Button 
                                         variant="ghost" 
                                         size="icon" 
-                                        className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
+                                        className="h-8 w-8 text-zinc-400 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" 
                                         onClick={() => remove(index)}
                                     >
                                         <Trash2 className="h-4 w-4" />
@@ -1217,40 +1217,37 @@ export function AddPurchaseOrderDialog({
                         </table>
                       </div>
                   </div>
-              </div>
-
-
-              {/* BOTTOM SUMMARY BAR */}
+                            {/* BOTTOM SUMMARY BAR */}
               <div className="bg-background border-t p-3 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
-                    <div className="text-xs text-muted-foreground">
-                        <span className="font-semibold">{fields.length}</span> items added.
+                    <div className="text-xs text-zinc-700 font-medium">
+                        <span className="font-black text-zinc-900">{fields.length}</span> items added.
                     </div>
                     
                     <div className="flex items-center gap-8">
                         <div className="flex flex-col items-end">
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Subtotal</span>
-                            <span className="font-mono text-sm">₱{(total - (form.watch('shipping') || 0)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-800 font-bold">Subtotal</span>
+                            <span className="font-mono text-sm font-bold text-zinc-900">₱{(total - (form.watch('shipping') || 0)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Shipping</span>
-                            <span className="font-mono text-sm">₱{(form.watch('shipping') || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-800 font-bold">Shipping</span>
+                            <span className="font-mono text-sm font-bold text-zinc-900">₱{(form.watch('shipping') || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">VAT {activeTaxRate ? `(${activeTaxRate.rate}%)` : ''}</span>
-                            <span className="font-mono text-sm">₱{vatTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span className="text-[10px] uppercase tracking-wider text-zinc-800 font-bold">VAT {activeTaxRate ? `(${activeTaxRate.rate}%)` : ''}</span>
+                            <span className="font-mono text-sm font-bold text-zinc-900">₱{vatTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                         </div>
                          <div className="flex flex-col items-end border-l pl-8">
-                            <span className="text-[10px] uppercase tracking-wider text-primary font-bold">Total Payable</span>
-                            <span className="font-mono text-2xl font-bold text-primary">₱{total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span className="text-[10px] uppercase tracking-wider text-primary font-black">Total Payable</span>
+                            <span className="font-mono text-2xl font-black text-primary">₱{total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                         </div>
                     </div>
               </div>
-
             </div>
+          </div>
 
-            <DialogFooter className="p-4 bg-background border-t">
-               <div className="flex items-center text-xs text-muted-foreground mr-auto">
-                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"/> Ready to process</span>
+          <DialogFooter className="p-4 bg-background border-t">
+               <div className="flex items-center text-xs text-zinc-700 font-bold mr-auto">
+                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-600"/> Ready to process</span>
                </div>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel

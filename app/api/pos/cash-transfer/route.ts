@@ -79,7 +79,55 @@ export async function GET(req: NextRequest) {
         const terminalId = searchParams.get('terminalId');
         const cashierId = searchParams.get('cashierId');
         const type = searchParams.get('type');
+        const page = parseInt(searchParams.get('page') || '1');
+        const limit = parseInt(searchParams.get('limit') || '10');
+        const offset = (page - 1) * limit;
 
+        let whereClause = ` WHERE 1=1`;
+        const params: any[] = [];
+
+        if (startDate) {
+            whereClause += ` AND DATE(ct.transaction_time) >= ?`;
+            params.push(startDate);
+        }
+
+        if (endDate) {
+            whereClause += ` AND DATE(ct.transaction_time) <= ?`;
+            params.push(endDate);
+        }
+
+        if (terminalId && terminalId !== 'all') {
+            whereClause += ` AND ct.terminal_id = ?`;
+            params.push(terminalId);
+        }
+
+        if (cashierId && cashierId !== 'all') {
+            whereClause += ` AND ct.user_id = ?`;
+            params.push(cashierId);
+        }
+
+        if (type && type !== 'all') {
+            whereClause += ` AND ct.type = ?`;
+            params.push(type);
+        }
+
+        // Get total count for pagination
+        const countSql = `SELECT COUNT(*) as total FROM cash_transfers ct ${whereClause}`;
+        const countResult = await query(countSql, params);
+        const totalCount = countResult[0]?.total || 0;
+
+        // Get summary (totals for all filtered data, not just current page)
+        const summarySql = `
+            SELECT 
+                SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) as totalCashIn,
+                SUM(CASE WHEN type = 'pickup' THEN amount ELSE 0 END) as totalCashOut
+            FROM cash_transfers ct
+            ${whereClause}
+        `;
+        const summaryResult = await query(summarySql, params);
+        const summary = summaryResult[0] || { totalCashIn: 0, totalCashOut: 0 };
+
+        // Get paginated data
         let sql = `
             SELECT 
                 ct.id,
@@ -94,59 +142,26 @@ export async function GET(req: NextRequest) {
             FROM cash_transfers ct
             LEFT JOIN users u ON ct.user_id = u.uid
             LEFT JOIN pos_terminals t ON ct.terminal_id = t.id
-            WHERE 1=1
+            ${whereClause}
+            ORDER BY ct.transaction_time DESC
+            LIMIT ? OFFSET ?
         `;
         
-        const params: any[] = [];
-
-        if (startDate) {
-            sql += ` AND DATE(ct.transaction_time) >= ?`;
-            params.push(startDate);
-        }
-
-        if (endDate) {
-            sql += ` AND DATE(ct.transaction_time) <= ?`;
-            params.push(endDate);
-        }
-
-        if (terminalId && terminalId !== 'all') {
-            sql += ` AND ct.terminal_id = ?`;
-            params.push(terminalId);
-        }
-
-        if (cashierId && cashierId !== 'all') {
-            sql += ` AND ct.user_id = ?`;
-            params.push(cashierId);
-        }
-
-        if (type && type !== 'all') {
-            sql += ` AND ct.type = ?`;
-            params.push(type);
-        }
-
-        sql += ` ORDER BY ct.transaction_time DESC`;
-
-        const rows = await query(sql, params);
+        const dataParams = [...params, limit, offset];
+        const rows = await query(sql, dataParams);
         
-        // Calculate totals
-        let totalCashIn = 0;
-        let totalCashOut = 0;
-        
-        rows.forEach((row: any) => {
-            const amount = parseFloat(row.amount);
-            if (row.type === 'deposit') {
-                totalCashIn += amount;
-            } else if (row.type === 'pickup') {
-                totalCashOut += amount;
-            }
-        });
-
         return NextResponse.json({
             success: true,
             data: rows,
+            pagination: {
+                totalCount,
+                pageSize: limit,
+                currentPage: page,
+                totalPages: Math.ceil(totalCount / limit)
+            },
             summary: {
-                totalCashIn,
-                totalCashOut
+                totalCashIn: parseFloat(summary.totalCashIn || 0),
+                totalCashOut: parseFloat(summary.totalCashOut || 0)
             }
         });
 

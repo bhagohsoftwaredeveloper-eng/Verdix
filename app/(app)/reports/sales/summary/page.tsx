@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/card';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { CalendarIcon, FileDown, DollarSign, TrendingUp, Receipt, Percent, ShoppingCart, LayoutGrid, Table as TableIcon, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { CalendarIcon, FileDown, DollarSign, TrendingUp, Receipt, Percent, ShoppingCart, LayoutGrid, Table as TableIcon, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, PhilippinePeso } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -70,10 +70,10 @@ export default function SalesSummaryPage() {
     if (!searchTerm.trim()) return true;
     const search = searchTerm.toLowerCase();
     return (
-      record.orderNumber?.toLowerCase().includes(search) ||
-      record.customer?.name?.toLowerCase().includes(search) ||
-      record.cashier?.toLowerCase().includes(search) ||
-      record.terminal?.toLowerCase().includes(search)
+      String(record.orderNumber || '').toLowerCase().includes(search) ||
+      String(record.customer?.name || '').toLowerCase().includes(search) ||
+      String(record.cashier || '').toLowerCase().includes(search) ||
+      String(record.terminal || '').toLowerCase().includes(search)
     );
   });
 
@@ -298,7 +298,7 @@ export default function SalesSummaryPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-blue-600" />
+                <PhilippinePeso className="h-5 w-5 text-blue-600" />
                 Sales Summary Report
               </CardTitle>
               <CardDescription>

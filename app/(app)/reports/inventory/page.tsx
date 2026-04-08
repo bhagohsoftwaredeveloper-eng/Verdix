@@ -26,6 +26,8 @@ import { ReportHeader } from '@/components/reports/ReportHeader';
 import { getApiUrl } from '@/lib/api-config';
 
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { getCategories } from '@/app/(app)/products/actions';
+import { Category } from '@/lib/types';
 
 interface Product {
   id: string;
@@ -58,7 +60,7 @@ export default function InventoryReportPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [summary, setSummary] = useState<Summary>({ totalItems: 0, totalStock: 0, totalValue: 0 });
   const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   
   // Pagination State
@@ -66,6 +68,7 @@ export default function InventoryReportPage() {
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [settings, setSettings] = useState<any>(null);
 
   const componentRef = useRef<HTMLDivElement>(null);
 
@@ -80,12 +83,28 @@ export default function InventoryReportPage() {
   
   // Separate effect to fetch categories only once on mount
   useEffect(() => {
-      // In a real app we'd fetch distinct categories from an API
-      // For now, we rely on existing products or a separate call
-      // Optimization: Fetch all categories once.
-      // Since we don't have a dedicated category endpoint readily available in context, 
-      // providing a hardcoded lists or fetching valid categories is better.
-      // I'll skip dynamic category fetching for this step to focus on pagination unless critical.
+    const fetchCategories = async () => {
+        try {
+            const data = await getCategories();
+            setCategories(data);
+        } catch (error) {
+            console.error('Failed to fetch categories:', error);
+        }
+    };
+    fetchCategories();
+
+    const fetchSettings = async () => {
+        try {
+            const res = await fetch(getApiUrl('/pos-settings'));
+            const data = await res.json();
+            if (data.success) {
+                setSettings(data.data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch settings:', error);
+        }
+    };
+    fetchSettings();
   }, []);
 
   const fetchData = async () => {
@@ -143,12 +162,11 @@ export default function InventoryReportPage() {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
-                    {/* Ideally populate this dynamically */}
-                    <SelectItem value="Beverages">Beverages</SelectItem>
-                    <SelectItem value="Food">Food</SelectItem>
-                    <SelectItem value="Alcohol">Alcohol</SelectItem>
-                    <SelectItem value="Tobacco">Tobacco</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                            {category.name}
+                        </SelectItem>
+                    ))}
                 </SelectContent>
             </Select>
         </div>
@@ -184,9 +202,16 @@ export default function InventoryReportPage() {
 
       {/* Printable Area */}
       <div ref={componentRef} className="bg-background p-4 rounded-md border print:border-0 print:p-8 print:shadow-none printable-area">
-          <ReportHeader title="Stock on Hand Report" subtitle="Current inventory levels and valuation." />
+          <ReportHeader 
+            title="Stock on Hand Report" 
+            subtitle="Current inventory levels and valuation." 
+            businessName={settings?.businessName}
+            address={settings?.address}
+            contactNumber={settings?.contactNumber}
+            tin={settings?.tin}
+          />
           
-          <div className="rounded-md border mb-4">
+          <div className="rounded-md border mb-4 print:border-none print:overflow-visible">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -249,17 +274,37 @@ export default function InventoryReportPage() {
 
           {/* Footer Summary for Print */}
           {!loading && (
-             <div className="mt-8 border-t pt-4 flex justify-between print:flex hidden">
-                 <div>
-                     <p className="font-bold">Summary</p>
-                     <p>Total Items: {summary.totalItems}</p>
+             <div className="mt-12 border-t-2 border-slate-200 pt-6 flex justify-between items-start print:flex hidden">
+                 <div className="space-y-1">
+                     <p className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Report Summary</p>
+                     <div className="flex gap-8">
+                        <div>
+                            <p className="text-xs text-slate-500">Total Unique Items</p>
+                            <p className="text-xl font-black text-slate-900">{summary.totalItems}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-500">Total Stock Quantity</p>
+                            <p className="text-xl font-black text-slate-900">{summary.totalStock}</p>
+                        </div>
+                     </div>
                  </div>
-                 <div className="text-right">
-                     <p>Total Quantity: {summary.totalStock}</p>
-                     <p className="font-bold text-lg">Total Value: {formatCurrency(summary.totalValue)}</p>
+                 <div className="text-right p-4 bg-slate-50 rounded-xl border border-slate-100">
+                     <p className="text-[10px] uppercase font-bold tracking-widest text-slate-500 mb-1">Total Inventory Value</p>
+                     <p className="text-3xl font-black text-primary leading-none">{formatCurrency(summary.totalValue)}</p>
+                     <p className="text-[10px] text-slate-400 mt-2 italic">Based on average cost calculation</p>
                  </div>
              </div>
           )}
+          
+          <div className="mt-20 pt-8 border-t border-slate-100 flex justify-between items-end print:flex hidden text-[10px] text-slate-400 uppercase tracking-widest">
+              <div>
+                  <p>Authorized Signature: ___________________________</p>
+              </div>
+              <div className="text-right">
+                  <p>Page 1 of 1</p>
+                  <p className="mt-1 font-bold text-primary/40">Powered by Stock Pilot</p>
+              </div>
+          </div>
       </div>
     </div>
   );

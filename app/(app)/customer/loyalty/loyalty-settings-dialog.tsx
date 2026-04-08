@@ -38,8 +38,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Settings, Edit, Trash2 } from 'lucide-react';
+import { Plus, Settings, Edit, Trash2, MoreHorizontal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -360,6 +366,7 @@ export function LoyaltySettingsDialog() {
   const [settings, setSettings] = useState<LoyaltySetting[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [editingSetting, setEditingSetting] = useState<LoyaltySetting | null>(null);
+  const [deleteSetting, setDeleteSetting] = useState<LoyaltySetting | null>(null);
   const { toast } = useToast();
 
   const fetchSettings = async () => {
@@ -432,6 +439,7 @@ export function LoyaltySettingsDialog() {
       }
 
       setSettings(prev => prev.filter(s => s.id !== id));
+      setDeleteSetting(null);
       toast({
         title: 'Setting Deleted',
         description: 'Loyalty setting has been deleted successfully.',
@@ -484,36 +492,27 @@ export function LoyaltySettingsDialog() {
                     <TableCell className="text-center">{setting.amount}</TableCell>
                     <TableCell className="text-center">{setting.equivalent}</TableCell>
                     <TableCell className="text-center">
-                      <div className="flex gap-2 justify-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditSetting(setting)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Loyalty Setting</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete "{setting.description}"? This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteSetting(setting.id)}>
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Open menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="z-[100]">
+                          <DropdownMenuItem onClick={() => handleEditSetting(setting)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            <span>Edit</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => setDeleteSetting(setting)} 
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -534,6 +533,25 @@ export function LoyaltySettingsDialog() {
           onCancel={() => setEditingSetting(null)}
         />
       )}
+      <AlertDialog open={!!deleteSetting} onOpenChange={(open) => !open && setDeleteSetting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Loyalty Setting</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteSetting?.description}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => deleteSetting && handleDeleteSetting(deleteSetting.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

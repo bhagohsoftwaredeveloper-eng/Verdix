@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Ban, UserCheck, Search, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +34,8 @@ import { AddUserDialog } from './add-user-dialog';
 import { EditUserDialog } from './edit-user-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -111,26 +113,57 @@ function UserRow({
     return '??';
   };
 
+  const handleToggleStatus = async () => {
+    try {
+      const res = await fetch(getApiUrl('/users'), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          disabled: !user.disabled,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update user status');
+      }
+
+      toast({
+        title: user.disabled ? 'User enabled' : 'User disabled',
+        description: `The user has been successfully ${user.disabled ? 'enabled' : 'disabled'}.`,
+      });
+      onUserUpdated();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to update user status.',
+      });
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     try {
       setIsDeleting(true);
       const res = await fetch(getApiUrl(`/users?uid=${user.uid}`), {
         method: 'DELETE',
       });
+      const data = await res.json();
       if (!res.ok) {
-        throw new Error('Failed to delete user');
+        throw new Error(data.error || 'Failed to delete user');
       }
       toast({
         title: 'User deleted',
         description: 'The user has been successfully removed.',
       });
       onUserUpdated();
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to delete the user.',
+        description: error.message || 'Failed to delete the user.',
       });
     } finally {
       setIsDeleting(false);
@@ -156,9 +189,11 @@ function UserRow({
                 </Badge>
               )}
             </div>
-            <div className="text-sm text-muted-foreground">{user.username}</div>
           </div>
         </div>
+      </TableCell>
+      <TableCell>
+        <div className="text-sm font-medium text-muted-foreground">{user.username}</div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
         <div className="flex flex-wrap gap-1">
@@ -190,6 +225,19 @@ function UserRow({
             <DropdownMenuItem onClick={() => onEdit(user)}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit User
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleToggleStatus}>
+              {user.disabled ? (
+                <>
+                  <UserCheck className="mr-2 h-4 w-4" />
+                  Enable User
+                </>
+              ) : (
+                <>
+                  <Ban className="mr-2 h-4 w-4" />
+                  Disable User
+                </>
+              )}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive focus:bg-destructive/10"
@@ -230,10 +278,10 @@ function UserSkeleton() {
           <Skeleton className="h-10 w-10 rounded-full" />
           <div className="space-y-2">
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-40" />
           </div>
         </div>
       </TableCell>
+      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
       <TableCell className="hidden md:table-cell"><Skeleton className="h-6 w-48 rounded-full" /></TableCell>
       <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
       <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
@@ -248,6 +296,10 @@ export default function UserManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -267,6 +319,17 @@ export default function UserManagementPage() {
     }
   }, []);
 
+  const handleSearch = () => {
+    setActiveSearch(searchQuery);
+    setCurrentPage(1); // Reset to first page on search
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setActiveSearch('');
+    setCurrentPage(1);
+  };
+
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
@@ -284,52 +347,109 @@ export default function UserManagementPage() {
     }
   };
 
+  // Filter logic
+  const filteredUsers = users.filter(user => {
+    if (!activeSearch) return true;
+    const search = activeSearch.toLowerCase();
+    return (
+      (user.displayName?.toLowerCase().includes(search)) ||
+      (user.username?.toLowerCase().includes(search))
+    );
+  });
+
+  // Pagination logic
+  const totalItems = filteredUsers.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-4">
-            <div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
               <CardTitle>User Management</CardTitle>
               <CardDescription>
                 A list of all users in your application.
               </CardDescription>
             </div>
-            <AddUserDialog onUserAdded={fetchUsers} />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-[300px]">
+                <Input
+                  placeholder="Search name or username..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  className="pr-10"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-2 hover:bg-transparent"
+                    onClick={clearSearch}
+                  >
+                    <X className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                )}
+              </div>
+              <Button onClick={handleSearch} size="icon" variant="secondary">
+                <Search className="h-4 w-4" />
+              </Button>
+              <AddUserDialog onUserAdded={fetchUsers} />
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead className="hidden md:table-cell">Permissions</TableHead>
-                <TableHead className="hidden sm:table-cell">Created On</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && Array.from({ length: 5 }).map((_, i) => <UserSkeleton key={i} />)}
-              {!isLoading && users.map((user: User) => (
-                <UserRow 
-                  key={user.uid} 
-                  user={user} 
-                  onUserUpdated={fetchUsers}
-                  onEdit={handleEdit}
-                />
-              ))}
-              {!isLoading && users.length === 0 && (
+        <CardContent className="p-0 sm:p-6">
+          <div className="max-h-[600px] overflow-y-auto relative border rounded-md">
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
-                    {error || 'No users found.'}
-                  </TableCell>
+                  <TableHead className="w-[250px]">Full Name</TableHead>
+                  <TableHead className="w-[150px]">Username</TableHead>
+                  <TableHead className="hidden md:table-cell">Permissions</TableHead>
+                  <TableHead className="hidden sm:table-cell">Created On</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {isLoading && Array.from({ length: pageSize }).map((_, i) => <UserSkeleton key={i} />)}
+                {!isLoading && paginatedUsers.map((user: User) => (
+                  <UserRow 
+                    key={user.uid} 
+                    user={user} 
+                    onUserUpdated={fetchUsers}
+                    onEdit={handleEdit}
+                  />
+                ))}
+                {!isLoading && paginatedUsers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center">
+                      {error || 'No users found.'}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {!isLoading && users.length > 0 && (
+            <div className="py-4 px-2 border-t">
+              <DataTablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={totalItems}
+                setPage={setCurrentPage}
+                setPageSize={setPageSize}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

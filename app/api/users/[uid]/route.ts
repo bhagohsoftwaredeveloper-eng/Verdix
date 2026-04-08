@@ -11,7 +11,7 @@ export async function PUT(
   try {
     const { uid } = await params;
     const body = await request.json();
-    const { username, password, userType, permissions } = body;
+    const { username, password, userType, permissions, displayName } = body;
 
     if (!uid) {
       return NextResponse.json(
@@ -23,7 +23,7 @@ export async function PUT(
     await withTransaction(async (connection) => {
       // Update user basic info
       let updateFields = ['username = ?', 'display_name = ?', 'user_type = ?'];
-      let queryParams = [username, body.displayName || username.split('@')[0], userType || 'User'];
+      let queryParams = [username, displayName || username.split('@')[0], userType || 'User'];
 
       if (password) {
         const hashedPassword = await hash(password, 10);

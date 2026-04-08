@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { CalendarIcon, X, Image as ImageIcon, FileText, Printer, Eye } from 'lucide-react';
+import { DateRange } from 'react-day-picker';
 import { useToast } from '@/hooks/use-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -33,7 +34,10 @@ import { BusinessSettings } from '../z-reading/z-reading-preview';
 type PrinterFormat = '58mm' | '80mm';
 
 export default function XReadingPage() {
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: new Date(),
+  });
   const [xReadings, setXReadings] = useState<XReadingData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -69,10 +73,10 @@ export default function XReadingPage() {
   );
 
   const fetchXReadings = async () => {
-    if (!date) {
+    if (!dateRange?.from) {
         toast({
             title: 'Error',
-            description: 'Please select a date',
+            description: 'Please select a date range',
             variant: 'destructive',
         });
         return;
@@ -81,9 +85,18 @@ export default function XReadingPage() {
     setIsLoading(true);
     setHasSearched(true);
     try {
-      const dateStr = format(date, 'yyyy-MM-dd');
-      // Fetch all shifts for the date
-      const response = await fetch(getApiUrl(`/sales/x-reading?startDate=${dateStr}&endDate=${dateStr}`));
+      const params = new URLSearchParams();
+      if (dateRange?.from) {
+        params.append('startDate', format(dateRange.from, 'yyyy-MM-dd'));
+      }
+      if (dateRange?.to) {
+        params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+      } else if (dateRange?.from) {
+        params.append('endDate', format(dateRange.from, 'yyyy-MM-dd'));
+      }
+
+      // Fetch all shifts for the date range
+      const response = await fetch(getApiUrl(`/sales/x-reading?${params.toString()}`));
       const result = await response.json();
 
       if (result.success) {
@@ -229,7 +242,7 @@ export default function XReadingPage() {
     <div className="space-y-6">
       <div className="flex items-end gap-4 p-1 bg-background rounded-lg">
         {/* Date Picker */}
-        <div className="space-y-2">
+        <div className="flex items-center gap-3">
             <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 Date
             </label>
@@ -238,20 +251,29 @@ export default function XReadingPage() {
                     <Button
                         variant={"outline"}
                         className={cn(
-                            "w-[240px] justify-start text-left font-normal",
-                            !date && "text-muted-foreground"
+                            "w-[300px] justify-start text-left font-normal",
+                            !dateRange && "text-muted-foreground"
                         )}
                     >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date ? format(date, "yyyy-MM-dd") : <span>Pick a date</span>}
+                        {dateRange?.from ? (
+                            dateRange.to ? (
+                                <>{format(dateRange.from, "yyyy-MM-dd")} - {format(dateRange.to, "yyyy-MM-dd")}</>
+                            ) : (
+                                format(dateRange.from, "yyyy-MM-dd")
+                            )
+                        ) : (
+                            <span>Pick a date range</span>
+                        )}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
-                        mode="single"
-                        selected={date}
-                        onSelect={setDate}
+                        mode="range"
+                        selected={dateRange}
+                        onSelect={setDateRange}
                         initialFocus
+                        numberOfMonths={2}
                     />
                 </PopoverContent>
             </Popover>

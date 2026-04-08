@@ -40,9 +40,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, Pencil } from 'lucide-react';
+import { Loader2, Plus, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -87,6 +95,7 @@ export function ManagePaymentTermsDialog({
   const [newTypeName, setNewTypeName] = useState('');
   const [isLoadingTypes, setIsLoadingTypes] = useState(false);
   const [editingTerm, setEditingTerm] = useState<any | null>(null);
+  const [isTypeSelectOpen, setIsTypeSelectOpen] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<PaymentTermFormValues>({
@@ -138,7 +147,6 @@ export function ManagePaymentTermsDialog({
   async function onSubmit(values: PaymentTermFormValues) {
     setIsSaving(true);
     try {
-      const url = editingTerm ? '/api/payment-terms' : '/api/payment-terms';
       const method = editingTerm ? 'PUT' : 'POST';
       const body = editingTerm ? { id: editingTerm.id, ...values } : values;
 
@@ -319,102 +327,112 @@ export function ManagePaymentTermsDialog({
           <div className="py-4 border-b">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)}>
-                <div className="flex items-end gap-3">
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter description" {...field} className="h-10" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem className="w-40">
-                        <FormLabel>Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payment Term Name</FormLabel>
                           <FormControl>
-                            <SelectTrigger className="h-10">
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
+                            <Input placeholder="e.g., Net 30, Cash on Delivery" {...field} className="h-10" />
                           </FormControl>
-                          <SelectContent>
-                            {customTypes.map((type) => (
-                              <SelectItem key={type.id} value={type.name}>
-                                {type.name}
-                              </SelectItem>
-                            ))}
-                            <div className="border-t mt-1 pt-1">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  setShowAddTypeDialog(true);
-                                }}
-                                className="w-full text-left px-2 py-1.5 text-sm text-primary hover:bg-accent rounded-sm flex items-center gap-2"
-                              >
-                                <Plus className="h-3 w-3" />
-                                Add Type
-                              </button>
-                            </div>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="flex items-end gap-3">
+                    <FormField
+                      control={form.control}
+                      name="type"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormLabel>Type</FormLabel>
+                          <Select 
+                            open={isTypeSelectOpen} 
+                            onOpenChange={setIsTypeSelectOpen}
+                            onValueChange={field.onChange} 
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-10">
+                                <SelectValue placeholder="Select type" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {customTypes.map((type) => (
+                                <SelectItem key={type.id} value={type.name}>
+                                  {type.name}
+                                </SelectItem>
+                              ))}
+                              <div className="border-t mt-1 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setShowAddTypeDialog(true);
+                                    setIsTypeSelectOpen(false);
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 text-sm text-primary hover:bg-accent rounded-sm flex items-center gap-2"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Add Type
+                                </button>
+                              </div>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="numberOfDaysMonth"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormLabel>Days/Month</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Enter number" {...field} className="h-10" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {editingTerm && (
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => {
+                          setEditingTerm(null);
+                          form.reset({
+                            description: '',
+                            type: '',
+                            numberOfDaysMonth: '',
+                          });
+                        }}
+                        className="h-10"
+                      >
+                        Cancel
+                      </Button>
                     )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="numberOfDaysMonth"
-                    render={({ field }) => (
-                      <FormItem className="w-48">
-                        <FormLabel>Number of Days/Month</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter number" {...field} className="h-10" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {editingTerm && (
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => {
-                        setEditingTerm(null);
-                        form.reset({
-                          description: '',
-                          type: '',
-                          numberOfDaysMonth: '',
-                        });
-                      }}
-                      className="h-10"
-                    >
-                      Cancel
+                    <Button type="submit" disabled={isSaving} className="h-10 min-w-[80px]">
+                      {isSaving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : editingTerm ? (
+                        <>
+                          <Plus className="h-4 w-4" />
+                          <span className="ml-2">Update</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4" />
+                          <span className="ml-2">Add</span>
+                        </>
+                      )}
                     </Button>
-                  )}
-                  <Button type="submit" disabled={isSaving} className="h-10">
-                    {isSaving ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : editingTerm ? (
-                      <>
-                        <Plus className="h-4 w-4" />
-                        <span className="ml-2">Update</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-4 w-4" />
-                        <span className="ml-2">Add</span>
-                      </>
-                    )}
-                  </Button>
+                  </div>
                 </div>
               </form>
             </Form>
@@ -425,7 +443,7 @@ export function ManagePaymentTermsDialog({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Description</TableHead>
+                  <TableHead>Payment Term</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Days/Month</TableHead>
                   <TableHead className="text-right">Action</TableHead>
@@ -451,24 +469,29 @@ export function ManagePaymentTermsDialog({
                       <TableCell>{term.type}</TableCell>
                       <TableCell>{term.numberOfDaysMonth || '-'}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleEdit(term)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive/90 hover:bg-destructive/10"
-                            onClick={() => setTermToDelete({ id: term.id, description: term.description })}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleEdit(term)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setTermToDelete({ id: term.id, description: term.description })}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))

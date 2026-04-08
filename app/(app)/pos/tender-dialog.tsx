@@ -606,6 +606,14 @@ export function TenderDialog({
                                                 Select Customer
                                             </Button>
                                         </div>
+                                    ) : (customer as any)?.isExpired ? (
+                                        <Alert className="bg-red-50 border-red-200 text-red-900 border-2">
+                                            <AlertCircle className="h-5 w-5 text-red-600" />
+                                            <AlertTitle className="font-bold">Loyalty Card Expired</AlertTitle>
+                                            <AlertDescription className="font-medium text-red-700">
+                                                Points cannot be redeemed because this customer's loyalty card is expired.
+                                            </AlertDescription>
+                                        </Alert>
                                     ) : (
                                         <div className="space-y-3 bg-purple-50 p-4 rounded-xl border border-purple-200 animate-in fade-in slide-in-from-top-2 duration-300">
                                             <div className="flex justify-between items-center px-1">
@@ -797,7 +805,7 @@ export function TenderDialog({
                                 <Button
                                     variant="outline"
                                     onClick={() => onOpenChange(false)}
-                                    disabled={isProcessing}
+                                    disabled={isProcessing || (selectedMethod === 'POINTS' && (customer as any)?.isExpired)}
                                     className="w-full sm:w-auto text-muted-foreground hover:text-foreground"
                                 >
                                     Cancel

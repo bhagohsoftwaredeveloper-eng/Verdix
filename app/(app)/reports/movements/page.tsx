@@ -160,7 +160,7 @@ export default function StockMovementPage() {
             subtitle="History of stock changes (Sales, Purchases, Adjustments)."
             period={`${startDate} to ${endDate}`}
         />
-        <div className="rounded-md border bg-card text-card-foreground shadow-sm print:border-0 print:shadow-none">
+        <div className="rounded-md border bg-card text-card-foreground shadow-sm print:border-0 print:shadow-none print:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>

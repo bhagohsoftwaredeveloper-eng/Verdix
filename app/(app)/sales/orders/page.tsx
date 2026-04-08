@@ -308,6 +308,7 @@ export default function SalesOrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [summary, setSummary] = useState({ totalCount: 0, totalAmount: 0 });
+  const [limit, setLimit] = useState(10);
   const { toast } = useToast();
 
   // Filters State
@@ -364,7 +365,7 @@ export default function SalesOrdersPage() {
       setIsLoading(true);
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '10',
+        limit: limit.toString(),
         ...filters,
         ...(searchTerm ? { search: searchTerm } : {})
       });
@@ -404,7 +405,7 @@ export default function SalesOrdersPage() {
 
   useEffect(() => {
     fetchSalesOrders(currentPage);
-  }, [currentPage, filters, searchTerm]); // Re-fetch when filters or search change
+  }, [currentPage, filters, searchTerm, limit]); // Re-fetch when filters, search, or limit changes
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -415,6 +416,11 @@ export default function SalesOrdersPage() {
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setCurrentPage(1); // Reset to page 1 on filter
+  };
+
+  const handleLimitChange = (value: string) => {
+    setLimit(Number(value));
+    setCurrentPage(1);
   };
 
   const handleDelete = async (id: string) => {
@@ -611,8 +617,8 @@ export default function SalesOrdersPage() {
       </div>
 
       <CardContent className="flex-1 overflow-hidden">
-        <Table>
-          <TableHeader>
+        <Table wrapperClassName="max-h-[500px] overflow-auto border rounded-md">
+          <TableHeader className="sticky top-0 z-30 bg-background">
             <TableRow>
               <TableHead>User</TableHead>
               <TableHead>Customer</TableHead>
@@ -656,29 +662,48 @@ export default function SalesOrdersPage() {
 
         {/* Pagination Controls */}
         {!isLoading && sales.length > 0 && (
-            <div className="mt-4 non-printable">
-                <Pagination>
-                    <PaginationContent>
-                        <PaginationItem>
-                            <PaginationPrevious
-                                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                                aria-disabled={currentPage === 1}
-                                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                        </PaginationItem>
-                        {/* Simplified pagination for brevity */}
-                         <PaginationItem>
-                            <PaginationLink>{currentPage} of {totalPages}</PaginationLink>
-                         </PaginationItem>
-                        <PaginationItem>
-                            <PaginationNext
-                                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                                aria-disabled={currentPage === totalPages}
-                                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                            />
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 non-printable">
+                <div className="flex items-center gap-2 order-2 sm:order-1">
+                    <Label htmlFor="rows-per-page" className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</Label>
+                    <Select 
+                        value={limit.toString()} 
+                        onValueChange={handleLimitChange}
+                    >
+                        <SelectTrigger id="rows-per-page" className="h-8 w-[70px] text-xs">
+                            <SelectValue placeholder={limit.toString()} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="order-1 sm:order-2">
+                    <Pagination>
+                        <PaginationContent>
+                            <PaginationItem>
+                                <PaginationPrevious
+                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                    aria-disabled={currentPage === 1}
+                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                            {/* Simplified pagination for brevity */}
+                             <PaginationItem>
+                                <PaginationLink>{currentPage} of {totalPages}</PaginationLink>
+                             </PaginationItem>
+                            <PaginationItem>
+                                <PaginationNext
+                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                    aria-disabled={currentPage === totalPages}
+                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                </div>
             </div>
         )}
       </CardContent>

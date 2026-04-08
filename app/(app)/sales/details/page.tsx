@@ -67,7 +67,7 @@ export default function SalesDetailsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const limit = 10; // Transactions per page
+  const [limit, setLimit] = useState(10); // Transactions per page
 
   // Filter states
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
@@ -140,7 +140,7 @@ export default function SalesDetailsPage() {
 
   useEffect(() => {
     fetchSales(currentPage);
-  }, [dateRange, terminalId, currentPage]);
+  }, [dateRange, terminalId, currentPage, limit]);
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -148,10 +148,10 @@ export default function SalesDetailsPage() {
     }
   };
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters or limit change
   useEffect(() => {
       setCurrentPage(1);
-  }, [dateRange, terminalId]);
+  }, [dateRange, terminalId, limit]);
 
   const filteredSales = sales.filter(sale => {
       if (searchTerm) {
@@ -528,20 +528,19 @@ export default function SalesDetailsPage() {
             </div>
 
             {/* Main Table with Accordion */}
-            <div className="overflow-x-auto border rounded-md">
-            <Table className="text-xs w-full">
-              <TableHeader>
-                <TableRow className="bg-primary hover:bg-primary">
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">SO No.</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Receipt</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Date</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Terminal</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Cashier</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Customer</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 text-right whitespace-nowrap">Amount</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Payment</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Status</TableHead>
+            <Table className="text-xs w-full" wrapperClassName="max-h-[440px] overflow-auto border rounded-md">
+              <TableHeader className="sticky top-0 z-30">
+                <TableRow className="bg-primary hover:bg-primary border-b-0">
+                  <TableHead className="w-8 bg-primary text-primary-foreground"></TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">SO No.</TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Receipt</TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Date</TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Terminal</TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Cashier</TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Customer</TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 text-right whitespace-nowrap">Amount</TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Payment</TableHead>
+                  <TableHead className="bg-primary text-primary-foreground font-semibold py-2 px-2 whitespace-nowrap">Status</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -684,29 +683,50 @@ export default function SalesDetailsPage() {
                 )}
               </TableBody>
             </Table>
-            </div>
              {/* Pagination Controls */}
              {!isLoading && sales.length > 0 && (
-                <div className="mt-4">
-                    <Pagination>
-                        <PaginationContent>
-                            <PaginationItem>
-                                <PaginationPrevious
-                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                                    aria-disabled={currentPage === 1}
-                                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                />
-                            </PaginationItem>
-                            {renderPaginationItems()}
-                            <PaginationItem>
-                                <PaginationNext
-                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                                    aria-disabled={currentPage === totalPages}
-                                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                />
-                            </PaginationItem>
-                        </PaginationContent>
-                    </Pagination>
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 order-2 sm:order-1">
+                        <Label htmlFor="rows-per-page" className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</Label>
+                        <Select 
+                            value={limit.toString()} 
+                            onValueChange={(v) => {
+                                setLimit(Number(v));
+                                setCurrentPage(1);
+                            }}
+                        >
+                            <SelectTrigger id="rows-per-page" className="h-8 w-[70px] text-xs">
+                                <SelectValue placeholder={limit.toString()} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="10">10</SelectItem>
+                                <SelectItem value="20">20</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                                <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="order-1 sm:order-2">
+                        <Pagination>
+                            <PaginationContent>
+                                <PaginationItem>
+                                    <PaginationPrevious
+                                        onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                        aria-disabled={currentPage === 1}
+                                        className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                    />
+                                </PaginationItem>
+                                {renderPaginationItems()}
+                                <PaginationItem>
+                                    <PaginationNext
+                                        onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                        aria-disabled={currentPage === totalPages}
+                                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                    />
+                                </PaginationItem>
+                            </PaginationContent>
+                        </Pagination>
+                    </div>
                 </div>
             )}
           </CardContent>

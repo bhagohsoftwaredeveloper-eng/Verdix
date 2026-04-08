@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -21,16 +20,18 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { PurchaseOrder, Product } from '../../../lib/types';
 import { mockProducts } from '../../../lib/data';
-import { usePurchaseOrders, useProducts, useBusinessProfile } from '../../../hooks/use-api';
-import { format } from 'date-fns';
+import { usePurchaseOrders, useProducts, useBusinessProfile, useSuppliers } from '../../../hooks/use-api';
+import { format as formatFns } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddPurchaseOrderDialog } from './add-purchase-order-dialog';
 import { ReceivePurchaseOrderDialog } from './receive-purchase-order-dialog';
 import { ViewPurchaseOrderDialog } from './view-purchase-order-dialog';
 import { ScheduledOrdersDialog } from './scheduled-orders-dialog';
+import { exportToCSV, exportToPDF } from './purchase-order-export-utils';
+import { PurchasesFilterDialog } from './purchases-filter-dialog';
 
 import { Button } from '@/components/ui/button';
-import { Check, Truck, Search, CalendarIcon, X, Printer, ArrowLeft } from 'lucide-react';
+import { Check, Truck, Search, CalendarIcon, X, Printer, ArrowLeft, Download, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -62,6 +63,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, FileText, Ban, RotateCcw, Edit, Copy } from "lucide-react";
 import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -71,6 +79,8 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { getApiUrl } from '@/lib/api-config';
+
+import { printPurchaseOrder } from './purchase-order-print-utils';
 
 function PurchaseOrderActions({ 
   order, 
@@ -90,6 +100,7 @@ function PurchaseOrderActions({
   onEdit: (order: PurchaseOrder) => void
 }) {
   const { toast } = useToast();
+  const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
 
   const handleApprove = () => {
     onUpdateOrder(order.id, { status: 'Approved' });
@@ -99,62 +110,88 @@ function PurchaseOrderActions({
   const handleVoid = () => {
     onUpdateOrder(order.id, { status: 'Cancelled' });
     toast({ title: "Order Voided", description: "Purchase order has been cancelled." });
+    setIsVoidDialogOpen(false);
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-8 w-8 p-0">
-          <span className="sr-only">Open menu</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-        
-        {/* Status Actions */}
-        {order.status === 'Pending' && (
-          <DropdownMenuItem onClick={handleApprove}>
-            <Check className="mr-2 h-4 w-4" /> Approve
-          </DropdownMenuItem>
-        )}
-        
-        {['Approved', 'Paid', 'Shipped'].includes(order.status) && (
-          <DropdownMenuItem onClick={() => onReceive(order)}>
-             <Truck className="mr-2 h-4 w-4" /> Receive Items
-          </DropdownMenuItem>
-        )}
+    <>
+      <AlertDialog open={isVoidDialogOpen} onOpenChange={setIsVoidDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void Purchase Order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel the purchase order and mark it as voided. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleVoid} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Void Order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-        {/* General Actions */}
-        <DropdownMenuItem onClick={onViewDetails}>
-          <FileText className="mr-2 h-4 w-4" /> View Details
-        </DropdownMenuItem>
-
-        <DropdownMenuItem onClick={() => onReorder(order)}>
-           <Copy className="mr-2 h-4 w-4" /> Reorder
-        </DropdownMenuItem>
-
-         {/* Edit - Only for Pending ideally, or allow restricted edits. For now basic. */}
-         {order.status === 'Pending' && (
-             <DropdownMenuItem onClick={() => onEdit(order)}>
-                <Edit className="mr-2 h-4 w-4" /> Edit
-             </DropdownMenuItem>
-         )}
-
-        <DropdownMenuItem onClick={onPrint}>
-          <Printer className="mr-2 h-4 w-4" /> Print
-        </DropdownMenuItem>
-        
-        <DropdownMenuSeparator />
-        
-        {/* Destructive / Final Actions */}
-        {(order.status === 'Pending' || order.status === 'Approved') && (
-            <DropdownMenuItem onClick={handleVoid} className="text-destructive focus:text-destructive">
-               <Ban className="mr-2 h-4 w-4" /> Void / Cancel
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-8 w-8 p-0">
+            <span className="sr-only">Open menu</span>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+          
+          {/* Status Actions */}
+          {order.status === 'Draft' && (
+            <DropdownMenuItem onClick={handleApprove}>
+              <Check className="mr-2 h-4 w-4" /> Approve
             </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          )}
+          
+          {['Approved', 'Paid', 'Shipped'].includes(order.status) && (
+            <DropdownMenuItem onClick={() => onReceive(order)}>
+               <Truck className="mr-2 h-4 w-4" /> Receive Items
+            </DropdownMenuItem>
+          )}
+  
+          {/* General Actions */}
+          <DropdownMenuItem onClick={onViewDetails}>
+            <FileText className="mr-2 h-4 w-4" /> View Details
+          </DropdownMenuItem>
+  
+          <DropdownMenuItem onClick={() => onReorder(order)}>
+             <Copy className="mr-2 h-4 w-4" /> Reorder
+          </DropdownMenuItem>
+  
+           {/* Edit - Only for Pending ideally, or allow restricted edits. For now basic. */}
+           {order.status === 'Draft' && (
+               <DropdownMenuItem onClick={() => onEdit(order)}>
+                  <Edit className="mr-2 h-4 w-4" /> Edit
+               </DropdownMenuItem>
+           )}
+  
+          <DropdownMenuItem onClick={onPrint}>
+            <Printer className="mr-2 h-4 w-4" /> Print
+          </DropdownMenuItem>
+          
+          <DropdownMenuSeparator />
+          
+          {/* Destructive / Final Actions */}
+          {(order.status === 'Draft' || order.status === 'Approved') && (
+              <DropdownMenuItem 
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setIsVoidDialogOpen(true);
+                }} 
+                className="text-destructive focus:text-destructive"
+              >
+                 <Ban className="mr-2 h-4 w-4" /> Void / Cancel
+              </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 
@@ -169,17 +206,18 @@ function PurchaseOrderRow({
 }: { 
   order: PurchaseOrder, 
   onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, 
-  onReceive: (order: PurchaseOrder) => void,
-  onPrint: () => void,
-  onReorder: (order: PurchaseOrder) => void,
-  onEdit: (order: PurchaseOrder) => void,
-  onViewDetails: (order: PurchaseOrder) => void
+  onReceive: (order: PurchaseOrder) => void, 
+  onPrint: (order: PurchaseOrder) => void, 
+  onReorder: (order: PurchaseOrder) => void, 
+  onEdit: (order: PurchaseOrder) => void, 
+  onViewDetails: (order: PurchaseOrder) => void 
 }) {
   
   const statusVariant = (status: string) => {
     switch (status) {
       case 'Paid':
-      case 'Received': return 'success'; // Assuming success variant exists or default to default
+      case 'Received': return 'success';
+      case 'Draft':
       case 'Pending': return 'secondary';
       case 'Approved':
       case 'Shipped': return 'default';
@@ -189,46 +227,38 @@ function PurchaseOrderRow({
     }
   };
 
-  // Calculate strict order total (items subtotal)
   const itemsSubtotal = order.items.reduce((acc, item) => acc + (item.cost * item.quantity), 0);
   
   return (
-    <>
-      <TableRow className="hover:bg-muted/50 transition-colors data-[state=selected]:bg-muted text-xs group">
-        <TableCell className="w-8 p-1">
-          {/* Removed Accordion Trigger */}
-        </TableCell>
-        <TableCell className="px-2 py-1 font-medium text-primary whitespace-nowrap">{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</TableCell>
-        <TableCell className="px-2 py-1 whitespace-nowrap">{order.orderedBy || '-'}</TableCell>
-        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{itemsSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.shippingFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.vatAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-        <TableCell className="px-2 py-1 text-right font-bold whitespace-nowrap">₱{order.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-        <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.receivedTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-        <TableCell className="px-2 py-1 max-w-[150px] truncate" title={order.supplierName}>
-            {order.supplierName}
-        </TableCell>
-        <TableCell className="px-2 py-1 whitespace-nowrap">{format(new Date(order.date), 'MMM dd, yyyy')}</TableCell>
-        <TableCell className="px-2 py-1 whitespace-nowrap">{order.deliveryDate ? format(new Date(order.deliveryDate), 'MMM dd, yyyy') : '-'}</TableCell>
-        <TableCell className="px-2 py-1 text-center">
-          <Badge variant={statusVariant(order.status) as any} className="rounded-sm uppercase text-[9px] px-1.5 py-0 min-w-[70px] justify-center h-5">
-            {order.status}
-          </Badge>
-        </TableCell>
-        <TableCell className="px-2 py-1 text-right">
-          <PurchaseOrderActions 
-            order={order} 
-            onUpdateOrder={onUpdateOrder} 
-            onReceive={onReceive} 
-            onPrint={onPrint}
-            onViewDetails={() => onViewDetails(order)}
-            onReorder={onReorder}
-            onEdit={onEdit}
-          />
-        </TableCell>
-      </TableRow>
-      {/* Removed Accordion Content */}
-    </>
+    <TableRow className="hover:bg-muted/50 transition-colors text-xs group">
+      <TableCell className="w-8 p-1"></TableCell>
+      <TableCell className="px-2 py-1 font-medium text-primary whitespace-nowrap">{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</TableCell>
+      <TableCell className="px-2 py-1 whitespace-nowrap">{order.orderedBy || '-'}</TableCell>
+      <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{itemsSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+      <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.shippingFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+      <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.vatAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+      <TableCell className="px-2 py-1 text-right font-bold whitespace-nowrap">₱{order.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+      <TableCell className="px-2 py-1 text-right whitespace-nowrap">₱{(order.receivedTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+      <TableCell className="px-2 py-1 max-w-[150px] truncate" title={order.supplierName}>{order.supplierName}</TableCell>
+      <TableCell className="px-2 py-1 whitespace-nowrap">{formatFns(new Date(order.date), 'MMM dd, yyyy')}</TableCell>
+      <TableCell className="px-2 py-1 whitespace-nowrap">{order.deliveryDate ? formatFns(new Date(order.deliveryDate), 'MMM dd, yyyy') : '-'}</TableCell>
+      <TableCell className="px-2 py-1 text-center">
+        <Badge variant={statusVariant(order.status) as any} className="rounded-sm uppercase text-[9px] px-1.5 py-0 min-w-[70px] justify-center h-5">
+          {order.status}
+        </Badge>
+      </TableCell>
+      <TableCell className="px-2 py-1 text-right">
+        <PurchaseOrderActions 
+          order={order} 
+          onUpdateOrder={onUpdateOrder} 
+          onReceive={onReceive} 
+          onPrint={() => onPrint(order)}
+          onViewDetails={() => onViewDetails(order)}
+          onReorder={onReorder}
+          onEdit={onEdit}
+        />
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -238,100 +268,23 @@ function PurchaseOrderSkeleton() {
       <TableCell className='w-12'><Skeleton className="h-5 w-5 rounded-full" /></TableCell>
       <TableCell><Skeleton className="h-5 w-24" /></TableCell>
       <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-      <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-24" /></TableCell>
+      <TableCell className="px-2 py-1 text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+      <TableCell className="px-2 py-1 text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+      <TableCell className="px-2 py-1 text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+      <TableCell className="px-2 py-1 text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+      <TableCell className="px-2 py-1 text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
       <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-      <TableCell className="text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
-      <TableCell className="text-right"><div className='flex gap-2 justify-end'><Skeleton className="h-9 w-24" /><Skeleton className="h-9 w-24" /></div></TableCell>
+      <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
     </TableRow>
   );
 }
 
-function PurchaseOrderPrintView({ order, onBack }: { order: PurchaseOrder, onBack: () => void }) {
+export default function PurchasesPage() {
   const { products } = useProducts();
   const { profile } = useBusinessProfile();
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Button variant="outline" size="icon" onClick={onBack} className="non-printable">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <CardTitle>Purchase Order</CardTitle>
-            </div>
-            <CardDescription>Order ID: {order.id}</CardDescription>
-          </div>
-          <div className="text-right">
-             <div className="flex items-center justify-end gap-2">
-               <Logo className="size-7 text-primary" />
-               <h1 className="text-xl font-semibold font-headline text-primary">{profile?.businessName || 'StockPilot'}</h1>
-             </div>
-             <div className="text-xs text-muted-foreground mt-1">
-                <p>{profile?.address}</p>
-                <p>{profile?.contactNumber} {profile?.email && `• ${profile.email}`}</p>
-             </div>
-          </div>
-        </div>
-        <div className="flex justify-between text-sm text-muted-foreground pt-4">
-          <div>
-            <p className="font-semibold text-foreground">Supplier:</p>
-            <p>{order.supplierName}</p>
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">Order Date:</p>
-            <p>{format(new Date(order.date), 'PPP')}</p>
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">Status:</p>
-            <p>{order.status}</p>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead className="text-center">Remaining QTY</TableHead>
-              <TableHead className="text-right">Quantity</TableHead>
-              <TableHead className="text-right">Cost per Item</TableHead>
-              <TableHead className="text-right">Subtotal</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {order.items.map(item => {
-               const product = products.find(p => p.id === item.productId);
-               const currentStock = product ? product.stock : (item.currentStock || 0);
-               
-               return (
-              <TableRow key={item.productId}>
-                <TableCell>{item.productName}</TableCell>
-                <TableCell className="text-center">{currentStock}</TableCell>
-                <TableCell className="text-right">{item.quantity}</TableCell>
-                <TableCell className="text-right">₱{item.cost.toFixed(2)}</TableCell>
-                <TableCell className="text-right">₱{(item.cost * item.quantity).toFixed(2)}</TableCell>
-              </TableRow>
-            )})}
-            <TableRow className="border-t-2 border-primary">
-              <TableCell colSpan={4} className="text-right font-bold text-lg">Total</TableCell>
-              <TableCell className="text-right font-bold text-lg">₱{order.total.toFixed(2)}</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-        <div className="flex justify-end mt-4 non-printable">
-          <Button onClick={() => window.print()}>
-            <Printer className="mr-2 h-4 w-4" />
-            Print Order
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function PurchasesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -341,7 +294,6 @@ export default function PurchasesPage() {
   const [reorderData, setReorderData] = useState<PurchaseOrder | null>(null);
   const [isReorderOpen, setIsReorderOpen] = useState(false);
   
-  const [orderToPrint, setOrderToPrint] = useState<PurchaseOrder | null>(null);
   const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
   const [orderToReceive, setOrderToReceive] = useState<PurchaseOrder | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -350,12 +302,24 @@ export default function PurchasesPage() {
   const [isScheduledOrderOpen, setIsScheduledOrderOpen] = useState(false);
   const [scheduledSupplierId, setScheduledSupplierId] = useState<string | undefined>(undefined);
 
-  const pageSize = 10;
-
+  const [pageSize, setPageSize] = useState(50);
   const { toast } = useToast();
 
-  // Use the real API hook
-  const { purchaseOrders, loading, refetch, pagination } = usePurchaseOrders(searchTerm, undefined, currentPage, pageSize);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [supplierFilter, setSupplierFilter] = useState<string>('all');
+
+  const { suppliers } = useSuppliers('', 1, 100);
+
+  // Use the real API hook with updated filters
+  const { purchaseOrders, loading, refetch, pagination } = usePurchaseOrders(
+    searchTerm, 
+    statusFilter, 
+    currentPage, 
+    pageSize,
+    dateRange?.from ? formatFns(dateRange.from, 'yyyy-MM-dd') : undefined,
+    dateRange?.to ? formatFns(dateRange.to, 'yyyy-MM-dd') : undefined,
+    supplierFilter
+  );
 
   const updatePurchaseOrder = async (id: string, updates: any) => {
     try {
@@ -461,7 +425,6 @@ export default function PurchasesPage() {
   };
 
   // API handles search and pagination. We use the results directly.
-  // Note: Date range filtering is temporarily disabled for server-side pagination unless implemented in API.
   const filteredPurchaseOrders = purchaseOrders;
 
   const handleSearch = () => {
@@ -473,11 +436,46 @@ export default function PurchasesPage() {
     setSearchTerm('');
     setSearchQuery('');
     setDateRange(undefined);
+    setStatusFilter('all');
+    setSupplierFilter('all');
     setCurrentPage(1);
   };
 
+  // Reset to page 1 when page size changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize]);
+
   const handlePrint = (order: PurchaseOrder) => {
-    setOrderToPrint(order);
+    printPurchaseOrder(order, profile, products);
+  };
+
+  const handleExport = async (format: 'csv' | 'pdf') => {
+    try {
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (supplierFilter !== 'all') params.append('supplierId', supplierFilter);
+      if (dateRange?.from) params.append('startDate', formatFns(dateRange.from, 'yyyy-MM-dd'));
+      if (dateRange?.to) params.append('endDate', formatFns(dateRange.to, 'yyyy-MM-dd'));
+
+      const response = await fetch(getApiUrl(`/purchase-orders/export?${params.toString()}`));
+      const result = await response.json();
+
+      if (!result.success) throw new Error(result.error || 'Export failed');
+
+      const fileName = `purchase_orders_${formatFns(new Date(), 'yyyyMMdd_HHmm')}`;
+      if (format === 'csv') {
+        await exportToCSV(result.data, fileName);
+      } else {
+        await exportToPDF(result.data, fileName, profile);
+      }
+
+      toast({ title: "Export Successful", description: `Your ${format.toUpperCase()} file has been generated.` });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({ title: "Export Failed", description: "An error occurred during export.", variant: "destructive" });
+    }
   };
 
   const handleEdit = (order: PurchaseOrder) => {
@@ -496,10 +494,6 @@ export default function PurchasesPage() {
 
   const hasActiveFilters = searchTerm || dateRange;
 
-  if (orderToPrint) {
-    return <PurchaseOrderPrintView order={orderToPrint} onBack={() => setOrderToPrint(null)} />
-  }
-
   return (
     <Card className="printable-area">
       <CardHeader className="non-printable">
@@ -517,6 +511,24 @@ export default function PurchasesPage() {
                     setIsScheduledOrderOpen(true);
                 }} 
             />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="mr-2 h-4 w-4" />
+                  Export
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport('csv')}>
+                  Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                  Export as PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <AddPurchaseOrderDialog onAddOrder={addPurchaseOrder} />
             
             {isScheduledOrderOpen && (
@@ -571,70 +583,49 @@ export default function PurchasesPage() {
             />
           </div>
         </div>
-        <div className="flex items-center justify-between gap-4 pt-4">
-          <div className="relative flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-4">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                 type="search"
                 placeholder="Search by ID, supplier..."
-                className="pl-8 sm:w-[300px]"
+                className="pl-8 sm:w-[250px]"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 />
             </div>
             <Button variant="secondary" onClick={handleSearch}>Search</Button>
+
+            <PurchasesFilterDialog 
+              status={statusFilter}
+              setStatus={setStatusFilter}
+              supplierId={supplierFilter}
+              setSupplierId={setSupplierFilter}
+              dateRange={dateRange}
+              setDateRange={setDateRange}
+              suppliers={suppliers}
+              onReset={resetFilters}
+            />
           </div>
-          <div className="flex items-center gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-[280px] justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
-                    ) : (
-                      format(dateRange.from, "LLL dd, y")
-                    )
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
+          <div className="flex items-center gap-2 non-printable">
             {hasActiveFilters && (
-              <Button variant="ghost" onClick={resetFilters} size="icon">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Reset filters</span>
+              <Button variant="ghost" onClick={resetFilters} size="sm" className="h-8 px-2 text-xs">
+                <X className="mr-1 h-3 w-3" />
+                Reset
               </Button>
             )}
           </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="rounded-md border m-4">
-          <Table className="text-xs">
-            <TableHeader>
+        <div className="m-4">
+          <Table 
+            className="text-xs" 
+            wrapperClassName="max-h-[calc(100vh-320px)] overflow-auto rounded-md border border-separate border-spacing-0"
+          >
+            <TableHeader className="bg-muted/50 backdrop-blur-sm">
               <TableRow className="hover:bg-transparent bg-muted/50">
                 <TableHead className="w-8 p-1 text-center"></TableHead>
                 <TableHead className="h-8 px-2 py-1 font-semibold text-foreground whitespace-nowrap">Ref No</TableHead>
@@ -661,7 +652,7 @@ export default function PurchasesPage() {
                     setOrderToReceive(order);
                     setIsReceiveDialogOpen(true);
                   }}
-                  onPrint={() => handlePrint(order)}
+                  onPrint={handlePrint}
                   onReorder={handleReorder}
                   onEdit={handleEdit}
                   onViewDetails={handleViewDetails}
@@ -672,8 +663,26 @@ export default function PurchasesPage() {
         </div>
         
         {pagination && pagination.total > 0 && (
-          <div className="py-2 border-t px-4">
-            <Pagination>
+          <div className="py-2 border-t px-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">Rows per page:</span>
+              <Select
+                value={pageSize.toString()}
+                onValueChange={(val: string) => setPageSize(parseInt(val))}
+              >
+                <SelectTrigger className="h-8 w-[70px] text-xs">
+                  <SelectValue placeholder={pageSize.toString()} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Pagination className="w-auto mx-0">
               <PaginationContent>
                 <PaginationItem>
                   <PaginationPrevious 

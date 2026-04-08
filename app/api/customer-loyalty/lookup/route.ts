@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../../lib/mysql';
+import { isLoyaltyCardExpired } from '../../../../lib/loyalty-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
         loyaltyPoints: Number(result[0].loyaltyPoints || 0),
         discount: Number(result[0].discount || 0),
         creditLimit: Number(result[0].creditLimit || 0),
+        isExpired: isLoyaltyCardExpired(result[0].expiryDate)
       };
 
       return NextResponse.json({

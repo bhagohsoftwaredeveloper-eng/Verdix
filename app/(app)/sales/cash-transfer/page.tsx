@@ -14,6 +14,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { TerminalSelector } from '@/components/TerminalSelector';
 import { getApiUrl } from '@/lib/api-config';
+import { Label } from '@/components/ui/label';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 interface CashTransfer {
   id: string;
@@ -40,6 +50,12 @@ export default function CashTransferPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [summary, setSummary] = useState({ totalCashIn: 0, totalCashOut: 0 });
   const [cashiers, setCashiers] = useState<{uid: string, display_name: string, username: string}[]>([]);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Fetch cashiers (users)
   useEffect(() => {
@@ -72,12 +88,20 @@ export default function CashTransferPage() {
         if (terminalId && terminalId !== 'all') params.append('terminalId', terminalId);
         if (cashierId && cashierId !== 'all') params.append('cashierId', cashierId);
         if (type && type !== 'all') params.append('type', type);
+        
+        // Add pagination params
+        params.append('page', currentPage.toString());
+        params.append('limit', pageSize.toString());
 
         const res = await fetch(getApiUrl(`/pos/cash-transfer?${params.toString()}`));
         const json = await res.json();
         if (json.success) {
             setData(json.data);
             setSummary(json.summary || { totalCashIn: 0, totalCashOut: 0 });
+            if (json.pagination) {
+                setTotalPages(json.pagination.totalPages);
+                setTotalCount(json.pagination.totalCount);
+            }
         }
     } catch (e) {
         console.error(e);
@@ -89,7 +113,62 @@ export default function CashTransferPage() {
 
   useEffect(() => {
     fetchData();
-  }, [dateRange, terminalId, cashierId, type]);
+  }, [dateRange, terminalId, cashierId, type, currentPage, pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateRange, terminalId, cashierId, type, pageSize]);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+        setCurrentPage(page);
+    }
+  };
+
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+        for (let i = 1; i <= totalPages; i++) {
+            items.push(
+                <PaginationItem key={i}>
+                    <PaginationLink
+                        isActive={currentPage === i}
+                        onClick={() => handlePageChange(i)}
+                        className="cursor-pointer"
+                    >
+                        {i}
+                    </PaginationLink>
+                </PaginationItem>
+            );
+        }
+    } else {
+        items.push(
+            <PaginationItem key={1}>
+                <PaginationLink isActive={currentPage === 1} onClick={() => handlePageChange(1)} className="cursor-pointer">1</PaginationLink>
+            </PaginationItem>
+        );
+        if (currentPage > 3) items.push(<PaginationItem key="e1"><PaginationEllipsis /></PaginationItem>);
+        const start = Math.max(2, currentPage - 1);
+        const end = Math.min(totalPages - 1, currentPage + 1);
+        for (let i = start; i <= end; i++) {
+            items.push(
+                <PaginationItem key={i}>
+                    <PaginationLink isActive={currentPage === i} onClick={() => handlePageChange(i)} className="cursor-pointer">{i}</PaginationLink>
+                </PaginationItem>
+            );
+        }
+        if (currentPage < totalPages - 2) items.push(<PaginationItem key="e2"><PaginationEllipsis /></PaginationItem>);
+        items.push(
+            <PaginationItem key={totalPages}>
+                <PaginationLink isActive={currentPage === totalPages} onClick={() => handlePageChange(totalPages)} className="cursor-pointer">{totalPages}</PaginationLink>
+            </PaginationItem>
+        );
+    }
+    return items;
+  };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', {
@@ -191,16 +270,15 @@ export default function CashTransferPage() {
                 </div>
 
                 {/* Table */}
-                <div className="rounded-md border">
-                    <Table>
-                    <TableHeader className="bg-muted/50">
+                <Table wrapperClassName="max-h-[500px] overflow-auto border rounded-md">
+                    <TableHeader className="sticky top-0 z-30 bg-background">
                         <TableRow>
-                            <TableHead className="w-[180px]">Date</TableHead>
-                            <TableHead>Terminal</TableHead>
-                            <TableHead>Cashier</TableHead>
-                            <TableHead>Amount</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Note</TableHead>
+                            <TableHead className="w-[180px] bg-background">Date</TableHead>
+                            <TableHead className="bg-background">Terminal</TableHead>
+                            <TableHead className="bg-background">Cashier</TableHead>
+                            <TableHead className="bg-background">Amount</TableHead>
+                            <TableHead className="bg-background">Type</TableHead>
+                            <TableHead className="bg-background">Note</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -241,8 +319,57 @@ export default function CashTransferPage() {
                             ))
                         )}
                     </TableBody>
-                    </Table>
-                </div>
+                </Table>
+
+                {/* Pagination Controls */}
+                {!isLoading && data.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-2">
+                        <div className="flex items-center gap-2 order-2 sm:order-1">
+                            <Label htmlFor="rows-per-page" className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</Label>
+                            <Select 
+                                value={pageSize.toString()} 
+                                onValueChange={(v) => {
+                                    setPageSize(Number(v));
+                                    setCurrentPage(1);
+                                }}
+                            >
+                                <SelectTrigger id="rows-per-page" className="h-8 w-[70px] text-xs">
+                                    <SelectValue placeholder={pageSize.toString()} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="10">10</SelectItem>
+                                    <SelectItem value="20">20</SelectItem>
+                                    <SelectItem value="50">50</SelectItem>
+                                    <SelectItem value="100">100</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <span className="text-xs text-muted-foreground ml-2">
+                                Total: {totalCount} records
+                            </span>
+                        </div>
+                        <div className="order-1 sm:order-2">
+                            <Pagination>
+                                <PaginationContent>
+                                    <PaginationItem>
+                                        <PaginationPrevious
+                                            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                                            aria-disabled={currentPage === 1}
+                                            className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                        />
+                                    </PaginationItem>
+                                    {renderPaginationItems()}
+                                    <PaginationItem>
+                                        <PaginationNext
+                                            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                                            aria-disabled={currentPage === totalPages}
+                                            className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                        />
+                                    </PaginationItem>
+                                </PaginationContent>
+                            </Pagination>
+                        </div>
+                    </div>
+                )}
             </div>
          </CardContent>
       </Card>

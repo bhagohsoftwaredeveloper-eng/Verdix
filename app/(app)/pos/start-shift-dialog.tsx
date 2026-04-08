@@ -19,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 interface StartShiftDialogProps {
   isOpen: boolean;
   onShiftStart: (totalCash: number) => void;
+  onCancel: () => void;
 }
 
 const billDenominations = [
@@ -65,7 +66,7 @@ const DenominationInput = ({
   </div>
 );
 
-export function StartShiftDialog({ isOpen, onShiftStart }: StartShiftDialogProps) {
+export function StartShiftDialog({ isOpen, onShiftStart, onCancel }: StartShiftDialogProps) {
   const [counts, setCounts] = useState<Record<number, number>>({});
   
   const totalCash = useMemo(() => {
@@ -108,7 +109,7 @@ export function StartShiftDialog({ isOpen, onShiftStart }: StartShiftDialogProps
   }, [isOpen]);
 
   return (
-    <Dialog open={isOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onCancel(); }}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Start New Shift</DialogTitle>
@@ -116,6 +117,7 @@ export function StartShiftDialog({ isOpen, onShiftStart }: StartShiftDialogProps
             Enter your starting cash denominations to begin your shift.
           </DialogDescription>
         </DialogHeader>
+
         <ScrollArea className="h-80 pr-6">
           <div className="py-4 grid grid-cols-2 gap-x-8 gap-y-4">
             <div className="space-y-4">
@@ -147,15 +149,16 @@ export function StartShiftDialog({ isOpen, onShiftStart }: StartShiftDialogProps
             <span className="text-lg font-medium">Total Starting Cash:</span>
             <span className="text-2xl font-bold text-primary">₱{totalCash.toFixed(2)}</span>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex flex-col gap-2">
           <Button
             type="button"
             onClick={handleStartShift}
-            className="w-full"
+            className="w-full py-6 h-auto text-lg"
           >
-            Start Shift
+            Start Shift {totalCash > 0 ? `(₱${totalCash.toFixed(2)})` : ''}
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );

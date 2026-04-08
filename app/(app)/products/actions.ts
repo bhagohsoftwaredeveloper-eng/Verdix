@@ -46,6 +46,7 @@ export type ProductFilters = {
   category?: string;
   supplier?: string;
   warehouse?: string;
+  shelfLocation?: string;
   status?: 'in-stock' | 'low-stock' | 'out-of-stock' | 'all' | string;
 };
 
@@ -70,6 +71,16 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
     const whereClauses: string[] = [];
     const params: any[] = [];
 
+    const hasActiveFilters = filters && (
+      (filters.brand && filters.brand !== 'all') ||
+      (filters.category && filters.category !== 'all') ||
+      (filters.supplier && filters.supplier !== 'all') ||
+      (filters.warehouse && filters.warehouse !== 'all') ||
+      (filters.shelfLocation && filters.shelfLocation !== 'all') ||
+      (filters.status && filters.status !== 'all') ||
+      filters.search
+    );
+
     if (filters) {
       if (filters.search) {
         whereClauses.push(`(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)`);
@@ -93,15 +104,24 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
         whereClauses.push(`p.warehouse_id = ?`);
         params.push(filters.warehouse);
       }
+      if (filters.shelfLocation && filters.shelfLocation !== 'all') {
+        whereClauses.push(`p.shelf_location_id = ?`);
+        params.push(filters.shelfLocation);
+      }
       if (filters.status && filters.status !== 'all') {
         if (filters.status === 'out-of-stock') {
           whereClauses.push(`p.stock <= 0`);
         } else if (filters.status === 'low-stock') {
           whereClauses.push(`p.stock > 0 AND p.stock < p.reorder_point`);
         } else if (filters.status === 'in-stock') {
-           whereClauses.push(`p.stock >= p.reorder_point`);
+           whereClauses.push(`p.stock > 0 AND p.stock >= p.reorder_point`);
         }
       }
+    }
+
+    if (!hasActiveFilters && limit !== undefined && offset !== undefined) {
+      // In tree mode (no filters), paginate by root products only
+      whereClauses.push(`p.parent_id IS NULL`);
     }
 
     if (whereClauses.length > 0) {
@@ -115,7 +135,61 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
       params.push(limit, offset);
     }
 
-    const products = await query(sql, params.length > 0 ? params : undefined);
+    const pagedProducts = await query(sql, params.length > 0 ? params : undefined);
+    
+    // If we paginated root products, we now need to fetch all their descendants
+    // to ensure the tree can be built correctly in the frontend.
+    let products = pagedProducts;
+    if (!hasActiveFilters && limit !== undefined && offset !== undefined && pagedProducts.length > 0) {
+      const rootIds = pagedProducts.map((p: any) => p.id);
+      
+      // Fetch all children for these roots recursively (up to 10 levels)
+      // Using a recursive CTE for MySQL 8.0+
+      try {
+        const recursiveSql = `
+          WITH RECURSIVE product_tree AS (
+            SELECT p.*, 
+                   s_legacy.name as legacy_supplier_name, 
+                   w.name as warehouse_name,
+                   sl.name as shelf_location_name,
+                   spm.supplier_id as primary_supplier_id,
+                   spm.supplier_specific_rop as primary_supplier_rop,
+                   s_primary.name as primary_supplier_name
+            FROM products p
+            LEFT JOIN suppliers s_legacy ON p.supplier_id = s_legacy.id
+            LEFT JOIN warehouses w ON p.warehouse_id = w.id
+            LEFT JOIN shelf_locations sl ON p.shelf_location_id = sl.id
+            LEFT JOIN supplier_product_mapping spm ON p.id = spm.product_id AND spm.is_primary = 1
+            LEFT JOIN suppliers s_primary ON spm.supplier_id = s_primary.id
+            WHERE p.id IN (?)
+            
+            UNION ALL
+            
+            SELECT p.*, 
+                   s_legacy.name as legacy_supplier_name, 
+                   w.name as warehouse_name,
+                   sl.name as shelf_location_name,
+                   spm.supplier_id as primary_supplier_id,
+                   spm.supplier_specific_rop as primary_supplier_rop,
+                   s_primary.name as primary_supplier_name
+            FROM products p
+            INNER JOIN product_tree pt ON p.parent_id = pt.id
+            LEFT JOIN suppliers s_legacy ON p.supplier_id = s_legacy.id
+            LEFT JOIN warehouses w ON p.warehouse_id = w.id
+            LEFT JOIN shelf_locations sl ON p.shelf_location_id = sl.id
+            LEFT JOIN supplier_product_mapping spm ON p.id = spm.product_id AND spm.is_primary = 1
+            LEFT JOIN suppliers s_primary ON spm.supplier_id = s_primary.id
+          )
+          SELECT * FROM product_tree ORDER BY created_at DESC
+        `;
+        products = await query(recursiveSql, [rootIds]);
+      } catch (err) {
+        console.warn('Recursive CTE failed, falling back to flat list. Error:', err);
+        // If recursive CTE is not supported, we just return the roots.
+        // The tree will be shallow but at least it won't crash.
+        products = pagedProducts;
+      }
+    }
 
     // Fetch conversion factors for all products
     const conversionFactorsSql = `SELECT * FROM conversion_factors ORDER BY product_id, created_at`;
@@ -237,15 +311,33 @@ export async function getProductsCount(filters?: ProductFilters) {
         whereClauses.push(`p.warehouse_id = ?`);
         params.push(filters.warehouse);
       }
+      if (filters.shelfLocation && filters.shelfLocation !== 'all') {
+        whereClauses.push(`p.shelf_location_id = ?`);
+        params.push(filters.shelfLocation);
+      }
       if (filters.status && filters.status !== 'all') {
         if (filters.status === 'out-of-stock') {
           whereClauses.push(`p.stock <= 0`);
         } else if (filters.status === 'low-stock') {
           whereClauses.push(`p.stock > 0 AND p.stock < p.reorder_point`);
         } else if (filters.status === 'in-stock') {
-           whereClauses.push(`p.stock >= p.reorder_point`);
+           whereClauses.push(`p.stock > 0 AND p.stock >= p.reorder_point`);
         }
       }
+    }
+
+    const hasActiveFilters = filters && (
+      (filters.brand && filters.brand !== 'all') ||
+      (filters.category && filters.category !== 'all') ||
+      (filters.supplier && filters.supplier !== 'all') ||
+      (filters.warehouse && filters.warehouse !== 'all') ||
+      (filters.shelfLocation && filters.shelfLocation !== 'all') ||
+      (filters.status && filters.status !== 'all') ||
+      filters.search
+    );
+
+    if (!hasActiveFilters) {
+      whereClauses.push(`p.parent_id IS NULL`);
     }
 
     if (whereClauses.length > 0) {
@@ -644,6 +736,44 @@ export async function updateProduct(id: string, formData: UpdateProductData) {
 
 export async function deleteBrand(id: string) {
   try {
+    // Get the brand name first as it is used as the link in the products table
+    const brandResult = await query('SELECT name FROM brands WHERE id = ?', [id]);
+    if (brandResult.length === 0) {
+      return { success: false, message: 'Brand not found.' };
+    }
+    const brandName = brandResult[0].name;
+
+    // Check if any products are associated with this brand name
+    const productsSql = `SELECT id FROM products WHERE brand = ? LIMIT 1`;
+    const products = await query(productsSql, [brandName]);
+
+    if (products.length > 0) {
+      // Check if any of these products have transactions
+      const transactionsSql = `
+        SELECT 1 FROM sale_items si JOIN products p ON si.product_id = p.id WHERE p.brand = ?
+        UNION ALL
+        SELECT 1 FROM purchase_order_items poi JOIN products p ON poi.product_id = p.id WHERE p.brand = ?
+        UNION ALL
+        SELECT 1 FROM stock_movements sm JOIN products p ON sm.product_id = p.id WHERE p.brand = ?
+        UNION ALL
+        SELECT 1 FROM bad_order_items boi JOIN products p ON boi.product_id = p.id WHERE p.brand = ?
+        LIMIT 1
+      `;
+      const transactions = await query(transactionsSql, [brandName, brandName, brandName, brandName]);
+
+      if (transactions.length > 0) {
+        return { 
+          success: false, 
+          message: 'Cannot delete brand because it has associated transactions. Please void or delete related transactions first.' 
+        };
+      }
+
+      return { 
+        success: false, 
+        message: 'Cannot delete brand because it is currently assigned to one or more products. Please reassign or delete the products first.' 
+      };
+    }
+
     const sql = `DELETE FROM brands WHERE id = ?`;
     await query(sql, [id]);
     return { success: true, message: 'Brand deleted successfully.' };
@@ -656,11 +786,17 @@ export async function deleteBrand(id: string) {
 // Categories
 export async function getCategories() {
   try {
-    const sql = `SELECT * FROM categories ORDER BY name ASC`;
+    const sql = `
+      SELECT c.*, 
+             (SELECT COUNT(*) FROM products p WHERE p.category = c.name) as product_count
+      FROM categories c 
+      ORDER BY c.name ASC
+    `;
     const categories = await query(sql);
     return categories.map((c: any) => ({ 
       ...c, 
       markupPercentage: c.markup_percentage !== null ? parseFloat(c.markup_percentage) : undefined,
+      productCount: c.product_count || 0,
       created_at: c.created_at, 
       updated_at: c.updated_at 
     }));
@@ -684,6 +820,44 @@ export async function addCategory(name: string, markupPercentage?: number) {
 
 export async function deleteCategory(id: string) {
   try {
+    // Get the category name first as it is used as the link in the products table
+    const categoryResult = await query('SELECT name FROM categories WHERE id = ?', [id]);
+    if (categoryResult.length === 0) {
+      return { success: false, message: 'Category not found.' };
+    }
+    const categoryName = categoryResult[0].name;
+
+    // Check if any products are associated with this category name
+    const productsSql = `SELECT id FROM products WHERE category = ? LIMIT 1`;
+    const products = await query(productsSql, [categoryName]);
+
+    if (products.length > 0) {
+      // Check if any of these products have transactions
+      const transactionsSql = `
+        SELECT 1 FROM sale_items si JOIN products p ON si.product_id = p.id WHERE p.category = ?
+        UNION ALL
+        SELECT 1 FROM purchase_order_items poi JOIN products p ON poi.product_id = p.id WHERE p.category = ?
+        UNION ALL
+        SELECT 1 FROM stock_movements sm JOIN products p ON sm.product_id = p.id WHERE p.category = ?
+        UNION ALL
+        SELECT 1 FROM bad_order_items boi JOIN products p ON boi.product_id = p.id WHERE p.category = ?
+        LIMIT 1
+      `;
+      const transactions = await query(transactionsSql, [categoryName, categoryName, categoryName, categoryName]);
+
+      if (transactions.length > 0) {
+        return { 
+          success: false, 
+          message: `Cannot delete category "${categoryName}" because it has associated transactions. Please void or delete related transactions first.` 
+        };
+      }
+
+      return { 
+        success: false, 
+        message: `Cannot delete category "${categoryName}" because it is currently assigned to one or more products. Please reassign or delete the products first.` 
+      };
+    }
+
     const sql = `DELETE FROM categories WHERE id = ?`;
     await query(sql, [id]);
     return { success: true, message: 'Category deleted successfully.' };
@@ -696,11 +870,17 @@ export async function deleteCategory(id: string) {
 // Subcategories
 export async function getSubcategories() {
   try {
-    const sql = `SELECT * FROM subcategories ORDER BY name ASC`;
+    const sql = `
+      SELECT s.*, 
+             (SELECT COUNT(*) FROM products p WHERE p.subcategory = s.name) as product_count
+      FROM subcategories s 
+      ORDER BY s.name ASC
+    `;
     const subcategories = await query(sql);
     return subcategories.map((s: any) => ({ 
       ...s, 
       markupPercentage: s.markup_percentage !== null ? parseFloat(s.markup_percentage) : undefined,
+      productCount: s.product_count || 0,
       created_at: s.created_at, 
       updated_at: s.updated_at 
     }));
@@ -724,6 +904,44 @@ export async function addSubcategory(name: string, markupPercentage?: number) {
 
 export async function deleteSubcategory(id: string) {
   try {
+    // Get the subcategory name first as it is used as the link in the products table
+    const subcategoryResult = await query('SELECT name FROM subcategories WHERE id = ?', [id]);
+    if (subcategoryResult.length === 0) {
+      return { success: false, message: 'Subcategory not found.' };
+    }
+    const subcategoryName = subcategoryResult[0].name;
+
+    // Check if any products are associated with this subcategory name
+    const productsSql = `SELECT id FROM products WHERE subcategory = ? LIMIT 1`;
+    const products = await query(productsSql, [subcategoryName]);
+
+    if (products.length > 0) {
+      // Check if any of these products have transactions
+      const transactionsSql = `
+        SELECT 1 FROM sale_items si JOIN products p ON si.product_id = p.id WHERE p.subcategory = ?
+        UNION ALL
+        SELECT 1 FROM purchase_order_items poi JOIN products p ON poi.product_id = p.id WHERE p.subcategory = ?
+        UNION ALL
+        SELECT 1 FROM stock_movements sm JOIN products p ON sm.product_id = p.id WHERE p.subcategory = ?
+        UNION ALL
+        SELECT 1 FROM bad_order_items boi JOIN products p ON boi.product_id = p.id WHERE p.subcategory = ?
+        LIMIT 1
+      `;
+      const transactions = await query(transactionsSql, [subcategoryName, subcategoryName, subcategoryName, subcategoryName]);
+
+      if (transactions.length > 0) {
+        return { 
+          success: false, 
+          message: `Cannot delete subcategory "${subcategoryName}" because it has associated transactions. Please void or delete related transactions first.` 
+        };
+      }
+
+      return { 
+        success: false, 
+        message: `Cannot delete subcategory "${subcategoryName}" because it is currently assigned to one or more products. Please reassign or delete the products first.` 
+      };
+    }
+
     const sql = `DELETE FROM subcategories WHERE id = ?`;
     await query(sql, [id]);
     return { success: true, message: 'Subcategory deleted successfully.' };
@@ -838,6 +1056,24 @@ export async function updateSupplier(id: string, data: { name: string, contactNu
 
 export async function deleteSupplier(id: string) {
   try {
+    // Check for existing purchase orders
+    const poResult = await query('SELECT id FROM purchase_orders WHERE supplier_id = ? LIMIT 1', [id]);
+    if (poResult.length > 0) {
+      return { 
+        success: false, 
+        message: 'Cannot delete supplier because they have existing purchase orders. Please void or delete related purchase orders first.' 
+      };
+    }
+
+    // Check for existing payments
+    const paymentResult = await query('SELECT id FROM supplier_payments WHERE supplier_id = ? LIMIT 1', [id]);
+    if (paymentResult.length > 0) {
+      return { 
+        success: false, 
+        message: 'Cannot delete supplier because they have existing payment history. Please void or delete related payments first.' 
+      };
+    }
+
     const sql = `DELETE FROM suppliers WHERE id = ?`;
     await query(sql, [id]);
     return { success: true, message: 'Supplier deleted successfully.' };
@@ -1210,9 +1446,31 @@ export async function updatePriceLevel(id: string, name: string, description?: s
 export async function deletePriceLevel(id: string) {
   try {
     // Check if it's the default level
-    const [level] = await query('SELECT is_default FROM price_levels WHERE id = ?', [id]);
-    if (level && level.is_default) {
+    const [level] = await query('SELECT name, is_default FROM price_levels WHERE id = ?', [id]);
+    if (!level) {
+      return { success: false, message: 'Price level not found.' };
+    }
+    
+    if (level.is_default) {
       return { success: false, message: 'Cannot delete the default price level.' };
+    }
+
+    // Check if any customers are assigned to this price level
+    const customerCheck = await query('SELECT id FROM customers WHERE price_level_id = ? LIMIT 1', [id]);
+    if (customerCheck.length > 0) {
+      return { 
+        success: false, 
+        message: `Cannot delete price level "${level.name}" because it is currently assigned to one or more customers. Please reassign the customers first.` 
+      };
+    }
+
+    // Check if any product price overrides exist for this level
+    const productCheck = await query('SELECT product_id FROM product_price_levels WHERE price_level_id = ? LIMIT 1', [id]);
+    if (productCheck.length > 0) {
+      return { 
+        success: false, 
+        message: `Cannot delete price level "${level.name}" because it is currently used in product price overrides. Please remove these overrides first.` 
+      };
     }
     
     const sql = `DELETE FROM price_levels WHERE id = ?`;
@@ -1220,7 +1478,7 @@ export async function deletePriceLevel(id: string) {
     return { success: true, message: 'Price level deleted successfully.' };
   } catch (error) {
     console.error('Error deleting price level:', error);
-    return { success: false, message: 'Error deleting price level.' };
+    return { success: false, message: 'Error deleting price level. It may have associated transaction history.' };
   }
 }
 // Supplier Product Mappings

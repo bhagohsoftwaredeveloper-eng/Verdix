@@ -81,6 +81,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
   const { toast } = useToast();
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySetting[]>([]);
   const [isLoadingLoyaltySettings, setIsLoadingLoyaltySettings] = useState(false);
+  const [sameAsAddress, setSameAsAddress] = useState(false);
 
   const fetchLoyaltySettings = async () => {
     try {
@@ -116,6 +117,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
 
   const [isLoadingPaymentTerms, setIsLoadingPaymentTerms] = useState(false);
   const [isManagePaymentTermsOpen, setIsManagePaymentTermsOpen] = useState(false);
+  const [isPaymentTermsSelectOpen, setIsPaymentTermsSelectOpen] = useState(false);
 
   const fetchPaymentTerms = async () => {
     try {
@@ -196,6 +198,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
           priceLevelId: '',
         });
       }
+      setSameAsAddress(false);
     }
   }, [isOpen, customer, form]);
 
@@ -224,24 +227,24 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
     <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-3xl h-[85vh] flex flex-col overflow-hidden !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
+      <DialogContent className="sm:max-w-3xl h-[650px] flex flex-col !overflow-hidden !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>{customer ? 'Edit Customer' : 'Add New Customer'}</DialogTitle>
           <DialogDescription>
             {customer ? 'Update the customer details below.' : 'Fill in the details below to add a new customer.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto px-4 py-1">
+        <div className="flex-1 px-4 py-1">
           <Form {...form}>
             <form id="add-customer-form" onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="h-[520px]">
+              <div className="h-[480px]">
                 <Tabs defaultValue="basic" className="w-full h-full">
               <TabsList className="grid w-fit grid-cols-3 mx-auto">
                 <TabsTrigger value="basic">Basic Info</TabsTrigger>
                 <TabsTrigger value="address">Address</TabsTrigger>
                 <TabsTrigger value="financial">Financial</TabsTrigger>
               </TabsList>
-              <TabsContent value="basic" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+              <TabsContent value="basic" className="space-y-4 p-6 h-[400px]">
                 <FormField
                   control={form.control}
                   name="customerId"
@@ -305,7 +308,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
                 />
               </TabsContent>
 
-              <TabsContent value="address" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+              <TabsContent value="address" className="space-y-4 p-6 h-[400px]">
                 <div className="grid grid-cols-1 gap-4">
                   <FormField
                     control={form.control}
@@ -314,7 +317,17 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
                       <FormItem>
                         <FormLabel>Address</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="e.g., 123 Main St, City, Country" {...field} rows={2} />
+                          <Textarea
+                            placeholder="e.g., 123 Main St, City, Country"
+                            {...field}
+                            rows={2}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              if (sameAsAddress) {
+                                form.setValue('billingAddress', e.target.value);
+                              }
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -325,9 +338,28 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
                     name="billingAddress"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Billing Address</FormLabel>
+                        <div className="flex flex-row items-center justify-between">
+                          <FormLabel>Billing Address</FormLabel>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Same as Address</span>
+                            <Switch
+                              checked={sameAsAddress}
+                              onCheckedChange={(checked) => {
+                                setSameAsAddress(checked);
+                                if (checked) {
+                                  form.setValue('billingAddress', form.getValues('address'));
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
                         <FormControl>
-                          <Textarea placeholder="e.g., 123 Main St, City, Country" {...field} rows={2} />
+                          <Textarea
+                            placeholder="e.g., 123 Main St, City, Country"
+                            {...field}
+                            rows={2}
+                            disabled={sameAsAddress}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -335,14 +367,19 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
                   />
                 </div>
               </TabsContent>
-              <TabsContent value="financial" className="space-y-4 p-6 h-[450px] overflow-y-auto">
+              <TabsContent value="financial" className="space-y-4 p-6 h-[400px]">
                   <FormField
                     control={form.control}
                     name="paymentTerms"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Payment Terms</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select 
+                          open={isPaymentTermsSelectOpen} 
+                          onOpenChange={setIsPaymentTermsSelectOpen}
+                          onValueChange={field.onChange} 
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select Payment Terms" />
@@ -367,6 +404,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
                                     e.preventDefault();
                                     e.stopPropagation();
                                     setIsManagePaymentTermsOpen(true);
+                                    setIsPaymentTermsSelectOpen(false);
                                   }}
                                 >
                                   <PlusCircle className="mr-2 h-4 w-4" />

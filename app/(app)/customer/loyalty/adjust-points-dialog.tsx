@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Form,
@@ -32,6 +31,7 @@ import { getApiUrl } from '@/lib/api-config';
 
 interface CustomerWithLoyalty extends Customer {
   loyaltyPoints: number;
+  isExpired?: boolean;
 }
 
 const pointsSchema = z.object({
@@ -64,7 +64,7 @@ function AdjustPointsForm({
   const pointsForm = useForm<PointsFormValues>({
     resolver: zodResolver(pointsSchema),
     defaultValues: {
-      points: 0,
+      points: undefined,
       reason: '',
     },
   });
@@ -166,10 +166,11 @@ function AdjustPointsForm({
       const result = await response.json();
 
       if (result.success) {
+        const currentPoints = Number(customer.loyaltyPoints || 0);
         const newPoints =
           adjustmentType === 'add'
-            ? customer.loyaltyPoints + values.points
-            : customer.loyaltyPoints - values.points;
+            ? currentPoints + values.points
+            : currentPoints - values.points;
 
         // Update local customer state to reflect new points
         setCustomer({ ...customer, loyaltyPoints: newPoints });
@@ -225,10 +226,19 @@ function AdjustPointsForm({
         <div className="grid grid-cols-1 gap-3 py-4">
           {!hideAdjustments && (
             <>
+              {customer?.isExpired && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 font-bold flex items-center gap-3">
+                  <div className="bg-red-500 text-white p-1 rounded-full">
+                    <Minus className="w-4 h-4" />
+                  </div>
+                  <span>THIS LOYALTY CARD IS EXPIRED. ACTIONS DISABLED.</span>
+                </div>
+              )}
               <Button 
                 className="h-16 justify-between px-6 text-base font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 group transition-all"
                 variant="outline"
                 onClick={() => handleActionClick('add')}
+                disabled={customer?.isExpired}
               >
                 <div className="flex items-center gap-4">
                   <div className="p-2 bg-emerald-500 rounded-full text-white group-hover:scale-110 transition-transform">
@@ -243,6 +253,7 @@ function AdjustPointsForm({
                 className="h-16 justify-between px-6 text-base font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 group transition-all"
                 variant="outline"
                 onClick={() => handleActionClick('withdraw')}
+                disabled={customer?.isExpired}
               >
                 <div className="flex items-center gap-4">
                   <div className="p-2 bg-amber-500 rounded-full text-white group-hover:scale-110 transition-transform">
@@ -348,7 +359,9 @@ function AdjustPointsForm({
               {customer.loyaltyPoints}
             </div>
             <div className="text-sm text-blue-400 font-bold">LOYALTY POINTS</div>
-            <div className="text-xs text-slate-500 mt-2 font-mono">{customer.name}</div>
+            <div className="text-xs text-slate-500 mt-2 font-mono italic">
+              {customer.name} {customer.isExpired && "(EXPIRED)"}
+            </div>
           </div>
         </div>
 
@@ -398,8 +411,10 @@ function AdjustPointsForm({
                   <div className="relative">
                     <Input 
                       type="number" 
-                      className="text-2xl h-16 font-black pl-12 bg-white" 
+                      placeholder="Enter amount"
+                      className="text-2xl h-16 font-black pl-12 bg-white placeholder:text-slate-200 placeholder:font-normal" 
                       {...field} 
+                      value={field.value === undefined ? '' : field.value}
                       autoFocus
                     />
                     <Star className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-yellow-500 fill-yellow-500" />
@@ -452,14 +467,23 @@ function AdjustPointsForm({
 }
 
 
-export function AdjustPointsDialog({ customer, onFinished }: { customer: CustomerWithLoyalty; onFinished?: () => void; }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function AdjustPointsDialog({
+  customer,
+  onFinished,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: {
+  customer: CustomerWithLoyalty;
+  onFinished?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = openProp !== undefined;
+  const isOpen = isControlled ? openProp : internalOpen;
+  const setIsOpen = isControlled ? (onOpenChangeProp ?? setInternalOpen) : setInternalOpen;
   
   const handleDialogFinished = () => {
-    // If we want to autoclose, we can uncomment this
-    // setIsOpen(false); 
-    
-    // Instead, we just trigger the refresh callback but keep dialog open as per user flow in form
     if (onFinished) {
       onFinished();
     }
@@ -467,11 +491,6 @@ export function AdjustPointsDialog({ customer, onFinished }: { customer: Custome
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" title="Adjust Points" className="bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border-yellow-200">
-          <Star className="h-4 w-4 fill-yellow-400" />
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-3xl p-6 rounded-[2rem]">
         <AdjustPointsForm customer={customer} onFinished={handleDialogFinished} />
       </DialogContent>

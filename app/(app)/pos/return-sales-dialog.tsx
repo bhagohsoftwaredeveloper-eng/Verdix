@@ -399,7 +399,7 @@ export function ReturnSalesDialog({
                       })),
                       terminalId: terminalId || posSettings?.terminalId, 
                       userId: currentUser?.uid || currentUser?.id || null,
-                      reason: 'POS Return',
+                      reason: 'Merchandise Credit',
                       totalAmount
                   })
               });
@@ -434,6 +434,11 @@ export function ReturnSalesDialog({
   const handlePrintCredit = async () => {
       if (!selectedSale || returnedItems.length === 0) return;
 
+      const now = new Date();
+      const expiryDate = new Date(now);
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      const creditSlipId = `MC-${selectedSale.orderNumber || selectedSale.id.slice(-6)}-${format(now, 'yyMMddHHmm')}`.toUpperCase();
+
       if (printMode === 'browser') {
            handleBrowserPrint();
            return;
@@ -447,9 +452,11 @@ export function ReturnSalesDialog({
       try {
           const generator = new CreditSlipGenerator();
           const slipData: CreditSlipData = {
+              creditSlipId,
               originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
               customerName: selectedSale.customer?.name || 'Walk-in Customer',
-              date: new Date().toISOString(),
+              date: now.toISOString(),
+              expiryDate: expiryDate.toISOString(),
               cashierName: currentUser?.name || currentUser?.displayName || currentUser?.username || 'Cashier',
               items: returnedItems.map(item => ({
                   name: item.product.name,
@@ -463,7 +470,9 @@ export function ReturnSalesDialog({
                    businessName: posSettings?.businessName,
                    address: posSettings?.address,
                    contactNumber: posSettings?.contactNumber,
-                   tin: posSettings?.tin
+                   tin: posSettings?.tin,
+                   minNumber: posSettings?.minNumber,
+                   serialNumber: posSettings?.serialNumber
               }
           };
 
@@ -546,9 +555,11 @@ export function ReturnSalesDialog({
               <CreditSlipView
                   ref={creditSlipRef}
                   creditDetails={{
+                      creditSlipId: `MC-${selectedSale.orderNumber || selectedSale.id.slice(-6)}-${format(new Date(), 'yyMMddHHmm')}`.toUpperCase(),
                       originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
                       customerName: selectedSale.customer?.name || 'Walk-in Customer',
                       date: new Date().toISOString(),
+                      expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                       cashierName: currentUser?.name || currentUser?.displayName || currentUser?.username || 'Cashier',
                       items: returnedItems,
                       totalAmount: returnedTotal

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../lib/mysql';
+import { isLoyaltyCardExpired } from '../../../lib/loyalty-utils';
 
 // GET endpoint to fetch customers
 export async function GET(request: NextRequest) {
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
         c.sales_group AS salesGroup,
         COALESCE(cl.current_points, c.loyalty_points) AS loyaltyPoints,
         cl.current_points AS current_points,
+        cl.expiry_date AS expiryDate,
         c.payment_terms AS paymentTerms,
         c.address,
         c.billing_address AS billingAddress,
@@ -43,7 +45,12 @@ export async function GET(request: NextRequest) {
     sql += ' ORDER BY c.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
-    const customers = await query(sql, params);
+    const customersRaw: any[] = await query(sql, params);
+
+    const customers = customersRaw.map(c => ({
+      ...c,
+      isExpired: isLoyaltyCardExpired(c.expiryDate)
+    }));
 
     // Get total count for pagination
     let countSql = 'SELECT COUNT(*) as total FROM customers WHERE 1=1';

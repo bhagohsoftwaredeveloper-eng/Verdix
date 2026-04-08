@@ -60,7 +60,7 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
 
   const { toast } = useToast();
   const stockStatus =
-    product.stock === 0
+    product.stock <= 0
       ? 'out-of-stock'
       : product.stock < product.reorderPoint
         ? 'low-stock'
@@ -752,12 +752,15 @@ function ProductsContent() {
         )}
       </div>
 
-      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden">
-        <CardContent className="p-0">
+      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden flex flex-col h-full">
+        <CardContent className="p-0 overflow-hidden flex flex-col flex-1 relative">
         <TooltipProvider>
-          <Table className="text-xs">
-            <TableHeader>
-              <TableRow>
+          <Table 
+            className="text-xs" 
+            wrapperClassName="overflow-auto max-h-[calc(100vh-250px)]"
+          >
+            <TableHeader className="z-20">
+              <TableRow className="hover:bg-transparent border-b">
                 <TableHead className="w-12 hidden sm:table-cell"><span className="sr-only">Expand</span></TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="hidden md:table-cell">SKU</TableHead>
@@ -773,6 +776,7 @@ function ProductsContent() {
                   Actions
                 </TableHead>
               </TableRow>
+
             </TableHeader>
             <TableBody>
               {isLoadingProducts ? (
@@ -801,13 +805,15 @@ function ProductsContent() {
           </Table>
         </TooltipProvider>
 
-        {/* Pagination Controls */}
-        {!isLoadingProducts && totalProducts > 0 && (
-          <div className="flex items-center justify-between px-2 py-4">
+      </CardContent>
+      {/* Pagination Controls */}
+      <div className="border-t bg-card/50 backdrop-blur-sm mt-auto">
+        {totalProducts > 0 && (
+          <div className="flex items-center justify-between px-6 py-4">
             <div className="flex-1 text-sm text-muted-foreground">
               Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalProducts)} of {totalProducts} products
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-2">
                 <Label htmlFor="page-size" className="text-sm">Rows per page:</Label>
                 <Select
@@ -818,7 +824,7 @@ function ProductsContent() {
                     setCurrentPage(1); // Reset to first page when changing page size
                   }}
                 >
-                  <SelectTrigger className="w-20">
+                  <SelectTrigger className="w-20" id="page-size">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -838,9 +844,9 @@ function ProductsContent() {
                 >
                   Previous
                 </Button>
-                <span className="text-sm">
+                <div className="text-sm font-medium">
                   Page {currentPage} of {Math.ceil(totalProducts / pageSize)}
-                </span>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
@@ -853,7 +859,7 @@ function ProductsContent() {
             </div>
           </div>
         )}
-      </CardContent>
+      </div>
       </Card>
     </div>
   );

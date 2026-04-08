@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Warehouse } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlusCircle, Pencil, Trash2, Loader2, WarehouseIcon } from 'lucide-react';
+import { PlusCircle, Pencil, Trash2, Loader2, WarehouseIcon, MoreHorizontal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
 
@@ -124,6 +124,8 @@ export function WarehouseDialog({ warehouse, onSave, children, disabled, open, o
 
 function WarehouseRow({ warehouse, onUpdate, onDelete }: { warehouse: Warehouse, onUpdate: () => void, onDelete: () => void }) {
   const { toast } = useToast();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [dependencyInfo, setDependencyInfo] = useState<{
     products: number;
@@ -234,16 +236,48 @@ function WarehouseRow({ warehouse, onUpdate, onDelete }: { warehouse: Warehouse,
         <TableCell>{warehouse.isActive ? 'Yes' : 'No'}</TableCell>
         <TableCell>{warehouse.createdAt ? new Date(warehouse.createdAt).toLocaleDateString() : 'N/A'}</TableCell>
         <TableCell className="text-right">
-          <div className="flex justify-end gap-2">
-            <WarehouseDialog warehouse={warehouse} onSave={handleUpdate}>
-              <Button variant="outline" size="sm">
-                <Pencil className="mr-2 h-4 w-4" /> Edit
-              </Button>
-            </WarehouseDialog>
-            <Button variant="destructive" size="sm" onClick={handleDeleteClick}>
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
+          <div className="relative inline-block">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setIsMenuOpen((v) => !v)}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">Actions</span>
             </Button>
+            {isMenuOpen && (
+              <>
+                {/* backdrop to close menu */}
+                <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)} />
+                <div className="absolute right-0 top-9 z-50 min-w-[120px] rounded-md border bg-popover shadow-md text-sm">
+                  <button
+                    className="flex items-center gap-2 w-full px-3 py-2 hover:bg-muted rounded-t-md"
+                    onClick={() => { setIsMenuOpen(false); setIsEditOpen(true); }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
+                  <button
+                    className="flex items-center gap-2 w-full px-3 py-2 text-destructive hover:bg-destructive/10 rounded-b-md"
+                    onClick={() => { setIsMenuOpen(false); handleDeleteClick(); }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
           </div>
+          {/* Edit dialog controlled externally */}
+          <WarehouseDialog
+            warehouse={warehouse}
+            onSave={handleUpdate}
+            open={isEditOpen}
+            onOpenChange={setIsEditOpen}
+          >
+            <span />
+          </WarehouseDialog>
         </TableCell>
       </TableRow>
 

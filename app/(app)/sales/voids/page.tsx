@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Card,
   CardContent,
@@ -62,6 +63,7 @@ export default function VoidedSalesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   // Filter records based on search term
@@ -69,13 +71,13 @@ export default function VoidedSalesPage() {
     if (!searchTerm.trim()) return true;
     const search = searchTerm.toLowerCase();
     return (
-      record.refNo?.toLowerCase().includes(search) ||
-      record.siNo?.toLowerCase().includes(search) ||
-      record.customer?.toLowerCase().includes(search) ||
-      record.cashier?.toLowerCase().includes(search) ||
-      record.voidedBy?.toLowerCase().includes(search) ||
-      record.overrideBy?.toLowerCase().includes(search) ||
-      record.note?.toLowerCase().includes(search)
+      String(record.refNo || '').toLowerCase().includes(search) ||
+      String(record.siNo || '').toLowerCase().includes(search) ||
+      String(record.customer || '').toLowerCase().includes(search) ||
+      String(record.cashier || '').toLowerCase().includes(search) ||
+      String(record.voidedBy || '').toLowerCase().includes(search) ||
+      String(record.overrideBy || '').toLowerCase().includes(search) ||
+      String(record.note || '').toLowerCase().includes(search)
     );
   });
 
@@ -97,6 +99,16 @@ export default function VoidedSalesPage() {
     profit: records.reduce((sum, r) => sum + r.profit, 0),
     vatableSales: records.reduce((sum, r) => sum + r.vatableSales, 0),
     vatAmount: records.reduce((sum, r) => sum + r.vatAmount, 0),
+  };
+
+  const toggleSelectRow = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
   };
 
   const fetchReport = async () => {
@@ -125,6 +137,10 @@ export default function VoidedSalesPage() {
   useEffect(() => {
     fetchReport();
   }, []);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentPage, pageSize, searchTerm]);
 
   const exportToPDF = () => {
     if (records.length === 0) {
@@ -471,7 +487,7 @@ export default function VoidedSalesPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className={viewMode === 'table' ? 'p-0' : 'pt-0'}>
+        <CardContent className={viewMode === 'table' ? 'p-0 pb-0' : 'pt-0'}>
           {viewMode === 'card' ? (
             /* Card View */
             paginatedRecords.length > 0 ? (
@@ -572,76 +588,85 @@ export default function VoidedSalesPage() {
               </div>
             )
           ) : (
-          <Table className="w-full text-sm">
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="py-2 px-3">Ref No.</TableHead>
-                <TableHead className="py-2 px-2">Date</TableHead>
-                <TableHead className="py-2 px-2">Customer</TableHead>
-                <TableHead className="py-2 px-2">Cashier</TableHead>
-                <TableHead className="py-2 px-2">Void Info</TableHead>
-                <TableHead className="py-2 px-2 text-right">Amount</TableHead>
-                <TableHead className="py-2 px-2 text-right">Cost</TableHead>
-                <TableHead className="py-2 px-2 text-right">Profit</TableHead>
-                <TableHead className="py-2 px-2 text-right">Vatable</TableHead>
-                <TableHead className="py-2 px-2 text-right">VAT</TableHead>
-                <TableHead className="py-2 px-2">Note</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className="relative overflow-auto max-h-[600px] border-b">
+            <Table className="w-full text-sm">
+              <TableHeader className="sticky top-0 z-10 bg-background shadow-sm hover:bg-muted/50">
+                <TableRow className="bg-muted/50 border-b">
+                  <TableHead className="py-2 px-3 w-[50px]"></TableHead>
+                  <TableHead className="py-2 px-3 whitespace-nowrap">Ref No.</TableHead>
+                  <TableHead className="py-2 px-2 whitespace-nowrap">Date</TableHead>
+                  <TableHead className="py-2 px-2 whitespace-nowrap">Customer</TableHead>
+                  <TableHead className="py-2 px-2 whitespace-nowrap">Cashier</TableHead>
+                  <TableHead className="py-2 px-2 whitespace-nowrap">Void Info</TableHead>
+                  <TableHead className="py-2 px-2 text-right whitespace-nowrap">Amount</TableHead>
+                  <TableHead className="py-2 px-2 text-right whitespace-nowrap">Cost</TableHead>
+                  <TableHead className="py-2 px-2 text-right whitespace-nowrap">Profit</TableHead>
+                  <TableHead className="py-2 px-2 text-right whitespace-nowrap">Vatable</TableHead>
+                  <TableHead className="py-2 px-2 text-right whitespace-nowrap">VAT</TableHead>
+                  <TableHead className="py-2 px-2 whitespace-nowrap">Note</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {paginatedRecords.length > 0 ? (
                 paginatedRecords.map((record, index) => (
-                  <TableRow 
-                    key={index}
-                    className={cn(
-                      "cursor-pointer hover:bg-muted/50 transition-colors text-xs",
-                      selectedRow === index && "bg-muted"
-                    )}
-                    onClick={() => setSelectedRow(index)}
-                  >
-                    <TableCell className="py-2 px-3">
-                      <div className="font-medium text-primary leading-tight">{record.refNo}</div>
-                      <div className="text-[10px] text-muted-foreground">{record.siNo}</div>
-                    </TableCell>
-                    <TableCell className="py-2 px-2">
-                      {record.transDate ? format(new Date(record.transDate), 'MM/dd/yy') : '-'}
-                    </TableCell>
-                    <TableCell className="py-2 px-2 max-w-[100px] truncate" title={record.customer}>
-                      {record.customer}
-                    </TableCell>
-                    <TableCell className="py-2 px-2">{record.cashier || '-'}</TableCell>
-                    <TableCell className="py-2 px-2">
-                      <div className="leading-tight">
-                        <div>{record.voidDate ? format(new Date(record.voidDate), 'MM/dd/yy') : '-'}</div>
-                        <div className="text-[10px] text-muted-foreground">{record.voidedBy || '-'}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-2 px-2 text-right font-mono">
-                      {record.salesAmount.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="py-2 px-2 text-right font-mono text-muted-foreground">
-                      {record.cost.toFixed(2)}
-                    </TableCell>
-                    <TableCell className={cn(
-                      "py-2 px-2 text-right font-mono",
-                      record.profit >= 0 ? "text-green-600" : "text-red-600"
-                    )}>
-                      {record.profit.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="py-2 px-2 text-right font-mono">
-                      {record.vatableSales.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="py-2 px-2 text-right font-mono">
-                      {record.vatAmount.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="py-2 px-2 max-w-[80px] truncate text-muted-foreground" title={record.note || '-'}>
-                      {record.note || '-'}
-                    </TableCell>
-                  </TableRow>
+                    <TableRow 
+                      key={index}
+                      className={cn(
+                        "cursor-pointer hover:bg-muted/50 transition-colors text-xs",
+                        (selectedRow === index || selectedIds.has(record.refNo)) && "bg-muted"
+                      )}
+                      onClick={() => setSelectedRow(index)}
+                    >
+                      <TableCell className="py-2 px-3">
+                        <Checkbox 
+                          checked={selectedIds.has(record.refNo)}
+                          onCheckedChange={() => toggleSelectRow(record.refNo)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </TableCell>
+                      <TableCell className="py-2 px-3">
+                        <div className="font-medium text-primary leading-tight">{record.refNo}</div>
+                        <div className="text-[10px] text-muted-foreground">{record.siNo}</div>
+                      </TableCell>
+                      <TableCell className="py-2 px-2">
+                        {record.transDate ? format(new Date(record.transDate), 'MM/dd/yy') : '-'}
+                      </TableCell>
+                      <TableCell className="py-2 px-2 max-w-[100px] truncate" title={record.customer}>
+                        {record.customer}
+                      </TableCell>
+                      <TableCell className="py-2 px-2">{record.cashier || '-'}</TableCell>
+                      <TableCell className="py-2 px-2">
+                        <div className="leading-tight">
+                          <div>{record.voidDate ? format(new Date(record.voidDate), 'MM/dd/yy') : '-'}</div>
+                          <div className="text-[10px] text-muted-foreground">{record.voidedBy || '-'}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-right font-mono">
+                        {record.salesAmount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-right font-mono text-muted-foreground">
+                        {record.cost.toFixed(2)}
+                      </TableCell>
+                      <TableCell className={cn(
+                        "py-2 px-2 text-right font-mono",
+                        record.profit >= 0 ? "text-green-600" : "text-red-600"
+                      )}>
+                        {record.profit.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-right font-mono">
+                        {record.vatableSales.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="py-2 px-2 text-right font-mono">
+                        {record.vatAmount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="py-2 px-2 max-w-[80px] truncate text-muted-foreground" title={record.note || '-'}>
+                        {record.note || '-'}
+                      </TableCell>
+                    </TableRow>
                 ))
               ) : (
-                <TableRow>
-                  <TableCell colSpan={11} className="h-24 text-center">
+                  <TableRow>
+                    <TableCell colSpan={12} className="h-24 text-center">
                     {isLoading ? (
                       <div className="flex items-center justify-center gap-2">
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
@@ -657,6 +682,7 @@ export default function VoidedSalesPage() {
               )}
             </TableBody>
           </Table>
+          </div>
           )}
           
           {/* Pagination Controls */}

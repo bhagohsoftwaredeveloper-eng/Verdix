@@ -70,7 +70,7 @@ export default function SalesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const limit = 10; // Number of items per page
+  const [limit, setLimit] = useState(10); // Number of items per page
 
   // Filter states
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
@@ -151,12 +151,12 @@ export default function SalesPage() {
 
   useEffect(() => {
     fetchSales(currentPage);
-  }, [dateRange, terminalId, currentPage]);
+  }, [dateRange, terminalId, currentPage, limit]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
       setCurrentPage(1);
-  }, [dateRange, terminalId]);
+  }, [dateRange, terminalId, limit]);
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -873,20 +873,20 @@ export default function SalesPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto border rounded-md">
-            <Table className="text-xs">
-              <TableHeader>
-                <TableRow className="bg-primary hover:bg-primary">
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 w-8"></TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2">SO No.</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2">Receipt No.</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2">Date</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2">Terminal</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2">Cashier</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2">Customer</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 text-right">Sales Amount</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2">Payment Type</TableHead>
-                  <TableHead className="text-primary-foreground font-semibold py-2 px-2">Payment Status</TableHead>
+            <div className="border rounded-md overflow-hidden">
+              <Table className="text-xs" wrapperClassName="max-h-[500px] overflow-auto">
+              <TableHeader className="sticky top-0 z-20 bg-primary">
+                <TableRow className="bg-primary hover:bg-primary border-0">
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 w-8 bg-primary sticky top-0"></TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 bg-primary sticky top-0">SO No.</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 bg-primary sticky top-0">Receipt No.</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 bg-primary sticky top-0">Date</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 bg-primary sticky top-0">Terminal</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 bg-primary sticky top-0">Cashier</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 bg-primary sticky top-0">Customer</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 text-right bg-primary sticky top-0">Sales Amount</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 bg-primary sticky top-0">Payment Type</TableHead>
+                  <TableHead className="text-primary-foreground font-semibold py-2 px-2 bg-primary sticky top-0 pr-4">Payment Status</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -1011,8 +1011,26 @@ export default function SalesPage() {
 
             {/* Pagination Controls */}
             {!isLoading && sales.length > 0 && (
-                <div className="mt-4">
-                    <Pagination>
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mr-auto sm:mr-0 whitespace-nowrap">
+                        <Label htmlFor="rows-per-page" className="text-sm font-normal">Rows per page:</Label>
+                        <Select
+                            value={limit.toString()}
+                            onValueChange={(val) => setLimit(Number(val))}
+                        >
+                            <SelectTrigger id="rows-per-page" className="h-8 w-[70px]">
+                                <SelectValue placeholder={limit.toString()} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="10">10</SelectItem>
+                                <SelectItem value="20">20</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                                <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Pagination className="justify-center sm:justify-end">
                         <PaginationContent>
                             <PaginationItem>
                                 <PaginationPrevious

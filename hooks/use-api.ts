@@ -274,7 +274,7 @@ export interface UsePurchaseOrdersResult {
   };
 }
 
-export function usePurchaseOrders(search?: string, status?: string, page: number = 1, limit: number = 10): UsePurchaseOrdersResult {
+export function usePurchaseOrders(search?: string, status?: string, page: number = 1, limit: number = 10, startDate?: string, endDate?: string, supplierId?: string): UsePurchaseOrdersResult {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [pagination, setPagination] = useState({ total: 0, limit: 10, offset: 0, hasMore: false });
   const [loading, setLoading] = useState(true);
@@ -290,8 +290,17 @@ export function usePurchaseOrders(search?: string, status?: string, page: number
       if (search) {
         params.append('search', search);
       }
-      if (status) {
+      if (status && status !== 'all') {
         params.append('status', status);
+      }
+      if (supplierId && supplierId !== 'all') {
+        params.append('supplierId', supplierId);
+      }
+      if (startDate) {
+        params.append('startDate', startDate);
+      }
+      if (endDate) {
+        params.append('endDate', endDate);
       }
       params.append('limit', limit.toString());
       params.append('offset', offset.toString());
@@ -319,7 +328,7 @@ export function usePurchaseOrders(search?: string, status?: string, page: number
 
   useEffect(() => {
     fetchPurchaseOrders();
-  }, [search, status, page, limit]);
+  }, [search, status, page, limit, startDate, endDate, supplierId]);
 
   const refetch = () => {
     fetchPurchaseOrders();
@@ -411,7 +420,7 @@ export function useBadOrders(search?: string, status?: string, page: number = 1,
       if (search) {
         params.append('search', search);
       }
-      if (status) {
+      if (status && status !== 'all') {
         params.append('status', status);
       }
       params.append('limit', limit.toString());

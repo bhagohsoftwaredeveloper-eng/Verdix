@@ -16,10 +16,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search } from 'lucide-react';
+import { Search, MoreHorizontal, Edit, Star, History, Trash2 } from 'lucide-react';
 import {
   Pagination,
   PaginationContent,
@@ -38,7 +46,6 @@ import { AddLoyaltyCardDialog } from './add-loyalty-card-dialog';
 import { PointsHistoryDialog } from './points-history-dialog';
 import { EditLoyaltyCardDialog } from './edit-loyalty-card-dialog';
 import { DeleteLoyaltyCardDialog } from './delete-loyalty-card-dialog';
-import { Plus } from 'lucide-react';
 
 
 interface CustomerWithLoyalty {
@@ -54,6 +61,7 @@ interface CustomerWithLoyalty {
   last_transaction: string | null;
   created_at: string;
   updated_at: string;
+  isExpired: boolean;
 }
 
 function CustomerRow({ customer, onRefresh }: { customer: CustomerWithLoyalty; onRefresh: (silent?: boolean) => void }) {
@@ -61,7 +69,12 @@ function CustomerRow({ customer, onRefresh }: { customer: CustomerWithLoyalty; o
         if (!name) return '??';
         const names = name.split(' ');
         return names.map(n => n[0]).join('').toUpperCase();
-    }
+    };
+
+    const [editOpen, setEditOpen] = useState(false);
+    const [adjustOpen, setAdjustOpen] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
 
     // Map to the interface expected by AdjustPointsDialog
     const mappedCustomerForAdjust = {
@@ -69,42 +82,102 @@ function CustomerRow({ customer, onRefresh }: { customer: CustomerWithLoyalty; o
       name: customer.name,
       contactNumber: customer.contact_number,
       paymentTerms: customer.payment_terms || '',
-      loyaltyPoints: customer.loyaltyPoints
+      loyaltyPoints: Number(customer.loyaltyPoints || 0),
+      isExpired: customer.isExpired
     };
 
   return (
-    <TableRow>
-      <TableCell className="font-medium">{customer.customer_id}</TableCell>
-      <TableCell>
-        <div className="flex items-center gap-4">
-            <Avatar>
-                <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
-            </Avatar>
-            <div>
-                <div className="font-medium">{customer.name}</div>
-                <div className="text-sm text-muted-foreground">{customer.contact_number}</div>
-            </div>
-        </div>
-      </TableCell>
-      <TableCell className="text-center text-sm font-mono text-muted-foreground">
-        {customer.rfid_code || '-'}
-      </TableCell>
-      <TableCell className="text-center font-semibold text-lg text-primary">
-        {customer.loyaltyPoints}
-      </TableCell>
-      <TableCell className="text-center">{customer.point_setting || 'Not set'}</TableCell>
-      <TableCell className="text-center">
-        {customer.expiry_date ? format(new Date(customer.expiry_date), 'PP') : 'No expiry'}
-      </TableCell>
-      <TableCell className="text-right">
-        <div className="flex gap-2 justify-end">
-          <EditLoyaltyCardDialog customer={customer} onSuccess={() => onRefresh()} />
-          <AdjustPointsDialog customer={mappedCustomerForAdjust} onFinished={() => onRefresh(true)} />
-          <PointsHistoryDialog customerLoyaltyId={customer.id} customerName={customer.name} />
-          <DeleteLoyaltyCardDialog customer={customer} onSuccess={onRefresh} />
-        </div>
-      </TableCell>
-    </TableRow>
+    <>
+      <TableRow>
+        <TableCell className="font-medium">{customer.customer_id}</TableCell>
+        <TableCell>
+          <div className="flex items-center gap-4">
+              <Avatar>
+                  <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
+              </Avatar>
+              <div>
+                  <div className="font-medium">{customer.name}</div>
+                  <div className="text-sm text-muted-foreground">{customer.contact_number}</div>
+              </div>
+          </div>
+        </TableCell>
+        <TableCell className="text-center text-sm font-mono text-muted-foreground">
+          {customer.rfid_code || '-'}
+        </TableCell>
+        <TableCell className="text-center font-semibold text-lg text-primary">
+          {customer.loyaltyPoints}
+        </TableCell>
+        <TableCell className="text-center">{customer.point_setting || 'Not set'}</TableCell>
+        <TableCell className="text-center">
+          {(() => {
+            if (!customer.expiry_date) return 'No expiry';
+            const dateStr = customer.expiry_date.includes('T') || customer.expiry_date.includes(' ') 
+              ? customer.expiry_date 
+              : `${customer.expiry_date}T00:00:00`;
+            const date = new Date(dateStr);
+            return isNaN(date.getTime()) ? 'Invalid Date' : format(date, 'PP');
+          })()}
+        </TableCell>
+        <TableCell className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit Loyalty Card
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAdjustOpen(true)}>
+                <Star className="mr-2 h-4 w-4" />
+                Adjust Points
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setHistoryOpen(true)}>
+                <History className="mr-2 h-4 w-4" />
+                View History
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setDeleteOpen(true)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
+      </TableRow>
+
+      {/* Controlled dialogs rendered outside the table row to avoid nesting issues */}
+      <EditLoyaltyCardDialog
+        customer={customer}
+        onSuccess={() => onRefresh()}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <AdjustPointsDialog
+        customer={mappedCustomerForAdjust}
+        onFinished={() => onRefresh(true)}
+        open={adjustOpen}
+        onOpenChange={setAdjustOpen}
+      />
+      <PointsHistoryDialog
+        customerLoyaltyId={customer.id}
+        customerName={customer.name}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
+      <DeleteLoyaltyCardDialog
+        customer={customer}
+        onSuccess={onRefresh}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
+    </>
   );
 }
 
@@ -207,8 +280,9 @@ export default function CustomerLoyaltyPage() {
         </div>
       </CardHeader>
       <CardContent>
+        <div className="relative overflow-auto rounded-md border" style={{ maxHeight: '60vh' }}>
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Code</TableHead>
               <TableHead>Customer Name</TableHead>
@@ -234,6 +308,7 @@ export default function CustomerLoyaltyPage() {
             )}
           </TableBody>
         </Table>
+        </div>
 
         {/* Pagination */}
         {totalPages > 1 && (

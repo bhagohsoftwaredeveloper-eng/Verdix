@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../lib/mysql';
+import { isLoyaltyCardExpired } from '../../../lib/loyalty-utils';
 
 // GET endpoint to fetch customer loyalty data
 export async function GET(request: NextRequest) {
@@ -39,8 +40,14 @@ export async function GET(request: NextRequest) {
     params.push(limit, offset);
 
     console.log('Executing query:', sql, params);
-    const customers = await query(sql, params);
-    console.log('Query result:', customers);
+    const customersRaw: any[] = await query(sql, params);
+    console.log('Query result:', customersRaw);
+
+    // Add isExpired flag
+    const customers = customersRaw.map(c => ({
+      ...c,
+      isExpired: isLoyaltyCardExpired(c.expiry_date)
+    }));
 
     // Get total count for pagination
     let countSql = `
@@ -106,6 +113,26 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'Customer not found' },
         { status: 404 }
       );
+    }
+
+    // Check if RFID code is already assigned to another customer
+    if (rfidCode) {
+      const rfidCheckSql = `
+        SELECT cl.id, c.name 
+        FROM customer_loyalty cl
+        JOIN customers c ON cl.customer_id = c.id
+        WHERE cl.rfid_code = ? AND cl.customer_id != ?
+      `;
+      const rfidCheck = await query(rfidCheckSql, [rfidCode, customerId]);
+      if (rfidCheck.length > 0) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: `RFID card ${rfidCode} is already assigned to customer ${rfidCheck[0].name}.` 
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Check if loyalty record already exists

@@ -22,7 +22,16 @@ export type SupplierWithBalance = {
   orderSchedule?: string;
 };
 
-export async function getSuppliersWithBalance(search?: string): Promise<SupplierWithBalance[]> {
+export type SupplierFilters = {
+  paymentTerms?: string;
+  orderSchedule?: string;
+  company?: string;
+  hasBalance?: boolean;
+  minBalance?: number;
+  maxBalance?: number;
+};
+
+export async function getSuppliersWithBalance(search?: string, filters?: SupplierFilters): Promise<SupplierWithBalance[]> {
   try {
     let sql = `
       SELECT 
@@ -43,11 +52,44 @@ export async function getSuppliersWithBalance(search?: string): Promise<Supplier
     const params: any[] = [];
 
     if (search) {
-      sql += ` AND s.name LIKE ?`;
-      params.push(`%${search}%`);
+      sql += ` AND (s.name LIKE ? OR s.company LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`);
     }
 
-    sql += ` GROUP BY s.id ORDER BY s.name ASC`;
+    if (filters?.paymentTerms) {
+      sql += ` AND s.payment_terms = ?`;
+      params.push(filters.paymentTerms);
+    }
+
+    if (filters?.orderSchedule) {
+      sql += ` AND s.order_schedule LIKE ?`;
+      params.push(`%${filters.orderSchedule}%`);
+    }
+
+    if (filters?.company) {
+      sql += ` AND s.company LIKE ?`;
+      params.push(`%${filters.company}%`);
+    }
+
+    sql += ` GROUP BY s.id`;
+
+    // Filter by balance if requested
+    if (filters?.hasBalance || filters?.minBalance !== undefined || filters?.maxBalance !== undefined) {
+        sql = `SELECT * FROM (${sql}) as t WHERE 1=1`;
+        if (filters.hasBalance) {
+            sql += ` AND (total_purchases - total_payments) > 0`;
+        }
+        if (filters.minBalance !== undefined) {
+            sql += ` AND (total_purchases - total_payments) >= ?`;
+            params.push(filters.minBalance);
+        }
+        if (filters.maxBalance !== undefined) {
+            sql += ` AND (total_purchases - total_payments) <= ?`;
+            params.push(filters.maxBalance);
+        }
+    }
+
+    sql += ` ORDER BY name ASC`;
 
     const rows = await query(sql, params);
 
@@ -225,28 +267,60 @@ export async function getUnpaidPurchaseOrders(supplierId: string) {
   }
 }
 
-export async function getSupplierPayments(searchTerm?: string) {
+export async function getSupplierPayments(options: {
+  searchTerm?: string;
+  page?: number;
+  limit?: number;
+  from?: string;
+  to?: string;
+  paymentMethod?: string;
+} = {}) {
   try {
+    const { searchTerm, page = 1, limit = 10, from, to, paymentMethod } = options;
+    const offset = (page - 1) * limit;
+
     let sql = `
       SELECT 
         sp.*,
         s.name as supplier_name
       FROM supplier_payments sp
       JOIN suppliers s ON sp.supplier_id = s.id
+      WHERE 1=1
     `;
     
     const params: any[] = [];
 
     if (searchTerm) {
-      sql += ` WHERE s.name LIKE ? OR sp.reference LIKE ?`;
+      sql += ` AND (s.name LIKE ? OR sp.reference LIKE ?)`;
       params.push(`%${searchTerm}%`, `%${searchTerm}%`);
     }
 
-    sql += ` ORDER BY sp.date DESC, sp.created_at DESC`;
+    if (from) {
+      sql += ` AND sp.date >= ?`;
+      params.push(from);
+    }
+
+    if (to) {
+      sql += ` AND sp.date <= ?`;
+      params.push(to);
+    }
+
+    if (paymentMethod && paymentMethod !== 'All') {
+      sql += ` AND sp.payment_method = ?`;
+      params.push(paymentMethod);
+    }
+
+    // Get total count
+    const countSql = `SELECT COUNT(*) as total FROM (${sql}) as sub`;
+    const countResult: any = await query(countSql, params);
+    const total = countResult[0]?.total || 0;
+
+    sql += ` ORDER BY sp.date DESC, sp.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
 
     const payments = await query(sql, params);
 
-    return payments.map((p: any) => ({
+    const data = payments.map((p: any) => ({
       id: p.id,
       supplierId: p.supplier_id,
       supplierName: p.supplier_name,
@@ -257,9 +331,20 @@ export async function getSupplierPayments(searchTerm?: string) {
       notes: p.notes,
       createdAt: p.created_at
     }));
+
+    return {
+      success: true,
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
   } catch (error) {
     console.error('Error fetching supplier payments:', error);
-    return [];
+    return { success: false, data: [], error: 'Failed to fetch payments' };
   }
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../../lib/mysql';
+import { isLoyaltyCardExpired } from '../../../../lib/loyalty-utils';
 
 // POST endpoint to adjust customer loyalty points
 export async function POST(request: NextRequest) {
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     // Check if customer loyalty record exists
     const loyaltyCheck = await query(
-      'SELECT id, current_points FROM customer_loyalty WHERE customer_id = ?',
+      'SELECT id, current_points, expiry_date FROM customer_loyalty WHERE customer_id = ?',
       [customerId]
     );
 
@@ -50,7 +51,15 @@ export async function POST(request: NextRequest) {
     }
 
     const loyaltyRecord = loyaltyCheck[0];
-    const currentPoints = loyaltyRecord.current_points || 0;
+
+    // Check for expiration
+    if (isLoyaltyCardExpired(loyaltyRecord.expiry_date)) {
+      return NextResponse.json(
+        { success: false, error: 'Loyalty card is expired. Points cannot be adjusted.' },
+        { status: 400 }
+      );
+    }
+    const currentPoints = Number(loyaltyRecord.current_points || 0);
     const adjustmentPoints = adjustmentType === 'add' ? points : -points;
     const newPoints = currentPoints + adjustmentPoints;
 

@@ -158,8 +158,15 @@ function SubcategoryRow({ subcategory, onSubcategoryUpdated, onSubcategoryDelete
               <span className="sr-only">Edit</span>
             </Button>
           </SubcategoryDialog>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 text-muted-foreground transition-colors hover:text-destructive" />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 hover:bg-muted" 
+            onClick={handleDelete}
+            disabled={subcategory.productCount !== undefined && subcategory.productCount > 0}
+            title={subcategory.productCount !== undefined && subcategory.productCount > 0 ? "Cannot delete subcategory with products assigned" : "Delete subcategory"}
+          >
+            <Trash2 className={`h-4 w-4 ${subcategory.productCount !== undefined && subcategory.productCount > 0 ? 'text-muted-foreground/50' : 'text-muted-foreground transition-colors hover:text-destructive'}`} />
             <span className="sr-only">Delete</span>
           </Button>
         </div>
@@ -184,10 +191,14 @@ function SubcategorySkeleton() {
   );
 }
 
-export function ManageSubcategoriesDialog({ trigger, onSubcategoryAdded }: { trigger?: React.ReactNode; onSubcategoryAdded?: () => void }) {
+export function ManageSubcategoriesDialog({ trigger, onSubcategoryAdded, open, onOpenChange }: { trigger?: React.ReactNode; onSubcategoryAdded?: () => void; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const [subcategories, setSubcategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const loadSubcategories = async () => {
     const subs = await getSubcategories();
@@ -215,6 +226,7 @@ export function ManageSubcategoriesDialog({ trigger, onSubcategoryAdded }: { tri
     loadSubcategories();
   };
 
+  const showTrigger = trigger !== null;
   const dialogTrigger = trigger || (
     <Button variant="outline">
       <ListTree className="mr-2 h-4 w-4" />
@@ -223,11 +235,13 @@ export function ManageSubcategoriesDialog({ trigger, onSubcategoryAdded }: { tri
   );
 
   return (
-     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {dialogTrigger}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-3xl">
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {showTrigger && (
+        <DialogTrigger asChild>
+          {dialogTrigger}
+        </DialogTrigger>
+      )}
+      <DialogContent className="sm:max-w-3xl !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
         <DialogHeader>
           <DialogTitle>Manage Subcategories</DialogTitle>
           <DialogDescription>

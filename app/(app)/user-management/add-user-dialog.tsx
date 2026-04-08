@@ -38,6 +38,7 @@ import { ALL_PERMISSIONS } from './permissions';
 import { getApiUrl } from '@/lib/api-config';
 
 const formSchema = z.object({
+  fullName: z.string().min(1, 'Full name is required'),
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(6, 'Password must be at least 6 characters long'),
   userType: z.enum(['Admin', 'Staff', 'Cashier', 'User']),
@@ -54,10 +55,11 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      username: 'admin',
-      password: '123700',
-      userType: 'Admin',
-      permissions: [],
+      fullName: '',
+      username: '',
+      password: '',
+      userType: 'User',
+      permissions: ['view_dashboard'],
     },
   });
 
@@ -65,18 +67,32 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
   const watchedUserType = form.watch('userType');
 
   useEffect(() => {
-    if (watchedUserType === 'Cashier') {
+    if (watchedUserType === 'Admin') {
+      form.setValue('permissions', ALL_PERMISSIONS.map(p => p.id));
+    } else if (watchedUserType === 'Staff') {
+      form.setValue('permissions', [
+        'view_dashboard',
+        'manage_products',
+        'manage_inventory',
+        'view_sales',
+        'manage_customers',
+        'manage_suppliers',
+        'view_reports'
+      ]);
+    } else if (watchedUserType === 'Cashier') {
       form.setValue('permissions', ['access_pos']);
+    } else if (watchedUserType === 'User') {
+      form.setValue('permissions', ['view_dashboard']);
     }
   }, [watchedUserType, form]);
 
-  async function createUser(username: string, password: string, userType: string, permissions: string[]) {
+  async function createUser(fullName: string, username: string, password: string, userType: string, permissions: string[]) {
     try {
       const permissionsToSend = permissions.includes('super_admin')
         ? ['super_admin']
         : permissions;
 
-      console.log('Creating user with:', { username, password, permissions: permissionsToSend });
+      console.log('Creating user with:', { fullName, username, password, permissions: permissionsToSend });
       // Call the API to create user
       const response = await fetch(getApiUrl('/users'), {
         method: 'POST',
@@ -84,6 +100,7 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          displayName: fullName,
           username,
           email: username, // Send both for compatibility
           password,
@@ -100,7 +117,7 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
 
       toast({
         title: 'User Created',
-        description: `User ${username} has been created successfully.`,
+        description: `User ${fullName} (${username}) has been created successfully.`,
       });
       onUserAdded(); // Callback to refresh the user list
       setIsOpen(false);
@@ -116,7 +133,7 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
   }
 
   async function onSubmit(values: FormValues) {
-    await createUser(values.username, values.password, values.userType, values.permissions);
+    await createUser(values.fullName, values.username, values.password, values.userType, values.permissions);
   }
 
   return (
@@ -139,12 +156,25 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
             <div className="space-y-4">
               <FormField
                 control={form.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full Name</FormLabel>
+                    <FormControl>
+                      <Input type="text" placeholder="John Doe" {...field} value={field.value ?? ''} className="bg-white" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="username"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Username</FormLabel>
                     <FormControl>
-                      <Input type="text" placeholder="username" {...field} className="bg-white" />
+                      <Input type="text" placeholder="username" {...field} value={field.value ?? ''} className="bg-white" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -180,7 +210,7 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} className="bg-white" />
+                      <Input type="password" {...field} value={field.value ?? ''} className="bg-white" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

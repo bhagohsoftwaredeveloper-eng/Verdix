@@ -817,10 +817,10 @@ export default function InventoryPage() {
             ))}
           </div>
         ) : (
-          <div className="rounded-md border">
-            <Table>
+          <div className="rounded-md border overflow-hidden">
+            <Table wrapperClassName="overflow-auto max-h-[calc(100vh-300px)]">
               <TableHeader>
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[300px]">Product Name</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Stock</TableHead>

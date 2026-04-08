@@ -197,16 +197,17 @@ export default function AdjustmentHistoryPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Quantity</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead className="text-right">Resulting Stock</TableHead>
-            </TableRow>
-          </TableHeader>
+        <div className="rounded-md border overflow-hidden">
+          <Table wrapperClassName="overflow-auto max-h-[calc(100vh-280px)]">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Product</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Quantity</TableHead>
+                <TableHead>Reason</TableHead>
+                <TableHead className="text-right">Resulting Stock</TableHead>
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {isLoading && Array.from({ length: 5 }).map((_, i) => <AdjustmentSkeleton key={i} />)}
             {!isLoading && paginatedAdjustments.length > 0 ? (
@@ -223,7 +224,8 @@ export default function AdjustmentHistoryPage() {
               )
             )}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
         <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-muted-foreground">
             Showing {filteredAdjustments.length === 0 ? 0 : ((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, filteredAdjustments.length)} of {filteredAdjustments.length} entries

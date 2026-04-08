@@ -143,7 +143,7 @@ export default function FastSlowMovingReportPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="print:px-0 px-0">
-                <div className="rounded-md border mb-4">
+                <div className="rounded-md border mb-4 print:border-none print:overflow-visible">
                     <Table>
                     <TableHeader>
                         <TableRow>

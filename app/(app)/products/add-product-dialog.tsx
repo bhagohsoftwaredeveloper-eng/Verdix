@@ -149,6 +149,26 @@ export function AddProductDialog({
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
 
+  const [dialogs, setDialogs] = useState({
+    categories: false,
+    brands: false,
+    subcategories: false,
+    suppliers: false,
+    warehouses: false,
+    shelfLocations: false,
+    units: false,
+  });
+  
+  const [selects, setSelects] = useState({
+    categories: false,
+    brands: false,
+    subcategories: false,
+    suppliers: false,
+    warehouses: false,
+    shelfLocations: false,
+    units: false,
+  });
+
 
 
 
@@ -553,7 +573,7 @@ export function AddProductDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
+        <Button size="sm" className="shadow-lg shadow-black/30">
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Product
         </Button>
@@ -627,36 +647,51 @@ export function AddProductDialog({
                         control={form.control}
                         name="brand"
                         render={({ field }) => (
-                            <FormItem className="col-span-2 sm:col-span-1">
-                              <FormLabel>Brand</FormLabel>
-                              <div className="flex gap-2">
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a brand" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {isLoadingBrands ? (
-                                      <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                    ) : (
-                                      brands?.map((brand: Brand) => <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>)
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                                <ManageBrandsDialog 
-                                  onBrandAdded={() => {
-                                      getBrands().then(setBrands);
-                                  }}
-                                  trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                      <Plus className="h-4 w-4" />
-                                    </Button>
-                                  }
-                                />
-                              </div>
-                              <FormMessage />
-                            </FormItem>
+                          <FormItem>
+                            <FormLabel>Brand</FormLabel>
+                            <Select 
+                              open={selects.brands}
+                              onOpenChange={(open) => setSelects(prev => ({ ...prev, brands: open }))}
+                              onValueChange={field.onChange} 
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a brand" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingBrands ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : brands?.length > 0 ? (
+                                  brands.map((brand: Brand) => (
+                                    <SelectItem key={brand.id} value={brand.name}>
+                                      {brand.name}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <SelectItem value="none" disabled>No brands found</SelectItem>
+                                )}
+                                <div className="border-t mt-1 pt-1 px-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setDialogs(prev => ({ ...prev, brands: true }));
+                                      setSelects(prev => ({ ...prev, brands: false }));
+                                    }}
+                                  >
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Brand
+                                  </Button>
+                                </div>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
                         )}
                       />
 
@@ -722,7 +757,15 @@ export function AddProductDialog({
                           <FormItem>
                             <FormLabel>Description</FormLabel>
                             <FormControl>
-                              <Textarea placeholder="A short description of the product." {...field} />
+                              <Textarea 
+                                placeholder="A short description of the product." 
+                                {...field} 
+                                onKeyDown={(e) => {
+                                  if (e.key === ' ') {
+                                    e.stopPropagation();
+                                  }
+                                }}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -735,7 +778,15 @@ export function AddProductDialog({
                           <FormItem>
                             <FormLabel>Additional Description (Optional)</FormLabel>
                             <FormControl>
-                              <Textarea placeholder="Provide additional details like specifications or special notes." {...field} />
+                              <Textarea 
+                                placeholder="Provide additional details like specifications or special notes." 
+                                {...field} 
+                                onKeyDown={(e) => {
+                                  if (e.key === ' ') {
+                                    e.stopPropagation();
+                                  }
+                                }}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -749,32 +800,47 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Category</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a category" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {isLoadingCategories ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    categories?.map(cat => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <ManageCategoriesDialog 
-                                onCategoryAdded={() => {
-                                    getCategories().then(setCategories);
-                                }}
-                                trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                }
-                              />
-                            </div>
+                            <Select 
+                              open={selects.categories}
+                              onOpenChange={(open) => setSelects(prev => ({ ...prev, categories: open }))}
+                              onValueChange={field.onChange} 
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a category" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingCategories ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : categories?.length > 0 ? (
+                                  categories.map((category: Category) => (
+                                    <SelectItem key={category.id} value={category.name}>
+                                      {category.name}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <SelectItem value="none" disabled>No categories found</SelectItem>
+                                )}
+                                <div className="border-t mt-1 pt-1 px-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setDialogs(prev => ({ ...prev, categories: true }));
+                                      setSelects(prev => ({ ...prev, categories: false }));
+                                    }}
+                                  >
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Category
+                                  </Button>
+                                </div>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -785,32 +851,43 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Subcategory (Optional)</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a subcategory" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {isLoadingSubcategories ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    subcategories?.map(sub => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <ManageSubcategoriesDialog 
-                                onSubcategoryAdded={() => {
-                                    getSubcategories().then(setSubcategories);
-                                }}
-                                trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                }
-                              />
-                            </div>
+                            <Select
+                              open={selects.subcategories}
+                              onOpenChange={(open) => setSelects(prev => ({ ...prev, subcategories: open }))}
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a subcategory" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingSubcategories ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : subcategories?.length > 0 ? (
+                                  subcategories.map(sub => <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>)
+                                ) : (
+                                  <SelectItem value="none" disabled>No subcategories found</SelectItem>
+                                )}
+                                <div className="border-t mt-1 pt-1 px-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setDialogs(prev => ({ ...prev, subcategories: true }));
+                                      setSelects(prev => ({ ...prev, subcategories: false }));
+                                    }}
+                                  >
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Subcategory
+                                  </Button>
+                                </div>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -873,32 +950,43 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Supplier (Optional)</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a supplier" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {isLoadingSuppliers ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    suppliers?.map(supplier => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <ManageSuppliersDialog 
-                                onSupplierAdded={() => {
-                                    getSuppliers().then(setSuppliers);
-                                }}
-                                trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                }
-                              />
-                            </div>
+                            <Select
+                              open={selects.suppliers}
+                              onOpenChange={(open) => setSelects(prev => ({ ...prev, suppliers: open }))}
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a supplier" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingSuppliers ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : suppliers?.length > 0 ? (
+                                  suppliers.map(supplier => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)
+                                ) : (
+                                  <SelectItem value="none" disabled>No suppliers found</SelectItem>
+                                )}
+                                <div className="border-t mt-1 pt-1 px-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setDialogs(prev => ({ ...prev, suppliers: true }));
+                                      setSelects(prev => ({ ...prev, suppliers: false }));
+                                    }}
+                                  >
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Supplier
+                                  </Button>
+                                </div>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -910,76 +998,99 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Warehouse (Optional)</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a warehouse" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {isLoadingWarehouses ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    warehouses?.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <ManageWarehousesDialog 
-                                onChange={() => {
-                                    getWarehouses().then(setWarehouses);
-                                }}
-                                trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                }
-                              />
-                            </div>
+                            <Select
+                              open={selects.warehouses}
+                              onOpenChange={(open) => setSelects(prev => ({ ...prev, warehouses: open }))}
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a warehouse" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingWarehouses ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : warehouses?.length > 0 ? (
+                                  warehouses.map((warehouse: any) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>)
+                                ) : (
+                                  <SelectItem value="none" disabled>No warehouses found</SelectItem>
+                                )}
+                                <div className="border-t mt-1 pt-1 px-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setDialogs(prev => ({ ...prev, warehouses: true }));
+                                      setSelects(prev => ({ ...prev, warehouses: false }));
+                                    }}
+                                  >
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Warehouse
+                                  </Button>
+                                </div>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
 
-                      <FormField
-                        control={form.control}
-                        name="shelfLocationId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Shelf Location (Optional)</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
+                        <FormField
+                          control={form.control}
+                          name="shelfLocationId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Shelf Location (Optional)</FormLabel>
+                              <Select 
+                                open={selects.shelfLocations}
+                                onOpenChange={(open) => setSelects(prev => ({ ...prev, shelfLocations: open }))}
+                                onValueChange={field.onChange} 
+                                value={field.value}
+                              >
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Select a shelf location" />
+                                    <SelectValue placeholder="Select a location" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
                                   {isLoadingShelfLocations ? (
                                     <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                  ) : shelfLocations?.length > 0 ? (
+                                    shelfLocations.map((loc: any) => (
+                                      <SelectItem key={loc.id} value={loc.id}>
+                                        {loc.name}
+                                      </SelectItem>
+                                    ))
                                   ) : (
-                                    shelfLocations?.map((location: any) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)
+                                    <SelectItem value="none" disabled>No shelf locations found</SelectItem>
                                   )}
+                                  <div className="border-t mt-1 pt-1 px-1">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setDialogs(prev => ({ ...prev, shelfLocations: true }));
+                                        setSelects(prev => ({ ...prev, shelfLocations: false }));
+                                      }}
+                                    >
+                                      <PlusCircle className="mr-2 h-4 w-4" />
+                                      Add Shelf Location
+                                    </Button>
+                                  </div>
                                 </SelectContent>
                               </Select>
-                              <ManageShelfLocationsDialog 
-                                onLocationAdded={(newLocationId?: string) => {
-                                  if (onOptionsRefresh) onOptionsRefresh();
-                                  if (newLocationId) {
-                                    form.setValue('shelfLocationId', newLocationId, { shouldValidate: true, shouldDirty: true });
-                                  }
-                                }}
-                                trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                }
-                              />
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
                       <FormField
                         control={form.control}
@@ -987,36 +1098,47 @@ export function AddProductDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>{productType === 'parent' ? 'Base Unit of Measure' : 'Unit of Measure'}</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a unit" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {isLoadingUnits ? (
-                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                                  ) : (
-                                    unitsOfMeasure?.map((uom: UnitOfMeasure) => (
-                                      <SelectItem key={uom.id} value={uom.name}>
-                                        {uom.name} ({uom.abbreviation})
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <ManageUnitOfMeasureDialog 
-                                onUnitAdded={() => {
-                                    getUnitsOfMeasure().then(setUnitsOfMeasure);
-                                }}
-                                trigger={
-                                    <Button type="button" size="icon" className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0">
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                }
-                              />
-                            </div>
+                            <Select 
+                              open={selects.units}
+                              onOpenChange={(open) => setSelects(prev => ({ ...prev, units: open }))}
+                              onValueChange={field.onChange} 
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a unit" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingUnits ? (
+                                  <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                ) : unitsOfMeasure?.length > 0 ? (
+                                  unitsOfMeasure.map((uom: UnitOfMeasure) => (
+                                    <SelectItem key={uom.id} value={uom.name}>
+                                      {uom.name} ({uom.abbreviation})
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <SelectItem value="none" disabled>No units found</SelectItem>
+                                )}
+                                <div className="border-t mt-1 pt-1 px-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setDialogs(prev => ({ ...prev, units: true }));
+                                      setSelects(prev => ({ ...prev, units: false }));
+                                    }}
+                                  >
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Unit
+                                  </Button>
+                                </div>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1440,6 +1562,51 @@ export function AddProductDialog({
         </DialogFooter>
 
         {/* Lifted Manage Dialogs */}
+        <ManageBrandsDialog
+          trigger={null}
+          open={dialogs.brands}
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, brands: open }))}
+          onBrandAdded={() => getBrands().then(setBrands)}
+        />
+        <ManageCategoriesDialog
+          trigger={null}
+          open={dialogs.categories}
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, categories: open }))}
+          onCategoryAdded={() => getCategories().then(setCategories)}
+        />
+        <ManageSubcategoriesDialog
+          trigger={null}
+          open={dialogs.subcategories}
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, subcategories: open }))}
+          onSubcategoryAdded={() => getSubcategories().then(setSubcategories)}
+        />
+        <ManageSuppliersDialog
+          trigger={null}
+          open={dialogs.suppliers}
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, suppliers: open }))}
+          onSupplierAdded={() => getSuppliers().then(setSuppliers)}
+        />
+        <ManageWarehousesDialog
+          open={dialogs.warehouses}
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, warehouses: open }))}
+          onChange={() => getWarehouses().then(setWarehouses)}
+        />
+        <ManageShelfLocationsDialog
+          open={dialogs.shelfLocations}
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, shelfLocations: open }))}
+          onLocationAdded={(newLocationId?: string) => {
+            if (onOptionsRefresh) onOptionsRefresh();
+            if (newLocationId) {
+              form.setValue('shelfLocationId', newLocationId, { shouldValidate: true, shouldDirty: true });
+            }
+          }}
+        />
+        <ManageUnitOfMeasureDialog
+          trigger={null}
+          open={dialogs.units}
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, units: open }))}
+          onUnitAdded={() => getUnitsOfMeasure().then(setUnitsOfMeasure)}
+        />
 
       </DialogContent>
     </Dialog>

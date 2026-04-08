@@ -629,26 +629,29 @@ export default function SalesInvoicesPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="overflow-x-auto border rounded-md">
-                <Table className="text-xs">
-                    <TableHeader>
+                <Table 
+                    className="text-xs border-separate border-spacing-0"
+                    wrapperClassName="h-[550px] border rounded-md relative"
+                >
+                    <TableHeader className="bg-primary">
                     <TableRow className="bg-primary hover:bg-primary">
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2 w-8"></TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">User</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">Customer</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">Reference</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">Receipt No</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">Trans Ref</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">Type</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">Invoice Date</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">Due Date</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2 text-right">Total</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2 text-right">Amount Paid</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2 text-right">Balance</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2">Status</TableHead>
-                        <TableHead className="text-primary-foreground font-semibold py-2 px-2 text-right">Action</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 w-8 bg-primary border-b"></TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary border-b">User</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary font-medium border-b">Customer</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary border-b">Reference</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary font-medium border-b">Receipt No</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary border-b">Trans Ref</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary border-b">Type</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary border-b">Invoice Date</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary border-b">Due Date</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary text-right border-b">Total</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary text-right border-b">Amount Paid</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary text-right border-b">Balance</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 bg-primary border-b">Status</TableHead>
+                        <TableHead className="sticky top-0 z-20 text-primary-foreground font-semibold py-2 px-2 text-right bg-primary border-b">Action</TableHead>
                     </TableRow>
                     </TableHeader>
+
                     <TableBody>
                     {currentSales.length > 0 ? (
                         currentSales.map((sale: Sale, index) => {
@@ -790,12 +793,10 @@ export default function SalesInvoicesPage() {
                     )}
                     </TableBody>
                 </Table>
-            </div>
             
-             {/* Pagination Controls */}
-             <div className="flex items-center justify-between px-2">
+             <div className="flex items-center justify-between px-2 py-4 border-t">
                 <div className="flex items-center space-x-2">
-                    <p className="text-sm font-medium">Rows per page</p>
+                    <p className="text-sm font-medium whitespace-nowrap">Rows per page</p>
                     <Select
                         value={`${itemsPerPage}`}
                         onValueChange={(value) => {

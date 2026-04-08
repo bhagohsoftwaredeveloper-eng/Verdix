@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const status = searchParams.get('status');
     const supplierId = searchParams.get('supplierId');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     let sql = `
       SELECT
@@ -49,6 +51,16 @@ export async function GET(request: NextRequest) {
     if (search) {
       sql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ? OR po.reference_number LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (startDate) {
+      sql += ' AND po.date >= ?';
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      sql += ' AND po.date <= ?';
+      params.push(`${endDate} 23:59:59`);
     }
 
     sql += ' ORDER BY po.created_at DESC LIMIT ? OFFSET ?';
@@ -129,6 +141,16 @@ export async function GET(request: NextRequest) {
     if (search) {
       countSql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ? OR po.reference_number LIKE ?)';
       countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (startDate) {
+      countSql += ' AND po.date >= ?';
+      countParams.push(startDate);
+    }
+
+    if (endDate) {
+      countSql += ' AND po.date <= ?';
+      countParams.push(`${endDate} 23:59:59`);
     }
 
     const countResult = await query(countSql, countParams);

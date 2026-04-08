@@ -66,7 +66,17 @@ const loyaltyCardSchema = z.object({
 
 type LoyaltyCardFormValues = z.infer<typeof loyaltyCardSchema>;
 
-export function AddLoyaltyCardDialog({ customer, showLabel = false, onSuccess }: { customer?: CustomerWithLoyalty, showLabel?: boolean, onSuccess?: () => void }) {
+export function AddLoyaltyCardDialog({ 
+  customer, 
+  showLabel = false, 
+  onSuccess,
+  children
+}: { 
+  customer?: CustomerWithLoyalty, 
+  showLabel?: boolean, 
+  onSuccess?: () => void,
+  children?: React.ReactNode
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySetting[]>([]);
@@ -145,7 +155,7 @@ export function AddLoyaltyCardDialog({ customer, showLabel = false, onSuccess }:
         body: JSON.stringify({
           customerId: targetCustomerId,
           rfidCode: values.rfidCode,
-          expiryDate: values.expiryDate ? values.expiryDate.toISOString().split('T')[0] : null,
+          expiryDate: values.expiryDate ? format(values.expiryDate, 'yyyy-MM-dd') : null,
           pointSetting: values.pointSetting,
           initialPoints: values.initialPoints,
         }),
@@ -183,10 +193,12 @@ export function AddLoyaltyCardDialog({ customer, showLabel = false, onSuccess }:
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" title="Add Loyalty Card">
-          <CreditCard className="h-4 w-4" />
-          {showLabel && "Add Loyalty Card"}
-        </Button>
+        {children ? children : (
+          <Button variant="outline" size="sm" title="Add Loyalty Card">
+            <CreditCard className="h-4 w-4" />
+            {showLabel && "Add Loyalty Card"}
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
@@ -247,7 +259,7 @@ export function AddLoyaltyCardDialog({ customer, showLabel = false, onSuccess }:
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Expiry Date</FormLabel>
-                  <Popover>
+                  <Popover modal={false}>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button
@@ -266,7 +278,7 @@ export function AddLoyaltyCardDialog({ customer, showLabel = false, onSuccess }:
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-[9999]" align="start">
                       <Calendar
                         mode="single"
                         selected={field.value}

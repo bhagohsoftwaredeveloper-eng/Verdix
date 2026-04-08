@@ -104,6 +104,7 @@ export default function SalesByProductPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [limit, setLimit] = useState(10); // Rows per page
 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [transactions, setTransactions] = useState<Record<string, TransactionData[]>>({});
@@ -178,6 +179,7 @@ export default function SalesByProductPage() {
       if (referenceFilter) params.append('reference', referenceFilter);
 
       params.append('page', currentPage.toString());
+      params.append('limit', limit.toString());
       if (searchTerm) {
         params.append('search', searchTerm);
       }
@@ -207,7 +209,7 @@ export default function SalesByProductPage() {
 
   useEffect(() => {
     fetchSalesByProduct();
-  }, [dateRange, terminal, currentPage, categoryFilter, brandFilter, cashierFilter]); // referenceFilter is debounced via separate effect or handled with search? Let's add it here but maybe debounce it?
+  }, [dateRange, terminal, currentPage, limit, categoryFilter, brandFilter, cashierFilter]); // referenceFilter is debounced via separate effect or handled with search? Let's add it here but maybe debounce it?
 
   // Debounce search and reference filter
   useEffect(() => {
@@ -637,18 +639,18 @@ export default function SalesByProductPage() {
           </div>
         ) : (
             <div className="overflow-x-auto border rounded-md">
-          <Table className="text-xs">
-            <TableHeader>
-              <TableRow className="bg-primary hover:bg-primary">
-                <TableHead className="w-[50px] text-primary-foreground font-semibold"></TableHead>
-                <TableHead className="text-primary-foreground font-semibold">Code</TableHead>
-                <TableHead className="text-primary-foreground font-semibold">Description</TableHead>
-                <TableHead className="text-primary-foreground font-semibold">Category/Brand</TableHead>
-                <TableHead className="text-primary-foreground font-semibold text-right">Quantity</TableHead>
-                <TableHead className="text-primary-foreground font-semibold text-right">Sales Discount</TableHead>
-                <TableHead className="text-primary-foreground font-semibold text-right">Sales Amount</TableHead>
-                <TableHead className="text-primary-foreground font-semibold text-right">Cost</TableHead>
-                <TableHead className="text-primary-foreground font-semibold text-right">Profit</TableHead>
+          <Table className="text-xs w-full" wrapperClassName="max-h-[530px] overflow-auto border rounded-md">
+            <TableHeader className="sticky top-0 z-30">
+              <TableRow className="bg-primary hover:bg-primary border-b-0">
+                <TableHead className="w-[50px] bg-primary text-primary-foreground font-semibold"></TableHead>
+                <TableHead className="bg-primary text-primary-foreground font-semibold">Code</TableHead>
+                <TableHead className="bg-primary text-primary-foreground font-semibold">Description</TableHead>
+                <TableHead className="bg-primary text-primary-foreground font-semibold">Category/Brand</TableHead>
+                <TableHead className="bg-primary text-primary-foreground font-semibold text-right">Quantity</TableHead>
+                <TableHead className="bg-primary text-primary-foreground font-semibold text-right">Sales Discount</TableHead>
+                <TableHead className="bg-primary text-primary-foreground font-semibold text-right">Sales Amount</TableHead>
+                <TableHead className="bg-primary text-primary-foreground font-semibold text-right">Cost</TableHead>
+                <TableHead className="bg-primary text-primary-foreground font-semibold text-right">Profit</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -746,37 +748,58 @@ export default function SalesByProductPage() {
         )}
       </CardContent>
             {/* Pagination Controls */}
-            {totalPages > 1 && (
-            <div className="py-4 border-t px-6">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious 
-                      href="#" 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (currentPage > 1) setCurrentPage(currentPage - 1);
+            <div className="py-4 border-t px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2 order-2 sm:order-1">
+                  <Label htmlFor="rows-per-page" className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</Label>
+                  <Select 
+                      value={limit.toString()} 
+                      onValueChange={(v) => {
+                          setLimit(Number(v));
+                          setCurrentPage(1);
                       }}
-                      className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-                    />
-                  </PaginationItem>
-                  
-                  {renderPaginationItems()}
+                  >
+                      <SelectTrigger id="rows-per-page" className="h-8 w-[70px] text-xs">
+                          <SelectValue placeholder={limit.toString()} />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                  </Select>
+              </div>
 
-                  <PaginationItem>
-                    <PaginationNext 
-                      href="#" 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-                      }}
-                       className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
+              <div className="order-1 sm:order-2">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage > 1) setCurrentPage(currentPage - 1);
+                        }}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    
+                    {renderPaginationItems()}
+
+                    <PaginationItem>
+                      <PaginationNext 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                        }}
+                         className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
             </div>
-          )}
     </Card>
 
       {/* Date Range Filter Dialog */}

@@ -66,6 +66,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 type SalesData = {
   date: string;
@@ -94,6 +103,11 @@ export default function SalesByDatePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [limit, setLimit] = useState(10);
+
   // Dialog State
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>(undefined);
@@ -103,7 +117,7 @@ export default function SalesByDatePage() {
 
   const [searchTerm, setSearchTerm] = useState('');
 
-  const fetchSalesByDate = async () => {
+  const fetchSalesByDate = async (page = 1) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
@@ -123,11 +137,19 @@ export default function SalesByDatePage() {
         params.append('paymentType', paymentType);
       }
 
+      // Add pagination params
+      params.append('page', page.toString());
+      params.append('limit', limit.toString());
+
       const response = await fetch(`/api/sales/by-date?${params.toString()}`);
       const result = await response.json();
 
       if (result.success) {
         setSalesData(result.data);
+        if (result.pagination) {
+          setTotalPages(result.pagination.totalPages);
+          setCurrentPage(result.pagination.page);
+        }
       } else {
         console.error('Failed to fetch sales by date:', result.error);
         setSalesData([]);
@@ -141,8 +163,19 @@ export default function SalesByDatePage() {
   };
 
   useEffect(() => {
-    fetchSalesByDate();
-  }, [dateRange, terminal, interval, paymentType]);
+    fetchSalesByDate(currentPage);
+  }, [dateRange, terminal, interval, paymentType, currentPage, limit]);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  // Reset to page 1 when filters or limit change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateRange, terminal, interval, paymentType, limit]);
 
   const toggleRowExpansion = (date: string) => {
     setExpandedRows(prev => {
@@ -314,9 +347,54 @@ export default function SalesByDatePage() {
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '-'; // Add check for invalid date
     if (interval === 'monthly') return format(date, 'MMMM yyyy');
     if (interval === 'hourly') return format(date, 'PP p');
     return format(date, 'PP');
+  };
+
+  // Render pagination items logic
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink
+              isActive={currentPage === i}
+              onClick={() => handlePageChange(i)}
+            >
+              {i}
+            </PaginationLink>
+          </PaginationItem>
+        );
+      }
+    } else {
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink isActive={currentPage === 1} onClick={() => handlePageChange(1)}>1</PaginationLink>
+        </PaginationItem>
+      );
+      if (currentPage > 3) items.push(<PaginationItem key="e1"><PaginationEllipsis /></PaginationItem>);
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink isActive={currentPage === i} onClick={() => handlePageChange(i)}>{i}</PaginationLink>
+          </PaginationItem>
+        );
+      }
+      if (currentPage < totalPages - 2) items.push(<PaginationItem key="e2"><PaginationEllipsis /></PaginationItem>);
+      items.push(
+        <PaginationItem key={totalPages}>
+          <PaginationLink isActive={currentPage === totalPages} onClick={() => handlePageChange(totalPages)}>{totalPages}</PaginationLink>
+        </PaginationItem>
+      );
+    }
+    return items;
   };
 
   const hasActiveFilters = dateRange || terminal !== 'all' || interval !== 'daily' || paymentType !== 'all' || searchTerm;
@@ -514,27 +592,29 @@ export default function SalesByDatePage() {
              </div>
          </div>
 
-         {/* 3. Data Table (Bottom) */}
-         <div className="flex-1 overflow-auto border rounded-md">
-            <div className="relative w-full">
-                <Table className="text-xs whitespace-nowrap w-full">
-                  <TableHeader className="sticky top-0 z-10 bg-primary hover:bg-primary shadow-sm">
-                    <TableRow className="bg-primary hover:bg-primary border-none">
-                      <TableHead className="w-8 text-primary-foreground"></TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2">Date</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2">Terminal</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2">OR Range</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">Discount</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">Revenue</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">Vatable</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">VAT</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">Exempt</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">Zero</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">Non-VAT</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">Cost</TableHead>
-                      <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right">Profit</TableHead>
-                    </TableRow>
-                  </TableHeader>
+          {/* 3. Data Table (Bottom) */}
+          <Table 
+            className="text-xs whitespace-nowrap w-full" 
+            wrapperClassName="max-h-[600px] overflow-auto border rounded-md"
+          >
+            <TableHeader className="sticky top-0 z-40">
+              <TableRow className="bg-primary hover:bg-primary border-none">
+                <TableHead className="w-8 text-primary-foreground bg-primary border-none"></TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 bg-primary border-none">Date</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 bg-primary border-none">Terminal</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 bg-primary border-none">OR Range</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">Discount</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">Revenue</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">Vatable</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">VAT</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">Exempt</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">Zero</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">Non-VAT</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">Cost</TableHead>
+                <TableHead className="text-primary-foreground font-semibold h-9 py-2 text-right bg-primary border-none">Profit</TableHead>
+              </TableRow>
+            </TableHeader>
+
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
@@ -598,8 +678,53 @@ export default function SalesByDatePage() {
                     )}
                   </TableBody>
                 </Table>
+
+          {/* Pagination Controls */}
+          {!isLoading && filteredSalesData.length > 0 && (
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2 order-2 sm:order-1">
+                <Label htmlFor="rows-per-page" className="text-xs text-muted-foreground whitespace-nowrap">Rows per page</Label>
+                <Select
+                  value={limit.toString()}
+                  onValueChange={(v) => {
+                    setLimit(Number(v));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger id="rows-per-page" className="h-8 w-[70px] text-xs">
+                    <SelectValue placeholder={limit.toString()} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="order-1 sm:order-2">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                        aria-disabled={currentPage === 1}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {renderPaginationItems()}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                        aria-disabled={currentPage === totalPages}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
             </div>
-         </div>
+          )}
       </CardContent>
 
       <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>

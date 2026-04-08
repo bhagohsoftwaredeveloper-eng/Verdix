@@ -12,21 +12,34 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Wallet, Clock, AlertTriangle, Calendar } from 'lucide-react';
-import { getSuppliersWithBalance, SupplierWithBalance } from '../actions';
+import { Search, Wallet, Clock, AlertTriangle, Calendar, MoreHorizontal, Eye, CreditCard, X } from 'lucide-react';
+import { getSuppliersWithBalance, SupplierWithBalance, SupplierFilters } from '../actions';
 import { MakePaymentDialog } from '../payment-dialog';
 import { SupplierTransactionDialog } from './supplier-transaction-dialog';
+import { BalanceFilterDialog } from './balance-filter-dialog';
 import { differenceInDays, format } from 'date-fns';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 
 export default function SupplierBalancePage() {
   const [suppliers, setSuppliers] = useState<SupplierWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<SupplierFilters>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadSuppliers = async () => {
     setLoading(true);
     try {
-      const data = await getSuppliersWithBalance(searchTerm);
+      const data = await getSuppliersWithBalance(searchTerm, filters);
       // Optional: Filter to only show suppliers with non-zero balance if desired?
       // For now, show all but sort by balance descending maybe?
       setSuppliers(data.sort((a, b) => b.balance - a.balance));
@@ -38,8 +51,14 @@ export default function SupplierBalancePage() {
   };
 
   useEffect(() => {
+    setCurrentPage(1);
     loadSuppliers();
-  }, [searchTerm]);
+  }, [searchTerm, filters]);
+
+  const paginatedSuppliers = suppliers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   const totalPayable = suppliers.reduce((acc, s) => acc + s.balance, 0);
 
@@ -113,18 +132,35 @@ export default function SupplierBalancePage() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+                <div className="flex items-center gap-2">
+                  <BalanceFilterDialog 
+                    filters={filters}
+                    onFilterChange={setFilters}
+                    onReset={() => setFilters({})}
+                  />
+                  {Object.keys(filters).length > 0 && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-9 px-2 text-muted-foreground"
+                      onClick={() => setFilters({})}
+                    >
+                      Clear <X className="ml-1 h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
            </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Oldest Invoice</TableHead>
-                <TableHead>Total Purchases</TableHead>
-                <TableHead className="text-right">Current Balance</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+          <Table wrapperClassName="max-h-[calc(100vh-350px)] overflow-auto relative">
+            <TableHeader className="sticky top-0 z-30 bg-background shadow-sm">
+              <TableRow className="hover:bg-transparent bg-muted/50">
+                <TableHead className="font-semibold text-foreground">Supplier</TableHead>
+                <TableHead className="font-semibold text-foreground">Oldest Invoice</TableHead>
+                <TableHead className="font-semibold text-foreground">Total Purchases</TableHead>
+                <TableHead className="font-semibold text-foreground text-right">Current Balance</TableHead>
+                <TableHead className="font-semibold text-foreground text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -141,8 +177,8 @@ export default function SupplierBalancePage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                suppliers.map((supplier) => (
-                  <TableRow key={supplier.id}>
+                paginatedSuppliers.map((supplier) => (
+                  <TableRow key={supplier.id} className="group hover:bg-muted/50">
                     <TableCell className="font-medium">{supplier.name}</TableCell>
                     <TableCell>
                        {supplier.oldestInvoiceDate ? (
@@ -159,22 +195,57 @@ export default function SupplierBalancePage() {
                         ₱{supplier.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                     <TableCell className="text-right">
-                       <div className="flex justify-end gap-2">
-                        <SupplierTransactionDialog 
-                           supplierId={supplier.id} 
-                           supplierName={supplier.name}
-                        />
-                        <MakePaymentDialog 
-                            supplier={supplier} 
-                            onPaymentComplete={loadSuppliers}
-                          />
-                       </div>
+                       <DropdownMenu>
+                         <DropdownMenuTrigger asChild>
+                           <Button variant="ghost" size="icon" className="h-8 w-8">
+                             <MoreHorizontal className="h-4 w-4" />
+                             <span className="sr-only">Open menu</span>
+                           </Button>
+                         </DropdownMenuTrigger>
+                         <DropdownMenuContent align="end" className="w-[200px]">
+                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                           <DropdownMenuSeparator />
+                           <SupplierTransactionDialog 
+                              supplierId={supplier.id} 
+                              supplierName={supplier.name}
+                              trigger={
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View Transactions
+                                </DropdownMenuItem>
+                              }
+                           />
+                           <MakePaymentDialog 
+                               supplier={supplier} 
+                               onPaymentComplete={loadSuppliers}
+                               trigger={
+                                 <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                   <CreditCard className="mr-2 h-4 w-4" />
+                                   Make Payment
+                                 </DropdownMenuItem>
+                               }
+                             />
+                         </DropdownMenuContent>
+                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
+
+          {suppliers.length > 0 && (
+            <div className="py-2 border-t px-4">
+              <DataTablePagination
+                currentPage={currentPage}
+                totalPages={Math.ceil(suppliers.length / pageSize)}
+                pageSize={pageSize}
+                totalItems={suppliers.length}
+                setPage={setCurrentPage}
+                setPageSize={setPageSize}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

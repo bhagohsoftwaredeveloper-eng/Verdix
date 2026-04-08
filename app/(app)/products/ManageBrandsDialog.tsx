@@ -22,6 +22,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -178,10 +189,32 @@ function BrandRow({ brand, onBrandUpdated, onBrandDeleted }: { brand: Brand; onB
               <span className="sr-only">Edit</span>
             </Button>
           </BrandDialog>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4 text-muted-foreground transition-colors hover:text-destructive" />
-            <span className="sr-only">Delete</span>
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
+                <Trash2 className="h-4 w-4 text-muted-foreground transition-colors hover:text-destructive" />
+                <span className="sr-only">Delete</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="!rounded-3xl">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the brand
+                  "{brand.name}".
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={handleDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </TableCell>
     </TableRow>
@@ -239,6 +272,7 @@ export function ManageBrandsDialog({ trigger, onBrandAdded, open, onOpenChange }
     }
   };
 
+  const showTrigger = trigger !== null;
   const dialogTrigger = trigger || (
     <Button variant="outline">
       <ListTree className="mr-2 h-4 w-4" />
@@ -247,10 +281,12 @@ export function ManageBrandsDialog({ trigger, onBrandAdded, open, onOpenChange }
   );
 
   return (
-     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        {dialogTrigger}
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {showTrigger && (
+        <DialogTrigger asChild>
+          {dialogTrigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-3xl !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
         <DialogHeader>
           <DialogTitle>Manage Brands</DialogTitle>

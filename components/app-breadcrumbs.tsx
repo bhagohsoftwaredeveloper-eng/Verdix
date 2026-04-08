@@ -14,7 +14,7 @@ import { Fragment } from 'react';
 
 export function AppBreadcrumbs() {
   const pathname = usePathname();
-  const segments = pathname.split('/').filter(Boolean).filter(segment => segment !== 'sales');
+  const segments = pathname.split('/').filter(Boolean).filter(segment => segment !== 'sales' && segment !== 'purchases');
 
   return (
     <Breadcrumb>
@@ -23,17 +23,21 @@ export function AppBreadcrumbs() {
           <BreadcrumbLink href="/">Home</BreadcrumbLink>
         </BreadcrumbItem>
         {segments.map((segment, index) => {
-          const href = `/${segments.slice(0, index + 1).join('/')}`;
+          const hrefArr = pathname.split('/').filter(Boolean);
+          const segmentIndexInPath = hrefArr.lastIndexOf(segment);
+          const href = `/${hrefArr.slice(0, segmentIndexInPath + 1).join('/')}`;
           const isLast = index === segments.length - 1;
+          const isPurchases = pathname.includes('/purchases/');
           
           // Custom label mappings
           const labelMap: Record<string, string> = {
             'returns': 'Merchandise Credits',
             'voids': 'Post Void',
-            'by-product': 'Sales by Product',
+            'by-product': isPurchases ? 'Purchases by Product' : 'Sales by Product',
+            'by-supplier': 'Purchases by Supplier',
             'profit-margin': 'Profit Margin',
             'by-customer': 'Sales by Customer',
-            'summary': 'Sales Summary',
+            'summary': isPurchases ? 'Purchases Summary' : 'Sales Summary',
           };
           
           const defaultLabel = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');

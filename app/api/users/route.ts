@@ -17,7 +17,7 @@ export type UserWithPermissions = {
 export async function GET() {
   try {
     // Fetch users from MySQL
-    const users = await query('SELECT uid, username as email, user_type as userType, display_name as displayName, photo_url as photoURL, disabled, creation_time as creationTime FROM users ORDER BY creation_time DESC');
+    const users = await query('SELECT uid, username, username as email, user_type as userType, display_name as displayName, photo_url as photoURL, disabled, creation_time as creationTime FROM users ORDER BY creation_time DESC');
 
     // Fetch permissions for each user
     const permissions = await query('SELECT user_uid, permission FROM user_permissions');
@@ -50,9 +50,8 @@ export async function POST(request: NextRequest) {
   console.log('[ROOT API/Users] POST request received');
   try {
     const body = await request.json();
-    console.log('[ROOT API/Users] Request body:', JSON.stringify(body));
+    const { password, userType, permissions, displayName } = body;
     const username = body.username || body.email;
-    const { password, userType, permissions } = body;
 
     if (!username) {
       return NextResponse.json(
@@ -74,7 +73,7 @@ export async function POST(request: NextRequest) {
       // Insert user
       await connection.execute(
         'INSERT INTO users (uid, username, password, user_type, display_name, photo_url, disabled, creation_time) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-        [uid, username, hashedPassword, userType || 'User', username.split('@')[0], '', false]
+        [uid, username, hashedPassword, userType || 'User', displayName || username.split('@')[0], '', false]
       );
 
       // Insert permissions
@@ -90,6 +89,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       uid,
+      username,
       email: username,
       userType: userType || 'User',
       displayName: username.split('@')[0],
@@ -110,23 +110,31 @@ export async function POST(request: NextRequest) {
 // PATCH /api/users - Update user permissions
 export async function PATCH(request: NextRequest) {
   try {
-    const { uid, permissions } = await request.json();
+    const { uid, permissions, disabled } = await request.json();
 
     if (!uid) {
       return NextResponse.json({ error: 'User UID is required' }, { status: 400 });
     }
 
     await withTransaction(async (connection) => {
-      // Delete existing permissions
-      await connection.execute('DELETE FROM user_permissions WHERE user_uid = ?', [uid]);
+      // Update disabled status if provided
+      if (disabled !== undefined) {
+        await connection.execute('UPDATE users SET disabled = ? WHERE uid = ?', [!!disabled, uid]);
+      }
 
-      // Insert new permissions
-      if (permissions && permissions.length > 0) {
-        for (const permission of permissions) {
-          await connection.execute(
-            'INSERT INTO user_permissions (id, user_uid, permission) VALUES (?, ?, ?)',
-            [uuidv4(), uid, permission]
-          );
+      // Update permissions if provided
+      if (permissions !== undefined) {
+        // Delete existing permissions
+        await connection.execute('DELETE FROM user_permissions WHERE user_uid = ?', [uid]);
+
+        // Insert new permissions
+        if (permissions.length > 0) {
+          for (const permission of permissions) {
+            await connection.execute(
+              'INSERT INTO user_permissions (id, user_uid, permission) VALUES (?, ?, ?)',
+              [uuidv4(), uid, permission]
+            );
+          }
         }
       }
     });
@@ -148,7 +156,29 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'User UID is required' }, { status: 400 });
     }
 
-    await query('DELETE FROM users WHERE uid = ?', [uid]);
+    // Check for dependencies
+    const posTransactions: any = await query('SELECT id FROM pos_transactions WHERE user_id = ? LIMIT 1', [uid]);
+    const shifts: any = await query('SELECT id FROM shifts WHERE user_id = ? LIMIT 1', [uid]);
+    const auditLogs: any = await query('SELECT id FROM payment_audit_log WHERE user_id = ? LIMIT 1', [uid]);
+    const cashTransfers: any = await query('SELECT id FROM cash_transfers WHERE user_id = ? LIMIT 1', [uid]);
+
+    if ((posTransactions && posTransactions.length > 0) || 
+        (shifts && shifts.length > 0) || 
+        (auditLogs && auditLogs.length > 0) ||
+        (cashTransfers && cashTransfers.length > 0)) {
+      return NextResponse.json(
+        { error: 'Cannot delete user. This user has associated transactions, shifts, or cash transfer records. For data integrity, these users cannot be deleted. Consider disabling the account instead.' },
+        { status: 400 }
+      );
+    }
+
+    await withTransaction(async (connection) => {
+      // Delete user permissions first
+      await connection.execute('DELETE FROM user_permissions WHERE user_uid = ?', [uid]);
+      
+      // Delete user
+      await connection.execute('DELETE FROM users WHERE uid = ?', [uid]);
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

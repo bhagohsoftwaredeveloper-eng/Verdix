@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import {
   Card,
   CardContent,
@@ -21,14 +23,19 @@ export default function CustomerListPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [limit, setLimit] = useState(10);
   const { toast } = useToast();
 
-  const fetchCustomers = async (page: number = currentPage) => {
+  const fetchCustomers = async (page: number = currentPage, currentLimit: number = limit, search: string = searchQuery) => {
     setIsLoading(true);
     try {
-      const limit = 10;
-      const offset = (page - 1) * limit;
-      const response = await fetch(getApiUrl(`/customers?limit=${limit}&offset=${offset}`));
+      const offset = (page - 1) * currentLimit;
+      let url = getApiUrl(`/customers?limit=${currentLimit}&offset=${offset}`);
+      if (search) {
+        url += `&search=${encodeURIComponent(search)}`;
+      }
+      const response = await fetch(url);
       const result = await response.json();
       if (result.success) {
         setCustomers(result.data);
@@ -54,11 +61,20 @@ export default function CustomerListPage() {
   };
 
   useEffect(() => {
-    fetchCustomers(1);
-  }, []);
+    const timer = setTimeout(() => {
+      fetchCustomers(1, limit, searchQuery);
+    }, 500); // Debounce search
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, limit]);
 
   const handlePageChange = (page: number) => {
-    fetchCustomers(page);
+    fetchCustomers(page, limit, searchQuery);
+  };
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setCurrentPage(1);
   };
 
   const handleAddCustomer = async (customerId: string, name: string, contactNumber: string, active: boolean, loyaltyPoints: number, paymentTerms: string, address: string, billingAddress: string, discount: number, creditLimit: number, priceLevelId?: string) => {
@@ -142,36 +158,19 @@ export default function CustomerListPage() {
   };
 
   const handleDeleteCustomer = async (customerId: string) => {
-    try {
-      const response = await fetch(getApiUrl(`/customers/${customerId}`), {
-        method: 'DELETE',
-      });
+    const response = await fetch(getApiUrl(`/customers/${customerId}`), {
+      method: 'DELETE',
+    });
 
-      const result = await response.json();
-      if (result.success) {
-        toast({
-          title: 'Success',
-          description: 'Customer deleted successfully',
-        });
-        // If we deleted the last item on the page, go back a page
-        const newTotalCount = totalCount - 1;
-        const maxPage = Math.max(1, Math.ceil(newTotalCount / 10));
-        const newPage = currentPage > maxPage ? maxPage : currentPage;
-        fetchCustomers(newPage);
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: result.error || 'Failed to delete customer',
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting customer:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to delete customer',
-      });
+    const result = await response.json();
+    if (result.success) {
+      // If we deleted the last item on the page, go back a page
+      const newTotalCount = totalCount - 1;
+      const maxPage = Math.max(1, Math.ceil(newTotalCount / limit));
+      const newPage = currentPage > maxPage ? maxPage : currentPage;
+      fetchCustomers(newPage, limit, searchQuery);
+    } else {
+      throw new Error(result.error || 'Failed to delete customer');
     }
   };
 
@@ -200,6 +199,28 @@ export default function CustomerListPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search customers by name or contact number..."
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    fetchCustomers(1, limit, searchQuery);
+                  }
+                }}
+              />
+            </div>
+            <Button 
+              variant="secondary" 
+              onClick={() => fetchCustomers(1, limit, searchQuery)}
+            >
+              Search
+            </Button>
+          </div>
           <CustomerList
             customers={customers}
             isLoading={isLoading}
@@ -208,6 +229,8 @@ export default function CustomerListPage() {
             totalCount={totalCount}
             currentPage={currentPage}
             onPageChange={handlePageChange}
+            itemsPerPage={limit}
+            onItemsPerPageChange={handleLimitChange}
           />
         </CardContent>
       </Card>

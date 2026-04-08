@@ -24,6 +24,8 @@ import { useProducts, useBusinessProfile } from "@/hooks/use-api";
 import { calculatePurchaseCosts } from "@/lib/purchase-utils";
 // import { Logo } from "@/components/logo"; // Removed to avoid text overlap
 
+import { printPurchaseOrder } from "./purchase-order-print-utils";
+
 interface ViewPurchaseOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,150 +43,7 @@ export function ViewPurchaseOrderDialog({
   if (!order) return null;
 
   const handlePrint = () => {
-    // OLD METHOD: window.print();
-    
-    // NEW METHOD: Open a popup window with isolated content
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-        alert("Please allow popups to print.");
-        return;
-    }
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Purchase Order #${order.referenceNumber || order.id.substring(0,8)}</title>
-        <style>
-          @page { size: A4 portrait; margin: 15mm; }
-          body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; margin: 0; padding: 0; }
-          .header { text-align: center; margin-bottom: 20px; }
-          .header h1 { margin: 0; font-size: 18pt; font-weight: bold; }
-          .header p { margin: 0; font-size: 10pt; }
-          
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 10pt; }
-          .info-col p { margin: 2px 0; }
-          
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9pt; }
-          th, td { border: 1px solid #000; padding: 4px 6px; text-align: left; }
-          th { background-color: #f0f0f0; -webkit-print-color-adjust: exact; font-weight: bold; }
-          .text-right { text-align: right; }
-          
-          .totals { margin-left: auto; width: 200px; font-size: 10pt; }
-          .totals-row { display: flex; justify-content: space-between; padding: 2px 0; }
-          .totals-row.bordered { border-bottom: 1px dashed #999; }
-          .totals-row.final { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 4px; }
-          .totals-row.grand { font-weight: bold; font-size: 11pt; }
-          
-          .footer { margin-top: 50px; display: flex; justify-content: space-between; font-size: 10pt; }
-          .signature-box { text-align: center; width: 200px; }
-          .signature-line { border-top: 1px solid #000; padding-top: 5px; }
-          
-          .generated { margin-top: 30px; text-align: center; font-size: 8pt; color: #666; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-            <h1>PURCHASE ORDER</h1>
-            <p>${profile?.businessName || 'StockPilot Inc.'}</p>
-            <p style="font-size: 8pt; margin-top: 2px;">${profile?.address || '123 Business Avenue, Tech District'}</p>
-            <p style="font-size: 8pt;">${profile?.contactNumber || '+63 900 000 0000'} • ${profile?.email || 'contact@stockpilot.app'}</p>
-        </div>
-        
-        <div class="info-row">
-            <div class="info-col">
-                <p><strong>Supplier:</strong></p>
-                <p>${order.supplierName}</p>
-                <p>ID: ${order.supplierId.substring(0,8)}</p>
-            </div>
-            <div class="info-col" style="text-align: right;">
-                <p><strong>PO #:</strong> ${order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</p>
-                <p><strong>Date:</strong> ${format(new Date(order.date), "MMM dd, yyyy")}</p>
-                <p><strong>Status:</strong> ${order.status}</p>
-            </div>
-        </div>
-        
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 40%">Description</th>
-                    <th class="text-right" style="width: 10%">Rem. Qty</th>
-                    <th class="text-right" style="width: 10%">Cost</th>
-                    <th class="text-right" style="width: 10%">Qty</th>
-                    <th class="text-right" style="width: 12%">Landed Cost</th>
-                    <th class="text-right" style="width: 13%">Total</th>
-                    <th class="text-right" style="width: 10%">Recv</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${order.items.map(item => {
-                    const product = products.find(p => p.id === item.productId);
-                    const currentStock = product ? product.stock : (item.currentStock || 0);
-                    
-                    return `
-                    <tr>
-                        <td>
-                            <div style="font-weight: bold; font-size: 10pt;">${item.productName}</div>
-                            <div style="font-size: 8pt; color: #666;">
-                                ${item.barcode || '-'}
-                            </div>
-                        </td>
-                        <td class="text-right">${currentStock}</td>
-                        <td class="text-right">₱${item.cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                        <td class="text-right">${item.quantity}</td>
-                        <td class="text-right" style="color: #666; font-style: italic;">₱${(() => {
-                            const results = calculatePurchaseCosts(order.items as any, order.shippingFee || 0);
-                            return (results.items[order.items.indexOf(item)]?.landedCostPerUnit || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                        })()}</td>
-                        <td class="text-right">₱${(item.cost * item.quantity).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                        <td class="text-right">${
-                            order.status === 'Received' || order.status === 'Paid' ? item.quantity : 
-                            (order.status === 'Approved' ? '0' : '-')
-                        }</td>
-                    </tr>
-                `}).join('')}
-            </tbody>
-        </table>
-        
-        <div class="totals">
-            <div class="totals-row bordered">
-                <span>Subtotal:</span>
-                <span>₱${order.items.reduce((acc, item) => acc + item.cost * item.quantity, 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-            </div>
-            <div class="totals-row bordered">
-                <span>Shipping:</span>
-                <span>₱${(order.shippingFee || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-            </div>
-             <div class="totals-row final">
-                <span>VAT:</span>
-                <span>₱${(order.vatAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-            </div>
-             <div class="totals-row grand">
-                <span>Total:</span>
-                <span>₱${order.total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <div class="signature-box">
-                <div class="signature-line">Authorized By</div>
-            </div>
-             <div class="signature-box">
-                <div class="signature-line">Received By</div>
-            </div>
-        </div>
-        
-        <div class="generated">Generated by StockPilot on ${format(new Date(), "PPpp")}</div>
-        
-        <script>
-            window.onload = function() { window.print(); window.close(); }
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    printPurchaseOrder(order, profile, products);
   };
 
   return (
@@ -222,15 +81,15 @@ export function ViewPurchaseOrderDialog({
                 </div>
                 <div className="space-y-1">
                     <h2 className="text-2xl font-bold tracking-tight text-foreground">{profile?.businessName || 'StockPilot Inc.'}</h2>
-                    <div className="text-muted-foreground space-y-0.5 text-xs">
+                    <div className="text-zinc-700 space-y-0.5 text-xs">
                         <p>{profile?.address || '123 Business Avenue, Tech District'}</p>
                         <p>{profile?.contactNumber || '+63 900 000 0000'} • {profile?.email || 'contact@stockpilot.app'}</p>
                     </div>
                 </div>
             </div>
             <div className="text-right space-y-2">
-                <h1 className="text-4xl font-black text-zinc-900 tracking-tighter/5">PURCHASE ORDER</h1>
-                <p className="text-lg font-medium text-muted-foreground">#{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</p>
+                <h1 className="text-4xl font-black text-zinc-950 tracking-tighter/5">PURCHASE ORDER</h1>
+                <p className="text-lg font-bold text-zinc-700">#{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</p>
             </div>
           </div>
 
@@ -241,42 +100,42 @@ export function ViewPurchaseOrderDialog({
              
              {/* Supplier */}
              <div className="space-y-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900 flex items-center gap-2">
                     <Building2 className="size-3" /> Supplier
                 </h3>
-                <div className="space-y-1 border-l-2 pl-3 border-primary/20">
-                    <p className="font-bold text-base">{order.supplierName}</p>
-                    <p className="text-muted-foreground">Supplier ID: {order.supplierId.substring(0,8)}</p>
+                <div className="space-y-1 border-l-2 pl-3 border-primary/40">
+                    <p className="font-bold text-base text-zinc-900">{order.supplierName}</p>
+                    <p className="text-zinc-700">Supplier ID: {order.supplierId.substring(0,8)}</p>
                     {/* Placeholder address if not in type */}
-                    <p className="text-muted-foreground">Manila, Philippines</p> 
+                    <p className="text-zinc-700 font-medium">Manila, Philippines</p> 
                 </div>
              </div>
 
              {/* Ship To */}
              <div className="space-y-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900 flex items-center gap-2">
                     <MapPin className="size-3" /> Ship To
                 </h3>
-                 <div className="space-y-1 border-l-2 pl-3 border-zinc-200">
-                    <p className="font-bold text-base">{order.orderedBy || "Main Warehouse"}</p>
-                    <p className="text-muted-foreground">Purok sto. Nino, Bunao</p>
-                    <p className="text-muted-foreground">Quezon City</p>
+                 <div className="space-y-1 border-l-2 pl-3 border-zinc-400">
+                    <p className="font-bold text-base text-zinc-900">{order.orderedBy || "Main Warehouse"}</p>
+                    <p className="text-zinc-700">Purok sto. Nino, Bunao</p>
+                    <p className="text-zinc-700">Quezon City</p>
                 </div>
              </div>
 
              {/* Details */}
-             <div className="bg-zinc-50 p-4 rounded-lg space-y-3 border">
+             <div className="bg-zinc-100 p-4 rounded-lg space-y-3 border border-zinc-300">
                 <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground flex items-center gap-1.5"><Calendar className="size-3" /> Issue Date</span>
-                    <span className="font-medium">{format(new Date(order.date), "MMM dd, yyyy")}</span>
+                    <span className="text-zinc-700 font-bold flex items-center gap-1.5"><Calendar className="size-3" /> Issue Date</span>
+                    <span className="font-bold text-zinc-900">{format(new Date(order.date), "MMM dd, yyyy")}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground flex items-center gap-1.5"><Calendar className="size-3" /> Delivery Date</span>
-                    <span className="font-medium">{order.deliveryDate ? format(new Date(order.deliveryDate), "MMM dd, yyyy") : "-"}</span>
+                    <span className="text-zinc-700 font-bold flex items-center gap-1.5"><Calendar className="size-3" /> Delivery Date</span>
+                    <span className="font-bold text-zinc-900">{order.deliveryDate ? format(new Date(order.deliveryDate), "MMM dd, yyyy") : "-"}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground flex items-center gap-1.5"><CreditCard className="size-3" /> Terms</span>
-                    <span className="font-medium">{order.paymentMethod || "Net 30"}</span>
+                    <span className="text-zinc-700 font-bold flex items-center gap-1.5"><CreditCard className="size-3" /> Terms</span>
+                    <span className="font-bold text-zinc-900">{order.paymentMethod || "Net 30"}</span>
                 </div>
              </div>
           </div>
@@ -286,13 +145,13 @@ export function ViewPurchaseOrderDialog({
             <Table>
               <TableHeader className="bg-zinc-100/80">
                 <TableRow>
-                  <TableHead className="font-semibold text-zinc-700">Product Description</TableHead>
-                  <TableHead className="text-center font-semibold text-zinc-700 w-[100px]">Remaining QTY</TableHead>
-                  <TableHead className="text-right font-semibold text-zinc-700 w-[120px]">Base Cost</TableHead>
-                  <TableHead className="text-right font-semibold text-zinc-700 w-[100px]">Qty</TableHead>
-                  <TableHead className="text-right font-semibold text-zinc-700 w-[120px] italic text-muted-foreground">Landed Cost</TableHead>
-                  <TableHead className="text-right font-semibold text-zinc-700 w-[120px]">Total</TableHead>
-                  <TableHead className="text-right font-semibold text-zinc-700 w-[120px] bg-primary/5">Qty Recv</TableHead>
+                  <TableHead className="font-bold text-zinc-900">Product Description</TableHead>
+                  <TableHead className="text-center font-bold text-zinc-900 w-[100px]">Remaining QTY</TableHead>
+                  <TableHead className="text-right font-bold text-zinc-900 w-[120px]">Base Cost</TableHead>
+                  <TableHead className="text-right font-bold text-zinc-900 w-[100px]">Qty</TableHead>
+                  <TableHead className="text-right font-bold text-zinc-800 w-[120px] italic">Landed Cost</TableHead>
+                  <TableHead className="text-right font-bold text-zinc-900 w-[120px]">Total</TableHead>
+                  <TableHead className="text-right font-bold text-zinc-900 w-[120px] bg-primary/10">Qty Recv</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -301,35 +160,30 @@ export function ViewPurchaseOrderDialog({
                   const currentStock = product ? product.stock : (item.currentStock || 0);
 
                   return (
-                  <TableRow key={index} className="hover:bg-zinc-50">
+                  <TableRow key={index} className="hover:bg-zinc-50 border-zinc-300">
                     <TableCell>
                         <div className="flex flex-col">
-                             <span className="font-medium text-sm">{item.productName}</span>
-                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                 <span className="font-mono">{item.barcode || '-'}</span>
+                             <span className="font-bold text-sm text-zinc-900">{item.productName}</span>
+                             <div className="flex items-center gap-2 text-xs text-zinc-700">
+                                 <span className="font-mono font-bold">{item.barcode || '-'}</span>
                              </div>
                         </div>
                     </TableCell>
-                    <TableCell className="text-center">
-                        <span className={currentStock <= 0 ? 'text-destructive font-bold' : ''}>
+                    <TableCell className="text-center text-zinc-900 font-bold">
+                        <span className={currentStock <= 0 ? 'text-destructive font-black' : ''}>
                             {currentStock}
                         </span>
                     </TableCell>
-                    <TableCell className="text-right">₱{item.cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</TableCell>
-                    <TableCell className="text-right">{item.quantity} <span className="text-xs text-muted-foreground">pc</span></TableCell>
-                    <TableCell className="text-right italic text-muted-foreground bg-muted/5 font-mono text-xs">
+                    <TableCell className="text-right text-zinc-900 font-bold">₱{item.cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</TableCell>
+                    <TableCell className="text-right text-zinc-900 font-bold">{item.quantity} <span className="text-xs text-zinc-700">pc</span></TableCell>
+                    <TableCell className="text-right italic text-zinc-800 bg-zinc-100/50 font-mono text-xs font-bold border-l border-zinc-200">
                         ₱{(() => {
                             const results = calculatePurchaseCosts(order.items as any, order.shippingFee || 0);
                             return (results.items[index]?.landedCostPerUnit || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                         })()}
                     </TableCell>
-                    <TableCell className="text-right font-medium">₱{(item.cost * item.quantity).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</TableCell>
-                     {/* "Quantity Received" column as requested. 
-                         Logic: If status is 'Received', show quantity (assuming full). 
-                         If status is 'Partially Received', we'd need a field.
-                         For now we don't have per-item received tracking in the type, so we'll show '-' or match Qty if closed.
-                      */}
-                    <TableCell className="text-right bg-primary/5 font-medium">
+                    <TableCell className="text-right font-black text-zinc-950">₱{(item.cost * item.quantity).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</TableCell>
+                    <TableCell className="text-right bg-primary/10 font-black text-zinc-950">
                         {order.status === 'Received' || order.status === 'Paid' ? item.quantity : 
                          (order.status === 'Approved' ? '0' : '-')}
                     </TableCell>
@@ -348,9 +202,9 @@ export function ViewPurchaseOrderDialog({
 
           {/* Footer Grid */}
           <div className="grid grid-cols-2 gap-12 pt-4">
-             <div className="bg-zinc-50 p-6 rounded-lg border h-fit space-y-4">
-                 <p className="text-xs font-semibold text-muted-foreground uppercase">Notes / Instructions</p>
-                 <p className="text-sm text-muted-foreground italic">
+             <div className="bg-zinc-100 p-6 rounded-lg border border-zinc-300 h-fit space-y-4">
+                 <p className="text-xs font-bold text-zinc-900 uppercase">Notes / Instructions</p>
+                 <p className="text-sm text-zinc-800 italic font-medium">
                     Please ensure all items are sealed and in good condition upon delivery.
                     Call ahead 24 hours before delivery.
                  </p>
@@ -358,20 +212,20 @@ export function ViewPurchaseOrderDialog({
 
              <div className="space-y-4">
                 <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center text-muted-foreground">
+                    <div className="flex justify-between items-center text-zinc-700">
                         <span>Subtotal</span>
-                        <span>₱{order.items.reduce((acc, item) => acc + item.cost * item.quantity, 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                        <span className="font-bold text-zinc-900">₱{order.items.reduce((acc, item) => acc + item.cost * item.quantity, 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
-                     <div className="flex justify-between items-center text-muted-foreground">
+                     <div className="flex justify-between items-center text-zinc-700">
                         <span>Shipping Fee</span>
-                        <span>₱{(order.shippingFee || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                        <span className="font-bold text-zinc-900">₱{(order.shippingFee || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
-                     <div className="flex justify-between items-center text-muted-foreground">
+                     <div className="flex justify-between items-center text-zinc-700">
                         <span>VAT (12%)</span>
-                        <span>₱{(order.vatAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                        <span className="font-bold text-zinc-900">₱{(order.vatAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
-                    <Separator className="my-2" />
-                    <div className="flex justify-between items-center text-xl font-bold bg-primary/5 p-3 rounded text-primary">
+                    <Separator className="my-2 bg-zinc-400" />
+                    <div className="flex justify-between items-center text-xl font-black bg-zinc-900 p-3 rounded text-white mt-4">
                         <span>Grand Total</span>
                         <span>₱{order.total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
@@ -380,12 +234,12 @@ export function ViewPurchaseOrderDialog({
                 {/* Signatures */}
                 <div className="pt-12 grid grid-cols-2 gap-4">
                      <div className="space-y-2">
-                         <div className="border-b-2 border-zinc-200 h-8"></div>
-                         <p className="text-xs text-center text-muted-foreground uppercase tracking-wide">Approved By</p>
+                         <div className="border-b-2 border-zinc-400 h-8"></div>
+                         <p className="text-xs text-center text-zinc-900 font-bold uppercase tracking-wide">Approved By</p>
                      </div>
                      <div className="space-y-2">
-                         <div className="border-b-2 border-zinc-200 h-8"></div>
-                         <p className="text-xs text-center text-muted-foreground uppercase tracking-wide">Received By</p>
+                         <div className="border-b-2 border-zinc-400 h-8"></div>
+                         <p className="text-xs text-center text-zinc-900 font-bold uppercase tracking-wide">Received By</p>
                      </div>
                 </div>
              </div>

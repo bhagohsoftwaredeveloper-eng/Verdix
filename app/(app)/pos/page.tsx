@@ -57,6 +57,7 @@ import { StartShiftDialog } from './start-shift-dialog';
 import { PosLoginForm } from './login-form';
 import { AdminAuthDialog } from './admin-auth-dialog';
 import { EndShiftDialog } from './end-shift-dialog';
+import { ShiftTakeoverDialog } from './shift-takeover-dialog';
 import { CashTransferDialog } from './cash-transfer-dialog';
 import { SelectCustomerDialog, WALK_IN_CUSTOMER } from './select-customer-dialog';
 import { LoyaltyRewardsDialog } from './loyalty-rewards-dialog';
@@ -302,6 +303,9 @@ export default function POSPage() {
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+  const [isCollisionOpen, setIsCollisionOpen] = useState(false);
+  const [collisionShift, setCollisionShift] = useState<any>(null);
+  const [isCheckingShift, setIsCheckingShift] = useState(false);
   
   // Payment Methods
   const [paymentMethods, setPaymentMethods] = useState<{id: string; name: string; isActive: boolean; isReferenceRequired?: boolean; pointsAmount?: number; currencyEquivalent?: number}[]>([]);
@@ -365,9 +369,22 @@ export default function POSPage() {
 
       const storedShiftId = localStorage.getItem('pos_current_shift_id');
       if (storedShiftId) {
-          setCurrentShiftId(storedShiftId);
-          setShiftActive(true);
-          // Ideally fetch shift details here to verify active status
+          // Verify shift status and ownership
+          fetch(getApiUrl(`/pos/shifts?shiftId=${storedShiftId}`))
+            .then(res => res.json())
+            .then(result => {
+                if (result.success && result.data.status === 'active') {
+                    setCurrentShiftId(storedShiftId);
+                    setShiftActive(result.data.userId === JSON.parse(storedUser || '{}').id || result.data.userId === JSON.parse(storedUser || '{}').uid);
+                } else {
+                    localStorage.removeItem('pos_current_shift_id');
+                    setShiftActive(false);
+                    setCurrentShiftId(null);
+                }
+            })
+            .catch(() => {
+                setShiftActive(false);
+            });
       }
   }, []);
 
@@ -576,6 +593,38 @@ export default function POSPage() {
   // changing the dependency array size (avoids React Fast Refresh warning).
   const isPosLoggedInRef = useRef(isPosLoggedIn);
   useEffect(() => { isPosLoggedInRef.current = isPosLoggedIn; }, [isPosLoggedIn]);
+
+  // Refs for stable session state access in effects
+  const shiftActiveRef = useRef(shiftActive);
+  const isCheckingShiftRef = useRef(isCheckingShift);
+  const isPosLoggedInSyncRef = useRef(isPosLoggedIn);
+  
+  useEffect(() => {
+    shiftActiveRef.current = shiftActive;
+    isCheckingShiftRef.current = isCheckingShift;
+    isPosLoggedInSyncRef.current = isPosLoggedIn;
+  }, [shiftActive, isCheckingShift, isPosLoggedIn]);
+
+  // Persist Cartesian State
+  useEffect(() => {
+    // Only synch if logged in 
+    if (!isPosLoggedInSyncRef.current) return;
+    
+    // Safety: If we are currently checking for a shift, don't update/clear localStorage
+    // This prevents the empty state on mount from wiping out the stored cart
+    if (isCheckingShiftRef.current) return;
+
+    if (items.length > 0 || selectedCustomer?.id !== 'walk-in' || heldTransactions.length > 0) {
+        localStorage.setItem('pos_current_cart', JSON.stringify({
+            items,
+            selectedCustomer,
+            heldTransactions
+        }));
+    } else if (shiftActiveRef.current) {
+        // Only remove if we intentionally cleared the cart while a shift is active
+        localStorage.removeItem('pos_current_cart');
+    }
+  }, [items, selectedCustomer, heldTransactions]); 
 
   // Keyboard Shortcuts Listener
   useEffect(() => {
@@ -969,9 +1018,10 @@ export default function POSPage() {
     setHeldTransactions(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleStartShift = async (cash: number) => {
-    if (!currentUser) { // Should check currentUser, setIsPosLoggedIn handles UI
-        toast({ title: "Error", description: "User not logged in", variant: "destructive" });
+  const handleStartShift = async (cash: number, explicitUserId?: string) => {
+    const userId = explicitUserId || (currentUser?.uid || currentUser?.id);
+    if (!userId) { 
+        toast({ title: "Error", description: "User not identified for shift start", variant: "destructive" });
         return;
     }
 
@@ -985,7 +1035,7 @@ export default function POSPage() {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({
-                 userId: currentUser.uid || currentUser.id,
+                 userId: userId,
                  terminalId: selectedTerminalId,
                  startingCash: cash
              })
@@ -1019,7 +1069,8 @@ export default function POSPage() {
     // See next step for EndShiftDialog update.
   }
   
-  // Redefining handleEndShift with expected signature, I'll update the Dialog next.
+
+
   const handleConfirmEndShift = async (data: { actualCash: number; cashDifference: number; notes: string; cashDenominations: any[] }) => {
       if (!currentShiftId || isEndingShift) {
           return;
@@ -1145,23 +1196,120 @@ export default function POSPage() {
       }
   };
 
-  const handlePosLoginSuccess = (user: any) => {
+  const handlePosLoginSuccess = async (user: any) => {
+    setIsCheckingShift(true);
     setIsPosLoggedIn(true);
     setCurrentUser(user);
     localStorage.setItem('pos_current_user', JSON.stringify(user));
-    // Determine if shift is already active based on localStorage? 
-    // Usually we would fetch "active shift for user" from backend here.
+    
+    // Restore Cartesian state from localStorage
+    const savedCart = localStorage.getItem('pos_current_cart');
+    if (savedCart) {
+        try {
+            const parsed = JSON.parse(savedCart);
+            setItems(parsed.items || []);
+            setSelectedCustomer(parsed.selectedCustomer || WALK_IN_CUSTOMER);
+            setHeldTransactions(parsed.heldTransactions || []);
+        } catch (e) {
+            console.error("Failed to restore cart:", e);
+        }
+    }
+    
+    const loginUserId = user.id || user.uid;
+    const terminalId = selectedTerminalId;
+
+    if (terminalId) {
+        try {
+            // Check for ANY active shift on this terminal
+            const activeRes = await fetch(getApiUrl(`/pos/shifts?terminalId=${terminalId}&status=active`));
+            const activeResult = await activeRes.json();
+            
+            if (activeResult.success && activeResult.data) {
+                const shift = activeResult.data;
+                const shiftUserId = String(shift.user_id || shift.userId);
+                const loginUserIdStr = String(loginUserId);
+                
+                if (shiftUserId !== loginUserIdStr) {
+                    // Collision! Another user has an active shift here.
+                    setCollisionShift(shift);
+                    setIsCollisionOpen(true);
+                } else {
+                    // Resume our own shift
+                    setCurrentShiftId(shift.id);
+                    setShiftActive(true);
+                    localStorage.setItem('pos_current_shift_id', shift.id);
+                }
+            } else {
+                // No active shift found
+                setShiftActive(false);
+                setCurrentShiftId(null);
+            }
+        } catch (error) {
+            console.error("Login shift check failed:", error);
+        } finally {
+            setIsCheckingShift(false);
+        }
+    } else {
+        setIsCheckingShift(false);
+    }
+  }
+
+  const handleContinueShift = async () => {
+      if (!collisionShift || !currentUser) return;
+      
+      const userId = currentUser.id || currentUser.uid;
+      
+      try {
+          // Update shift ownership in DB
+          const response = await fetch(getApiUrl('/pos/shifts'), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  shiftId: collisionShift.id,
+                  takeoverUserId: userId
+              })
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+              setCurrentShiftId(collisionShift.id);
+              setShiftActive(true);
+              localStorage.setItem('pos_current_shift_id', collisionShift.id);
+              setIsCollisionOpen(false);
+              toast({ title: "Shift Taken Over", description: `You have continued the session from ${collisionShift.cashierName || 'previous cashier'}.` });
+          }
+      } catch (error: any) {
+          toast({ title: "Takeover Failed", description: error.message, variant: "destructive" });
+      }
+  }
+
+  const handleTakeoverStartNew = () => {
+      if (!collisionShift) return;
+      setIsCollisionOpen(false);
+      
+      // Clear cart when starting fresh
+      setItems([]);
+      setSelectedCustomer(WALK_IN_CUSTOMER);
+      setHeldTransactions([]);
+      
+      setCurrentShiftId(collisionShift.id); // For the EndShiftDialog
+      setIsEndShiftOpen(true);
+      // Once EndShiftDialog finishes, shiftActive is false and StartShiftDialog will show.
   }
 
   const handleLogout = () => {
-    // Only log out the user, don't clear transaction
     setIsPosLoggedIn(false);
     setCurrentUser(null);
+    // REMOVED: setHeldTransactions([]), setSelectedCustomer, etc. to allow resumption
+    // We only clear items if we explicitly want to start fresh.
+    setShiftActive(false);
+    setCurrentShiftId(null);
     localStorage.removeItem('pos_current_user');
+    localStorage.removeItem('pos_current_shift_id');
   }
 
   const handleShutdown = () => {
-    setIsShutdownConfirmOpen(true);
+    handleLogout();
   }
 
   const handleRequestPriceEdit = () => {
@@ -1317,7 +1465,7 @@ export default function POSPage() {
     { icon: ListOrdered, label: 'Suspended', fKey: 'F5', action: () => setIsHeldTransOpen(true), className: "bg-orange-50 text-orange-800 hover:bg-orange-100 border-orange-100 hover:border-orange-200" },
     { icon: Plus, label: 'Quantity', fKey: 'F6', action: handleOpenQuantityDialog, className: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100 hover:border-indigo-200" },
     { icon: CurrencyIcon, label: 'Edit Price', fKey: 'F7', action: handleRequestPriceEdit, className: "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-100 hover:border-purple-200" },
-    { icon: Power, label: 'Shutdown', fKey: 'F8', action: handleShutdown, className: "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-100 hover:border-slate-200" },
+    { icon: Power, label: shiftActive ? 'Endorse/Out' : 'Shutdown', fKey: 'F8', action: handleShutdown, className: "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-100 hover:border-slate-200" },
   ];
 
   const footerActions = [
@@ -1694,10 +1842,20 @@ export default function POSPage() {
         </div>
       )}
 
-       {isPosLoggedIn && !shiftActive && (
+       {isPosLoggedIn && !shiftActive && !isCheckingShift && !isCollisionOpen && (
         <StartShiftDialog
-          isOpen={isPosLoggedIn && !shiftActive}
+          isOpen={isPosLoggedIn && !shiftActive && !isCheckingShift && !isCollisionOpen}
           onShiftStart={handleStartShift}
+          onCancel={handleLogout}
+        />
+      )}
+
+      {isCollisionOpen && collisionShift && (
+        <ShiftTakeoverDialog 
+          isOpen={isCollisionOpen}
+          previousCashierName={collisionShift.cashierName || 'Previous Cashier'}
+          onContinue={handleContinueShift}
+          onStartNew={handleTakeoverStartNew}
         />
       )}
 
