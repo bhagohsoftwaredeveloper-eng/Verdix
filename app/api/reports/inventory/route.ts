@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (lowStock === 'true') {
-      conditions.push('p.stock <= p.reorder_point');
+      conditions.push('p.stock > 0 AND (p.stock < p.reorder_point OR p.stock < (SELECT COALESCE(low_stock_threshold, 0) FROM pos_settings LIMIT 1))');
     }
 
     if (search) {

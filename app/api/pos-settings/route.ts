@@ -13,7 +13,13 @@ export async function GET(request: NextRequest) {
       { name: 'enable_email_notifications', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'notification_email', type: 'VARCHAR(255) NULL' },
       { name: 'enable_push_notifications', type: 'BOOLEAN DEFAULT TRUE' },
-      { name: 'is_training_mode', type: 'BOOLEAN DEFAULT FALSE' }
+      { name: 'is_training_mode', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'enable_tax_rates_auth', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'tax_rates_auth_username', type: 'VARCHAR(255) NULL' },
+      { name: 'tax_rates_auth_password', type: 'VARCHAR(255) NULL' },
+      { name: 'fiscal_year_start_month', type: 'INT DEFAULT 1' },
+      { name: 'print_two_receipts', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'native_printer_name', type: 'VARCHAR(255) DEFAULT "XP-58-P"' }
     ];
 
     const currentColumnsResult = await query(
@@ -79,7 +85,13 @@ export async function GET(request: NextRequest) {
         enable_email_notifications AS enableEmailNotifications,
         notification_email AS notificationEmail,
         enable_push_notifications AS enablePushNotifications,
-        is_training_mode AS isTrainingMode
+        is_training_mode AS isTrainingMode,
+        enable_tax_rates_auth AS enableTaxRatesAuth,
+        tax_rates_auth_username AS taxRatesAuthUsername,
+        tax_rates_auth_password AS taxRatesAuthPassword,
+        fiscal_year_start_month AS fiscalYearStartMonth,
+        print_two_receipts AS printTwoReceipts,
+        native_printer_name AS nativePrinterName
       FROM pos_settings
       LIMIT 1
     `;
@@ -143,7 +155,9 @@ export async function POST(request: NextRequest) {
         showQuantityInSearch,
         enablePriceEditAuth, priceEditAuthUsername, priceEditAuthPassword,
         operatedBy, minNumber, serialNumber,
-        lowStockThreshold, enableEmailNotifications, notificationEmail, enablePushNotifications
+        lowStockThreshold, enableEmailNotifications, notificationEmail, enablePushNotifications,
+        enableTaxRatesAuth, taxRatesAuthUsername, taxRatesAuthPassword,
+        fiscalYearStartMonth, printTwoReceipts, nativePrinterName
       } = body;
 
       const insertSQL = `
@@ -158,12 +172,11 @@ export async function POST(request: NextRequest) {
           enable_recent_sales_auth, recent_sales_auth_username, recent_sales_auth_password,
           paper_size, print_mode, enable_negative_inventory,
           enable_cash_count_auth, cash_count_auth_username, cash_count_auth_password,
-          show_quantity_in_search,
-          enable_price_edit_auth, price_edit_auth_username, price_edit_auth_password,
-          operated_by, min_number, serial_number,
-          low_stock_threshold, enable_email_notifications, notification_email, enable_push_notifications
+          low_stock_threshold, enable_email_notifications, notification_email, enable_push_notifications,
+          enable_tax_rates_auth, tax_rates_auth_username, tax_rates_auth_password,
+          fiscal_year_start_month, print_two_receipts, native_printer_name
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
@@ -208,7 +221,13 @@ export async function POST(request: NextRequest) {
         lowStockThreshold || 10,
         enableEmailNotifications ?? false,
         notificationEmail || null,
-        enablePushNotifications ?? true
+        enablePushNotifications ?? true,
+        enableTaxRatesAuth ?? false,
+        taxRatesAuthUsername || null,
+        taxRatesAuthPassword || null,
+        fiscalYearStartMonth || 1,
+        printTwoReceipts ?? false,
+        nativePrinterName || 'XP-58-P'
       ]);
     } else {
       // Update existing settings - Dynamic Update
@@ -256,7 +275,13 @@ export async function POST(request: NextRequest) {
         enableEmailNotifications: 'enable_email_notifications',
         notificationEmail: 'notification_email',
         enablePushNotifications: 'enable_push_notifications',
-        isTrainingMode: 'is_training_mode'
+        isTrainingMode: 'is_training_mode',
+        enableTaxRatesAuth: 'enable_tax_rates_auth',
+        taxRatesAuthUsername: 'tax_rates_auth_username',
+        taxRatesAuthPassword: 'tax_rates_auth_password',
+        fiscalYearStartMonth: 'fiscal_year_start_month',
+        printTwoReceipts: 'print_two_receipts',
+        nativePrinterName: 'native_printer_name'
       };
 
       const updates: string[] = [];

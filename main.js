@@ -108,6 +108,10 @@ ipcMain.handle('window:close', (event) => {
 });
 
 // Printer SDK IPC Handlers
+ipcMain.handle('printer:list', async () => {
+  return await printerSdk.listPrinters();
+});
+
 ipcMain.handle('printer:connect', async (event, portSetting) => {
   return await printerSdk.connectPrinter(portSetting);
 });

@@ -205,10 +205,8 @@ export class ReceiptGenerator {
         enc.align('center');
         enc.line('Thank you for your purchase!');
         enc.line('Pos System by Bhagoh');
-
         if (sale.isTrainingMode) {
             enc.newline();
-            enc.bold(true).line('*** TRAINING MODE ***').bold(false);
             enc.line('THIS IS NOT A CASH SALE/');
             enc.line('OFFICIAL RECEIPT.');
             enc.line('PLEASE REQUEST FROM SELLER');
@@ -216,6 +214,71 @@ export class ReceiptGenerator {
             enc.line('OFFICIAL RECEIPT');
         }
 
+        enc.newline().newline().newline();
+        enc.cut();
+
+        return enc.encode();
+    }
+
+    public generatePaymentReceipt(payment: {
+        customerName: string;
+        date: Date | string;
+        amount: number;
+        paymentMethod: string;
+        reference?: string;
+        note?: string;
+        invoiceNo?: string;
+    }, settings?: any): Uint8Array {
+        const W = COLS;
+        const enc = this.encoder.initialize().codepage('cp437');
+
+        const center = (text: string) => {
+            const t = text.substring(0, W);
+            const padLen = Math.max(0, Math.floor((W - t.length) / 2));
+            return ' '.repeat(padLen) + t;
+        };
+
+        const padRow = (left: string, right: string) => {
+            const spaces = W - left.length - right.length;
+            if (spaces <= 0) return `${left} ${right}`.substring(0, W);
+            return `${left}${' '.repeat(spaces)}${right}`;
+        };
+
+        const paymentDate = new Date(payment.date);
+        const dateStr = format(paymentDate, 'PP p');
+        const bizName = settings?.businessName?.trim() || 'STOCK PILOT';
+        const address = settings?.address?.trim() || 'General Merchandise';
+
+        // HEADER
+        enc.bold(true).line(center(bizName)).bold(false);
+        enc.line(center(address));
+        if (settings?.contactNumber) enc.line(center(settings.contactNumber));
+        if (settings?.tin) enc.line(center(`VAT REG TIN: ${settings.tin}`));
+        enc.line(center(dateStr));
+        enc.newline();
+
+        // TITLE
+        enc.align('center').bold(true).line('PAYMENT RECEIPT').bold(false).align('left');
+        enc.line('-'.repeat(W));
+
+        // DETAILS
+        enc.line(`Received From: ${payment.customerName.substring(0, W - 15)}`);
+        if (payment.invoiceNo) enc.line(padRow('Invoice Ref:', payment.invoiceNo.substring(0, 14)));
+        if (payment.reference) enc.line(padRow('Receipt Ref:', payment.reference.substring(0, 14)));
+        enc.line(padRow('Method:', payment.paymentMethod));
+        if (payment.note) enc.line(`Note: ${payment.note.substring(0, W - 6)}`);
+        enc.line('-'.repeat(W));
+
+        // AMOUNT
+        enc.align('center').bold(true).line('AMOUNT PAID').bold(false);
+        enc.align('center').bold(true).line(`P${this.fmt(payment.amount)}`).bold(false);
+        enc.align('left');
+
+        // FOOTER
+        enc.newline();
+        enc.align('center');
+        enc.line('Thank you for your payment!');
+        enc.line('This is a system generated receipt.');
         enc.newline().newline().newline();
         enc.cut();
 

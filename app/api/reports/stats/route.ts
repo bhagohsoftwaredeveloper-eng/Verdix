@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
+import { getFiscalYearRange } from '@/lib/fiscal-utils';
 
 export async function GET(request: NextRequest) {
     try {
@@ -61,17 +62,30 @@ export async function GET(request: NextRequest) {
         currentMonthStart.setDate(1);
         const currentMonthStartStr = currentMonthStart.toISOString().split('T')[0];
 
+        // Fetch settings for fiscal year
+        const settingsResult = await query("SELECT fiscal_year_start_month FROM pos_settings LIMIT 1") as any[];
+        const startMonth = settingsResult[0]?.fiscal_year_start_month || 1;
+        
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        
+        // Determine current fiscal year
+        const fiscalYear = (now.getMonth() + 1) >= startMonth ? currentYear : currentYear - 1;
+        const { startDate: fiscalStartDate } = getFiscalYearRange(fiscalYear, startMonth);
+        const fiscalStartDateStr = fiscalStartDate.toISOString().split('T')[0];
+
         const summaryQuery = `
             SELECT 
                 (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid') as total_revenue_all_time,
                 (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ?) as total_revenue_month,
                 (SELECT COUNT(*) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ?) as total_sales_month,
                 (SELECT COALESCE(SUM(si.quantity), 0) FROM sale_items si JOIN sales_transactions st ON si.sale_id = st.id WHERE st.status = 'Paid' AND st.invoice_date >= ?) as products_sold_month,
-                (SELECT COUNT(*) FROM products WHERE stock <= reorder_point) as low_stock_items,
+                (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ?) as total_revenue_fiscal_ytd,
+                (SELECT COUNT(*) FROM products WHERE stock > 0 AND (stock < reorder_point OR stock < (SELECT COALESCE(low_stock_threshold, 0) FROM pos_settings LIMIT 1))) as low_stock_items,
                 (SELECT COUNT(*) FROM products) as total_items
         `;
         
-        const [summaryData] = await query(summaryQuery, [currentMonthStartStr, currentMonthStartStr, currentMonthStartStr]) as any[];
+        const [summaryData] = await query(summaryQuery, [currentMonthStartStr, currentMonthStartStr, currentMonthStartStr, fiscalStartDateStr]) as any[];
 
 
          // Transform Sales By Day for Chart (Recharts expects specific format)
@@ -101,6 +115,9 @@ export async function GET(request: NextRequest) {
             summary: {
                 totalRevenueAllTime: parseFloat(summaryData.total_revenue_all_time),
                 totalRevenueMonth: parseFloat(summaryData.total_revenue_month),
+                totalRevenueFiscalYTD: parseFloat(summaryData.total_revenue_fiscal_ytd),
+                fiscalYear: fiscalYear,
+                fiscalStartMonth: startMonth,
                 totalSalesMonth: parseInt(summaryData.total_sales_month),
                 productsSoldMonth: parseInt(summaryData.products_sold_month),
                 lowStockItems: parseInt(summaryData.low_stock_items),

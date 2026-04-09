@@ -115,7 +115,7 @@ export function TenderDialog({
     const [view, setView] = useState<'tender' | 'receipt' | 'change' | 'print_prompt'>('tender');
     const [completedSale, setCompletedSale] = useState<any>(null);
     const [pointsToRedeemInput, setPointsToRedeemInput] = useState<string>('');
-    const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
+    const { isPrinting, isConnected, connect, print } = usePrinter(printMode, settings?.nativePrinterName);
     const { toast } = useToast();
     const pointsInputRef = useRef<HTMLInputElement>(null);
 
@@ -219,6 +219,13 @@ export function TenderDialog({
 
 
     const receiptRef = useRef<HTMLDivElement>(null);
+    const yesButtonRef = useRef<HTMLButtonElement>(null);
+    const noButtonRef = useRef<HTMLButtonElement>(null);
+    const paymentMethodRef = useRef<HTMLButtonElement>(null);
+    const amountTenderedRef = useRef<HTMLInputElement>(null);
+    const referenceInputRef = useRef<HTMLInputElement>(null);
+    const confirmButtonRef = useRef<HTMLButtonElement>(null);
+    const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
     const handlePrint = useReactToPrint({
         contentRef: receiptRef,
@@ -445,6 +452,14 @@ export function TenderDialog({
 
         if (shouldPrint) {
             await handlePrintReceipt(completedSale);
+            
+            // If the setting is enabled, print a second copy
+            if (settings?.printTwoReceipts) {
+                // Short delay to allow the printer/buffer to breathe
+                await new Promise(resolve => setTimeout(resolve, 800));
+                await handlePrintReceipt(completedSale);
+            }
+
             // Small delay to ensure print command is sent
             setTimeout(() => {
                 onSuccess(selectedMethod, totalDue);
@@ -482,6 +497,75 @@ export function TenderDialog({
         onOpenChange(false);
     }
 
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (view === 'print_prompt') {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (document.activeElement === yesButtonRef.current) {
+                    noButtonRef.current?.focus();
+                } else {
+                    yesButtonRef.current?.focus();
+                }
+            } else if (e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                handleConfirmPrint(true);
+            } else if (e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                handleConfirmPrint(false);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                handleConfirmPrint(false);
+            }
+            return;
+        }
+
+        if (view === 'tender') {
+            if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+                e.preventDefault();
+                if (document.activeElement === paymentMethodRef.current) {
+                    amountTenderedRef.current?.focus();
+                    amountTenderedRef.current?.select();
+                } else if (document.activeElement === amountTenderedRef.current) {
+                    if (isReferenceRequired) {
+                        referenceInputRef.current?.focus();
+                    } else {
+                        confirmButtonRef.current?.focus();
+                    }
+                } else if (document.activeElement === referenceInputRef.current) {
+                    confirmButtonRef.current?.focus();
+                } else if (document.activeElement === confirmButtonRef.current || document.activeElement === cancelButtonRef.current) {
+                    paymentMethodRef.current?.focus();
+                }
+            } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+                e.preventDefault();
+                if (document.activeElement === amountTenderedRef.current) {
+                    paymentMethodRef.current?.focus();
+                } else if (document.activeElement === referenceInputRef.current) {
+                    amountTenderedRef.current?.focus();
+                    amountTenderedRef.current?.select();
+                } else if (document.activeElement === confirmButtonRef.current || document.activeElement === cancelButtonRef.current) {
+                    if (isReferenceRequired) {
+                        referenceInputRef.current?.focus();
+                    } else {
+                        amountTenderedRef.current?.focus();
+                        amountTenderedRef.current?.select();
+                    }
+                } else if (document.activeElement === paymentMethodRef.current) {
+                    confirmButtonRef.current?.focus();
+                }
+            } else if (e.key === 'ArrowRight' && document.activeElement === cancelButtonRef.current) {
+                e.preventDefault();
+                confirmButtonRef.current?.focus();
+            } else if (e.key === 'ArrowLeft' && document.activeElement === confirmButtonRef.current) {
+                e.preventDefault();
+                cancelButtonRef.current?.focus();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onOpenChange(false);
+            }
+        }
+    };
+
     const getQuickAmounts = (total: number) => {
         const amounts = new Set<number>();
         amounts.add(Math.ceil(total));
@@ -504,7 +588,7 @@ export function TenderDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg overflow-hidden flex flex-col p-0" onInteractOutside={(e) => e.preventDefault()}>
+            <DialogContent className="sm:max-w-lg overflow-hidden flex flex-col p-0" onInteractOutside={(e) => e.preventDefault()} onKeyDown={handleKeyDown}>
                 {view === 'receipt' && completedSale ? (
                     <ReceiptActionView saleDetails={completedSale} onNewSale={handleNewSale} onPrint={handleSmartPrint} settings={settings} />
                 ) : view === 'change' && completedSale ? (
@@ -535,6 +619,7 @@ export function TenderDialog({
                                 size="lg" 
                                 className="h-16 text-xl font-bold" 
                                 onClick={() => handleConfirmPrint(false)}
+                                ref={noButtonRef}
                             >
                                 No
                             </Button>
@@ -542,6 +627,7 @@ export function TenderDialog({
                                 size="lg" 
                                 className="h-16 text-xl font-bold" 
                                 onClick={() => handleConfirmPrint(true)}
+                                ref={yesButtonRef}
                                 autoFocus
                             >
                                 <Printer className="mr-2 h-6 w-6" />
@@ -573,7 +659,7 @@ export function TenderDialog({
                                     value={selectedMethod} 
                                     onValueChange={setSelectedMethod}
                                 >
-                                    <SelectTrigger className="w-full h-12 text-lg">
+                                    <SelectTrigger className="w-full h-12 text-lg" ref={paymentMethodRef}>
                                         <SelectValue placeholder="Select Payment Method" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -734,6 +820,7 @@ export function TenderDialog({
                                     <div className="relative">
                                         <Input
                                             id="amountTendered"
+                                            ref={amountTenderedRef}
                                             type="text"
                                             inputMode="decimal"
                                             value={amountTendered}
@@ -775,6 +862,7 @@ export function TenderDialog({
                                     </Label>
                                     <Input
                                         id="referenceInput"
+                                        ref={referenceInputRef}
                                         type="text"
                                         value={referenceInput}
                                         onChange={(e) => setReferenceInput(e.target.value)}
@@ -807,11 +895,13 @@ export function TenderDialog({
                                     onClick={() => onOpenChange(false)}
                                     disabled={isProcessing || (selectedMethod === 'POINTS' && (customer as any)?.isExpired)}
                                     className="w-full sm:w-auto text-muted-foreground hover:text-foreground"
+                                    ref={cancelButtonRef}
                                 >
                                     Cancel
                                 </Button>
                                 <Button 
                                     onClick={handleConfirmPayment}
+                                    ref={confirmButtonRef}
                                     disabled={
                                         isProcessing || 
                                         (!amountTendered && balanceRemaining > 0 && !isChargePayment) || 

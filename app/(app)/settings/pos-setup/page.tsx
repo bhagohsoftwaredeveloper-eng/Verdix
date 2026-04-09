@@ -42,7 +42,7 @@ interface PosSettings {
   recentSalesAuthUsername?: string | null;
   recentSalesAuthPassword?: string | null;
   paperSize?: '58mm' | '80mm';
-  printMode?: 'browser' | 'escpos' | 'usb';
+  printMode?: 'browser' | 'escpos' | 'usb' | 'native';
   enableNegativeInventory?: boolean;
   enableCashCountAuth?: boolean;
   cashCountAuthUsername?: string | null;
@@ -51,7 +51,12 @@ interface PosSettings {
   enablePriceEditAuth?: boolean;
   priceEditAuthUsername?: string | null;
   priceEditAuthPassword?: string | null;
+  enableTaxRatesAuth?: boolean;
+  taxRatesAuthUsername?: string | null;
+  taxRatesAuthPassword?: string | null;
   isTrainingMode?: boolean;
+  printTwoReceipts?: boolean;
+  nativePrinterName?: string | null;
 }
 
 export default function PosSetupPage() {
@@ -88,8 +93,15 @@ export default function PosSetupPage() {
     enablePriceEditAuth: false,
     priceEditAuthUsername: '',
     priceEditAuthPassword: '',
-    isTrainingMode: false
+    enableTaxRatesAuth: false,
+    taxRatesAuthUsername: '',
+    taxRatesAuthPassword: '',
+    isTrainingMode: false,
+    printTwoReceipts: false,
+    nativePrinterName: 'XP-58-P'
   });
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+  const [isScanningPrinters, setIsScanningPrinters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -102,7 +114,43 @@ export default function PosSetupPage() {
   // Fetch POS settings on mount
   useEffect(() => {
     fetchSettings();
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      handleScanPrinters();
+    }
   }, []);
+
+  const handleScanPrinters = async () => {
+    const api = (window as any).electronAPI;
+    if (api && api.listPrinters) {
+      try {
+        setIsScanningPrinters(true);
+        const printers = await api.listPrinters();
+        setAvailablePrinters(printers);
+        // Show feedback to user
+        if (printers.length > 0) {
+          toast({
+            title: "Printers Scanned",
+            description: `Found ${printers.length} available printers.`,
+          });
+        } else {
+          toast({
+            title: "No Printers Found",
+            description: "No installed Windows printers were detected.",
+            variant: "destructive",
+          });
+        }
+      } catch (err) {
+        console.error('Failed to list printers:', err);
+        toast({
+          title: "Scan Failed",
+          description: "An error occurred while scanning for printers.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsScanningPrinters(false);
+      }
+    }
+  };
 
   const fetchSettings = async () => {
     isRefreshingRef.current = true;
@@ -433,16 +481,59 @@ export default function PosSetupPage() {
                   onChange={(e) => setSettings(prev => ({ ...prev, printMode: e.target.value as any }))}
                 >
                   <option value="browser">Use Installed Driver (Browser Print)</option>
-                  <option value="escpos">Direct Serial (Use if no driver)</option>
-                  <option value="usb">Direct USB (WinUSB/Zadig Only)</option>
                   <option value="native">Native (DLL) Printer</option>
                 </select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  * If you installed a printer driver (e.g., XPrinter, Epson), choose "Use Installed Driver".
+                  * "Native (DLL)" uses the Windows Print Spooler for maximum reliability.
                   <br />
-                  * "Direct USB" requires replacing your driver with WinUSB via Zadig.
+                  * Choose your specific printer driver from the list below.
                 </p>
               </div>
+            </div>
+
+            {settings.printMode === 'native' && (
+              <div className="flex items-center justify-between pt-4 border-t animate-in fade-in slide-in-from-top-2">
+                <div className="space-y-0.5">
+                  <Label htmlFor="nativePrinterName">Select Printer</Label>
+                  <p className="text-sm text-muted-foreground">Choose the installed Windows printer</p>
+                </div>
+                <div className="flex gap-2 w-[300px]">
+                  <select
+                    id="nativePrinterName"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={settings.nativePrinterName || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, nativePrinterName: e.target.value }))}
+                  >
+                    <option value="">-- Select Printer --</option>
+                    {availablePrinters.map(printer => (
+                      <option key={printer} value={printer}>{printer}</option>
+                    ))}
+                  </select>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={handleScanPrinters}
+                    disabled={isScanningPrinters}
+                    title="Scan for printers"
+                  >
+                    <Loader2 className={`h-4 w-4 ${isScanningPrinters ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="printTwoReceipts">Print 2 Receipts</Label>
+                <p className="text-sm text-muted-foreground">
+                  Print two copies of the receipt during tender
+                </p>
+              </div>
+              <Switch
+                id="printTwoReceipts"
+                checked={!!settings.printTwoReceipts}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, printTwoReceipts: checked }))}
+              />
             </div>
           </CardContent>
         </Card>
@@ -513,6 +604,7 @@ export default function PosSetupPage() {
                 className="data-[state=checked]:bg-blue-600"
               />
             </div>
+
 
             <div className="flex items-center justify-between pt-4 border-t border-blue-100">
               <div className="space-y-0.5">
@@ -783,6 +875,45 @@ export default function PosSetupPage() {
                       type="password"
                       value={settings.priceEditAuthPassword || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, priceEditAuthPassword: e.target.value }))}
+                      placeholder="e.g. 1234"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableTaxRatesAuth">Tax Rates Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Require credentials to manage tax rates
+                  </p>
+                </div>
+                <Switch
+                  id="enableTaxRatesAuth"
+                  checked={!!settings.enableTaxRatesAuth}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableTaxRatesAuth: checked }))}
+                />
+              </div>
+              {settings.enableTaxRatesAuth && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label htmlFor="taxRatesAuthUsername">Username</Label>
+                    <Input
+                      id="taxRatesAuthUsername"
+                      value={settings.taxRatesAuthUsername || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, taxRatesAuthUsername: e.target.value }))}
+                      placeholder="e.g. admin"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="taxRatesAuthPassword">Password</Label>
+                    <Input
+                      id="taxRatesAuthPassword"
+                      type="password"
+                      value={settings.taxRatesAuthPassword || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, taxRatesAuthPassword: e.target.value }))}
                       placeholder="e.g. 1234"
                     />
                   </div>

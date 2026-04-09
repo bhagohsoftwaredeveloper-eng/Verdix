@@ -484,8 +484,19 @@ function NotificationsBell() {
   // Poll for low stock notifications
   // Poll for low stock notifications and listen for updates
   useEffect(() => {
+    let interval: NodeJS.Timeout;
+
     const checkStock = async () => {
         try {
+            // First check if notifications are enabled
+            const settingsResponse = await fetch('/api/pos-settings');
+            const settingsResult = await settingsResponse.json();
+            
+            if (!settingsResult.success || !settingsResult.data.enablePushNotifications) {
+                setNotifications([]);
+                return;
+            }
+
             const lowStock = await getLowStockAlerts();
             
             const newNotifications = lowStock.map((p: any) => ({
@@ -512,10 +523,10 @@ function NotificationsBell() {
     window.addEventListener('stock-updated', handleStockUpdate);
     
     // Poll every 30 seconds as a fallback
-    const interval = setInterval(checkStock, 30000);
+    interval = setInterval(checkStock, 30000);
     
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       window.removeEventListener('stock-updated', handleStockUpdate);
     };
   }, []);

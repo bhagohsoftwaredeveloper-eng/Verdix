@@ -11,7 +11,7 @@ export interface UsePrinterReturn {
     printMode: 'browser' | 'escpos' | 'usb' | 'native';
 }
 
-export function usePrinter(mode: 'browser' | 'escpos' | 'usb' | 'native' = 'escpos'): UsePrinterReturn {
+export function usePrinter(mode: 'browser' | 'escpos' | 'usb' | 'native' = 'escpos', printerName?: string): UsePrinterReturn {
     const serial = useWebSerial();
     const usb = useWebUSB();
     
@@ -23,9 +23,10 @@ export function usePrinter(mode: 'browser' | 'escpos' | 'usb' | 'native' = 'escp
         if (mode === 'native') {
             const api = (window as any).electronAPI;
             if (api && api.connectPrinter) {
+                const targetPrinter = printerName || "XP-58-P";
                 // Connecting directly to the Windows Printer Spooler Queue Name
-                console.log("[usePrinter] Attempting native connection to explicit driver name: 'XP-58-P'");
-                const success = await api.connectPrinter("XP-58-P");
+                console.log(`[usePrinter] Attempting native connection to explicit driver name: '${targetPrinter}'`);
+                const success = await api.connectPrinter(targetPrinter);
                 setNativeConnected(success);
                 console.log("[usePrinter] Native connected:", success);
                 return success;

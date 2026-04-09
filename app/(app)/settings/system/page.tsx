@@ -16,14 +16,32 @@ interface SystemSettings {
   currencyCode: string;
   timezone: string;
   dateFormat: string;
+  fiscalYearStartMonth: number;
 }
+
+const CURRENCIES = [
+  { symbol: '$', code: 'USD', name: 'US Dollar' },
+  { symbol: '€', code: 'EUR', name: 'Euro' },
+  { symbol: '£', code: 'GBP', name: 'British Pound' },
+  { symbol: '₱', code: 'PHP', name: 'Philippine Peso' },
+  { symbol: '¥', code: 'JPY', name: 'Japanese Yen' },
+  { symbol: '¥', code: 'CNY', name: 'Chinese Yuan' },
+  { symbol: '₹', code: 'INR', name: 'Indian Rupee' },
+  { symbol: '₩', code: 'KRW', name: 'South Korean Won' },
+  { symbol: '₫', code: 'VND', name: 'Vietnamese Dong' },
+  { symbol: '฿', code: 'THB', name: 'Thai Baht' },
+  { symbol: '$', code: 'AUD', name: 'Australian Dollar' },
+  { symbol: '$', code: 'CAD', name: 'Canadian Dollar' },
+  { symbol: '$', code: 'SGD', name: 'Singapore Dollar' },
+];
 
 export default function SystemPreferencesPage() {
   const [settings, setSettings] = useState<SystemSettings>({
     currencySymbol: '$',
     currencyCode: 'USD',
     timezone: 'UTC',
-    dateFormat: 'MM/DD/YYYY'
+    dateFormat: 'MM/DD/YYYY',
+    fiscalYearStartMonth: 1
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -44,7 +62,8 @@ export default function SystemPreferencesPage() {
             currencySymbol: result.data.currencySymbol || '$',
             currencyCode: result.data.currencyCode || 'USD',
             timezone: result.data.timezone || 'UTC',
-            dateFormat: result.data.dateFormat || 'MM/DD/YYYY'
+            dateFormat: result.data.dateFormat || 'MM/DD/YYYY',
+            fiscalYearStartMonth: result.data.fiscalYearStartMonth || 1
         });
       }
     } catch (error) {
@@ -139,21 +158,24 @@ export default function SystemPreferencesPage() {
               <Label htmlFor="currencySymbol">Currency Symbol</Label>
               <Select
                 value={settings.currencySymbol}
-                onValueChange={(value) => setSettings(prev => ({ ...prev, currencySymbol: value }))}
+                onValueChange={(value) => {
+                  const matchingCurrency = CURRENCIES.find(c => c.symbol === value);
+                  setSettings(prev => ({ 
+                    ...prev, 
+                    currencySymbol: value,
+                    currencyCode: matchingCurrency ? matchingCurrency.code : prev.currencyCode
+                  }));
+                }}
               >
                 <SelectTrigger id="currencySymbol">
                   <SelectValue placeholder="Select symbol" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="$">$ (Dollar)</SelectItem>
-                  <SelectItem value="€">€ (Euro)</SelectItem>
-                  <SelectItem value="£">£ (Pound)</SelectItem>
-                  <SelectItem value="₱">₱ (Peso)</SelectItem>
-                  <SelectItem value="¥">¥ (Yen/Yuan)</SelectItem>
-                  <SelectItem value="₹">₹ (Rupee)</SelectItem>
-                  <SelectItem value="₩">₩ (Won)</SelectItem>
-                  <SelectItem value="₫">₫ (Dong)</SelectItem>
-                  <SelectItem value="฿">฿ (Baht)</SelectItem>
+                  {Array.from(new Set(CURRENCIES.map(c => c.symbol))).map(symbol => (
+                    <SelectItem key={symbol} value={symbol}>
+                      {symbol} ({CURRENCIES.find(c => c.symbol === symbol)?.name.split(' ').pop()})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
@@ -164,25 +186,24 @@ export default function SystemPreferencesPage() {
               <Label htmlFor="currencyCode">Currency Code</Label>
               <Select
                 value={settings.currencyCode}
-                onValueChange={(value) => setSettings(prev => ({ ...prev, currencyCode: value }))}
+                onValueChange={(value) => {
+                  const matchingCurrency = CURRENCIES.find(c => c.code === value);
+                  setSettings(prev => ({ 
+                    ...prev, 
+                    currencyCode: value,
+                    currencySymbol: matchingCurrency ? matchingCurrency.symbol : prev.currencySymbol
+                  }));
+                }}
               >
                 <SelectTrigger id="currencyCode">
                   <SelectValue placeholder="Select code" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="USD">USD - US Dollar</SelectItem>
-                  <SelectItem value="EUR">EUR - Euro</SelectItem>
-                  <SelectItem value="GBP">GBP - British Pound</SelectItem>
-                  <SelectItem value="PHP">PHP - Philippine Peso</SelectItem>
-                  <SelectItem value="JPY">JPY - Japanese Yen</SelectItem>
-                  <SelectItem value="CNY">CNY - Chinese Yuan</SelectItem>
-                  <SelectItem value="INR">INR - Indian Rupee</SelectItem>
-                  <SelectItem value="KRW">KRW - South Korean Won</SelectItem>
-                  <SelectItem value="VND">VND - Vietnamese Dong</SelectItem>
-                  <SelectItem value="THB">THB - Thai Baht</SelectItem>
-                  <SelectItem value="AUD">AUD - Australian Dollar</SelectItem>
-                  <SelectItem value="CAD">CAD - Canadian Dollar</SelectItem>
-                  <SelectItem value="SGD">SGD - Singapore Dollar</SelectItem>
+                  {CURRENCIES.map(curr => (
+                    <SelectItem key={curr.code} value={curr.code}>
+                      {curr.code} - {curr.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
@@ -238,6 +259,46 @@ export default function SystemPreferencesPage() {
                   <SelectItem value="MMM D, YYYY">MMM D, YYYY (e.g. Dec 31, 2024)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Fiscal Year
+            </CardTitle>
+            <CardDescription>Configure your financial year reporting period</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="fiscalYearStartMonth">Fiscal Year Start Month</Label>
+              <Select 
+                value={settings.fiscalYearStartMonth.toString()} 
+                onValueChange={(value) => setSettings(prev => ({ ...prev, fiscalYearStartMonth: parseInt(value) }))}
+              >
+                <SelectTrigger id="fiscalYearStartMonth">
+                  <SelectValue placeholder="Select start month" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">January</SelectItem>
+                  <SelectItem value="2">February</SelectItem>
+                  <SelectItem value="3">March</SelectItem>
+                  <SelectItem value="4">April</SelectItem>
+                  <SelectItem value="5">May</SelectItem>
+                  <SelectItem value="6">June</SelectItem>
+                  <SelectItem value="7">July</SelectItem>
+                  <SelectItem value="8">August</SelectItem>
+                  <SelectItem value="9">September</SelectItem>
+                  <SelectItem value="10">October</SelectItem>
+                  <SelectItem value="11">November</SelectItem>
+                  <SelectItem value="12">December</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                The month when your business's financial year begins.
+              </p>
             </div>
           </CardContent>
         </Card>

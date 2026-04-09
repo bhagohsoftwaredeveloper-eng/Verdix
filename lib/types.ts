@@ -344,6 +344,8 @@ export interface SystemSettings {
   enableVoidReturnAuth?: boolean;
   voidAuthUsername?: string | null;
   voidAuthPassword?: string | null;
+  printTwoReceipts?: boolean;
+  nativePrinterName?: string;
 }
 
 export interface User {

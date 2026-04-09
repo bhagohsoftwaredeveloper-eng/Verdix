@@ -59,7 +59,7 @@ import { AdminAuthDialog } from './admin-auth-dialog';
 import { EndShiftDialog } from './end-shift-dialog';
 import { ShiftTakeoverDialog } from './shift-takeover-dialog';
 import { CashTransferDialog } from './cash-transfer-dialog';
-import { SelectCustomerDialog, WALK_IN_CUSTOMER } from './select-customer-dialog';
+import { CustomerAccountDialog, WALK_IN_CUSTOMER } from './customer-account-dialog';
 import { LoyaltyRewardsDialog } from './loyalty-rewards-dialog';
 import { RecentSalesDialog } from './recent-sales-dialog';
 import { VoidSalesDialog } from './void-sales-dialog';
@@ -1599,7 +1599,10 @@ export default function POSPage() {
                   </Button>
                 </div>
 
-                <div className="flex items-center gap-2 bg-background border border-muted-foreground/20 rounded-md px-3 h-12 shadow-sm min-w-[200px]">
+                <div 
+                  className="flex items-center gap-2 bg-background border border-muted-foreground/20 rounded-md px-3 h-12 shadow-sm min-w-[200px] cursor-pointer hover:border-primary transition-colors"
+                  onClick={() => setIsCustomerSelectOpen(true)}
+                >
                     <User className="h-4 w-4 text-primary" />
                     <div className="flex-1 overflow-hidden">
                         <div className="flex items-center gap-1.5">
@@ -1608,7 +1611,15 @@ export default function POSPage() {
                         <div className="text-sm font-medium truncate">{selectedCustomer?.name || 'Walk-in'}</div>
                     </div>
                     {selectedCustomer?.id !== 'walk-in' && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 -mr-1" onClick={() => handleSelectCustomer(WALK_IN_CUSTOMER)}>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 -mr-1" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectCustomer(WALK_IN_CUSTOMER);
+                          }}
+                        >
                             <X className="h-3 w-3" />
                         </Button>
                     )}
@@ -1859,13 +1870,7 @@ export default function POSPage() {
         />
       )}
 
-      {isTrainingMode && (
-         <div className="bg-blue-600 text-white py-1 px-4 text-center font-bold text-sm animate-pulse z-50 flex items-center justify-center gap-2">
-            <Ban className="h-4 w-4" />
-            BIR TRAINING MODE ACTIVE - TRANSACTIONS ARE NOT OFFICIAL
-            <Ban className="h-4 w-4" />
-         </div>
-      )}
+
 
       <TenderDialog
         isOpen={isTenderDialogOpen}
@@ -1978,10 +1983,13 @@ export default function POSPage() {
         terminalId={selectedTerminalId}
         userId={currentUser?.uid || currentUser?.id || ''}
       />
-      <SelectCustomerDialog
+      <CustomerAccountDialog
         isOpen={isCustomerSelectOpen}
         onOpenChange={setIsCustomerSelectOpen}
         onSelectCustomer={handleSelectCustomer}
+        initialCustomer={selectedCustomer}
+        printMode={businessSettings?.printMode || 'native'}
+        settings={businessSettings as any}
       />
       <LoyaltyRewardsDialog 
         isOpen={isLoyaltyOpen} 

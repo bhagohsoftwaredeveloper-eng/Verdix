@@ -28,19 +28,55 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { AddTaxRateDialog } from './add-tax-rate-dialog';
 import { EditTaxRateDialog } from './edit-tax-rate-dialog';
+import { AdminAuthDialog } from '../../pos/admin-auth-dialog';
 import { TaxRate } from '@/lib/types';
+import { Lock } from 'lucide-react';
 
 export default function TaxRatesPage() {
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [posSettings, setPosSettings] = useState<any>(null);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+
   const [selectedTaxRate, setSelectedTaxRate] = useState<TaxRate | null>(null);
   const [taxRateToDelete, setTaxRateToDelete] = useState<TaxRate | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchTaxRates();
+    checkAuthAndFetch();
   }, []);
+
+  const checkAuthAndFetch = async () => {
+    try {
+      setIsAuthLoading(true);
+      const settingsResponse = await fetch(getApiUrl('/pos-settings'));
+      const settingsResult = await settingsResponse.json();
+      
+      if (settingsResult.success) {
+        const settings = settingsResult.data;
+        setPosSettings(settings);
+        
+        if (settings.enableTaxRatesAuth) {
+          setShowAuthDialog(true);
+        } else {
+          setIsAuthenticated(true);
+          fetchTaxRates();
+        }
+      } else {
+        setIsAuthenticated(true);
+        fetchTaxRates();
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+      setIsAuthenticated(true);
+      fetchTaxRates();
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
 
   const fetchTaxRates = async () => {
     try {
@@ -96,6 +132,47 @@ export default function TaxRatesPage() {
       setTaxRateToDelete(null);
     }
   };
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && posSettings?.enableTaxRatesAuth) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-4">
+        <div className="p-4 rounded-full bg-muted/50">
+          <Lock className="h-12 w-12 text-muted-foreground" />
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold tracking-tight">Authentication Required</h2>
+          <p className="text-muted-foreground">
+            Direct access to Tax Rates is protected. Please authenticate to continue.
+          </p>
+        </div>
+        <Button onClick={() => setShowAuthDialog(true)}>
+          Enter Credentials
+        </Button>
+        <AdminAuthDialog
+          isOpen={showAuthDialog}
+          onOpenChange={setShowAuthDialog}
+          onSuccess={() => {
+            setIsAuthenticated(true);
+            fetchTaxRates();
+          }}
+          requiredCredentials={{
+            username: posSettings.taxRatesAuthUsername,
+            password: posSettings.taxRatesAuthPassword
+          }}
+          title="Tax Rates Authentication"
+          description="Enter valid credentials to manage tax rates."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">

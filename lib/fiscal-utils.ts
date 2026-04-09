@@ -1,0 +1,73 @@
+/**
+ * Utility functions for fiscal year calculations
+ */
+
+/**
+ * Gets the fiscal year for a given date and start month.
+ * 
+ * @param date The date to check
+ * @param startMonth The month the fiscal year starts (1-12)
+ * @returns The fiscal year number
+ */
+export function getFiscalYear(date: Date, startMonth: number): number {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // getMonth() is 0-indexed
+
+  // If startMonth is 1 (January), fiscal year is same as calendar year
+  if (startMonth === 1) return year;
+
+  // If the current month is less than the start month, we are in the previous calendar year's fiscal year
+  // Example: Fiscal year starts in April (4). If it's March (3) 2024, it's still FY 2023.
+  if (month < startMonth) {
+    return year - 1;
+  }
+
+  return year;
+}
+
+/**
+ * Gets the fiscal period (1-12) for a given date and start month.
+ * 
+ * @param date The date to check
+ * @param startMonth The month the fiscal year starts (1-12)
+ * @returns The fiscal period (1-12)
+ */
+export function getFiscalPeriod(date: Date, startMonth: number): number {
+  const month = date.getMonth() + 1; // 1-12
+
+  if (month >= startMonth) {
+    return month - startMonth + 1;
+  } else {
+    return month + (12 - startMonth) + 1;
+  }
+}
+
+/**
+ * Gets the start and end dates for a given fiscal year and start month.
+ * 
+ * @param fiscalYear The fiscal year (e.g., 2024)
+ * @param startMonth The month the fiscal year starts (1-12)
+ * @returns An object with startDate and endDate
+ */
+export function getFiscalYearRange(fiscalYear: number, startMonth: number): { startDate: Date; endDate: Date } {
+  const startDate = new Date(fiscalYear, startMonth - 1, 1);
+  const endDate = new Date(fiscalYear + 1, startMonth - 1, 0); // Last day of the previous calendar month
+  
+  // Set to start/end of day
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(23, 59, 59, 999);
+  
+  return { startDate, endDate };
+}
+
+/**
+ * Formats a fiscal year for display (e.g., "FY 2023-2024" or just "FY 2024")
+ * 
+ * @param fiscalYear The fiscal year number
+ * @param startMonth The month the fiscal year starts (1-12)
+ * @returns A formatted string
+ */
+export function formatFiscalYear(fiscalYear: number, startMonth: number): string {
+  if (startMonth === 1) return `FY ${fiscalYear}`;
+  return `FY ${fiscalYear}-${fiscalYear + 1}`;
+}

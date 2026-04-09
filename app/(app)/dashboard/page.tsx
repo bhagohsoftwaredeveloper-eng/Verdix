@@ -94,7 +94,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className={`grid gap-4 md:grid-cols-2 ${summary?.fiscalStartMonth !== 1 ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
         <Card className="glass-card overflow-hidden relative group hover:shadow-md transition-all duration-300 border-primary/10">
           <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -113,6 +113,26 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+        
+        {summary?.fiscalStartMonth !== 1 && (
+          <Card className="glass-card overflow-hidden relative group hover:shadow-md transition-all duration-300 border-orange-500/10">
+            <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Fiscal YTD</CardTitle>
+              <div className="p-2 bg-orange-500/10 rounded-full text-orange-500">
+                  <TrendingUp className="w-4 h-4" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                ₱{(summary?.totalRevenueFiscalYTD || 0).toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Since {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][summary?.fiscalStartMonth - 1]} 1, {summary?.fiscalYear}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="glass-card overflow-hidden relative group hover:shadow-md transition-all duration-300 border-blue-500/10">
            <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

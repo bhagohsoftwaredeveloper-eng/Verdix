@@ -35,6 +35,7 @@ import { Loader2, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ALL_PERMISSIONS } from './permissions';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { getApiUrl } from '@/lib/api-config';
 
 type User = {
@@ -52,7 +53,7 @@ const formSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   displayName: z.string().min(1, 'Display name is required'),
   password: z.string().transform(v => v === '' ? undefined : v).pipe(z.string().min(6, 'Password must be at least 6 characters long').optional()),
-  userType: z.enum(['Admin', 'Staff', 'Cashier', 'User']),
+  userType: z.enum(['Super Admin', 'Admin', 'Staff', 'Cashier', 'User']),
   permissions: z.array(z.string()).refine(value => value.some(item => item), {
     message: "You have to select at least one permission.",
   }),
@@ -110,8 +111,10 @@ export function EditUserDialog({
       }
 
       if (watchedUserType !== lastUserTypeRef.current) {
-        if (watchedUserType === 'Admin') {
+        if (watchedUserType === 'Super Admin') {
           form.setValue('permissions', ALL_PERMISSIONS.map(p => p.id));
+        } else if (watchedUserType === 'Admin') {
+          form.setValue('permissions', ALL_PERMISSIONS.filter(p => p.id !== 'manage_settings').map(p => p.id));
         } else if (watchedUserType === 'Staff') {
           form.setValue('permissions', [
             'view_dashboard',
@@ -136,9 +139,7 @@ export function EditUserDialog({
 
   async function onSubmit(values: FormValues) {
     try {
-      const permissionsToSend = values.permissions.includes('super_admin')
-        ? ['super_admin']
-        : values.permissions;
+      const permissionsToSend = values.permissions;
 
       // Call the API to update user
       const response = await fetch(getApiUrl(`/users/${user.uid}`), {
@@ -180,15 +181,22 @@ export function EditUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Edit User</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="sm:max-w-[800px] p-0 overflow-hidden flex flex-col max-h-[95vh] border-none shadow-2xl">
+        <DialogHeader className="p-8 pb-4 bg-muted/30">
+          <DialogTitle className="text-2xl font-bold">Edit User</DialogTitle>
+          <DialogDescription className="text-base">
             Modify details and permissions for {user.username}.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+            <ScrollArea className="flex-1">
+              <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
+                {/* Left Column: User Details */}
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold border-b pb-2">User Details</h3>
+                  </div>
             <FormField
               control={form.control}
               name="displayName"
@@ -228,6 +236,7 @@ export function EditUserDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="Super Admin">Super Admin</SelectItem>
                       <SelectItem value="Admin">Admin</SelectItem>
                       <SelectItem value="Staff">Staff</SelectItem>
                       <SelectItem value="Cashier">Cashier</SelectItem>
@@ -238,31 +247,35 @@ export function EditUserDialog({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password (leave blank to keep current)</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} value={field.value ?? ''} placeholder="New password" className="bg-white" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="permissions"
-              render={() => (
-                <FormItem>
-                  <div className="mb-4">
-                    <FormLabel className="text-base">Permissions</FormLabel>
-                    <p className="text-sm text-muted-foreground">
-                      Select the permissions for this user.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password (leave blank to keep current)</FormLabel>
+                        <FormControl>
+                          <Input type="password" {...field} value={field.value ?? ''} placeholder="New password" title="Leave blank to keep current password" className="bg-white h-11" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Right Column: Permissions */}
+                <div className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="permissions"
+                    render={() => (
+                      <FormItem className="space-y-6">
+                        <div className="space-y-2">
+                          <h3 className="text-lg font-semibold border-b pb-2">Permissions & Access</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Select individual access rights for this user.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-x-4 gap-y-3 p-4 rounded-xl bg-muted/20 border border-muted-foreground/10">
                     {ALL_PERMISSIONS.map((permission) => (
                       <FormField
                         key={permission.id}
@@ -295,13 +308,16 @@ export function EditUserDialog({
                           )
                         }}
                       />
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
+                        ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </ScrollArea>
+            <DialogFooter className="p-8 pt-4 bg-muted/30 border-t">
               <Button
                 type="button"
                 variant="outline"

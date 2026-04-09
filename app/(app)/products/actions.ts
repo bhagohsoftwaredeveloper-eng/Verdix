@@ -112,9 +112,9 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
         if (filters.status === 'out-of-stock') {
           whereClauses.push(`p.stock <= 0`);
         } else if (filters.status === 'low-stock') {
-          whereClauses.push(`p.stock > 0 AND p.stock < p.reorder_point`);
+          whereClauses.push(`p.stock > 0 AND (p.stock < p.reorder_point OR p.stock < (SELECT COALESCE(low_stock_threshold, 0) FROM pos_settings LIMIT 1))`);
         } else if (filters.status === 'in-stock') {
-           whereClauses.push(`p.stock > 0 AND p.stock >= p.reorder_point`);
+           whereClauses.push(`p.stock > 0 AND p.stock >= p.reorder_point AND p.stock >= (SELECT COALESCE(low_stock_threshold, 0) FROM pos_settings LIMIT 1)`);
         }
       }
     }
@@ -319,9 +319,9 @@ export async function getProductsCount(filters?: ProductFilters) {
         if (filters.status === 'out-of-stock') {
           whereClauses.push(`p.stock <= 0`);
         } else if (filters.status === 'low-stock') {
-          whereClauses.push(`p.stock > 0 AND p.stock < p.reorder_point`);
+          whereClauses.push(`p.stock > 0 AND (p.stock < p.reorder_point OR p.stock < (SELECT COALESCE(low_stock_threshold, 0) FROM pos_settings LIMIT 1))`);
         } else if (filters.status === 'in-stock') {
-           whereClauses.push(`p.stock > 0 AND p.stock >= p.reorder_point`);
+           whereClauses.push(`p.stock > 0 AND p.stock >= p.reorder_point AND p.stock >= (SELECT COALESCE(low_stock_threshold, 0) FROM pos_settings LIMIT 1)`);
         }
       }
     }
@@ -354,17 +354,21 @@ export async function getProductsCount(filters?: ProductFilters) {
 
 export async function getLowStockAlerts() {
   try {
+    // Get the global threshold first
+    const settingsResult = await query('SELECT low_stock_threshold FROM pos_settings LIMIT 1');
+    const globalThreshold = settingsResult.length > 0 ? settingsResult[0].low_stock_threshold : 10;
+
     const sql = `
       SELECT id, name, stock, reorder_point
       FROM products
-      WHERE stock < reorder_point
+      WHERE stock < reorder_point OR stock < ?
     `;
-    const products = await query(sql);
+    const products = await query(sql, [globalThreshold]);
     return products.map((p: any) => ({
       id: p.id,
       name: p.name,
       stock: p.stock,
-      reorderPoint: p.reorder_point
+      reorderPoint: Math.max(p.reorder_point || 0, globalThreshold)
     }));
   } catch (error) {
     console.error('Error fetching low stock alerts:', error);

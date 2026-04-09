@@ -10,5 +10,4 @@ export const ALL_PERMISSIONS = [
     { id: 'view_reports', label: 'View Reports' },
     { id: 'manage_users', label: 'Manage Users' },
     { id: 'manage_settings', label: 'Manage Settings' },
-    { id: 'super_admin', label: 'Super Admin (All Permissions)' },
 ] as const;

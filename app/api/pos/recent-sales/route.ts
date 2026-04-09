@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const terminalId = searchParams.get('terminalId');
     const queryParam = searchParams.get('query');
+    const customerId = searchParams.get('customerId');
 
     // 1. Fetch sales transactions
     // We join with pos_transactions to get terminal info and strictly filter POS sales
@@ -18,8 +19,11 @@ export async function GET(request: NextRequest) {
         c.contact_number as customer_contact,
         c.payment_terms as customer_payment_terms,
         st.date,
+        st.due_date,
         st.total,
+        (SELECT COALESCE(amount_paid, 0) FROM sales_invoices WHERE reference = st.reference LIMIT 1) as amount_paid,
         st.payment_method,
+        st.reference,
         st.status,
         st.notes,
         st.created_at,
@@ -48,6 +52,11 @@ export async function GET(request: NextRequest) {
     if (queryParam) {
         salesQuery += ' AND (pt.order_number LIKE ? OR st.id LIKE ?)';
         params.push(`%${queryParam}%`, `%${queryParam}%`);
+    }
+
+    if (customerId) {
+        salesQuery += ' AND st.customer_id = ?';
+        params.push(customerId);
     }
 
     salesQuery += ' ORDER BY st.created_at DESC';
@@ -100,11 +109,14 @@ export async function GET(request: NextRequest) {
             paymentTerms: sale.customer_payment_terms || '',
           },
           date: sale.created_at, // Use created_at as it has time
+          dueDate: sale.due_date,
           total: parseFloat(sale.total),
+          paidAmount: parseFloat(sale.amount_paid || 0),
           paymentMethod: sale.payment_method,
           status: sale.status,
           notes: sale.notes,
           orderNumber: sale.order_number,
+          reference: sale.reference,
           paymentReference: sale.payment_reference,
           pointsEarned: sale.points_earned ? parseFloat(sale.points_earned) : 0,
           amountTendered: sale.amount_tendered ? parseFloat(sale.amount_tendered) : parseFloat(sale.total),
