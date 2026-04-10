@@ -262,6 +262,7 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
         supplier: product.primary_supplier_id || product.supplier_id,
         supplierName: product.primary_supplier_name || product.legacy_supplier_name,
         warehouse: product.warehouse_id,
+        warehouseId: product.warehouse_id,
         warehouseName: product.warehouse_name,
         priceLevels: productPriceLevels,
         vatStatus: product.vat_status,

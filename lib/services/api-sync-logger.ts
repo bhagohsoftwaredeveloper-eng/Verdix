@@ -13,6 +13,8 @@ export type ApiSyncLog = {
   status: 'success' | 'failed' | 'pending';
   errorMessage?: string;
   retryCount: number;
+  nextRetryAt?: string | null;
+  lastRetryAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };

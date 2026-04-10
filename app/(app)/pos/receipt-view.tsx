@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 import { format } from 'date-fns';
-import { SaleItem } from './page';
+import { SaleItem, mapVatStatusToTaxType } from './page';
 import { Customer } from '@/lib/types';
 
 import { SystemSettings } from '@/lib/types';
@@ -24,6 +24,14 @@ interface ReceiptViewProps {
         terminalMin?: string;
         terminalSerialNumber?: string;
         isTrainingMode?: boolean;
+        paymentReference?: string;
+        taxBreakdown?: {
+            vatableSales: number;
+            vatAmount: number;
+            vatExemptSales: number;
+            zeroRatedSales: number;
+            nonVatSales: number;
+        };
     };
     settings?: SystemSettings | null;
 }
@@ -32,7 +40,28 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
     const { items, customer, totalDue, change, paymentMethod } = saleDetails;
     const subTotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
     const totalDiscount = items.reduce((acc, item) => acc + (item.price * item.quantity * (item.discount || 0)) / 100, 0);
-    const vatAmount = (totalDue / 1.12) * 0.12;
+    
+    // Robust tax calculation for fallback if taxBreakdown is missing
+    const computedTax = React.useMemo(() => {
+        const vatableGross = items.reduce((acc, item) => {
+            const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+            const taxType = item.taxType || mapVatStatusToTaxType(item.vatStatus);
+            return taxType === 'VAT' ? acc + netItemTotal : acc;
+        }, 0);
+
+        const vatableSales = vatableGross / 1.12;
+        const vatAmount = vatableGross - vatableSales;
+
+        const vatExemptSales = items.reduce((acc, item) => {
+            const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+            const taxType = item.taxType || mapVatStatusToTaxType(item.vatStatus);
+            return taxType === 'VAT_EXEMPT' ? acc + netItemTotal : acc;
+        }, 0);
+
+        return { vatableSales, vatAmount, vatExemptSales };
+    }, [items]);
+
+    const vatAmount = computedTax.vatAmount;
     const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const currentDate = saleDetails.transactionDate ? new Date(saleDetails.transactionDate) : new Date();
 
@@ -81,7 +110,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
 
             <div className="border-t border-dashed border-black pt-2 space-y-1">
                 <div className="flex justify-between">
-                    <span>Subtotal:</span>
+                    <span>SUBTOTAL:</span>
                     <span>{formatCurrency(subTotal)}</span>
                 </div>
                 {totalDiscount > 0 && (
@@ -91,13 +120,15 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 </div>
                 )}
                 <div className="flex justify-between font-bold text-sm mt-2">
-                    <span>TOTAL:</span>
+                    <span>AMOUNT DUE:</span>
                     <span>{formatCurrency(totalDue)}</span>
                 </div>
-                <div className="flex justify-between text-[10px]">
-                    <span>VAT (12%):</span>
-                    <span>{formatCurrency(vatAmount)}</span>
-                </div>
+                {!saleDetails.taxBreakdown && (
+                    <div className="flex justify-between text-[10px]">
+                        <span>VAT (12%):</span>
+                        <span>{formatCurrency(vatAmount)}</span>
+                    </div>
+                )}
             </div>
 
             <div className="border-t border-black my-2"></div>
@@ -117,17 +148,56 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 ) : null}
 
                 <div className="flex justify-between font-bold">
-                    <span>{saleDetails.pointsUsedValue && saleDetails.pointsUsedValue > 0 ? 'Cash Tendered:' : paymentMethod + ':'}</span>
+                    <span>{saleDetails.pointsUsedValue && saleDetails.pointsUsedValue > 0 ? 'CASH Tendered:' : (paymentMethod?.toUpperCase() === 'CASH' ? 'CASH:' : paymentMethod + ':')}</span>
                     <span>{formatCurrency(saleDetails.amountTendered || (totalDue + change))}</span>
                 </div>
 
+                {saleDetails.paymentReference && (
+                    <div className="flex justify-between font-bold text-[9px]">
+                        <span>REF NO:</span>
+                        <span>{saleDetails.paymentReference}</span>
+                    </div>
+                )}
+
                 {change > 0 && (
                     <div className="flex justify-between font-bold">
-                        <span>Change:</span>
+                        <span>CHANGE:</span>
                         <span>{formatCurrency(change)}</span>
                     </div>
                 )}
             </div>
+
+            {saleDetails.taxBreakdown ? (
+                <div className="border-t border-dashed border-black mt-2 pt-2 space-y-1">
+                    <div className="flex justify-between">
+                        <span>VAT SALES</span>
+                        <span>{formatCurrency(saleDetails.taxBreakdown.vatableSales)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>12% VAT</span>
+                        <span>{formatCurrency(saleDetails.taxBreakdown.vatAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>VAT-EXEMPT SALES</span>
+                        <span>{formatCurrency(saleDetails.taxBreakdown.vatExemptSales)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>ZERO-RATED SALES</span>
+                        <span>{formatCurrency(saleDetails.taxBreakdown.zeroRatedSales)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>NON-VAT SALES</span>
+                        <span>{formatCurrency(saleDetails.taxBreakdown.nonVatSales)}</span>
+                    </div>
+                </div>
+            ) : (
+                <div className="border-t border-dashed border-black mt-2 pt-2">
+                    <div className="flex justify-between text-[10px]">
+                        <span>VAT (12%):</span>
+                        <span>{formatCurrency(vatAmount)}</span>
+                    </div>
+                </div>
+            )}
 
                 {(saleDetails.pointsEarned && saleDetails.pointsEarned > 0) || (saleDetails.pointsUsedCount && saleDetails.pointsUsedCount > 0) || (saleDetails.pointsBalance !== undefined) ? (
                     <div className="mt-2 pt-2 border-t border-dashed border-black">

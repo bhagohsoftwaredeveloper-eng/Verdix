@@ -1,29 +1,31 @@
-
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import { format } from 'date-fns';
 import type { POSSaleItem, Customer } from './types';
 import { SystemSettings } from './types';
 
-// 58mm thermal printer = 32 characters per line (monospace)
-const COLS = 32;
-
-// Column widths matching receipt-view.tsx:
-//   <span className="w-10">  => Qty  : 7 chars
-//   <span className="flex-1"> => Item : 16 chars  (32 - 7 - 9)
-//   <span className="w-12">  => Amt  : 9 chars
-const QTY_W  = 7;
-const AMT_W  = 9;
-const NAME_W = COLS - QTY_W - AMT_W; // 16
+// Default for 58mm
+const DEFAULT_COLS = 32;
 
 export class ReceiptGenerator {
     private encoder: any;
 
-    constructor() {
-        this.encoder = new ReceiptPrinterEncoder({
-            language: 'esc-pos',
-            codepageMapping: 'epson',
-            width: COLS,
-        });
+    constructor() { }
+
+    private getLayout(settings?: SystemSettings | null) {
+        const paperSize = settings?.paperSize || '58mm';
+        if (paperSize === '80mm') {
+            const COLS = 48;
+            const QTY_W = 8;
+            const AMT_W = 12;
+            const NAME_W = COLS - QTY_W - AMT_W;
+            return { COLS, QTY_W, AMT_W, NAME_W };
+        }
+        // Default 58mm
+        const COLS = 32;
+        const QTY_W = 7;
+        const AMT_W = 9;
+        const NAME_W = COLS - QTY_W - AMT_W;
+        return { COLS, QTY_W, AMT_W, NAME_W };
     }
 
     public generateReceipt(sale: {
@@ -43,8 +45,17 @@ export class ReceiptGenerator {
         isTrainingMode?: boolean;
         pointsUsedValue?: number;
         pointsBalance?: number;
+        paymentReference?: string;
+        taxBreakdown?: {
+            vatableSales: number;
+            vatAmount: number;
+            vatExemptSales: number;
+            zeroRatedSales: number;
+            nonVatSales: number;
+        };
     }, settings?: SystemSettings | null): Uint8Array {
 
+        const { COLS, QTY_W, AMT_W, NAME_W } = this.getLayout(settings);
         const { items, customer, totalDue, change, paymentMethod, orderNumber, amountTendered, pointsEarned, pointsUsedCount } = sale;
         const subTotal      = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
         const totalDiscount = items.reduce((acc, item) => acc + (item.price * item.quantity * (item.discount || 0)) / 100, 0);
@@ -52,10 +63,16 @@ export class ReceiptGenerator {
         const currentDate   = sale.transactionDate ? new Date(sale.transactionDate) : new Date();
         const dateStr       = format(currentDate, 'PP p');
 
+        this.encoder = new ReceiptPrinterEncoder({
+            language: 'esc-pos',
+            codepageMapping: 'epson',
+            width: COLS,
+        });
+
         const enc = this.encoder.initialize().codepage('cp437');
 
         // ─── HEADER (centered) ───────────────────────────────────────────
-        // Use software centerRow to ensure perfect centering within 32 columns
+        // Use software centerRow to ensure perfect centering within columns
         const centerRow = (text: string) => {
             if (!text) return '';
             const stripped = text.substring(0, COLS);
@@ -155,29 +172,44 @@ export class ReceiptGenerator {
             return `${left}${pad.repeat(spaces)}${right}`;
         };
 
-        enc.line(padRow('Subtotal:', this.fmt(subTotal)));
+        enc.line(padRow('SUBTOTAL:', this.fmt(subTotal)));
 
         if (totalDiscount > 0) {
             enc.line(padRow('Discount:', `-${this.fmt(totalDiscount)}`));
         }
 
-        enc.bold(true).line(padRow('TOTAL:', this.fmt(totalDue))).bold(false);
-        enc.line(padRow('VAT (12%):', this.fmt(vatAmount)));
+        enc.bold(true).line(padRow('AMOUNT DUE:', this.fmt(totalDue))).bold(false);
 
         // ─── PAYMENT (solid border above) ────────────────────────────────
         enc.rule({ style: 'single' });
 
         if (sale.pointsUsedValue && sale.pointsUsedValue > 0) {
-            enc.bold(true).line(this.row('Points Redeemed:', `-${this.fmt(sale.pointsUsedValue)}`)).bold(false);
-            enc.bold(true).line(this.row('Net Balance Due:', this.fmt(totalDue - sale.pointsUsedValue))).bold(false);
-            enc.bold(true).line(this.row('Cash Tendered:', this.fmt(amountTendered || (totalDue + change)))).bold(false);
+            enc.bold(true).line(this.row('Points Redeemed:', `-${this.fmt(sale.pointsUsedValue)}`, COLS)).bold(false);
+            enc.bold(true).line(this.row('Net Balance Due:', this.fmt(totalDue - sale.pointsUsedValue), COLS)).bold(false);
+            enc.bold(true).line(this.row('CASH Tendered:', this.fmt(amountTendered || (totalDue + change)), COLS)).bold(false);
         } else {
-            const cashLabel = paymentMethod === 'POINTS' ? 'Cash Tendered:' : `${paymentMethod}:`;
-            enc.bold(true).line(this.row(cashLabel, this.fmt(amountTendered || (totalDue + change)))).bold(false);
+            const cashLabel = paymentMethod?.toUpperCase() === 'CASH' ? 'CASH:' : `${paymentMethod}:`;
+            enc.bold(true).line(this.row(cashLabel, this.fmt(amountTendered || (totalDue + change)), COLS)).bold(false);
+        }
+
+        if (sale.paymentReference) {
+            enc.line(this.row('REF NO:', sale.paymentReference, COLS));
         }
 
         if (change > 0) {
-            enc.bold(true).line(this.row('Change:', this.fmt(change))).bold(false);
+            enc.bold(true).line(this.row('CHANGE:', this.fmt(change), COLS)).bold(false);
+        }
+
+        // ─── TAX BREAKDOWN (dashed border above) ─────────────────────────
+        if (sale.taxBreakdown) {
+            enc.line('-'.repeat(COLS));
+            enc.line(padRow('VAT SALES', this.fmt(sale.taxBreakdown.vatableSales)));
+            enc.line(padRow('12% VAT', this.fmt(sale.taxBreakdown.vatAmount)));
+            enc.line(padRow('VAT-EXEMPT SALES', this.fmt(sale.taxBreakdown.vatExemptSales)));
+            enc.line(padRow('ZERO-RATED SALES', this.fmt(sale.taxBreakdown.zeroRatedSales)));
+            enc.line(padRow('NON-VAT SALES', this.fmt(sale.taxBreakdown.nonVatSales)));
+        } else {
+            enc.line(padRow('VAT (12%):', this.fmt(vatAmount)));
         }
 
         // ─── POINTS (dashed border above, if any) ────────────────────────
@@ -186,16 +218,16 @@ export class ReceiptGenerator {
             enc.align('center').bold(true).line('LOYALTY STATEMENT').bold(false).align('left');
             
             if (sale.pointsUsedCount && sale.pointsUsedCount > 0) {
-                enc.line(this.row('Points Used:', `${sale.pointsUsedCount.toLocaleString()} pts`));
+                enc.line(this.row('Points Used:', `${sale.pointsUsedCount.toLocaleString()} pts`, COLS));
             }
             if (pointsEarned && pointsEarned > 0) {
-                enc.line(this.row('Points Earned:', `${pointsEarned.toLocaleString()} pts`));
+                enc.line(this.row('Points Earned:', `${pointsEarned.toLocaleString()} pts`, COLS));
             }
             if (sale.pointsBalance !== undefined) {
-                enc.bold(true).line(this.row('New Balance:', `${Number(sale.pointsBalance).toLocaleString()} pts`)).bold(false);
+                enc.bold(true).line(this.row('New Balance:', `${Number(sale.pointsBalance).toLocaleString()} pts`, COLS)).bold(false);
             } else if (customer) {
                 const balance = (customer as any).current_points || (customer as any).loyaltyPoints || 0;
-                enc.bold(true).line(this.row('New Balance:', `${Number(balance).toLocaleString()} pts`)).bold(false);
+                enc.bold(true).line(this.row('New Balance:', `${Number(balance).toLocaleString()} pts`, COLS)).bold(false);
             }
         }
 
@@ -229,7 +261,13 @@ export class ReceiptGenerator {
         note?: string;
         invoiceNo?: string;
     }, settings?: any): Uint8Array {
+        const { COLS } = this.getLayout(settings);
         const W = COLS;
+        this.encoder = new ReceiptPrinterEncoder({
+            language: 'esc-pos',
+            codepageMapping: 'epson',
+            width: COLS,
+        });
         const enc = this.encoder.initialize().codepage('cp437');
 
         const center = (text: string) => {
@@ -286,14 +324,15 @@ export class ReceiptGenerator {
     }
 
     public generateZReadingReceipt(data: any, settings?: any): Uint8Array {
-        // 58mm thermal paper = 32 characters per line
-        const W = 32;
+        const { COLS } = this.getLayout(settings);
+        const W = COLS;
 
-        const enc = new ReceiptPrinterEncoder({
+        this.encoder = new ReceiptPrinterEncoder({
             language: 'esc-pos',
             codepageMapping: 'epson',
             width: W,
-        }).initialize().codepage('cp437');
+        });
+        const enc = this.encoder.initialize().codepage('cp437');
 
         const center = (text: string) => {
             const t = text.substring(0, W);
@@ -455,7 +494,7 @@ export class ReceiptGenerator {
     }
 
     /** Create a left+right padded row that fills `width` characters */
-    private row(left: string, right: string, width: number = COLS): string {
+    private row(left: string, right: string, width: number = DEFAULT_COLS): string {
         const spaces = width - left.length - right.length;
         if (spaces <= 0) return `${left} ${right}`.substring(0, width);
         return `${left}${' '.repeat(spaces)}${right}`;

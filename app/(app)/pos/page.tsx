@@ -192,8 +192,30 @@ function CurrencyIcon() {
 
 import { useProducts } from '@/hooks/use-api';
 
-// Shift Management State
-// ... (keep imports)
+/**
+ * Maps product vat_status string to internal taxType enum
+ */
+export function mapVatStatusToTaxType(vatStatus?: string): 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT' {
+  if (!vatStatus) return 'VAT';
+  const status = vatStatus.toUpperCase();
+  
+  // Explicit VAT markers
+  if (status.includes('SUBJECT TO 12% VAT') || status.includes('YES')) return 'VAT';
+  
+  // Explicit Exempt markers
+  if (status.includes('EXEMPT')) return 'VAT_EXEMPT';
+  
+  // Explicit Zero Rated markers
+  if (status.includes('ZERO RATED') || status.includes('ZERO-RATED') || status.includes('0%')) return 'ZERO_RATED';
+  
+  // Explicit Non-VAT markers
+  if (status.includes('NON-VAT') || status.includes('NON VAT') || status.includes('NO VAT')) return 'NON_VAT';
+  
+  // If it starts with NO/NON but didn't match specific EXEMPT/ZERO_RATED, treat as NON_VAT
+  if (status.startsWith('NO') || status.startsWith('NON')) return 'NON_VAT';
+
+  return 'VAT'; // Default to VAT for compliance
+}
 
 export default function POSPage() {
   // Shift Management State
@@ -787,7 +809,14 @@ export default function POSPage() {
           );
         } else {
           const itemPrice = calculateEffectivePrice(product, 1, activeLevelId, defaultLevelId);
-          const newItem: SaleItem = { ...product, quantity: 1, discount: 0, name: product.name, price: itemPrice };
+          const newItem: SaleItem = { 
+              ...product, 
+              quantity: 1, 
+              discount: 0, 
+              name: product.name, 
+              price: itemPrice,
+              taxType: mapVatStatusToTaxType(product.vatStatus)
+          };
           setSelectedItemId(newItem.id); 
           return [...prevItems, newItem];
         }
@@ -1367,8 +1396,8 @@ export default function POSPage() {
         
         subTotal += netItemTotal; // This acts as net sales after item discount
 
-        // Default to VAT if undefined
-        const taxType = item.taxType || 'VAT';
+        // Precise matching: use taxType if set, otherwise map from vatStatus
+        const taxType = item.taxType || mapVatStatusToTaxType(item.vatStatus);
 
         if (taxType === 'VAT') {
             const vatable = netItemTotal / 1.12;

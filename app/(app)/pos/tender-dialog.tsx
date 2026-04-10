@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Printer, User, Star, Info, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { SaleItem } from './page';
+import type { SaleItem, mapVatStatusToTaxType } from './page';
+import { mapVatStatusToTaxType as mapTax } from './page';
 import type { Customer } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
@@ -233,7 +234,7 @@ export function TenderDialog({
         onAfterPrint: () => console.log('Print finished'),
         pageStyle: `
             @page {
-                size: 58mm auto;
+                size: ${settings?.paperSize === '80mm' ? '80mm' : '58mm'} auto;
                 margin: 0;
             }
             @media print {
@@ -345,7 +346,8 @@ export function TenderDialog({
                     discountAmount: items.reduce((acc, item) => acc + (item.price * item.quantity * ((item.discount || 0) / 100)), 0),
                     taxAmount: items.reduce((acc, item) => {
                         const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
-                        const taxType = item.taxType || 'VAT';
+                        // Precise matching logic
+                        const taxType = item.taxType || mapTax(item.vatStatus);
                         if (taxType === 'VAT') {
                             return acc + (netItemTotal - (netItemTotal / 1.12));
                         }
@@ -389,6 +391,38 @@ export function TenderDialog({
                 duration: 2000
             });
 
+            // Calculate detailed tax breakdown for receipt
+            // Aggregated gross vatable sales to minimize rounding errors
+            const vatableGross = items.reduce((acc, item) => {
+                const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+                // Precise matching: use taxType if set, fallback to mapping from vatStatus
+                const taxType = item.taxType || mapTax(item.vatStatus);
+                return taxType === 'VAT' ? acc + netItemTotal : acc;
+            }, 0);
+
+            const vatableSales = vatableGross / 1.12;
+            const vatAmountResult = vatableGross - vatableSales;
+
+            const vatExemptSales = items.reduce((acc, item) => {
+                const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+                const taxType = item.taxType || mapTax(item.vatStatus);
+                return taxType === 'VAT_EXEMPT' ? acc + netItemTotal : acc;
+            }, 0);
+
+            const zeroRatedSales = items.reduce((acc, item) => {
+                const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+                const taxType = item.taxType || mapTax(item.vatStatus);
+                return taxType === 'ZERO_RATED' ? acc + netItemTotal : acc;
+            }, 0);
+
+            const nonVatSales = items.reduce((acc, item) => {
+                const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+                const taxType = item.taxType || mapTax(item.vatStatus);
+                // NON_VAT refers to items that are not VATable AND not specifically exempt/zero-rated in this context
+                // but usually it's just a catch-all for non-vatable items.
+                return taxType === 'NON_VAT' ? acc + netItemTotal : acc;
+            }, 0);
+
             const saleDetails = {
                 items: [...items],
                 customer: customer || { id: 'walk-in', name: 'Walk-in' } as any,
@@ -405,7 +439,15 @@ export function TenderDialog({
                 pointsBalance: result.data.pointsRemaining,
                 terminalMin: terminalMin || settings?.minNumber,
                 terminalSerialNumber: terminalSerialNumber || settings?.serialNumber,
-                isTrainingMode: isTrainingMode
+                isTrainingMode: isTrainingMode,
+                paymentReference: referenceInput.trim() || undefined,
+                taxBreakdown: {
+                    vatableSales,
+                    vatAmount: vatAmountResult,
+                    vatExemptSales,
+                    zeroRatedSales,
+                    nonVatSales
+                }
             };
 
             console.log('Final Sale Details for Receipt:', saleDetails);

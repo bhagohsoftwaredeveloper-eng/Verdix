@@ -63,6 +63,25 @@ export type PaymentTransactionPayload = {
   notes?: string;
 };
 
+export type SalesTransactionPayload = {
+  transactionType: 'SALES_INVOICE';
+  invoiceId: string;
+  customerId: string;
+  customerName: string;
+  date: string;
+  total: number;
+  paymentMethod: string;
+  paymentReference?: string;
+  status: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    price: number;
+    subtotal: number;
+  }>;
+};
+
 /**
  * Send HTTP request to external API with retry logic
  */
@@ -75,55 +94,66 @@ async function sendToExternalApi(
 ): Promise<{ success: boolean; error?: string; response?: any }> {
   let lastError: Error | null = null;
   
-  for (let attempt = 0; attempt <= config.retryAttempts; attempt++) {
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+  // Calculate next retry time (e.g., 5 minutes from now if it fails)
+  const getNextRetryAt = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 5);
+    return now.toISOString().slice(0, 19).replace('T', ' ');
+  };
 
-      // Add authentication headers
-      if (config.authType === 'api_key' && config.apiKey) {
-        headers['X-API-Key'] = config.apiKey;
-      } else if (config.authType === 'bearer_token' && config.bearerToken) {
-        headers['Authorization'] = `Bearer ${config.bearerToken}`;
-      }
+  try {
+    for (let attempt = 0; attempt <= config.retryAttempts; attempt++) {
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(config.timeout),
-      });
+        // Add authentication headers
+        if (config.authType === 'api_key' && config.apiKey) {
+          headers['X-API-Key'] = config.apiKey;
+        } else if (config.authType === 'bearer_token' && config.bearerToken) {
+          headers['Authorization'] = `Bearer ${config.bearerToken}`;
+        }
 
-      const responseData = await response.json().catch(() => ({}));
-
-      if (response.ok) {
-        // Success - log it
-        await logApiSync({
-          transactionType,
-          transactionId,
-          endpoint,
-          payload: JSON.stringify(payload),
-          response: JSON.stringify(responseData),
-          status: 'success',
-          retryCount: attempt,
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(config.timeout),
         });
 
-        return { success: true, response: responseData };
-      } else {
-        throw new Error(`HTTP ${response.status}: ${responseData.message || response.statusText}`);
-      }
-    } catch (error) {
-      lastError = error as Error;
-      
-      // If this isn't the last attempt, wait before retrying
-      if (attempt < config.retryAttempts) {
-        await new Promise(resolve => setTimeout(resolve, config.retryDelay));
+        const responseData = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+          // Success - log it
+          await logApiSync({
+            transactionType,
+            transactionId,
+            endpoint,
+            payload: JSON.stringify(payload),
+            response: JSON.stringify(responseData),
+            status: 'success',
+            retryCount: attempt,
+          });
+
+          return { success: true, response: responseData };
+        } else {
+          throw new Error(`HTTP ${response.status}: ${responseData.message || response.statusText}`);
+        }
+      } catch (error) {
+        lastError = error as Error;
+        
+        // If this isn't the last attempt, wait before retrying
+        if (attempt < config.retryAttempts) {
+          await new Promise(resolve => setTimeout(resolve, config.retryDelay));
+        }
       }
     }
+  } catch (outerError) {
+    lastError = outerError as Error;
   }
 
-  // All retries failed - log the failure
+  // All retries failed or network error occurred - log as 'pending' for background worker
   const errorMessage = lastError?.message || 'Unknown error';
   
   await logApiSync({
@@ -132,9 +162,11 @@ async function sendToExternalApi(
     endpoint,
     payload: JSON.stringify(payload),
     response: null,
-    status: 'failed',
+    status: 'pending', // Mark as pending instead of failed for automatic background retry
     errorMessage,
     retryCount: config.retryAttempts,
+    nextRetryAt: getNextRetryAt(),
+    lastRetryAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
   });
 
   return { success: false, error: errorMessage };
@@ -258,6 +290,47 @@ export async function syncPaymentTransaction(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error syncing payment transaction:', errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Sync sales transaction data
+ */
+export async function syncSalesTransaction(
+  invoiceId: string,
+  salesData: any,
+  config: ExternalApiConfig
+): Promise<{ success: boolean; error?: string }> {
+  if (!config.enabled) {
+    return { success: true }; // Skip if disabled
+  }
+
+  try {
+    const payload: SalesTransactionPayload = {
+      transactionType: 'SALES_INVOICE',
+      invoiceId: salesData.id || invoiceId,
+      customerId: salesData.customer?.id || '',
+      customerName: salesData.customer?.name || 'Walk-in Customer',
+      date: salesData.invoiceDate,
+      total: salesData.total,
+      paymentMethod: salesData.paymentMethod,
+      paymentReference: salesData.paymentReference,
+      status: salesData.status,
+      items: salesData.items.map((item: any) => ({
+        productId: item.product.id,
+        productName: item.product.name,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.quantity * item.price,
+      })),
+    };
+
+    const endpoint = `${config.apiEndpoint}/sales-transactions`;
+    return await sendToExternalApi(endpoint, payload, config, 'SALES_INVOICE', invoiceId);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error syncing sales transaction:', errorMessage);
     return { success: false, error: errorMessage };
   }
 }

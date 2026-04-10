@@ -346,6 +346,7 @@ export interface SystemSettings {
   voidAuthPassword?: string | null;
   printTwoReceipts?: boolean;
   nativePrinterName?: string;
+  paperSize?: '58mm' | '80mm';
 }
 
 export interface User {

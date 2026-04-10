@@ -194,6 +194,7 @@ export function EditProductDialog({
     resolver: zodResolver(productSchema),
     defaultValues: {
       ...product,
+      brand: product.brand ?? '',
       cost: product.cost ?? 0,
       barcode: product.barcode ?? '',
       additionalDescription: product.additionalDescription ?? '',
@@ -239,6 +240,7 @@ export function EditProductDialog({
     if (product && isOpen) {
       const sanitizedProduct = {
           ...product,
+          brand: product.brand ?? '',
           cost: product.cost ?? 0,
           barcode: product.barcode ?? '',
           additionalDescription: product.additionalDescription ?? '',
@@ -943,7 +945,7 @@ export function EditProductDialog({
                                   <SelectContent>
                                     {warehouses?.length > 0 ? (
                                       warehouses.map((w: any) => (
-                                        <SelectItem key={w.id} value={w.name}>
+                                        <SelectItem key={w.id} value={w.id}>
                                           {w.name}
                                         </SelectItem>
                                       ))

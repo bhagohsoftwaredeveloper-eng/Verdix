@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
       status,
       errorMessage,
       retryCount,
+      nextRetryAt,
+      lastRetryAt,
     } = body;
 
     const logId = `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -94,8 +96,8 @@ export async function POST(request: NextRequest) {
     const insertQuery = `
       INSERT INTO external_api_logs (
         id, transaction_type, transaction_id, endpoint, payload,
-        response, status, error_message, retry_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        response, status, error_message, retry_count, next_retry_at, last_retry_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     await query(insertQuery, [
@@ -108,6 +110,8 @@ export async function POST(request: NextRequest) {
       status,
       errorMessage || null,
       retryCount || 0,
+      nextRetryAt || null,
+      lastRetryAt || null,
     ]);
 
     return NextResponse.json({

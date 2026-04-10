@@ -44,7 +44,7 @@ export default function ExternalApiSettingsPage() {
 
   const fetchLogs = async () => {
     try {
-      const response = await fetch(getApiUrl('/external-api/logs?limit=20'));
+      const response = await fetch(getApiUrl('/external-api/logs?limit=50'));
       const data = await response.json();
       if (data.success) {
         setLogs(data.logs);
@@ -53,6 +53,8 @@ export default function ExternalApiSettingsPage() {
       console.error('Failed to fetch logs:', error);
     }
   };
+
+  const pendingCount = logs.filter(l => l.status === 'pending').length;
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -146,6 +148,34 @@ export default function ExternalApiSettingsPage() {
           </Button>
         </div>
       </div>
+
+      {pendingCount > 0 && (
+        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/30">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <p className="font-semibold text-amber-900 dark:text-amber-200">
+                  {pendingCount} item{pendingCount === 1 ? '' : 's'} waiting to be synced
+                </p>
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  The system will automatically attempt to sync these items in the background.
+                </p>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-amber-300 hover:bg-amber-100 dark:border-amber-800"
+                onClick={fetchLogs}
+              >
+                Refresh Status
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="configuration" className="space-y-4">
         <TabsList>
@@ -344,6 +374,7 @@ export default function ExternalApiSettingsPage() {
                       <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Reference</th>
                       <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
                       <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Attempts</th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Next Retry</th>
                       <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Error</th>
                     </tr>
                   </thead>
@@ -381,6 +412,9 @@ export default function ExternalApiSettingsPage() {
                           </td>
                           <td className="p-4 align-middle text-center">
                             {log.retryCount + 1}
+                          </td>
+                          <td className="p-4 align-middle text-xs">
+                            {log.nextRetryAt ? new Date(log.nextRetryAt).toLocaleTimeString() : '-'}
                           </td>
                           <td className="p-4 align-middle max-w-[200px] truncate text-xs text-destructive">
                             {log.errorMessage || '-'}

@@ -2,6 +2,14 @@ import fs from 'fs';
 import path from 'path';
 import cron from 'node-cron';
 import { performBackup } from './backup';
+import { query } from './mysql';
+import { getExternalApiConfig } from './external-api-config';
+import { 
+  syncPurchaseTransaction, 
+  syncPaymentTransaction, 
+  syncSalesTransaction,
+  syncAccountsPayable 
+} from './services/external-accounting-api';
 
 export interface BackupSchedule {
   enabled: boolean;
@@ -82,6 +90,80 @@ export function startScheduledBackup(schedule: BackupSchedule): void {
   }
 }
 
+/**
+ * Sweeps the external_api_logs table and retries pending/failed syncs
+ */
+export async function processSyncQueue(): Promise<void> {
+  try {
+    const apiConfig = await getExternalApiConfig();
+    if (!apiConfig.enabled) return;
+
+    // Find items that are pending or failed and due for retry
+    const pendingItems = await query(`
+      SELECT * FROM external_api_logs 
+      WHERE (status = 'pending' OR status = 'failed')
+      AND (next_retry_at IS NULL OR next_retry_at <= NOW())
+      ORDER BY created_at ASC
+      LIMIT 10
+    `);
+
+    if (pendingItems.length === 0) return;
+
+    console.log(`--- Sync Queue: Processing ${pendingItems.length} items ---`);
+
+    for (const log of pendingItems) {
+      try {
+        let syncResult: { success: boolean; error?: string };
+        const payload = JSON.parse(log.payload);
+
+        console.log(`Retrying ${log.transaction_type} sync for ID: ${log.transaction_id}`);
+
+        switch (log.transaction_type) {
+          case 'PURCHASE_ORDER':
+            syncResult = await syncPurchaseTransaction(log.transaction_id, payload, apiConfig);
+            break;
+          case 'SUPPLIER_PAYMENT':
+            syncResult = await syncPaymentTransaction(log.transaction_id, payload, apiConfig);
+            break;
+          case 'SALES_INVOICE':
+            syncResult = await syncSalesTransaction(log.transaction_id, payload, apiConfig);
+            break;
+          case 'ACCOUNTS_PAYABLE':
+            syncResult = await syncAccountsPayable(log.transaction_id, apiConfig);
+            break;
+          default:
+            console.warn(`Unsupported transaction type in sync queue: ${log.transaction_type}`);
+            continue;
+        }
+
+        if (syncResult.success) {
+          // Success: Mark as success
+          await query('UPDATE external_api_logs SET status = "success", error_message = NULL, next_retry_at = NULL WHERE id = ?', [log.id]);
+          console.log(`✅ Success: Synced ${log.transaction_type} (${log.transaction_id})`);
+        } else {
+          // Failure: Log but keep in queue (system will retry next sweep)
+          const nextRetry = new Date();
+          nextRetry.setMinutes(nextRetry.getMinutes() + 15); // Wait longer between sweeps
+          const nextRetryStr = nextRetry.toISOString().slice(0, 19).replace('T', ' ');
+          
+          await query(`
+            UPDATE external_api_logs 
+            SET error_message = ?, 
+                last_retry_at = NOW(), 
+                next_retry_at = ? 
+            WHERE id = ?
+          `, [syncResult.error || 'Sync failed', nextRetryStr, log.id]);
+          console.log(`❌ Failed: Could not sync ${log.transaction_type} (${log.transaction_id}). Next retry at ${nextRetryStr}`);
+        }
+      } catch (itemError) {
+        console.error(`Error processing sync queue item ${log.id}:`, itemError);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to process sync queue:', error);
+  }
+}
+
 export function initScheduler(): void {
   // Singleton-ish check to avoid multiple initializations in dev environment reloads
   if ((global as any).__backupSchedulerInitialized) {
@@ -90,6 +172,12 @@ export function initScheduler(): void {
   
   const schedule = getSchedule();
   startScheduledBackup(schedule);
+  
+  // Start the sync queue processor (runs every 2 minutes)
+  console.log('Starting background sync queue worker (2m interval)');
+  cron.schedule('*/2 * * * *', async () => {
+    await processSyncQueue();
+  });
   
   (global as any).__backupSchedulerInitialized = true;
   console.log('Backup scheduler initialized.');
