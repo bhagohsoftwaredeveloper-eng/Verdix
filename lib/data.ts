@@ -262,6 +262,7 @@ export const mockPurchases: PurchaseOrder[] = [
     total: (50 * 60 + 100 * 35),
     paymentMethod: 'Cash',
     status: 'Received',
+    paidAmount: (50 * 60 + 100 * 35),
   },
   {
     id: '2',
@@ -274,6 +275,7 @@ export const mockPurchases: PurchaseOrder[] = [
     total: 40 * 150,
     paymentMethod: 'Cash',
     status: 'Received',
+    paidAmount: 40 * 150,
   },
   {
     id: '3',
@@ -286,6 +288,7 @@ export const mockPurchases: PurchaseOrder[] = [
     total: 20 * 4000,
     paymentMethod: 'Invoice',
     status: 'Pending',
+    paidAmount: 0,
   },
 ];
 

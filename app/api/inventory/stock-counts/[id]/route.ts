@@ -26,8 +26,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const items = await query(itemsSql, [id]);
 
     return NextResponse.json({
-      ...count,
-      items
+      success: true,
+      data: {
+        ...count,
+        items
+      }
     });
 
   } catch (error) {

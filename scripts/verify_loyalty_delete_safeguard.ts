@@ -1,4 +1,4 @@
-import { query } from './lib/mysql';
+import { query } from '../lib/mysql';
 
 async function testLoyaltyDeleteSafeguard() {
   console.log('--- Testing Loyalty Delete Safeguard ---');
@@ -40,9 +40,9 @@ async function testLoyaltyDeleteSafeguard() {
     const historyRows: any = await query(transactionCheckSql, [loyaltyId]);
     
     if (historyRows && historyRows.length > 0 && historyRows[0].count > 0) {
-      console.log('✅ Safeguard Triggered: Records with transactions are blocked from deletion.');
+      console.log('âœ… Safeguard Triggered: Records with transactions are blocked from deletion.');
     } else {
-      console.error('❌ Safeguard Failed: Record with transaction was NOT blocked.');
+      console.error('âŒ Safeguard Failed: Record with transaction was NOT blocked.');
     }
 
     // 5. Clean up

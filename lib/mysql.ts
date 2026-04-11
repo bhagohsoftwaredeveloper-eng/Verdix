@@ -164,6 +164,64 @@ export async function getNextReceiptNumber(terminalId?: string): Promise<string>
 }
 
 /**
+ * Atomically gets and increments the next X-Reading number for a terminal
+ * @param terminalId - Terminal ID
+ * @returns The next X-Reading number string
+ */
+export async function getNextXReadingNumber(terminalId: string): Promise<string> {
+  return await withTransaction(async (connection) => {
+    // 1. Increment terminal-specific X counter
+    await connection.query(
+      `UPDATE pos_terminals SET x_counter = x_counter + 1 WHERE id = ?`,
+      [terminalId]
+    );
+    
+    // 2. Fetch the new value
+    const [rows]: any = await connection.query(
+      `SELECT x_counter as next_val FROM pos_terminals WHERE id = ?`,
+      [terminalId]
+    );
+    
+    if (!rows || rows.length === 0) {
+      throw new Error(`Failed to fetch next X-Reading number for terminal ${terminalId}`);
+    }
+    
+    const nextVal = rows[0].next_val;
+    const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    return `X-${dateStr}-${nextVal.toString().padStart(3, '0')}`;
+  });
+}
+
+/**
+ * Atomically gets and increments the next Z-Reading number for a terminal
+ * @param terminalId - Terminal ID
+ * @returns The next Z-Reading number string
+ */
+export async function getNextZReadingNumber(terminalId: string): Promise<string> {
+  return await withTransaction(async (connection) => {
+    // 1. Increment terminal-specific Z counter
+    await connection.query(
+      `UPDATE pos_terminals SET z_counter = z_counter + 1 WHERE id = ?`,
+      [terminalId]
+    );
+    
+    // 2. Fetch the new value
+    const [rows]: any = await connection.query(
+      `SELECT z_counter as next_val FROM pos_terminals WHERE id = ?`,
+      [terminalId]
+    );
+    
+    if (!rows || rows.length === 0) {
+      throw new Error(`Failed to fetch next Z-Reading number for terminal ${terminalId}`);
+    }
+    
+    const nextVal = rows[0].next_val;
+    const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    return `Z-${dateStr}-${nextVal.toString().padStart(3, '0')}`;
+  });
+}
+
+/**
  * Close the connection pool
  */
 export async function closePool() {

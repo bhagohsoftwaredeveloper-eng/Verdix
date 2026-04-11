@@ -23,6 +23,7 @@ interface XReadingDialogProps {
   onOpenChange: (open: boolean) => void;
   shiftId?: string;
   autoShow?: boolean;
+  terminalName?: string;
   printMode: 'browser' | 'escpos' | 'usb' | 'native';
 }
 
@@ -31,6 +32,7 @@ export function XReadingDialog({
   onOpenChange,
   shiftId,
   autoShow = false,
+  terminalName,
   printMode
 }: XReadingDialogProps) {
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
@@ -100,7 +102,7 @@ export function XReadingDialog({
               const { printReactComponent } = await import('@/app/lib/print-utils');
               printReactComponent(
                   <XReadingPreview 
-                      data={reportData} 
+                      data={{ ...reportData, terminalName }} 
                       businessSettings={businessSettings || {} as BusinessSettings} 
                       printerFormat="80mm" 
                   />,
@@ -131,6 +133,7 @@ export function XReadingDialog({
               tin: businessSettings?.tin,
               contactNumber: businessSettings?.contactNumber,
               email: businessSettings?.email,
+              terminalName: terminalName,
               min: reportData?.min,
               sn: reportData?.sn
           };
@@ -183,7 +186,7 @@ export function XReadingDialog({
                     ) : reportData ? (
                         <div className="bg-white shadow-lg h-fit max-w-[400px] w-full">
                             <XReadingPreview 
-                                data={reportData} 
+                                data={{ ...reportData, terminalName }} 
                                 businessSettings={businessSettings}
                             />
                         </div>

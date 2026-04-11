@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MySqlStockCountRepository } from '../../../../src/infrastructure/repositories/MySqlStockCountRepository';
+import { query } from '@/lib/mysql';
 
 // Initialize dependencies
 const stockCountRepository = new MySqlStockCountRepository();
@@ -24,16 +25,50 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const id = await stockCountRepository.create({
-      ...body,
-      id: `sc_${Date.now()}`,
-      status: 'Draft'
+    const { name, warehouseId, shelfLocationId, notes, createdBy } = body;
+    
+    // 1. Fetch products to include in the snapshot based on filters
+    let productsSql = `SELECT id, name, stock, sku, barcode FROM products WHERE availability = 'available'`;
+    const params: any[] = [];
+    
+    if (warehouseId) {
+      productsSql += ' AND warehouse_id = ?';
+      params.push(warehouseId);
+    }
+    
+    if (shelfLocationId) {
+      productsSql += ' AND shelf_location_id = ?';
+      params.push(shelfLocationId);
+    }
+    
+    const products: any[] = await query(productsSql, params);
+    
+    // 2. Map products to stock count items
+    const stockCountId = `sc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const items = products.map((p: any) => ({
+      id: `sci_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      stockCountId: stockCountId,
+      productId: p.id,
+      productName: p.name,
+      snapshotQuantity: parseFloat(p.stock || 0)
+    }));
+    
+    // 3. Create the stock count with items
+    await stockCountRepository.create({
+      id: stockCountId,
+      name,
+      warehouseId,
+      shelfLocationId,
+      notes,
+      createdBy: createdBy || 'Admin',
+      status: 'in_progress',
+      items
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Stock count created successfully',
-      data: { id },
+      message: 'Stock count created successfully with ' + items.length + ' items',
+      data: { id: stockCountId },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {

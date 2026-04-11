@@ -44,8 +44,8 @@ export function StockCountsClient() {
       setIsLoading(true);
       const res = await fetch('/api/inventory/stock-counts');
       const data = await res.json();
-      if (Array.isArray(data)) {
-        setCounts(data);
+      if (data.success && Array.isArray(data.data)) {
+        setCounts(data.data);
       }
     } catch (error) {
       console.error('Failed to fetch stock counts', error);
@@ -94,14 +94,14 @@ export function StockCountsClient() {
               counts.map((count) => (
                 <TableRow key={count.id}>
                   <TableCell>
-                    {format(new Date(count.created_at), 'PPP')}
+                    {count.createdAt ? format(new Date(count.createdAt), 'PPP') : 'N/A'}
                   </TableCell>
                   <TableCell className="font-medium">{count.name}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {count.warehouse_name || count.shelf_name ? (
+                    {count.warehouseName || count.shelfName ? (
                       <span className="flex flex-col text-xs">
-                        {count.warehouse_name && <span>WH: {count.warehouse_name}</span>}
-                        {count.shelf_name && <span>Shelf: {count.shelf_name}</span>}
+                        {count.warehouseName && <span>WH: {count.warehouseName}</span>}
+                        {count.shelfName && <span>Shelf: {count.shelfName}</span>}
                       </span>
                     ) : (
                       'Global'
@@ -116,7 +116,7 @@ export function StockCountsClient() {
                       {count.status.replace('_', ' ').toUpperCase()}
                     </span>
                   </TableCell>
-                  <TableCell>{count.created_by}</TableCell>
+                  <TableCell>{count.createdBy}</TableCell>
                   <TableCell className="text-right">
                     <Button 
                       variant="ghost" 
@@ -204,7 +204,7 @@ function NewCountDialog({ onCreated }: { onCreated: () => void }) {
       setShelfLocationId('all');
       onCreated();
       // Optionally route directly to it
-      router.push(`/inventory/stock-counts/${data.id}`);
+      router.push(`/inventory/stock-counts/${data.data.id}`);
 
     } catch (error) {
       console.error(error);

@@ -23,6 +23,7 @@ interface ReceiptViewProps {
         pointsUsed?: number;
         terminalMin?: string;
         terminalSerialNumber?: string;
+        terminalName?: string;
         isTrainingMode?: boolean;
         paymentReference?: string;
         taxBreakdown?: {
@@ -65,8 +66,19 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
     const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const currentDate = saleDetails.transactionDate ? new Date(saleDetails.transactionDate) : new Date();
 
+    const paperWidth = settings?.paperSize === '80mm' ? 'w-[80mm]' : 'w-[58mm]';
+
     return (
-        <div ref={ref} className="printable-area bg-white text-black p-4 text-[10px] font-mono font-bold w-[58mm] mx-auto print:w-auto print:ml-1 print:mr-6 leading-tight">
+        <div 
+            ref={ref} 
+            className={`printable-area bg-white text-black px-2 py-4 text-[10px] font-mono font-bold ${paperWidth} mx-auto leading-tight`}
+            style={{ 
+                wordBreak: 'break-word',
+                // Force size during print to match what's on screen
+                minWidth: settings?.paperSize === '80mm' ? '80mm' : '58mm',
+                maxWidth: settings?.paperSize === '80mm' ? '80mm' : '58mm'
+            }}
+        >
              {/* Print specific styles can be added here or via global CSS if needed, 
                  but react-to-print usually handles current styles well. 
                  We enforce black text and white background. */}
@@ -87,6 +99,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 <div className="font-bold">SI NO.: {(saleDetails.orderNumber || '000000').padStart(6, '0')}</div>
                 <div>Cust: {customer?.name || 'Walk-in'}</div>
                 <div>Cashier: {saleDetails.cashierName || 'Admin'}</div>
+                {saleDetails.terminalName && <div>Terminal: {saleDetails.terminalName}</div>}
             </div>
 
             <div className="mb-2">

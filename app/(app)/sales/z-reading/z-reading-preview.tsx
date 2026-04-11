@@ -35,6 +35,8 @@ export type ZReadingData = {
   vatAdjustment?: number;
   zCounter?: number;
   resetCounter?: number;
+  terminalName?: string;
+  intervalStartDate?: string | Date;
 };
 
 type PrinterFormat = '58mm' | '80mm';
@@ -50,6 +52,7 @@ export type BusinessSettings = {
   minNumber?: string;
   serialNumber?: string;
   email?: string;
+  paperSize?: '58mm' | '80mm';
 };
 
 interface ZReadingPreviewProps {
@@ -69,35 +72,32 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
     amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const reportDate = new Date(data.reportDate);
-  const startTime = new Date(data.reportDate); 
-  startTime.setHours(9, 0, 0, 0); // Mock 9 AM start
+  const startTime = data.intervalStartDate ? new Date(data.intervalStartDate) : new Date(data.reportDate);
+  if (!data.intervalStartDate) {
+    startTime.setHours(9, 0, 0, 0); // Fallback to 9 AM only if intervalStartDate is missing
+  }
   
-  const stripLeadingZeros = (val: string | number) => {
-    const str = String(val);
-    // If it's all zeros, return "0"
-    if (/^0+$/.test(str)) return "0";
-    // Remove leading zeros
-    return str.replace(/^0+/, '') || "0";
-  };
-
-  const minSi = stripLeadingZeros(data.minSaleId || '1');
-  const maxSi = stripLeadingZeros(data.maxSaleId || '1');
-  const minVoid = stripLeadingZeros(data.minVoidId || '1');
-  const maxVoid = stripLeadingZeros(data.maxVoidId || '1');
-  const minReturn = stripLeadingZeros(data.minReturnId || '0');
-  const maxReturn = stripLeadingZeros(data.maxReturnId || '0');
+  const minSi = data.minSaleId || '000000';
+  const maxSi = data.maxSaleId || '000000';
+  const minVoid = data.minVoidId || '000000';
+  const maxVoid = data.maxVoidId || '000000';
+  const minReturn = data.minReturnId || '000000';
+  const maxReturn = data.maxReturnId || '000000';
 
   const styles = {
     container: {
-        width: is58mm ? '200px' : '300px',
-        margin: '0', 
+        width: is58mm ? '58mm' : '80mm',
+        minWidth: is58mm ? '58mm' : '80mm',
+        maxWidth: is58mm ? '58mm' : '80mm',
+        margin: '0 auto', 
         backgroundColor: 'white',
         color: 'black',
         fontFamily: '"Courier New", Courier, monospace',
         fontSize: is58mm ? '9px' : '11px', 
         lineHeight: '1.2',
-        padding: '2mm',
+        padding: '1mm 2mm',
         fontWeight: 'normal',
+        wordBreak: 'break-word' as const,
     },
     headerDiv: {
         textAlign: 'center' as const,
@@ -151,6 +151,7 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
         <div style={{ fontSize: '10px' }}>VAT REG TIN: {businessSettings?.tin || '123-456-789-00000'}</div>
         <div style={{ fontSize: '10px' }}>MIN: {data.terminalMin || businessSettings?.minNumber || '1234567890'}</div>
         <div style={{ fontSize: '10px' }}>S/N: {data.terminalSerialNumber || businessSettings?.serialNumber || '0987654321-11'}</div>
+        {data.terminalName && <div style={{ fontSize: '10px' }}>Terminal: {data.terminalName}</div>}
       </div>
 
       <div style={styles.sectionTitle}>

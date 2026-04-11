@@ -2,6 +2,7 @@
  * Utility functions for purchase order cost calculations, 
  * including Landed Cost distribution.
  */
+import { toSafeNumber } from './utils';
 
 export interface PurchaseItem {
   productId: string;
@@ -41,14 +42,14 @@ export function calculatePurchaseCosts(
   let subtotal = 0;
   let totalVat = 0;
 
-  const numericShippingFee = parseFloat(shippingFee.toString()) || 0;
-  const numericTaxRate = parseFloat(taxRate.toString()) || 0;
+  const numericShippingFee = toSafeNumber(shippingFee);
+  const numericTaxRate = toSafeNumber(taxRate);
 
   // 1. Calculate line totals and base order subtotal
   const processedItems = items.map(item => {
-    const cost = parseFloat((item.cost || 0).toString()) || 0;
-    const quantity = parseFloat((item.quantity || 0).toString()) || 0;
-    const discount = parseFloat((item.discount || 0).toString()) || 0;
+    const cost = toSafeNumber(item.cost);
+    const quantity = toSafeNumber(item.quantity);
+    const discount = toSafeNumber(item.discount);
     const discountType = item.discountType || 'amount';
     const isVatSubject = item.vatSubject || false;
 
@@ -166,10 +167,10 @@ export function calculateSuggestedPrice(
   priceLevel?: any // Default level from system
 ): number {
   // 1. Calculate the base retail price (Landed Cost + Automatic Markup)
-  const baseRetailPrice = landedCost * (1 + (Number(markupPercentage) || 0) / 100);
+  const baseRetailPrice = landedCost * (1 + (toSafeNumber(markupPercentage)) / 100);
   
   if (priceLevel) {
-    const adjustment = Number(priceLevel.percentageAdjustment) || 0;
+    const adjustment = toSafeNumber(priceLevel.percentageAdjustment);
     const base = priceLevel.calculationBase || 'retail';
     
     if (adjustment !== 0) {

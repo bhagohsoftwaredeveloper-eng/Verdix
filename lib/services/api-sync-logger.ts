@@ -3,6 +3,8 @@
  * Logs all external API sync operations for audit trail
  */
 
+import { query } from '../mysql';
+
 export type ApiSyncLog = {
   id?: string;
   transactionType: string;
@@ -20,24 +22,39 @@ export type ApiSyncLog = {
 };
 
 /**
- * Log an API sync operation
+ * Log an API sync operation directly to the database
  */
 export async function logApiSync(log: Omit<ApiSyncLog, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
   try {
-    await fetch('/api/external-api/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(log),
-    });
+    const logId = `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const insertQuery = `
+      INSERT INTO external_api_logs (
+        id, transaction_type, transaction_id, endpoint, payload,
+        response, status, error_message, retry_count, next_retry_at, last_retry_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    await query(insertQuery, [
+      logId,
+      log.transactionType,
+      log.transactionId,
+      log.endpoint,
+      log.payload,
+      log.response,
+      log.status,
+      log.errorMessage || null,
+      log.retryCount || 0,
+      log.nextRetryAt || null,
+      log.lastRetryAt || null,
+    ]);
   } catch (error) {
-    // Fallback to console logging if database logging fails
     console.error('Failed to log API sync:', error);
-    console.log('API Sync Log:', log);
+    console.log('API Sync Log (Fallback):', log);
   }
 }
 
 /**
- * Get API sync logs with optional filters
+ * Get API sync logs directly from the database
  */
 export async function getApiSyncLogs(filters?: {
   status?: 'success' | 'failed' | 'pending';
@@ -46,19 +63,41 @@ export async function getApiSyncLogs(filters?: {
   offset?: number;
 }): Promise<ApiSyncLog[]> {
   try {
-    const params = new URLSearchParams();
-    if (filters?.status) params.append('status', filters.status);
-    if (filters?.transactionType) params.append('transactionType', filters.transactionType);
-    if (filters?.limit) params.append('limit', filters.limit.toString());
-    if (filters?.offset) params.append('offset', filters.offset.toString());
+    let sql = `SELECT * FROM external_api_logs WHERE 1=1`;
+    const params: any[] = [];
 
-    const response = await fetch(`/api/external-api/logs?${params.toString()}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch logs');
+    if (filters?.status) {
+      sql += ' AND status = ?';
+      params.push(filters.status);
+    }
+    if (filters?.transactionType) {
+      sql += ' AND transaction_type = ?';
+      params.push(filters.transactionType);
     }
 
-    const data = await response.json();
-    return data.logs || [];
+    const limit = filters?.limit || 50;
+    const offset = filters?.offset || 0;
+    
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const logs: any = await query(sql, params);
+    
+    return logs.map((log: any) => ({
+      id: log.id,
+      transactionType: log.transaction_type,
+      transactionId: log.transaction_id,
+      endpoint: log.endpoint,
+      payload: log.payload,
+      response: log.response,
+      status: log.status,
+      errorMessage: log.error_message,
+      retryCount: log.retry_count,
+      nextRetryAt: log.next_retry_at,
+      lastRetryAt: log.last_retry_at,
+      createdAt: log.created_at,
+      updatedAt: log.updated_at
+    }));
   } catch (error) {
     console.error('Error fetching API sync logs:', error);
     return [];
@@ -66,22 +105,8 @@ export async function getApiSyncLogs(filters?: {
 }
 
 /**
- * Retry a failed API sync
+ * Empty stub for retryFailedSync - will need implementation if utilized in the future
  */
 export async function retryFailedSync(logId: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    const response = await fetch(`/api/external-api/logs/${logId}/retry`, {
-      method: 'POST',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to retry sync');
-    }
-
-    const data = await response.json();
-    return { success: data.success };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return { success: false, error: errorMessage };
-  }
+  return { success: false, error: 'Not implemented as a direct DB call yet.' };
 }

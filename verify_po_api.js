@@ -1,8 +1,8 @@
 
 async function verifyPurchaseOrder() {
-  const baseUrl = 'http://localhost:9003/api/purchase-orders';
-  const productsUrl = 'http://localhost:9003/api/products?limit=1';
-  const suppliersUrl = 'http://localhost:9003/api/temp-suppliers';
+  const baseUrl = 'http://localhost:3000/api/purchase-orders';
+  const productsUrl = 'http://localhost:3000/api/products?limit=1';
+  const suppliersUrl = 'http://localhost:3000/api/suppliers';
 
   try {
     // 1. Fetch Product

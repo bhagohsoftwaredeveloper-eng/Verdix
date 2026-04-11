@@ -364,10 +364,20 @@ export interface User {
 
 export interface PosTerminal {
   id: string;
-  name: string;
+  name?: string; // Standard name
+  terminalDescription?: string; // Aliased from 'name' in API
   location?: string;
+  inventoryLocation?: string; // Aliased from 'location' in API
   ipAddress?: string;
+  serialNumber?: string;
+  min?: string;
+  permitNo?: string;
+  printOfficialReceipt?: string; // 'Yes' or 'No'
+  orNextReference?: string;
   isActive: boolean;
+  zCounter?: number;
+  resetCounter?: number;
+  lastActive?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -495,6 +505,10 @@ export interface ZReadingData {
   runningTotal?: number;
   voidAmount?: number;
   vatAdjustment?: number;
+  zCounter?: number;
+  resetCounter?: number;
+  terminalName?: string;
+  intervalStartDate?: string | Date;
 }
 
 
@@ -541,4 +555,7 @@ export interface XReadingData {
   tin?: string;
   contactNumber?: string;
   email?: string;
+  zCounter?: number;
+  resetCounter?: number;
+  terminalName?: string;
 }

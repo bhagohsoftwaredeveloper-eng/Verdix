@@ -3,7 +3,11 @@ import { query } from '../../../../lib/mysql';
 
 console.log('Warehouse route file loaded');
 
-// Helper function to create warehouses table if it doesn't exist
+// We rely on the ensureWarehousesTable in the main route.ts or the database being updated.
+// For safety, we can define a shared one or just call the one in the main route if needed.
+// However, since GET/PUT/DELETE are on /[id], they might be called directly.
+// Let's keep a simplified version here or just update the queries.
+
 async function ensureWarehousesTable() {
   try {
     const createTableSQL = `
@@ -11,32 +15,35 @@ async function ensureWarehousesTable() {
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL UNIQUE,
         location VARCHAR(255),
-        is_active BOOLEAN DEFAULT TRUE,
+        contact_number VARCHAR(100),
+        active BOOLEAN DEFAULT TRUE,
+        is_main BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `;
 
     await query(createTableSQL);
+    
+    // Check if we need to add columns (redundant but safe)
+    const columns = [
+      { name: 'contact_number', type: 'VARCHAR(100)' },
+      { name: 'active', type: 'BOOLEAN DEFAULT TRUE' },
+      { name: 'is_main', type: 'BOOLEAN DEFAULT FALSE' }
+    ];
+    
+    const currentColumnsResult = await query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'warehouses' AND TABLE_SCHEMA = DATABASE()"
+    );
+    const existingColumns = new Set(currentColumnsResult.map((c: any) => c.COLUMN_NAME));
 
-    // Insert default warehouses if table is empty
-    const checkSql = 'SELECT COUNT(*) as count FROM warehouses';
-    const result = await query(checkSql);
-
-    if (result[0].count === 0) {
-      const insertDataSQL = `
-        INSERT IGNORE INTO warehouses (id, name, location, is_active) VALUES
-        ('wh_main', 'Main Warehouse', 'Building A, Floor 1', TRUE),
-        ('wh_secondary', 'Secondary Warehouse', 'Building B, Floor 2', TRUE),
-        ('wh_distribution', 'Distribution Center', 'Building C, Ground Floor', TRUE)
-      `;
-
-      await query(insertDataSQL);
-      console.log('✅ Default warehouses inserted');
+    for (const col of columns) {
+      if (!existingColumns.has(col.name)) {
+        await query(`ALTER TABLE warehouses ADD COLUMN ${col.name} ${col.type}`);
+      }
     }
   } catch (error) {
     console.error('Error ensuring warehouses table:', error);
-    throw error;
   }
 }
 
@@ -55,7 +62,9 @@ export async function GET(
         id,
         name,
         location,
-        is_active AS isActive,
+        contact_number AS contactNumber,
+        active,
+        is_main AS isMain,
         created_at AS createdAt
       FROM warehouses
       WHERE id = ?
@@ -109,14 +118,20 @@ export async function PUT(
       UPDATE warehouses SET
         name = ?,
         location = ?,
-        is_active = ?
+        contact_number = ?,
+        active = ?,
+        is_main = ?
       WHERE id = ?
     `;
+
+    const { contactNumber, isMain } = body;
 
     const result = await query(sql, [
       name.trim(),
       location?.trim() || null,
-      isActive ?? true,
+      contactNumber?.trim() || null,
+      isActive ?? true, // Support both active and isActive from body for backward compatibility
+      isMain ?? false,
       warehouseId
     ]);
 

@@ -22,30 +22,41 @@ import { getApiUrl } from '@/lib/api-config';
 import { useReactToPrint } from 'react-to-print';
 import { useRef } from 'react';
 
-function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => void, printMode: 'browser' | 'escpos' | 'usb' | 'native', terminalId?: string }): JSX.Element {
-    const [data, setData] = useState<ZReadingData | null>(null);
+function ZReadingReportView({ onBack, printMode, terminalId, terminalName, initialData }: { onBack: () => void, printMode: 'browser' | 'escpos' | 'usb' | 'native', terminalId?: string, terminalName?: string, initialData?: ZReadingData | null }): JSX.Element {
+    const [data, setData] = useState<ZReadingData | null>(initialData || null);
     const [businessSettings, setBusinessSettings] = useState<BusinessSettings | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(!initialData);
     const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
     const { toast } = useToast();
     const contentRef = useRef<HTMLDivElement>(null);
 
+    const paperSize = businessSettings?.paperSize || '58mm';
+
     const handleReactToPrint = useReactToPrint({
-        contentRef: contentRef, // Try fallback to contentRef for older versions or robust content function
+        contentRef: contentRef, 
         content: () => contentRef.current,
         documentTitle: 'Z-Reading-Report',
         pageStyle: `
             @page {
-                size: 58mm auto;
+                size: ${paperSize} auto;
                 margin: 0;
             }
             @media print {
                 body {
                     visibility: visible !important;
                     -webkit-print-color-adjust: exact;
+                    margin: 0;
+                    padding: 0;
                 }
                 * {
                     visibility: visible !important;
+                }
+                .printable-area {
+                    box-shadow: none !important;
+                    margin: 0 !important;
+                    width: ${paperSize} !important;
+                    min-width: ${paperSize} !important;
+                    max-width: ${paperSize} !important;
                 }
             }
         `,
@@ -55,6 +66,19 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
     
     useEffect(() => {
         const fetchData = async () => {
+            if (initialData) {
+                // Settings might still be needed for business branding/paper size
+                 try {
+                    const settingsRes = await fetch(getApiUrl('/pos-settings'));
+                    const settingsResult = await settingsRes.json();
+                    if (settingsResult.success) {
+                        setBusinessSettings(settingsResult.data);
+                    }
+                } catch (e) { console.error(e); }
+                setIsLoading(false);
+                return;
+            }
+
             setIsLoading(true);
             try {
                 const settingsRes = await fetch(getApiUrl('/pos-settings'));
@@ -69,7 +93,8 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
                 if (result.success && result.data.length > 0) {
                     setData({
                         ...result.data[0],
-                        reportDate: new Date(result.data[0].reportDate)
+                        reportDate: new Date(result.data[0].reportDate),
+                        terminalName: terminalName
                     });
                 }
             } catch (error) {
@@ -85,7 +110,7 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
         };
 
         fetchData();
-    }, [toast]);
+    }, [toast, initialData, terminalId, terminalName]);
 
     const handlePrintAndFinalize = async () => {
         if (!data) return;
@@ -106,7 +131,7 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
 
         try {
             const generator = new ZReadingGenerator();
-            const bytes = generator.generate(data as any, businessSettings);
+            const bytes = generator.generate({ ...data, terminalName } as any, businessSettings);
             await print(bytes);
             
             toast({
@@ -125,21 +150,31 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
 
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center h-[400px]">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Generating Z-Reading Report...</p>
+            <div className="flex flex-col h-full max-h-[85vh]">
+                <DialogHeader className="px-4 py-3 border-b flex-none">
+                    <DialogTitle>Z-READING REPORT</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col items-center justify-center flex-1">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">Generating Z-Reading Report...</p>
+                </div>
             </div>
         );
     }
 
     if (!data) {
         return (
-             <div className="flex flex-col items-center justify-center h-[400px] p-6 text-center">
-                <p className="text-muted-foreground">No pending sales found for Z-Reading. All transactions might have been finalized already.</p>
-                <Button variant="outline" onClick={onBack} className="mt-4">
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                </Button>
+             <div className="flex flex-col h-full max-h-[85vh]">
+                <DialogHeader className="px-4 py-3 border-b flex-none">
+                    <DialogTitle>Z-READING REPORT</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col items-center justify-center flex-1 p-6 text-center">
+                    <p className="text-muted-foreground">No pending sales found for Z-Reading. All transactions might have been finalized already.</p>
+                    <Button variant="outline" onClick={onBack} className="mt-4">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back
+                    </Button>
+                </div>
             </div>
         );
     }
@@ -172,7 +207,7 @@ function ZReadingReportView({ onBack, printMode, terminalId }: { onBack: () => v
                         ref={contentRef}
                         data={data} 
                         businessSettings={businessSettings} 
-                        printerFormat="58mm" 
+                        printerFormat={paperSize as any} 
                     />
                  </div>
             </div>
@@ -184,26 +219,34 @@ interface ZReadingDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   printMode: 'browser' | 'escpos' | 'usb' | 'native';
+  autoShow?: boolean;
   terminalId?: string;
+  terminalName?: string;
+  initialData?: ZReadingData | null;
 }
 
 export function ZReadingDialog({
   isOpen,
   onOpenChange,
   printMode,
-  terminalId
+  autoShow = false,
+  terminalId,
+  terminalName,
+  initialData = null
 }: ZReadingDialogProps) {
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [showReport, setShowReport] = useState(false);
   
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && (autoShow || initialData)) {
+        setShowReport(true);
+    } else if (isOpen) {
         setIsAuthDialogOpen(true);
     } else {
         setIsAuthDialogOpen(false);
         setShowReport(false);
     }
-  }, [isOpen]);
+  }, [isOpen, autoShow, initialData]);
   
   const handleAdminAuthSuccess = () => {
     setIsAuthDialogOpen(false);
@@ -214,7 +257,7 @@ export function ZReadingDialog({
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-xl p-0 overflow-hidden">
             {showReport ? (
-                <ZReadingReportView onBack={() => onOpenChange(false)} printMode={printMode} terminalId={terminalId} />
+                <ZReadingReportView onBack={() => onOpenChange(false)} printMode={printMode} terminalId={terminalId} terminalName={terminalName} initialData={initialData} />
             ) : (
                 <div className="p-6">
                     <DialogHeader>

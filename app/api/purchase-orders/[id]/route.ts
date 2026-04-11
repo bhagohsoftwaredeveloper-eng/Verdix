@@ -3,6 +3,7 @@ import { query, withTransaction } from '../../../../lib/mysql';
 import { getExternalApiConfig } from '../../../../lib/external-api-config';
 import { syncPurchaseTransaction, syncAccountsPayable } from '../../../../lib/services/external-accounting-api';
 import { calculatePurchaseCosts } from '../../../../lib/purchase-utils';
+import { toSafeNumber } from '../../../../lib/utils';
 
 export async function PATCH(
   request: NextRequest,
@@ -30,8 +31,8 @@ export async function PATCH(
     } = body;
 
     // Recalculate if items or shipping updated
-    let finalTotal = total;
-    let finalVatAmount = vatAmount;
+    let finalTotal = toSafeNumber(total);
+    let finalVatAmount = toSafeNumber(vatAmount);
 
     if (items && Array.isArray(items)) {
       const calculations = calculatePurchaseCosts(items, shipping !== undefined ? shipping : 0);
@@ -51,7 +52,7 @@ export async function PATCH(
       }
       if (receivedTotal !== undefined) {
         updates.push('received_total = ?');
-        paramsUpdate.push(receivedTotal);
+        paramsUpdate.push(toSafeNumber(receivedTotal));
       }
       if (supplierId) {
         updates.push('supplier_id = ?');
@@ -76,7 +77,7 @@ export async function PATCH(
       }
       if (shipping !== undefined) {
         updates.push('shipping_fee = ?');
-        paramsUpdate.push(shipping);
+        paramsUpdate.push(toSafeNumber(shipping));
       }
       if (reference !== undefined) {
         updates.push('reference_number = ?');
@@ -115,10 +116,10 @@ export async function PATCH(
             id,
             item.productId,
             item.productName,
-            item.quantity,
-            item.cost,
-            item.sellingPrice || null,
-            item.discount || 0,
+            toSafeNumber(item.quantity),
+            toSafeNumber(item.cost),
+            item.sellingPrice ? toSafeNumber(item.sellingPrice) : null,
+            toSafeNumber(item.discount),
             item.discountType || 'amount',
             item.vatSubject ? 1 : 0,
             item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null
@@ -154,16 +155,16 @@ export async function PATCH(
 
           if (productResult && productResult.length > 0) {
             const product = productResult[0];
-            const previousStock = parseFloat(product.stock || '0');
-            const quantityAdded = parseFloat(item.quantity || '0');
+            const previousStock = toSafeNumber(product.stock);
+            const quantityAdded = toSafeNumber(item.quantity);
             const newStock = previousStock + quantityAdded;
 
             // Find calculated landed cost for this product
             const calculatedItem = calculations.items.find(ci => ci.productId === item.productId);
-            const landedCost = calculatedItem ? calculatedItem.landedCostPerUnit : parseFloat(item.cost || '0');
+            const landedCost = calculatedItem ? calculatedItem.landedCostPerUnit : toSafeNumber(item.cost);
 
             // Get selling price from current received item or the PO items
-            const sellingPrice = Number(item.sellingPrice || allItems.find((ai: any) => ai.productId === item.productId)?.sellingPrice || 0);
+            const sellingPrice = toSafeNumber(item.sellingPrice || allItems.find((ai: any) => ai.productId === item.productId)?.sellingPrice);
 
             // Update product stock, cost (landed), selling price, and expiration date
             await connection.query(

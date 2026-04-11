@@ -47,26 +47,21 @@ export class ZReadingGenerator {
 
         const dash = '-'.repeat(W);
 
-        const stripLead = (val: string | number | undefined) => {
-            const str = String(val || '0');
-            if (/^0+$/.test(str)) return '0';
-            return str.replace(/^0+/, '') || '0';
-        };
-
-        const bizName = settings?.businessName || "NICOLE'S SUPERMARKET";
-        const address = settings?.address || 'Paniqui, Tarlac';
-        const tin = settings?.tin || '123-456-789-00000';
-        const operatedBy = settings?.operatedBy || 'Facunla Enterprise Inc.';
-        const minNumber = data.terminalMin || settings?.minNumber || '1234567890';
-        const serialNumber = data.terminalSerialNumber || settings?.serialNumber || '0987654321-11';
+        const bizName = settings?.businessName || "POS SYSTEM";
+        const address = settings?.address || "Address";
+        const tin = settings?.tin || "000-000-000-000";
+        const operatedBy = settings?.operatedBy || "";
+        const minNumber = data.terminalMin || settings?.minNumber || "1234567890";
+        const serialNumber = data.terminalSerialNumber || settings?.serialNumber || "0987654321-11";
 
         // ── HEADER ──────────────────────────────────────────────────────────
         enc.bold(true).line(center(bizName)).bold(false);
-        enc.line(center(`Operated by: ${operatedBy}`));
+        if (operatedBy) enc.line(center(`Operated by: ${operatedBy}`));
         enc.line(center(address));
         enc.line(center(`VAT REG TIN: ${tin}`));
         enc.line(center(`MIN: ${minNumber}`));
         enc.line(center(`S/N: ${serialNumber}`));
+        if (data.terminalName) enc.line(center(`Terminal: ${data.terminalName}`));
 
         // ── TITLE ────────────────────────────────────────────────────────────
         enc.align('center').bold(true).line('Z-READING REPORT').bold(false).align('left');
@@ -82,14 +77,14 @@ export class ZReadingGenerator {
         enc.line(row('End:',   format(reportDate, 'MM/dd/yy h:mm a')));
 
         // ── COUNTER SECTION ──────────────────────────────────────────────────
-        enc.line(row('Beg. SI #:',        stripLead(data.minSaleId)));
-        enc.line(row('End. SI #:',        stripLead(data.maxSaleId)));
-        enc.line(row('Beg. VOID #:',      stripLead(data.minVoidId)));
-        enc.line(row('End. VOID #:',      stripLead(data.maxVoidId)));
-        enc.line(row('Beg. RETURN #:',    stripLead(data.minReturnId || '0')));
-        enc.line(row('End. RETURN #:',    stripLead(data.maxReturnId || '0')));
-        enc.line(row('Reset Counter No.', '0'));
-        enc.line(row('Z Counter No. :',   '1'));
+        enc.line(row('Beg. SI #:',        String(data.minSaleId || '000000')));
+        enc.line(row('End. SI #:',        String(data.maxSaleId || '000000')));
+        enc.line(row('Beg. VOID #:',      String(data.minVoidId || '000000')));
+        enc.line(row('End. VOID #:',      String(data.maxVoidId || '000000')));
+        enc.line(row('Beg. RETURN #:',    String(data.minReturnId || '000000')));
+        enc.line(row('End. RETURN #:',    String(data.maxReturnId || '000000')));
+        enc.line(row('Reset Counter No.', String(data.resetCounter || 0)));
+        enc.line(row('Z Counter No. :',   String(data.zCounter || 0)));
 
         // ── SALES TOTALS ─────────────────────────────────────────────────────
         enc.line(dash);

@@ -45,7 +45,7 @@ import {
   ShoppingCart,
   RefreshCw,
 } from 'lucide-react';
-import type { Product, Customer } from '@/lib/types';
+import type { Product, Customer, ZReadingData } from '@/lib/types';
 import Link from 'next/link';
 
 import { TenderDialog } from './tender-dialog';
@@ -222,7 +222,9 @@ export default function POSPage() {
   const [currentShiftId, setCurrentShiftId] = useState<string | null>(null);
   // Show X-Reading report after shift end
   const [showEndShiftReport, setShowEndShiftReport] = useState(false);
+  const [pendingZReading, setPendingZReading] = useState(false);
   const [lastEndedShiftId, setLastEndedShiftId] = useState<string | null>(null);
+  const [isPriceInquiryOpen, setIsPriceInquiryOpen] = useState(false);
 
   // Terminal State
   const [terminals, setTerminals] = useState<any[]>([]);
@@ -292,8 +294,8 @@ export default function POSPage() {
   const [isRecentSalesOpen, setIsRecentSalesOpen] = useState(false);
   const [isVoidSalesOpen, setIsVoidSalesOpen] = useState(false);
   const [isReturnSalesOpen, setIsReturnSalesOpen] = useState(false);
-  const [isPriceInquiryOpen, setIsPriceInquiryOpen] = useState(false);
   const [isZReadingOpen, setIsZReadingOpen] = useState(false);
+  const [lastSavedZReading, setLastSavedZReading] = useState<ZReadingData | null>(null);
   const [isShutdownConfirmOpen, setIsShutdownConfirmOpen] = useState(false);
   
   const [businessSettings, setBusinessSettings] = useState<SystemSettings | null>(null);
@@ -590,7 +592,7 @@ export default function POSPage() {
 
   const currentTerminalName = useMemo(() => {
     const t = terminals.find(t => t.id === selectedTerminalId);
-    return t ? t.terminalDescription : '';
+    return t ? (t.terminalDescription || `Terminal ${t.id.slice(-4)}`) : '';
   }, [terminals, selectedTerminalId]);
 
   useEffect(() => {
@@ -1156,6 +1158,7 @@ export default function POSPage() {
 
               // Show the report dialog which has the print button
               setShowEndShiftReport(true); 
+              setPendingZReading(true);
               
               // 2. Generate and Save X-Reading
               try {
@@ -1201,7 +1204,7 @@ export default function POSPage() {
 
               // 3. Generate and Save Z-Reading
               try {
-                  await fetch(getApiUrl('/sales/z-reading'), {
+                  const zRes = await fetch(getApiUrl('/sales/z-reading'), {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -1209,6 +1212,13 @@ export default function POSPage() {
                           cashierName: currentUser?.displayName || 'Admin'
                       })
                   });
+                  const zResult = await zRes.json();
+                  if (zResult.success && zResult.data?.length > 0) {
+                      setLastSavedZReading({
+                          ...zResult.data[0],
+                          reportDate: new Date(zResult.data[0].reportDate)
+                      });
+                  }
               } catch (zError) {
                    console.error("Failed to generate Z-Reading record", zError);
               }
@@ -1468,6 +1478,13 @@ export default function POSPage() {
         setIsEndShiftOpen(true);
     }
   };
+
+  // Effect to trigger Z-Reading after X-Reading closes if pending
+  useEffect(() => {
+    if (!showEndShiftReport && pendingZReading) {
+      setIsZReadingOpen(true);
+    }
+  }, [showEndShiftReport, pendingZReading]);
 
 
 
@@ -1917,6 +1934,7 @@ export default function POSPage() {
         terminalId={selectedTerminalId}
         terminalMin={terminals.find(t => t.id === selectedTerminalId)?.min}
         terminalSerialNumber={terminals.find(t => t.id === selectedTerminalId)?.serialNumber}
+        terminalName={currentTerminalName}
         isTrainingMode={isTrainingMode}
         paymentMethods={paymentMethods}
         printMode={businessSettings?.printMode || 'browser'}
@@ -2048,15 +2066,25 @@ export default function POSPage() {
       />
       <ZReadingDialog 
         isOpen={isZReadingOpen} 
-        onOpenChange={setIsZReadingOpen} 
+        onOpenChange={(open) => {
+          setIsZReadingOpen(open);
+          if (!open) {
+              setPendingZReading(false);
+              setLastSavedZReading(null);
+          }
+        }}
         printMode={businessSettings?.printMode || 'browser'}
         terminalId={selectedTerminalId}
+        terminalName={currentTerminalName}
+        autoShow={pendingZReading} 
+        initialData={lastSavedZReading}
       />
       
       <XReadingDialog 
         isOpen={showEndShiftReport} 
         onOpenChange={setShowEndShiftReport}
         shiftId={lastEndedShiftId ?? undefined}
+        terminalName={currentTerminalName}
         autoShow={true}
         printMode={businessSettings?.printMode || 'browser'}
       />

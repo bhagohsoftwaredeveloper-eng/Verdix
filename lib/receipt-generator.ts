@@ -46,6 +46,7 @@ export class ReceiptGenerator {
         pointsUsedValue?: number;
         pointsBalance?: number;
         paymentReference?: string;
+        terminalName?: string;
         taxBreakdown?: {
             vatableSales: number;
             vatAmount: number;
@@ -102,6 +103,9 @@ export class ReceiptGenerator {
         enc.bold(true).line(`SI NO.: ${formattedOrderNo}`).bold(false);
         enc.line(`Cust: ${customer?.name || 'Walk-in'}`);
         enc.line(`Cashier: ${sale.cashierName || 'Admin'}`);
+        if (sale.terminalName) {
+            enc.line(`Terminal: ${sale.terminalName}`);
+        }
         enc.line('-'.repeat(COLS)); // dashed border
 
         // ─── ITEM TABLE HEADER ────────────────────────────────────────────
@@ -372,6 +376,7 @@ export class ReceiptGenerator {
         enc.line(center(`VAT REG TIN: ${tin}`));
         enc.line(center(`MIN: ${minNumber}`));
         enc.line(center(`S/N: ${serialNumber}`));
+        if (data.terminalName) enc.line(center(`Terminal: ${data.terminalName}`));
 
         // ── TITLE ────────────────────────────────────────────────────────────
         // Mirrors: sectionTitle (center, bold, marginTop:5px)

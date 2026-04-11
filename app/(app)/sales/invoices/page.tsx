@@ -163,13 +163,13 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
                         </tr>
                     </thead>
                     <tbody>
-                        {order.items.map((item, index) => (
+                        {(order.items || []).map((item, index) => (
                             <tr key={index} className="border-b border-slate-100">
-                                <td className="py-2">{item.product.name}</td>
+                                <td className="py-2">{item.product?.name || (item as any).productName || 'Unknown Product'}</td>
                                 <td className="py-2 text-right">{item.quantity} pack</td>
-                                <td className="py-2 text-right">{item.price.toFixed(2)}</td>
+                                <td className="py-2 text-right">{Number(item.price || 0).toFixed(2)}</td>
                                 <td className="py-2 text-right">0.00</td>
-                                <td className="py-2 text-right">{(item.price * item.quantity).toFixed(2)}</td>
+                                <td className="py-2 text-right">{(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -181,7 +181,7 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
                 <div className="w-64">
                     <div className="flex justify-between py-1 text-sm font-semibold text-slate-600">
                         <span>SUBTOTAL</span>
-                        <span>{order.total.toFixed(2)}</span>
+                        <span>{Number(order.total || 0).toFixed(2)}</span>
                     </div>
                      <div className="flex justify-between py-1 text-sm font-semibold text-slate-600">
                         <span>SHIPPING</span>
@@ -193,7 +193,7 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
                     </div>
                     <div className="flex justify-between py-2 border-t border-slate-300 text-base font-bold text-slate-800 mt-2">
                         <span>GRAND TOTAL</span>
-                        <span>{order.total.toFixed(2)}</span>
+                        <span>{Number(order.total || 0).toFixed(2)}</span>
                     </div>
                 </div>
             </div>
@@ -767,12 +767,12 @@ export default function SalesInvoicesPage() {
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {sale.items.map(item => (
-                                                        <TableRow key={item.product.id}>
-                                                            <TableCell className="py-1 text-xs">{item.product.name}</TableCell>
+                                                        {(sale.items || []).map((item, idxx) => (
+                                                        <TableRow key={item.product?.id || (item as any).productId || idxx}>
+                                                            <TableCell className="py-1 text-xs">{item.product?.name || (item as any).productName || 'Unknown Product'}</TableCell>
                                                             <TableCell className="text-right py-1 text-xs">{item.quantity}</TableCell>
                                                             <TableCell className="text-right py-1 text-xs">₱{formatAmount(item.price)}</TableCell>
-                                                            <TableCell className="text-right py-1 text-xs">₱{formatAmount(item.price * item.quantity)}</TableCell>
+                                                            <TableCell className="text-right py-1 text-xs">₱{formatAmount(Number(item.price || 0) * Number(item.quantity || 0))}</TableCell>
                                                         </TableRow>
                                                         ))}
                                                     </TableBody>

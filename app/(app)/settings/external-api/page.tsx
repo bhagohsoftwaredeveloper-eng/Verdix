@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ExternalApiConfig, DEFAULT_EXTERNAL_API_CONFIG } from '@/lib/external-api-config';
 import { getApiUrl } from '@/lib/api-config';
-import { ApiSyncLog } from '@/lib/services/api-sync-logger';
+import type { ApiSyncLog } from '@/lib/services/api-sync-logger';
 
 export default function ExternalApiSettingsPage() {
   const [config, setConfig] = useState<ExternalApiConfig>(DEFAULT_EXTERNAL_API_CONFIG);

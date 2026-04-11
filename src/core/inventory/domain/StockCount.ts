@@ -1,9 +1,15 @@
 export interface StockCountEntity {
   id: string;
-  warehouseId: string;
-  countDate: string;
-  status: 'Draft' | 'Completed' | 'Cancelled';
+  name: string;
+  status: 'in_progress' | 'completed' | 'cancelled';
   notes?: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  shelfLocationId?: string;
+  shelfName?: string;
+  createdBy?: string;
+  completedBy?: string;
+  completedAt?: string;
   items: StockCountItemEntity[];
   createdAt?: string;
   updatedAt?: string;
@@ -13,9 +19,13 @@ export interface StockCountItemEntity {
   id: string;
   stockCountId: string;
   productId: string;
-  productName: string;
-  expectedQuantity: number;
-  countedQuantity: number;
+  productName?: string;
+  sku?: string;
+  barcode?: string;
+  snapshotQuantity: number;
+  countedQuantity?: number;
+  variance?: number;
   adjustmentReason?: string;
   createdAt?: string;
+  updatedAt?: string;
 }

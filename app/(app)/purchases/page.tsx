@@ -79,6 +79,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { getApiUrl } from '@/lib/api-config';
+import { toSafeNumber } from '@/lib/utils';
 
 import { printPurchaseOrder } from './purchase-order-print-utils';
 
@@ -143,7 +144,7 @@ function PurchaseOrderActions({
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           
           {/* Status Actions */}
-          {order.status === 'Draft' && (
+          {(order.status === 'Draft' || order.status === 'Pending') && (
             <DropdownMenuItem onClick={handleApprove}>
               <Check className="mr-2 h-4 w-4" /> Approve
             </DropdownMenuItem>
@@ -165,7 +166,7 @@ function PurchaseOrderActions({
           </DropdownMenuItem>
   
            {/* Edit - Only for Pending ideally, or allow restricted edits. For now basic. */}
-           {order.status === 'Draft' && (
+           {(order.status === 'Draft' || order.status === 'Pending') && (
                <DropdownMenuItem onClick={() => onEdit(order)}>
                   <Edit className="mr-2 h-4 w-4" /> Edit
                </DropdownMenuItem>
@@ -178,7 +179,7 @@ function PurchaseOrderActions({
           <DropdownMenuSeparator />
           
           {/* Destructive / Final Actions */}
-          {(order.status === 'Draft' || order.status === 'Approved') && (
+          {(order.status === 'Draft' || order.status === 'Pending' || order.status === 'Approved') && (
               <DropdownMenuItem 
                 onSelect={(e) => {
                   e.preventDefault();
@@ -227,7 +228,7 @@ function PurchaseOrderRow({
     }
   };
 
-  const itemsSubtotal = order.items.reduce((acc, item) => acc + (item.cost * item.quantity), 0);
+  const itemsSubtotal = order.items.reduce((acc, item) => acc + (toSafeNumber(item.cost) * toSafeNumber(item.quantity)), 0);
   
   return (
     <TableRow className="hover:bg-muted/50 transition-colors text-xs group">

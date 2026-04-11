@@ -48,6 +48,7 @@ interface TenderDialogProps {
     terminalId: string;
     terminalMin?: string;
     terminalSerialNumber?: string;
+    terminalName?: string;
     isTrainingMode?: boolean;
     paymentMethods: { id: string; name: string; isReferenceRequired?: boolean; pointsAmount?: number; currencyEquivalent?: number }[];
     printMode: 'browser' | 'escpos' | 'usb' | 'native';
@@ -72,7 +73,7 @@ function ReceiptActionView({
     return (
         <div className="flex flex-col h-full bg-gray-50 p-4">
              <div className="flex-1 overflow-auto flex justify-center">
-                <div className="printable-area bg-white shadow-sm my-4 h-fit">
+                <div className="bg-white shadow-sm my-4 h-fit">
                     <ReceiptView saleDetails={saleDetails} settings={settings} />
                 </div>
             </div>
@@ -103,6 +104,7 @@ export function TenderDialog({
     terminalId,
     terminalMin,
     terminalSerialNumber,
+    terminalName,
     isTrainingMode,
     paymentMethods = [],
     printMode,
@@ -240,6 +242,13 @@ export function TenderDialog({
             @media print {
                 body {
                     -webkit-print-color-adjust: exact;
+                    margin: 0;
+                    padding: 0;
+                }
+                .printable-area {
+                    box-shadow: none ! from-neutral-500;
+                    margin: 0 !important;
+                    width: ${settings?.paperSize === '80mm' ? '80mm' : '58mm'} !important;
                 }
             }
         `
@@ -439,6 +448,7 @@ export function TenderDialog({
                 pointsBalance: result.data.pointsRemaining,
                 terminalMin: terminalMin || settings?.minNumber,
                 terminalSerialNumber: terminalSerialNumber || settings?.serialNumber,
+                terminalName: terminalName,
                 isTrainingMode: isTrainingMode,
                 paymentReference: referenceInput.trim() || undefined,
                 taxBreakdown: {

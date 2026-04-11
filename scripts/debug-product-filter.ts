@@ -1,5 +1,6 @@
 
 import { getProducts, addProduct, addSupplier, addSupplierMapping, deleteProduct, deleteSupplier } from '../app/(app)/products/actions';
+import { Product } from '../lib/types';
 import { query } from '../lib/mysql';
 
 async function main() {
@@ -61,7 +62,7 @@ async function main() {
     console.log('Testing filter for supplier...');
     const products = await getProducts(10, 0, { supplier: supplierId });
     
-    const found = products.some(p => p.id === productId);
+    const found = products.some((p: Product) => p.id === productId);
     
     if (found) {
         console.log('SUCCESS: Product found with secondary supplier filter.');

@@ -1,4 +1,4 @@
-import { query } from './lib/mysql.ts';
+import { query } from '../../lib/mysql';
 
 async function updateSchema() {
     try {

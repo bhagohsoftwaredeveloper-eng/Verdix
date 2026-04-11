@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { query, getNextXReadingNumber } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,11 +56,12 @@ export async function GET(request: NextRequest) {
               SUM(CASE WHEN pt.transaction_type = 'return' THEN pt.total_amount ELSE 0 END) as returns_amount,
               COUNT(CASE WHEN pt.transaction_type = 'sale' THEN 1 END) as transaction_count,
               SUM(CASE WHEN pt.transaction_type = 'sale' AND pt.payment_method = 'CASH' THEN pt.total_amount ELSE 0 END) as cash_sales,
-              MIN(CASE WHEN pt.transaction_type = 'sale' THEN pt.order_number END) as min_sale_id,
-              MAX(CASE WHEN pt.transaction_type = 'sale' THEN pt.order_number END) as max_sale_id,
+              MIN(CASE WHEN pt.transaction_type = 'sale' THEN st.receipt_number END) as min_sale_id,
+              MAX(CASE WHEN pt.transaction_type = 'sale' THEN st.receipt_number END) as max_sale_id,
               SUM(CASE WHEN pt.transaction_type = 'void' THEN pt.total_amount ELSE 0 END) as void_amount,
               SUM(CASE WHEN pt.transaction_type = 'refund' THEN pt.total_amount ELSE 0 END) as refund_amount
           FROM pos_transactions pt
+          LEFT JOIN sales_transactions st ON pt.sale_id = st.id
           WHERE pt.is_training = 0
           GROUP BY pt.shift_id
       ) sales ON s.id = sales.shift_id
@@ -152,8 +153,8 @@ export async function GET(request: NextRequest) {
             : shift.cash_denominations || [],
 
         // New Layout Fields
-        minSaleId: shift.min_sale_id ? String(shift.min_sale_id).padStart(12, '0') : '0000000000000',
-        maxSaleId: shift.max_sale_id ? String(shift.max_sale_id).padStart(12, '0') : '0000000000000',
+        minSaleId: shift.min_sale_id ? String(shift.min_sale_id).padStart(6, '0') : '000000',
+        maxSaleId: shift.max_sale_id ? String(shift.max_sale_id).padStart(6, '0') : '000000',
         voidAmount: parseFloat(shift.void_amount || 0),
         refundAmount: parseFloat(shift.refund_amount || 0),
         min: shift.terminal_min || '',
@@ -182,7 +183,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      readingNumber,
       reportDate,
       shiftStart,
       shiftEnd,
@@ -200,7 +200,21 @@ export async function POST(request: NextRequest) {
       cashSales,
       cashInDrawer,
       shiftStatus = 'active',
+      minSaleId: minSaleIdRaw,
+      maxSaleId: maxSaleIdRaw,
+      voidAmount,
+      refundAmount,
     } = body;
+
+    const minSaleId = minSaleIdRaw ? String(minSaleIdRaw).padStart(6, '0') : '000000';
+    const maxSaleId = maxSaleIdRaw ? String(maxSaleIdRaw).padStart(6, '0') : '000000';
+
+    if (!terminalId) {
+        return NextResponse.json({ success: false, error: 'Terminal ID is required' }, { status: 400 });
+    }
+
+    // Generate Reading Number server-side
+    const readingNumber = await getNextXReadingNumber(terminalId);
 
     const sql = `
       INSERT INTO x_readings (
@@ -222,21 +236,12 @@ export async function POST(request: NextRequest) {
         cash_sales,
         cash_in_drawer,
         shift_status,
+        min_sale_id,
+        max_sale_id,
+        void_amount,
+        refund_amount,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-      ON DUPLICATE KEY UPDATE
-        report_date = VALUES(report_date),
-        shift_end = VALUES(shift_end),
-        gross_sales = VALUES(gross_sales),
-        returns = VALUES(returns),
-        discounts = VALUES(discounts),
-        net_sales = VALUES(net_sales),
-        vat_amount = VALUES(vat_amount),
-        payment_methods = VALUES(payment_methods),
-        transaction_count = VALUES(transaction_count),
-        cash_sales = VALUES(cash_sales),
-        cash_in_drawer = VALUES(cash_in_drawer),
-        shift_status = VALUES(shift_status)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
     const formatDate = (date: any) => {
@@ -249,7 +254,7 @@ export async function POST(request: NextRequest) {
 
     const result = await query(sql, [
       readingNumber,
-      formatDate(reportDate),
+      formatDate(reportDate || new Date()),
       formatDate(shiftStart),
       formatDate(shiftEnd),
       terminalId,
@@ -266,11 +271,15 @@ export async function POST(request: NextRequest) {
       cashSales,
       cashInDrawer,
       shiftStatus,
+      minSaleId,
+      maxSaleId,
+      voidAmount,
+      refundAmount,
     ]);
 
     return NextResponse.json({
       success: true,
-      data: { id: (result as any).insertId },
+      data: { id: (result as any).insertId, readingNumber },
     });
   } catch (error) {
     console.error('Error creating X-reading:', error);

@@ -6,9 +6,14 @@ import { PoolConnection } from 'mysql2/promise';
 export class MySqlStockCountRepository implements StockCountRepository {
   async findAll(): Promise<StockCountEntity[]> {
     const countsQuery = `
-      SELECT id, warehouse_id as warehouseId, count_date as countDate, status, notes, created_at as createdAt, updated_at as updatedAt
-      FROM stock_counts
-      ORDER BY count_date DESC
+      SELECT sc.id, sc.name, sc.status, sc.notes, sc.warehouse_id as warehouseId, sc.shelf_location_id as shelfLocationId, 
+             sc.created_by as createdBy, sc.completed_by as completedBy, sc.completed_at as completedAt,
+             sc.created_at as createdAt, sc.updated_at as updatedAt,
+             w.name as warehouseName, sl.name as shelfName
+      FROM stock_counts sc
+      LEFT JOIN warehouses w ON sc.warehouse_id = w.id
+      LEFT JOIN shelf_locations sl ON sc.shelf_location_id = sl.id
+      ORDER BY sc.created_at DESC
     `;
     const countsRaw: any[] = await query(countsQuery);
     
@@ -18,11 +23,13 @@ export class MySqlStockCountRepository implements StockCountRepository {
     const placeholders = countIds.map(() => '?').join(',');
     
     const itemsQuery = `
-      SELECT id, stock_count_id as stockCountId, product_id as productId, product_name as productName, 
-             expected_quantity as expectedQuantity, counted_quantity as countedQuantity, 
-             adjustment_reason as adjustmentReason, created_at as createdAt
-      FROM stock_count_items
-      WHERE stock_count_id IN (${placeholders})
+      SELECT sci.id, sci.stock_count_id as stockCountId, sci.product_id as productId, 
+             sci.snapshot_quantity as snapshotQuantity, sci.counted_quantity as countedQuantity, 
+             sci.variance, sci.created_at as createdAt, sci.updated_at as updatedAt,
+             p.name as productName, p.sku, p.barcode
+      FROM stock_count_items sci
+      JOIN products p ON sci.product_id = p.id
+      WHERE sci.stock_count_id IN (${placeholders})
     `;
     const itemsRaw: any[] = await query(itemsQuery, countIds);
 
@@ -33,8 +40,11 @@ export class MySqlStockCountRepository implements StockCountRepository {
       }
       itemsByCount[item.stockCountId].push({
         ...item,
-        expectedQuantity: parseFloat(item.expectedQuantity),
-        countedQuantity: parseFloat(item.countedQuantity)
+        snapshotQuantity: parseFloat(item.snapshotQuantity || 0),
+        countedQuantity: item.countedQuantity !== null ? parseFloat(item.countedQuantity) : undefined,
+        productName: item.productName,
+        sku: item.sku,
+        barcode: item.barcode
       });
     });
 
@@ -52,21 +62,34 @@ export class MySqlStockCountRepository implements StockCountRepository {
   async create(stockCount: StockCountEntity): Promise<string> {
      return await withTransaction(async (connection) => {
         const sql = `
-            INSERT INTO stock_counts (id, warehouse_id, count_date, status, notes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+            INSERT INTO stock_counts (id, name, warehouse_id, shelf_location_id, status, notes, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         `;
         await connection.query(sql, [
-            stockCount.id, stockCount.warehouseId, stockCount.countDate, stockCount.status, stockCount.notes || null
+            stockCount.id, 
+            stockCount.name, 
+            stockCount.warehouseId || null, 
+            stockCount.shelfLocationId || null,
+            stockCount.status, 
+            stockCount.notes || null,
+            stockCount.createdBy || 'Admin'
         ]);
 
-        const itemSql = `
-            INSERT INTO stock_count_items (id, stock_count_id, product_id, product_name, expected_quantity, counted_quantity, adjustment_reason, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-        `;
-        for (const item of stockCount.items) {
-            await connection.query(itemSql, [
-                item.id, stockCount.id, item.productId, item.productName, item.expectedQuantity, item.countedQuantity, item.adjustmentReason || null
-            ]);
+        if (stockCount.items && stockCount.items.length > 0) {
+          const itemSql = `
+              INSERT INTO stock_count_items (id, stock_count_id, product_id, snapshot_quantity, counted_quantity, variance, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+          `;
+          for (const item of stockCount.items) {
+              await connection.query(itemSql, [
+                  item.id, 
+                  stockCount.id, 
+                  item.productId, 
+                  item.snapshotQuantity, 
+                  item.countedQuantity || null, 
+                  item.variance || null
+              ]);
+          }
         }
         return stockCount.id;
      });

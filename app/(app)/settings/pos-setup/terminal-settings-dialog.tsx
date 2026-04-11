@@ -39,6 +39,8 @@ const terminalSchema = z.object({
   ipAddress: z.string().optional(),
   terminalDescription: z.string().min(1, "Terminal name is required"),
   inventoryLocation: z.string().optional(),
+  zCounter: z.coerce.number().min(0, "Must be positive").default(0),
+  resetCounter: z.coerce.number().min(0, "Must be positive").default(0),
 });
 
 type TerminalFormValues = z.infer<typeof terminalSchema>;
@@ -48,6 +50,8 @@ interface Terminal {
   terminalDescription: string;
   ipAddress: string | null;
   isActive: boolean;
+  zCounter?: number;
+  resetCounter?: number;
 }
 
 interface TerminalSettingsDialogProps {
@@ -70,6 +74,8 @@ export function TerminalSettingsDialog({ onTerminalChanged, currentTerminalId }:
       ipAddress: '',
       terminalDescription: '',
       inventoryLocation: 'Store',
+      zCounter: 0,
+      resetCounter: 0,
     },
   });
 
@@ -251,6 +257,36 @@ export function TerminalSettingsDialog({ onTerminalChanged, currentTerminalId }:
                         </FormItem>
                       )}
                     />
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                            control={form.control}
+                            name="zCounter"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Z Counter</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} type="number" min="0" />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="resetCounter"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Reset Counter</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} type="number" min="0" />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+
                     <Button type="submit" className="w-full" disabled={isSaving}>
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create & Select'}
                     </Button>

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../lib/mysql';
+import { query, withTransaction } from '../../../lib/mysql';
 import { getExternalApiConfig } from '../../../lib/external-api-config';
 import { syncPurchaseTransaction } from '../../../lib/services/external-accounting-api';
 import { calculatePurchaseCosts } from '../../../lib/purchase-utils';
+import { toSafeNumber } from '../../../lib/utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -98,27 +99,27 @@ export async function GET(request: NextRequest) {
           supplierId: row.supplier_id,
           supplierName: row.supplier_name,
           date: row.date,
-          total: parseFloat(row.total),
+          total: toSafeNumber(row.total),
           paymentMethod: row.payment_method || '',
           status: row.status,
           // New tracking fields
           orderedBy: row.ordered_by || '',
-          shippingFee: parseFloat(row.shipping_fee || '0'),
-          vatAmount: parseFloat(row.vat_amount || '0'),
+          shippingFee: toSafeNumber(row.shipping_fee),
+          vatAmount: toSafeNumber(row.vat_amount),
           deliveryDate: row.delivery_date ? row.delivery_date : undefined,
-          receivedTotal: parseFloat(row.received_total || '0'),
+          receivedTotal: toSafeNumber(row.received_total),
           referenceNumber: row.reference_number || '',
           items: items.map((item: any) => ({
             productId: item.product_id,
             productName: item.product_name,
-            quantity: parseInt(item.quantity),
-            cost: parseFloat(item.cost),
-            sellingPrice: item.selling_price ? parseFloat(item.selling_price) : undefined,
-            discount: item.discount ? parseFloat(item.discount) : 0,
+            quantity: toSafeNumber(item.quantity),
+            cost: toSafeNumber(item.cost),
+            sellingPrice: item.selling_price ? toSafeNumber(item.selling_price) : undefined,
+            discount: item.discount ? toSafeNumber(item.discount) : 0,
             discountType: item.discount_type || 'amount',
             vatSubject: item.vat_subject === 1,
             barcode: item.barcode || undefined,
-            currentStock: item.current_stock || 0,
+            currentStock: toSafeNumber(item.current_stock),
           })),
         };
       })
@@ -212,105 +213,138 @@ export async function POST(request: NextRequest) {
     // Generate order ID
     const orderId = `po_${Date.now()}`;
 
-    // Insert purchase order
-    const insertOrderQuery = `
-      INSERT INTO purchase_orders (
-        id, supplier_id, supplier_name, date, total, payment_method, status, 
-        reference_number, shipping_fee, ordered_by, vat_amount
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
     // Format date for MySQL
     const formattedDate = new Date(date || new Date()).toISOString().slice(0, 19).replace('T', ' ');
 
-    await query(insertOrderQuery, [
-      orderId,
-      supplierId,
-      supplierName,
-      formattedDate,
-      finalTotal,
-      paymentMethod || '',
-      (purchaseType === 'Receive') ? 'Received' : (status || 'Pending'),
-      reference || null,
-      shipping || 0,
-      orderedBy || null,
-      finalVatAmount
-    ]);
-
-    // Insert order items
-    const insertItemQuery = `
-      INSERT INTO purchase_order_items (
-        id, purchase_order_id, product_id, product_name, quantity, cost,
-        selling_price, discount, discount_type, vat_subject
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    for (const item of items) {
-      const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      await query(insertItemQuery, [
-        itemId,
-        orderId,
-        item.productId,
-        item.productName,
-        item.quantity,
-        item.cost,
-        item.sellingPrice || null,
-        item.discount || 0,
-        item.discountType || 'amount',
-        item.vatSubject ? 1 : 0
-      ]);
-    }
-
-    // Auto-record payment if status is 'Paid'
-    if (status === 'Paid' && total > 0) {
-      const paymentId = `sp_${Date.now()}_auto`;
-      const insertPaymentQuery = `
-        INSERT INTO supplier_payments (
-          id, supplier_id, amount, date, payment_method, reference, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    // Wrap in transaction for atomicity
+    const result = await withTransaction(async (connection) => {
+      // Insert purchase order
+      const insertOrderQuery = `
+        INSERT INTO purchase_orders (
+          id, supplier_id, supplier_name, date, total, payment_method, status, 
+          reference_number, shipping_fee, ordered_by, vat_amount
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
-      await query(insertPaymentQuery, [
-        paymentId,
+      await connection.query(insertOrderQuery, [
+        orderId,
         supplierId,
-        total,
-        date || new Date().toISOString(),
-        paymentMethod || 'Cash',
-        `PO-${orderId}`,
-        `Auto-payment for PO ${orderId}`
+        supplierName,
+        formattedDate,
+        finalTotal,
+        paymentMethod || '',
+        (purchaseType === 'Receive') ? 'Received' : (status || 'Pending'),
+        reference || null,
+        toSafeNumber(shipping),
+        orderedBy || null,
+        finalVatAmount
       ]);
-    }
 
-    // Auto-Receive Logic: Update Inventory if type is 'Receive'
-    if (purchaseType === 'Receive') {
-       const [defaultLevel]: any = await query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
-       const defaultLevelId = defaultLevel[0]?.id;
-       const updateProductQuery = `UPDATE products SET stock = stock + ?, cost = ?, price = ?, updated_at = NOW() WHERE id = ?`;
-       
-       for (const calculatedItem of calculations.items) {
-         // Find original item to get sellingPrice (calculations.items only has landedCost details)
-         const originalItem = items.find((i: any) => i.productId === calculatedItem.productId);
-         const sellingPrice = Number(originalItem?.sellingPrice || 0);
-         
-         // Update stock, cost (landed cost), and selling price
-         await query(updateProductQuery, [
-           calculatedItem.quantity, 
-           calculatedItem.landedCostPerUnit, 
-           sellingPrice,
-           calculatedItem.productId
-         ]);
+      // Insert order items
+      const insertItemQuery = `
+        INSERT INTO purchase_order_items (
+          id, purchase_order_id, product_id, product_name, quantity, cost,
+          selling_price, discount, discount_type, vat_subject
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
 
-         // Also update/insert default price level to ensure it reflects in POS
-         if (defaultLevelId && sellingPrice > 0) {
-            await query(`
+      for (const item of items) {
+        const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        await connection.query(insertItemQuery, [
+          itemId,
+          orderId,
+          item.productId,
+          item.productName,
+          toSafeNumber(item.quantity),
+          toSafeNumber(item.cost),
+          item.sellingPrice ? toSafeNumber(item.sellingPrice) : null,
+          toSafeNumber(item.discount),
+          item.discountType || 'amount',
+          item.vatSubject ? 1 : 0
+        ]);
+      }
+
+      // Auto-record payment if status is 'Paid'
+      if (status === 'Paid' && finalTotal > 0) {
+        const paymentId = `sp_${Date.now()}_auto`;
+        const insertPaymentQuery = `
+          INSERT INTO supplier_payments (
+            id, supplier_id, amount, date, payment_method, reference, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        await connection.query(insertPaymentQuery, [
+          paymentId,
+          supplierId,
+          finalTotal,
+          date || new Date().toISOString(),
+          paymentMethod || 'Cash',
+          `PO-${orderId}`,
+          `Auto-payment for PO ${orderId}`
+        ]);
+      }
+
+      // Auto-Receive Logic: Update Inventory if type is 'Receive'
+      if (purchaseType === 'Receive') {
+        const [defaultLevelResult]: any = await connection.query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
+        const defaultLevelId = defaultLevelResult[0]?.id;
+        
+        for (const calculatedItem of calculations.items) {
+          // Get current stock for movement recording
+          const [productResult]: any = await connection.query('SELECT name, stock FROM products WHERE id = ?', [calculatedItem.productId]);
+          if (productResult && productResult.length > 0) {
+            const product = productResult[0];
+            const previousStock = toSafeNumber(product.stock);
+            const quantityAdded = toSafeNumber(calculatedItem.quantity);
+            const newStock = previousStock + quantityAdded;
+            const landedCost = toSafeNumber(calculatedItem.landedCostPerUnit);
+
+            // Find original item to get sellingPrice
+            const originalItem = items.find((i: any) => i.productId === calculatedItem.productId);
+            const sellingPrice = toSafeNumber(originalItem?.sellingPrice);
+            
+            // Update product stock, cost (landed cost), and selling price
+            await connection.query('UPDATE products SET stock = ?, cost = ?, price = ?, updated_at = NOW() WHERE id = ?', [
+              newStock, 
+              landedCost, 
+              sellingPrice,
+              calculatedItem.productId
+            ]);
+
+            // Track stock movement
+            const movementId = `MOV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            await connection.query(`
+              INSERT INTO stock_movements (
+                id, product_id, product_name, movement_type, 
+                quantity_change, previous_stock, new_stock, 
+                reference_id, reference_type, notes, created_at, updated_at
+              ) VALUES (?, ?, ?, 'purchase', ?, ?, ?, ?, 'purchase', ?, NOW(), NOW())
+            `, [
+              movementId,
+              calculatedItem.productId,
+              product.name,
+              quantityAdded,
+              previousStock,
+              newStock,
+              orderId,
+              `Received Purchase (Quick Receive): ${orderId}`
+            ]);
+
+            // Also update/insert default price level to ensure it reflects in POS
+            if (defaultLevelId && sellingPrice > 0) {
+              await connection.query(`
                 INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
                 VALUES (?, ?, ?, 0) 
                 ON DUPLICATE KEY UPDATE price = VALUES(price)
-            `, [calculatedItem.productId, defaultLevelId, sellingPrice]);
-         }
-       }
-    }
+              `, [calculatedItem.productId, defaultLevelId, sellingPrice]);
+            }
+          }
+        }
+      }
+      
+      return { orderId };
+    });
 
     // Sync to external accounting API (non-blocking)
     try {
@@ -322,9 +356,9 @@ export async function POST(request: NextRequest) {
           supplierName,
           date: formattedDate,
           deliveryDate: body.deliveryDate || null,
-          total: total || 0,
-          vatAmount: vatAmount || 0,
-          shippingFee: shipping || 0,
+          total: finalTotal || 0,
+          vatAmount: finalVatAmount || 0,
+          shippingFee: toSafeNumber(shipping),
           paymentMethod: paymentMethod || '',
           status: (purchaseType === 'Receive') ? 'Received' : (status || 'Pending'),
           orderedBy: orderedBy || '',

@@ -71,8 +71,9 @@ export class XReadingGenerator {
         if (email) enc.line(center(`Email: ${email}`));
         
         enc.line(center(`MIN: ${min || '0987654321'}`))
-           .line(center(`S/N: ${sn || '1234567890-01'}`))
-           .newline()
+           .line(center(`S/N: ${sn || '1234567890-01'}`));
+        if (data.terminalName) enc.line(center(`Terminal: ${data.terminalName}`));
+        enc.newline()
            .bold(true)
            .line(center('X-READING REPORT'))
            .bold(false)
@@ -117,8 +118,8 @@ export class XReadingGenerator {
                     { width: 20, align: 'right' }
                 ],
                 [
-                    ['Beg. OR #:', minSaleId || '0000000000000'],
-                    ['End. OR #:', maxSaleId || '0000000000000']
+                    ['Beg. OR #:', minSaleId || '000000'],
+                    ['End. OR #:', maxSaleId || '000000']
                 ]
             )
             .newline()

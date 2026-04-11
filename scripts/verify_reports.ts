@@ -7,7 +7,7 @@ async function testEndpoint(name: string, path: string) {
     const url = `${BASE_URL}${path}`;
     console.log(`Testing ${name}: ${url}`);
     const res = await fetch(url);
-    const data = await res.json();
+    const data: any = await res.json();
     
     if (res.status === 200 && data.success) {
       console.log(`✅ ${name} Success! Items: ${Array.isArray(data.data) ? data.data.length : 'N/A'}`);
@@ -17,7 +17,7 @@ async function testEndpoint(name: string, path: string) {
     } else {
       console.error(`❌ ${name} Failed! Status: ${res.status}`, data);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error(`❌ ${name} Error:`, error.message);
   }
 }

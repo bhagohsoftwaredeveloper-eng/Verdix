@@ -52,6 +52,7 @@ import { SupplierFormDialog } from '../products/ManageSuppliersDialog';
 import { addSupplier } from '../products/actions';
 import { useUser } from '@/hooks/use-user';
 import { getApiUrl } from '@/lib/api-config';
+import { toSafeNumber } from '@/lib/utils';
 
 const purchaseOrderItemSchema = z.object({
   productId: z.string().min(1),
@@ -432,14 +433,14 @@ export function AddPurchaseOrderDialog({
         ...item,
         productId: item.productId || '',
         productName: item.productName || '',
-        quantity: Number(item.quantity) || 0,
-        cost: Number(item.cost) || 0,
-        discount: Number(item.discount) || 0,
+        quantity: toSafeNumber(item.quantity),
+        cost: toSafeNumber(item.cost),
+        discount: toSafeNumber(item.discount),
         discountType: item.discountType || 'amount',
         vatSubject: !!item.vatSubject,
       })),
-      Number(shipping) || 0,
-      activeTaxRate ? Number(activeTaxRate.rate) : 12
+      toSafeNumber(shipping),
+      activeTaxRate ? toSafeNumber(activeTaxRate.rate) : 12
     );
 
     setVatTotal(results.vatAmount);
@@ -601,15 +602,15 @@ export function AddPurchaseOrderDialog({
           ...item,
           productId: item.productId,
           productName: item.productName,
-          quantity: item.quantity,
-          cost: item.cost,
-          discount: item.discount,
+          quantity: toSafeNumber(item.quantity),
+          cost: toSafeNumber(item.cost),
+          discount: toSafeNumber(item.discount),
           discountType: item.discountType,
           vatSubject: item.vatSubject,
-          sellingPrice: Number(item.sellingPrice) || 0,
+          sellingPrice: toSafeNumber(item.sellingPrice),
         })),
-        values.shipping || 0,
-        activeTaxRate ? Number(activeTaxRate.rate) : 12
+        toSafeNumber(values.shipping),
+        activeTaxRate ? toSafeNumber(activeTaxRate.rate) : 12
       );
       
       const orderData = {

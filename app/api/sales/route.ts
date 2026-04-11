@@ -103,13 +103,21 @@ export async function GET(request: NextRequest) {
         },
         invoiceDate: row.invoiceDate,
         dueDate: row.dueDate,
-        total: row.total,
+        total: Number(row.total || 0),
         paymentMethod: row.paymentMethod || '',
         paymentReference: row.paymentReference || '',
         status: row.status,
         notes: row.notes,
         orderNumber: row.orderNumber,
-        items: row.items,
+        items: (row.items || []).map((item: any) => ({
+          ...item,
+          product: {
+            id: item.productId,
+            name: item.productName || 'Unknown Product',
+            sku: item.sku || '',
+            barcode: item.barcode || ''
+          }
+        })),
       };
     });
 

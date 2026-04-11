@@ -33,7 +33,9 @@ async function ensurePosTerminalsTable() {
       { name: 'permit_no', type: 'VARCHAR(100)' },
       { name: 'print_official_receipt', type: 'VARCHAR(10) DEFAULT "No"' },
       { name: 'or_next_reference', type: 'VARCHAR(100)' },
-      { name: 'last_active', type: 'TIMESTAMP NULL' }
+      { name: 'last_active', type: 'TIMESTAMP NULL' },
+      { name: 'z_counter', type: 'INT DEFAULT 0' },
+      { name: 'reset_counter', type: 'INT DEFAULT 0' }
     ];
 
     // Get current columns
@@ -106,7 +108,9 @@ export async function GET(request: NextRequest) {
         location AS inventoryLocation,
         is_active AS isActive,
         last_active AS lastActive,
-        created_at AS createdAt
+        created_at AS createdAt,
+        z_counter AS zCounter,
+        reset_counter AS resetCounter
       FROM pos_terminals
       WHERE 1=1
     `;
@@ -147,7 +151,7 @@ export async function GET(request: NextRequest) {
     // Get client IP
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
                      request.headers.get('x-real-ip') || 
-                     request.ip || 
+                     (request as any).ip || 
                      '127.0.0.1';
 
     return NextResponse.json({
@@ -186,7 +190,9 @@ export async function POST(request: NextRequest) {
       printOfficialReceipt,
       orNextReference,
       inventoryLocation,
-      isActive = true
+      isActive = true,
+      zCounter = 0,
+      resetCounter = 0
     } = body;
 
     // Generate ID
@@ -196,9 +202,9 @@ export async function POST(request: NextRequest) {
       INSERT INTO pos_terminals (
         id, ip_address, name, serial_number, min_number,
         permit_no, print_official_receipt, or_next_reference,
-        location, is_active
+        location, is_active, z_counter, reset_counter
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     await query(sql, [
@@ -211,7 +217,9 @@ export async function POST(request: NextRequest) {
       printOfficialReceipt || 'No',
       orNextReference?.trim() || null,
       inventoryLocation || 'Store',
-      isActive
+      isActive,
+      zCounter,
+      resetCounter
     ]);
 
     return NextResponse.json({
@@ -227,7 +235,9 @@ export async function POST(request: NextRequest) {
         printOfficialReceipt: printOfficialReceipt || 'No',
         orNextReference: orNextReference?.trim() || null,
         inventoryLocation: inventoryLocation || 'Store',
-        isActive
+        isActive,
+        zCounter,
+        resetCounter
       },
       timestamp: new Date().toISOString()
     });
@@ -269,7 +279,9 @@ export async function PUT(request: NextRequest) {
       printOfficialReceipt: 'print_official_receipt',
       orNextReference: 'or_next_reference',
       inventoryLocation: 'location',
-      isActive: 'is_active'
+      isActive: 'is_active',
+      zCounter: 'z_counter',
+      resetCounter: 'reset_counter'
     };
 
     Object.entries(fieldMap).forEach(([bodyKey, dbColumn]) => {

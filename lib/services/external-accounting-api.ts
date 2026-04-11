@@ -225,31 +225,42 @@ export async function syncPurchaseTransaction(
   }
 
   try {
-    const payload: PurchaseTransactionPayload = {
-      transactionType: 'PURCHASE_ORDER',
-      orderId: purchaseOrderData.id || purchaseOrderId,
-      referenceNumber: purchaseOrderData.referenceNumber || '',
-      supplierId: purchaseOrderData.supplierId,
-      supplierName: purchaseOrderData.supplierName,
-      date: purchaseOrderData.date,
-      dueDate: purchaseOrderData.deliveryDate,
-      total: purchaseOrderData.total,
-      vatAmount: purchaseOrderData.vatAmount || 0,
-      shippingFee: purchaseOrderData.shippingFee || 0,
-      paymentMethod: purchaseOrderData.paymentMethod,
-      status: purchaseOrderData.status,
-      orderedBy: purchaseOrderData.orderedBy || '',
-      lineItems: purchaseOrderData.items.map((item: any) => ({
-        productId: item.productId,
-        productName: item.productName,
-        quantity: item.quantity,
-        unitCost: item.cost,
-        discount: item.discount || 0,
-        discountType: item.discountType || 'amount',
-        vatSubject: item.vatSubject || false,
-        subtotal: item.quantity * item.cost - (item.discount || 0),
-      })),
-    };
+    let payload: PurchaseTransactionPayload;
+
+    // Check if this is already a processed payload (e.g. from a retry)
+    if (purchaseOrderData.transactionType === 'PURCHASE_ORDER' && purchaseOrderData.lineItems) {
+      payload = purchaseOrderData;
+    } else {
+      if (!purchaseOrderData.items) {
+        throw new Error('Purchase order items are missing in payload');
+      }
+
+      payload = {
+        transactionType: 'PURCHASE_ORDER',
+        orderId: purchaseOrderData.id || purchaseOrderId,
+        referenceNumber: purchaseOrderData.referenceNumber || '',
+        supplierId: purchaseOrderData.supplierId,
+        supplierName: purchaseOrderData.supplierName,
+        date: purchaseOrderData.date,
+        dueDate: purchaseOrderData.deliveryDate,
+        total: purchaseOrderData.total,
+        vatAmount: purchaseOrderData.vatAmount || 0,
+        shippingFee: purchaseOrderData.shippingFee || 0,
+        paymentMethod: purchaseOrderData.paymentMethod,
+        status: purchaseOrderData.status,
+        orderedBy: purchaseOrderData.orderedBy || '',
+        lineItems: purchaseOrderData.items.map((item: any) => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitCost: item.cost,
+          discount: item.discount || 0,
+          discountType: item.discountType || 'amount',
+          vatSubject: item.vatSubject || false,
+          subtotal: item.quantity * item.cost - (item.discount || 0),
+        })),
+      };
+    }
 
     const endpoint = `${config.apiEndpoint}/purchase-transactions`;
     return await sendToExternalApi(endpoint, payload, config, 'PURCHASE_ORDER', purchaseOrderId);
@@ -273,17 +284,24 @@ export async function syncPaymentTransaction(
   }
 
   try {
-    const payload: PaymentTransactionPayload = {
-      transactionType: 'SUPPLIER_PAYMENT',
-      paymentId: paymentData.id || paymentId,
-      supplierId: paymentData.supplierId,
-      supplierName: paymentData.supplierName || '',
-      amount: paymentData.amount,
-      date: paymentData.date,
-      paymentMethod: paymentData.paymentMethod,
-      reference: paymentData.reference,
-      notes: paymentData.notes,
-    };
+    let payload: PaymentTransactionPayload;
+
+    // Check if this is already a processed payload
+    if (paymentData.transactionType === 'SUPPLIER_PAYMENT' && paymentData.paymentId) {
+      payload = paymentData;
+    } else {
+      payload = {
+        transactionType: 'SUPPLIER_PAYMENT',
+        paymentId: paymentData.id || paymentId,
+        supplierId: paymentData.supplierId,
+        supplierName: paymentData.supplierName || '',
+        amount: paymentData.amount,
+        date: paymentData.date,
+        paymentMethod: paymentData.paymentMethod,
+        reference: paymentData.reference,
+        notes: paymentData.notes,
+      };
+    }
 
     const endpoint = `${config.apiEndpoint}/payment-transactions`;
     return await sendToExternalApi(endpoint, payload, config, 'SUPPLIER_PAYMENT', paymentId);
@@ -307,24 +325,35 @@ export async function syncSalesTransaction(
   }
 
   try {
-    const payload: SalesTransactionPayload = {
-      transactionType: 'SALES_INVOICE',
-      invoiceId: salesData.id || invoiceId,
-      customerId: salesData.customer?.id || '',
-      customerName: salesData.customer?.name || 'Walk-in Customer',
-      date: salesData.invoiceDate,
-      total: salesData.total,
-      paymentMethod: salesData.paymentMethod,
-      paymentReference: salesData.paymentReference,
-      status: salesData.status,
-      items: salesData.items.map((item: any) => ({
-        productId: item.product.id,
-        productName: item.product.name,
-        quantity: item.quantity,
-        price: item.price,
-        subtotal: item.quantity * item.price,
-      })),
-    };
+    let payload: SalesTransactionPayload;
+
+    // Check if this is already a processed payload
+    if (salesData.transactionType === 'SALES_INVOICE' && salesData.invoiceId) {
+      payload = salesData;
+    } else {
+      if (!salesData.items) {
+        throw new Error('Sales invoice items are missing in payload');
+      }
+
+      payload = {
+        transactionType: 'SALES_INVOICE',
+        invoiceId: salesData.id || invoiceId,
+        customerId: salesData.customer?.id || '',
+        customerName: salesData.customer?.name || 'Walk-in Customer',
+        date: salesData.invoiceDate,
+        total: salesData.total,
+        paymentMethod: salesData.paymentMethod,
+        paymentReference: salesData.paymentReference,
+        status: salesData.status,
+        items: salesData.items.map((item: any) => ({
+          productId: item.product.id,
+          productName: item.product.name,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.quantity * item.price,
+        })),
+      };
+    }
 
     const endpoint = `${config.apiEndpoint}/sales-transactions`;
     return await sendToExternalApi(endpoint, payload, config, 'SALES_INVOICE', invoiceId);

@@ -49,8 +49,12 @@ export function CountDetailClient({ countId }: { countId: string }) {
         throw new Error(`Failed to fetch count details (Status ${res.status})`);
       }
       const data = await res.json();
-      setCount(data);
-      setItems(data.items || []);
+      if (data.success) {
+        setCount(data.data);
+        setItems(data.data.items || []);
+      } else {
+        throw new Error(data.error || 'Failed to fetch count details');
+      }
     } catch (error) {
       console.error(error);
       toast({ title: 'Error loading count details', variant: 'destructive' });

@@ -1,4 +1,4 @@
-import { calculatePurchaseCosts } from '../lib/purchase-utils.ts';
+﻿import { calculatePurchaseCosts } from '../lib/purchase-utils';
 
 const testItems = [
   {
