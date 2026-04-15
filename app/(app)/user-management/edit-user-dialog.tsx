@@ -37,6 +37,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ALL_PERMISSIONS } from './permissions';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getApiUrl } from '@/lib/api-config';
+import { AddUserTypeDialog } from './add-user-type-dialog';
+import { Plus } from 'lucide-react';
+
 
 type User = {
   uid: string;
@@ -53,7 +56,7 @@ const formSchema = z.object({
   username: z.string().min(1, 'Username is required'),
   displayName: z.string().min(1, 'Display name is required'),
   password: z.string().transform(v => v === '' ? undefined : v).pipe(z.string().min(6, 'Password must be at least 6 characters long').optional()),
-  userType: z.enum(['Super Admin', 'Admin', 'Staff', 'Cashier', 'User']),
+  userType: z.string().min(1, 'User type is required'),
   permissions: z.array(z.string()).refine(value => value.some(item => item), {
     message: "You have to select at least one permission.",
   }),
@@ -71,6 +74,8 @@ export function EditUserDialog({
   open: boolean,
   onOpenChange: (open: boolean) => void
 }) {
+  const [userTypes, setUserTypes] = useState<any[]>([]);
+  const [isUserTypeDialogOpen, setIsUserTypeDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<FormValues>({
@@ -79,10 +84,27 @@ export function EditUserDialog({
       username: user.username || '',
       displayName: user.displayName || '',
       password: '',
-      userType: (user.userType as any) || 'User',
+      userType: user.userType || '',
       permissions: user.permissions || [],
     },
   });
+
+  async function fetchUserTypes() {
+    try {
+      const res = await fetch(getApiUrl('/user-types'));
+      const data = await res.json();
+      setUserTypes(data);
+    } catch (error) {
+      console.error('Failed to fetch user types:', error);
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      fetchUserTypes();
+    }
+  }, [open]);
+
 
   useEffect(() => {
     if (open) {
@@ -90,7 +112,7 @@ export function EditUserDialog({
         username: user.username || '',
         displayName: user.displayName || '',
         password: '',
-        userType: (user.userType as any) || 'User',
+        userType: user.userType || '',
         permissions: user.permissions || [],
       });
     }
@@ -103,39 +125,25 @@ export function EditUserDialog({
   const isInitializingRef = useRef(true);
 
   useEffect(() => {
-    if (open) {
+    if (open && watchedUserType && userTypes.length > 0) {
       if (isInitializingRef.current) {
-        lastUserTypeRef.current = user.userType;
+        lastUserTypeRef.current = watchedUserType;
         isInitializingRef.current = false;
         return;
       }
 
       if (watchedUserType !== lastUserTypeRef.current) {
-        if (watchedUserType === 'Super Admin') {
-          form.setValue('permissions', ALL_PERMISSIONS.map(p => p.id));
-        } else if (watchedUserType === 'Admin') {
-          form.setValue('permissions', ALL_PERMISSIONS.filter(p => p.id !== 'manage_settings').map(p => p.id));
-        } else if (watchedUserType === 'Staff') {
-          form.setValue('permissions', [
-            'view_dashboard',
-            'manage_products',
-            'manage_inventory',
-            'view_sales',
-            'manage_customers',
-            'manage_suppliers',
-            'view_reports'
-          ]);
-        } else if (watchedUserType === 'Cashier') {
-          form.setValue('permissions', ['access_pos']);
-        } else if (watchedUserType === 'User') {
-          form.setValue('permissions', ['view_dashboard']);
+        const selectedType = userTypes.find(t => t.name === watchedUserType);
+        if (selectedType) {
+          form.setValue('permissions', selectedType.permissions || []);
         }
         lastUserTypeRef.current = watchedUserType;
       }
-    } else {
+    } else if (!open) {
       isInitializingRef.current = true;
     }
-  }, [watchedUserType, form, open, user.userType]);
+  }, [watchedUserType, form, open, userTypes]);
+
 
   async function onSubmit(values: FormValues) {
     try {
@@ -229,20 +237,37 @@ export function EditUserDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>User Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select 
+                    onValueChange={(value) => {
+                      if (value === 'CREATE_NEW') {
+                        setIsUserTypeDialogOpen(true);
+                      } else {
+                        field.onChange(value);
+                      }
+                    }} 
+                    value={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger className="bg-white">
                         <SelectValue placeholder="Select a user type" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="Super Admin">Super Admin</SelectItem>
-                      <SelectItem value="Admin">Admin</SelectItem>
-                      <SelectItem value="Staff">Staff</SelectItem>
-                      <SelectItem value="Cashier">Cashier</SelectItem>
-                      <SelectItem value="User">User</SelectItem>
+                      {userTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.name}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                      <div className="border-t my-1" />
+                      <SelectItem value="CREATE_NEW" className="text-primary font-medium focus:text-primary">
+                        <div className="flex items-center">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Create New User Type...
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
+
                   <FormMessage />
                 </FormItem>
               )}
@@ -339,6 +364,14 @@ export function EditUserDialog({
           </form>
         </Form>
       </DialogContent>
+      <AddUserTypeDialog 
+        open={isUserTypeDialogOpen} 
+        onOpenChange={setIsUserTypeDialogOpen} 
+        onUserTypeUpdated={() => {
+          fetchUserTypes();
+        }}
+      />
     </Dialog>
+
   );
 }

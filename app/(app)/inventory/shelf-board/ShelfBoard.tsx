@@ -112,11 +112,21 @@ export default function ShelfBoard() {
 
     if (selectedProducts.length === 0) return;
 
+    // Initialize transfer quantities with full available amount
+    const initialQuantities: Record<string, number> = {};
+    selectedProducts.forEach(p => {
+        const available = source.droppableId === 'unassigned'
+            ? (p.stock - Object.values(p.shelfQuantities || {}).reduce((a, b) => a + b, 0))
+            : (p.shelfQuantities?.[source.droppableId] || 0);
+        initialQuantities[p.id] = available;
+    });
+
     setPendingTransfer({
       products: selectedProducts,
       sourceShelfId: source.droppableId,
       targetShelfId: destination.droppableId,
-    });
+      transferQuantities: initialQuantities
+    } as any);
   };
 
   const handleTransferConfirm = async () => {
@@ -124,24 +134,28 @@ export default function ShelfBoard() {
 
     setIsTransferring(true);
     try {
+      const sourceId = pendingTransfer.sourceShelfId === 'unassigned' ? null : pendingTransfer.sourceShelfId;
       const targetId = pendingTransfer.targetShelfId === 'unassigned' ? null : pendingTransfer.targetShelfId;
+      
       const updates = pendingTransfer.products.map(p => ({
           productId: p.id,
-          shelfLocationId: targetId
+          sourceShelfId: sourceId,
+          targetShelfId: targetId,
+          quantity: (pendingTransfer as any).transferQuantities?.[p.id] ?? p.stock
       }));
 
       const result = await updateProductShelfLocations(updates);
 
       if (result.success) {
         toast({
-          title: 'Shelves Updated',
-          description: `Successfully moved ${updates.length} item(s).`,
+          title: "Transfer successful",
+          description: `Transferred stock to ${shelfLocations.find(s => s.id === targetId)?.name || 'Unassigned Shelf'}`
         });
         setPendingTransfer(null);
         setSelectedIds(new Set());
         fetchData();
       } else {
-        throw new Error(result.message || 'Transfer failed');
+        throw new Error((result as any).message || 'Transfer failed');
       }
     } catch (error: any) {
       toast({
@@ -183,7 +197,7 @@ export default function ShelfBoard() {
   const brands = Array.from(new Set(products.map(p => p.brand).filter(Boolean)));
 
   const displayShelves = [
-    ...(products.some(p => !p.shelfLocationId) ? [{ id: 'unassigned', name: 'Unassigned Shelf' }] : []),
+    ...(products.some(p => !p.shelfLocationIds || p.shelfLocationIds.length === 0) ? [{ id: 'unassigned', name: 'Unassigned Shelf' }] : []),
     ...shelfLocations
   ];
 
@@ -324,7 +338,7 @@ export default function ShelfBoard() {
                   <h3 className="font-bold text-sm tracking-tight truncate">{shelf.name}</h3>
                 </div>
                 <Badge variant="secondary" className="font-mono">
-                  {filteredProducts.filter(p => shelf.id === 'unassigned' ? !p.shelfLocationId : p.shelfLocationId === shelf.id).length}
+                  {filteredProducts.filter(p => shelf.id === 'unassigned' ? (!p.shelfLocationIds || p.shelfLocationIds.length === 0) : p.shelfLocationIds?.includes(shelf.id)).length}
                 </Badge>
               </div>
 
@@ -339,82 +353,88 @@ export default function ShelfBoard() {
                     )}
                   >
                     {filteredProducts
-                      .filter((p) => shelf.id === 'unassigned' ? !p.shelfLocationId : p.shelfLocationId === shelf.id)
-                      .map((product, index) => (
-                        <Draggable
-                          key={product.id}
-                          draggableId={product.id}
-                          index={index}
-                        >
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              style={provided.draggableProps.style}
-                              className={cn(
-                                "group bg-background rounded-lg border p-3 shadow-sm hover:shadow-md hover:border-primary/50 transition-all relative",
-                                snapshot.isDragging && "ring-2 ring-primary shadow-lg scale-105 rotate-2 z-50",
-                                selectedIds.has(product.id) && "ring-2 ring-primary bg-primary/[0.02]",
-                                product.stock <= 0 && "opacity-60 grayscale-[0.5]"
-                              )}
-                              onClick={(e) => toggleSelect(product.id, e)}
+                      .filter((p) => shelf.id === 'unassigned' ? (!p.shelfLocationIds || p.shelfLocationIds.length === 0) : p.shelfLocationIds?.includes(shelf.id))
+                      .map((product, index) => {
+                          const shelfQty = shelf.id === 'unassigned' 
+                            ? (product.stock - Object.values(product.shelfQuantities || {}).reduce((a, b) => a + b, 0))
+                            : (product.shelfQuantities?.[shelf.id] || 0);
+                          
+                          return (
+                            <Draggable
+                              key={product.id}
+                              draggableId={product.id}
+                              index={index}
                             >
-                              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                <Checkbox 
-                                    checked={selectedIds.has(product.id)}
-                                    onCheckedChange={() => toggleSelect(product.id)} 
-                                />
-                              </div>
-
-                              <div className="flex justify-between items-start mb-2 pr-6">
-                                <h4 className="font-bold text-sm line-clamp-2 leading-tight group-hover:text-primary transition-colors">
-                                  {product.name}
-                                </h4>
-                                <Badge 
-                                    variant={product.stock > 0 ? (product.stock < (product.reorderPoint || 10) ? "secondary" : "default") : "destructive"} 
-                                    className="h-5 px-1.5 text-[10px] shrink-0"
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  style={provided.draggableProps.style}
+                                  className={cn(
+                                    "group bg-background rounded-lg border p-3 shadow-sm hover:shadow-md hover:border-primary/50 transition-all relative",
+                                    snapshot.isDragging && "ring-2 ring-primary shadow-lg scale-105 rotate-2 z-50",
+                                    selectedIds.has(product.id) && "ring-2 ring-primary bg-primary/[0.02]",
+                                    product.stock <= 0 && "opacity-60 grayscale-[0.5]"
+                                  )}
+                                  onClick={(e) => toggleSelect(product.id, e)}
                                 >
-                                  {product.stock}
-                                </Badge>
-                              </div>
-                              
-                              <div className="space-y-2">
-                                <div className="flex flex-wrap gap-1.5">
-                                    {product.sku && (
-                                    <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-mono">
-                                        {product.sku}
-                                    </span>
-                                    )}
-                                    {product.brand && (
-                                    <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-medium">
-                                        {product.brand}
-                                    </span>
-                                    )}
-                                    {product.category && (
-                                    <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-medium">
-                                        {product.category}
-                                    </span>
-                                    )}
-                                </div>
-                                
-                                <div className="pt-1">
-                                    <Progress 
-                                        value={Math.min(100, (product.stock / ((product.reorderPoint || 10) * 2)) * 100)} 
-                                        className="h-1" 
+                                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                    <Checkbox 
+                                        checked={selectedIds.has(product.id)}
+                                        onCheckedChange={() => toggleSelect(product.id)} 
                                     />
+                                  </div>
+
+                                  <div className="flex justify-between items-start mb-2 pr-6">
+                                    <h4 className="font-bold text-sm line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+                                      {product.name}
+                                    </h4>
+                                    <Badge 
+                                        variant={shelfQty > 0 ? (shelfQty < (product.reorderPoint || 10) ? "secondary" : "default") : "destructive"} 
+                                        className="h-5 px-1.5 text-[10px] shrink-0"
+                                    >
+                                      {shelfQty}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {product.sku && (
+                                        <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-mono">
+                                            {product.sku}
+                                        </span>
+                                        )}
+                                        {product.brand && (
+                                        <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-medium">
+                                            {product.brand}
+                                        </span>
+                                        )}
+                                        {product.category && (
+                                        <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-medium">
+                                            {product.category}
+                                        </span>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="pt-1">
+                                        <Progress 
+                                            value={Math.min(100, (shelfQty / ((product.reorderPoint || 10) * 2)) * 100)} 
+                                            className="h-1" 
+                                        />
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </div>
-          ))}
+                              )}
+                            </Draggable>
+                          );
+                        })}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            ))}
 
           {displayShelves.length === 0 && (
             <div className="flex flex-col items-center justify-center w-full h-full border-2 border-dashed rounded-xl border-muted text-muted-foreground">
@@ -425,30 +445,60 @@ export default function ShelfBoard() {
         </div>
       </DragDropContext>
 
-      <Dialog open={!!pendingTransfer} onOpenChange={(open) => !open && setPendingTransfer(null)}>
+      <Dialog open={!!pendingTransfer} onOpenChange={(open) => !open && !isTransferring && setPendingTransfer(null)}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Confirm Shelf Transfer</DialogTitle>
             <DialogDescription>
-              Moving <strong>{pendingTransfer?.products.length}</strong> items to <strong>{pendingTransfer?.targetShelfId === 'unassigned' ? 'Unassigned Shelf' : shelfLocations.find(s => s.id === pendingTransfer?.targetShelfId)?.name}</strong>.
+              Transferring stock from <strong>{pendingTransfer?.sourceShelfId === 'unassigned' ? 'Unassigned' : shelfLocations.find(s => s.id === pendingTransfer?.sourceShelfId)?.name}</strong> to <strong>{pendingTransfer?.targetShelfId === 'unassigned' ? 'Unassigned' : shelfLocations.find(s => s.id === pendingTransfer?.targetShelfId)?.name}</strong>.
             </DialogDescription>
           </DialogHeader>
           
           <ScrollArea className="flex-1 pr-4 -mr-4 my-4">
             <div className="space-y-4">
-                {pendingTransfer?.products.map(product => (
-                    <div key={product.id} className="p-4 bg-muted/30 rounded-lg border flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm truncate">{product.name}</p>
-                            <p className="text-xs text-muted-foreground">Current Shelf: {product.shelfLocationId ? shelfLocations.find(s => s.id === product.shelfLocationId)?.name || 'Unknown' : 'Unassigned Shelf'}</p>
+                {pendingTransfer?.products.map(product => {
+                    const maxQty = pendingTransfer.sourceShelfId === 'unassigned'
+                      ? (product.stock - Object.values(product.shelfQuantities || {}).reduce((a, b) => a + b, 0))
+                      : (product.shelfQuantities?.[pendingTransfer.sourceShelfId] || 0);
+
+                    return (
+                        <div key={product.id} className="p-4 bg-muted/30 rounded-lg border space-y-3">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-sm truncate">{product.name}</p>
+                                    <p className="text-xs text-muted-foreground">Available in source: {maxQty}</p>
+                                </div>
+                                <div className="w-32">
+                                    <Label htmlFor={`qty-${product.id}`} className="text-[10px] uppercase font-bold text-muted-foreground mb-1 block">Quantity</Label>
+                                    <Input 
+                                        id={`qty-${product.id}`}
+                                        type="number" 
+                                        size={1}
+                                        min={1} 
+                                        max={maxQty}
+                                        value={(pendingTransfer as any).transferQuantities?.[product.id] ?? maxQty}
+                                        onChange={(e) => {
+                                            const val = Math.min(maxQty, Math.max(1, parseInt(e.target.value) || 0));
+                                            setPendingTransfer(prev => prev ? ({
+                                                ...prev,
+                                                transferQuantities: {
+                                                    ...((prev as any).transferQuantities || {}),
+                                                    [product.id]: val
+                                                }
+                                            } as any) : null);
+                                        }}
+                                        className="h-8 text-sm"
+                                    />
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
           </ScrollArea>
 
           <DialogFooter className="border-t pt-4">
-            <Button variant="outline" onClick={() => setPendingTransfer(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setPendingTransfer(null)} disabled={isTransferring}>Cancel</Button>
             <Button onClick={handleTransferConfirm} disabled={isTransferring}>
               {isTransferring && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Transfer {pendingTransfer?.products.length} Items

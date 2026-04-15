@@ -7,9 +7,11 @@ export function WindowControls() {
   const [isElectron, setIsElectron] = useState(false);
 
   useEffect(() => {
-    // Check if running in Electron
+    // Check if running in Electron and if it's frameless
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
-      setIsElectron(true);
+      if ((window as any).electronAPI.isFrameless()) {
+        setIsElectron(true);
+      }
     }
   }, []);
 

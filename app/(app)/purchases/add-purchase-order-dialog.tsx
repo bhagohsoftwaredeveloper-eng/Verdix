@@ -17,6 +17,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   Form,
@@ -299,11 +309,15 @@ export function AddPurchaseOrderDialog({
   onOpenChange?: (open: boolean) => void;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  
   const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
-  const setOpen = controlledOnOpenChange || setInternalOpen;
+  const setOpen = (val: boolean) => {
+    if (controlledOnOpenChange) controlledOnOpenChange(val);
+    setInternalOpen(val);
+  };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [confirmValues, setConfirmValues] = useState<PurchaseOrderFormValues | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
   
@@ -588,6 +602,15 @@ export function AddPurchaseOrderDialog({
   };
 
   async function onSubmit(values: PurchaseOrderFormValues) {
+    if (systemSettings?.requirePOConfirmation) {
+      setConfirmValues(values);
+      setIsConfirmOpen(true);
+    } else {
+      await processSubmit(values);
+    }
+  }
+
+  async function processSubmit(values: PurchaseOrderFormValues) {
     setIsSubmitting(true);
 
     try {
@@ -628,6 +651,7 @@ export function AddPurchaseOrderDialog({
         purchaseType: values.purchaseType,
         receiveToWarehouse: values.receiveToWarehouse,
         orderedBy: editOrder ? editOrder.orderedBy : (user?.email || 'System'),
+        userId: user?.uid || 'system',
         deliveryDate: values.deliveryDate ? new Date(values.deliveryDate).toISOString() : null,
       };
 
@@ -663,9 +687,7 @@ export function AddPurchaseOrderDialog({
 
       if (!editOrder) form.reset();
       setOpen(false);
-      
-      // Optionally refresh
-      // window.location.reload(); 
+      setIsConfirmOpen(false);
     } catch (error) {
       console.error('Error saving purchase order:', error);
       toast({
@@ -687,14 +709,11 @@ export function AddPurchaseOrderDialog({
              // If we close, we should form.reset() if not editing?
         }
     }}>
-      <DialogTrigger asChild>
-        {trigger ? trigger : (
-            <Button size="sm">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            New Purchase Order
-            </Button>
-        )}
-      </DialogTrigger>
+      {trigger && (
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-[100vw] w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none">
         <DialogHeader className="px-6 py-4 border-b bg-background">
           <DialogTitle>{editOrder ? 'Edit' : 'New'} Purchase Order</DialogTitle>
@@ -1270,6 +1289,28 @@ export function AddPurchaseOrderDialog({
           </form>
         </Form>
       </DialogContent>
+
+      <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Purchase Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to {editOrder ? 'update' : 'create'} this purchase order for <strong>{suppliers.find(s => s.id === form.watch('supplierId'))?.name || 'the selected supplier'}</strong>?
+              Total Amount: <strong>₱{total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => confirmValues && processSubmit(confirmValues)}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Confirm & Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

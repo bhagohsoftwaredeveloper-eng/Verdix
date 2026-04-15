@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 const printerSdk = require('./printer-sdk');
+const epsonSdk = require('./epson-sdk');
 
 function createWindow() {
   const isDev = !app.isPackaged;
@@ -25,20 +26,29 @@ function createWindow() {
     app.setAppUserModelId('com.stockpilot.pos');
   }
 
+  const isAdmin = roleName === 'Admin Dashboard' || startRoute.includes('dashboard');
+
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // Pass info to preload
+      additionalArguments: [isAdmin ? '--is-admin=true' : '--is-admin=false']
     },
     title: `Stockpilot - ${roleName}`,
     autoHideMenuBar: true,
     icon: path.join(__dirname, 'public', 'Stockpilot.png'),
-    fullscreen: true,
-    frame: false
+    fullscreen: !isAdmin, // Only POS is true fullscreen
+    frame: isAdmin,       // Admin has frame, POS is frameless
+    resizable: true
   });
+
+  if (isAdmin) {
+    win.maximize();
+  }
 
   win.setIcon(path.join(__dirname, 'public', 'Stockpilot.png'));
 
@@ -122,6 +132,31 @@ ipcMain.handle('printer:print', async (event, buffer) => {
 
 ipcMain.handle('printer:disconnect', async (event) => {
   return await printerSdk.disconnectPrinter();
+});
+
+// Epson SDK IPC Handlers
+ipcMain.handle('epson-printer:list', async () => {
+  return await epsonSdk.listPrinters();
+});
+
+ipcMain.handle('epson-printer:connect', async (event, portSetting) => {
+  return await epsonSdk.connectPrinter(portSetting);
+});
+
+ipcMain.handle('epson-printer:print', async (event, buffer) => {
+  return await epsonSdk.printData(buffer);
+});
+
+ipcMain.handle('epson-printer:disconnect', async (event) => {
+  return await epsonSdk.disconnectPrinter();
+});
+
+ipcMain.handle('epson-printer:cut', async () => {
+  return epsonSdk.cutPaper();
+});
+
+ipcMain.handle('epson-printer:open-drawer', async () => {
+  return epsonSdk.openCashDrawer();
 });
 
 app.whenReady().then(() => {

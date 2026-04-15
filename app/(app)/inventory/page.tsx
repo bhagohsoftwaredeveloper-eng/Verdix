@@ -28,7 +28,7 @@ import { getProducts } from '../products/actions';
 import { adjustStock } from './history/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useEffect, useMemo } from 'react';
-import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban } from 'lucide-react';
+import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban, History } from 'lucide-react';
 import { StockTransferDialog } from './StockTransferDialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -45,10 +45,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { getApiUrl } from '@/lib/api-config';
 
-function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: { product: Product, children: React.ReactNode, defaultReason?: string, onSuccess?: () => void }) {
+function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, requireConfirmation }: { product: Product, children: React.ReactNode, defaultReason?: string, onSuccess?: () => void, requireConfirmation?: boolean }) {
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const [quantity, setQuantity] = useState(0);
   const [reason, setReason] = useState(defaultReason || '');
@@ -116,7 +128,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
     setPhysicalCount(isNaN(num) || num < 0 ? 0 : num);
   };
 
-  const handleAdjustStock = async () => {
+  const processAdjustment = async () => {
     let adjustment: number;
     let finalReason: string;
 
@@ -141,7 +153,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
         return;
       }
       const signedQuantity = adjustmentType === 'add' ? quantity : -quantity;
-      adjustment = signedQuantity; // Parent adjustment is just the quantity
+      adjustment = signedQuantity; 
       finalReason = reason;
     }
 
@@ -166,24 +178,33 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
     }
 
     try {
-      // Adjust parent stock
-      const parentResult = await adjustStock(product.id, adjustment, finalReason);
+      const userSession = localStorage.getItem('mock-user-session');
+      const userId = userSession ? JSON.parse(userSession).uid : 'system';
+      const parentResult = await adjustStock(product.id, adjustment, finalReason, userId);
 
       if (!parentResult.success) {
         toast({
           variant: 'destructive',
           title: 'Adjustment Failed',
-          description: parentResult.error || 'Failed to adjust parent stock.',
+          description: parentResult.error || 'Failed to adjust stock.',
         });
         return;
       }
 
-      toast({
-        title: 'Stock Adjusted',
-        description: `Stock for ${product.name} has been updated to ${parentResult.newStock}. All child products have been automatically synchronized.`,
-      });
+      if (parentResult.pendingApproval) {
+        toast({
+          title: 'Adjustment Pending Approval',
+          description: `Stock adjustment for ${product.name} has been submitted for multi-level approval.`,
+        });
+      } else {
+        toast({
+          title: 'Stock Adjusted',
+          description: `Stock for ${product.name} has been updated to ${parentResult.newStock}.`,
+        });
+      }
       setIsOpen(false);
-      onSuccess?.(); // Refresh the product list
+      setIsConfirmOpen(false);
+      onSuccess?.(); 
       window.dispatchEvent(new Event('stock-updated'));
     } catch (error) {
       toast({
@@ -193,7 +214,20 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
       });
     }
   };
+
+  const handleAdjustStock = () => {
+    if (requireConfirmation) {
+      setIsConfirmOpen(true);
+    } else {
+      processAdjustment();
+    }
+  };
   
+  const adjustmentTypeLabel = adjustmentType === 'add' ? 'Addition' : 'Removal';
+  const confirmationMessage = isPhysicalCountMode 
+    ? `Are you sure you want to update the stock for ${product.name} to ${physicalCount} ${product.unitOfMeasure}? This will record a variance of ${variance > 0 ? '+' : ''}${variance}.`
+    : `Are you sure you want to record a ${adjustmentTypeLabel.toLowerCase()} of ${quantity} ${product.unitOfMeasure} for ${product.name}?`;
+
   const renderPhysicalCountMode = () => (
      <>
         <div className="grid gap-4 py-4">
@@ -249,20 +283,17 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
   );
 
   const renderStandardMode = () => {
-    const signedQuantity = adjustmentType === 'add' ? quantity : -quantity;
-    const parentAdjustment = signedQuantity; // Parent shows quantity as-is
-
     return (
       <>
           <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-2">
                   <Button variant={adjustmentType === 'add' ? 'default' : 'outline'} onClick={() => setAdjustmentType('add')}>
                       <Plus className="mr-2 h-4 w-4"/>
-                      Add Stock (Positive)
+                      Add Stock
                   </Button>
                   <Button variant={adjustmentType === 'remove' ? 'destructive' : 'outline'} onClick={() => setAdjustmentType('remove')}>
                       <Minus className="mr-2 h-4 w-4"/>
-                      Remove Stock (Negative)
+                      Remove Stock
                   </Button>
               </div>
               <div className={cn("grid gap-4 rounded-lg border p-4",
@@ -290,61 +321,10 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     className="col-span-3"
-                    placeholder="e.g., New shipment, damaged goods"
+                    placeholder="e.g., New shipment"
                     disabled={!!defaultReason}
                   />
                 </div>
-                {quantity > 0 && (
-                  <div className="grid grid-cols-4 items-center gap-4 text-sm border-t pt-3">
-                    <Label className="text-right font-medium">Calculation:</Label>
-                    <div className="col-span-3">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{quantity}</Badge>
-                        <span className="font-medium">=</span>
-                        <Badge variant={adjustmentType === 'add' ? 'default' : 'destructive'}>
-                          {parentAdjustment > 0 ? '+' : ''}{Math.abs(parentAdjustment)}
-                        </Badge>
-                        <span className="text-muted-foreground">to {product.name}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {quantity > 0 && childProducts.length > 0 && (
-                  <div className="grid grid-cols-4 items-start gap-4 text-sm border-t pt-3">
-                    <Label className="text-right font-medium">Child Products:</Label>
-                    <div className="col-span-3 space-y-2">
-                      {childProducts.map((child) => {
-                        const childConversionFactor = product.conversionFactors ? product.conversionFactors.find(cf => cf.unit === child.unitOfMeasure)?.factor || 1 : 1;
-                        const childAdjustmentValue = signedQuantity * childConversionFactor;
-                        return (
-                          <div key={child.id} className="flex items-center gap-2 text-xs">
-                            <span className="font-medium truncate max-w-32">{child.name}:</span>
-                            <Badge variant="outline">{child.stock}</Badge>
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                            <Badge variant={adjustmentType === 'add' ? 'default' : 'destructive'}>
-                              {childAdjustmentValue > 0 ? '+' : ''}{Math.abs(childAdjustmentValue)}
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              ({signedQuantity > 0 ? '+' : ''}{signedQuantity} × {childConversionFactor})
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {quantity > 0 && childProducts.length === 0 && !isLoadingChildren && (
-                  <div className="grid grid-cols-4 items-center gap-4 text-sm border-t pt-3 text-muted-foreground">
-                    <Label className="text-right">Child Products:</Label>
-                    <div className="col-span-3">No child products found</div>
-                  </div>
-                )}
-                {quantity > 0 && isLoadingChildren && (
-                  <div className="grid grid-cols-4 items-center gap-4 text-sm border-t pt-3">
-                    <Label className="text-right">Child Products:</Label>
-                    <div className="col-span-3 text-muted-foreground">Loading...</div>
-                  </div>
-                )}
               </div>
           </div>
           <DialogFooter>
@@ -352,9 +332,9 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
             <Button
               onClick={handleAdjustStock}
               disabled={quantity === 0 || !reason.trim()}
-               variant={adjustmentType === 'add' ? 'default' : 'destructive'}
+              variant={adjustmentType === 'add' ? 'default' : 'destructive'}
             >
-              {`${adjustmentType === 'add' ? 'Add' : 'Remove'} ${quantity} ${quantity === 1 ? 'Unit' : 'Units'}`}
+              {`${adjustmentType === 'add' ? 'Add' : 'Remove'} ${quantity} Units`}
             </Button>
           </DialogFooter>
       </>
@@ -362,27 +342,44 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess }: 
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>{dialogTitle}</DialogTitle>
-          <DialogDescription>
-            Current stock: {product.stock}. {isPhysicalCountMode ? 'Enter the new physically counted quantity.' : 'Select whether to add or remove stock and provide a reason.'}
-          </DialogDescription>
-        </DialogHeader>
-        {isPhysicalCountMode ? renderPhysicalCountMode() : renderStandardMode()}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger asChild>
+          {children}
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <DialogDescription>
+              Current stock: {product.stock}. {isPhysicalCountMode ? 'Enter the new physically counted quantity.' : 'Select whether to add or remove stock and provide a reason.'}
+            </DialogDescription>
+          </DialogHeader>
+          {isPhysicalCountMode ? renderPhysicalCountMode() : renderStandardMode()}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Stock Adjustment</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmationMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={processAdjustment}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
 
 
 
-function ProductCard({ product, hasChildren = false, onSuccess }: { product: Product, hasChildren?: boolean, onSuccess?: () => void }) {
+function ProductCard({ product, hasChildren = false, onSuccess, requireAdjustmentConfirmation, requireTransferConfirmation }: { product: Product, hasChildren?: boolean, onSuccess?: () => void, requireAdjustmentConfirmation?: boolean, requireTransferConfirmation?: boolean }) {
   const displayStock = product.stock;
 
   const stockStatus =
@@ -424,6 +421,11 @@ function ProductCard({ product, hasChildren = false, onSuccess }: { product: Pro
                 <span className="font-medium">{displayStock}</span> {product.unitOfMeasure}
               </span>
               <Badge variant={badgeVariant} className="text-xs">{badgeText}</Badge>
+              {product.hasPendingApproval && (
+                <Badge variant="outline" className="text-xs border-amber-500 text-amber-500 bg-amber-500/10">
+                  Pending Approval
+                </Badge>
+              )}
               <span className="text-sm text-muted-foreground">
                 Reorder at: {product.reorderPoint}
               </span>
@@ -449,19 +451,19 @@ function ProductCard({ product, hasChildren = false, onSuccess }: { product: Pro
           </div>
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
-          <StockAdjustmentDialog product={product} onSuccess={onSuccess}>
+          <StockAdjustmentDialog product={product} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
             <Button variant="outline" size="sm" className="flex-1 min-w-0">
               <Pencil className="mr-2 h-4 w-4 flex-shrink-0" />
               Adjust
             </Button>
           </StockAdjustmentDialog>
-          <StockAdjustmentDialog product={product} defaultReason="Physical Count" onSuccess={onSuccess}>
+          <StockAdjustmentDialog product={product} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
             <Button variant="outline" size="sm" className="flex-1 min-w-0">
               <ClipboardCheck className="mr-2 h-4 w-4 flex-shrink-0" />
               Count
             </Button>
           </StockAdjustmentDialog>
-          <StockTransferDialog product={product} onSuccess={onSuccess}>
+          <StockTransferDialog product={product} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
             <Button variant="outline" size="sm" className="flex-1 min-w-0">
               <MoveHorizontal className="mr-2 h-4 w-4 flex-shrink-0" />
               Transfer
@@ -477,7 +479,7 @@ interface ProductWithChildren extends Product {
   children?: Product[];
 }
 
-function ProductGroup({ productGroup, onSuccess }: { productGroup: ProductWithChildren, onSuccess?: () => void }) {
+function ProductGroup({ productGroup, onSuccess, requireAdjustmentConfirmation, requireTransferConfirmation }: { productGroup: ProductWithChildren, onSuccess?: () => void, requireAdjustmentConfirmation?: boolean, requireTransferConfirmation?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasChildren = productGroup.children && productGroup.children.length > 0;
 
@@ -485,7 +487,13 @@ function ProductGroup({ productGroup, onSuccess }: { productGroup: ProductWithCh
     <div className="space-y-4">
       {/* Parent Product */}
       <div className="relative">
-        <ProductCard product={productGroup} hasChildren={hasChildren} onSuccess={onSuccess} />
+        <ProductCard 
+          product={productGroup} 
+          hasChildren={hasChildren} 
+          onSuccess={onSuccess} 
+          requireAdjustmentConfirmation={requireAdjustmentConfirmation}
+          requireTransferConfirmation={requireTransferConfirmation}
+        />
         {hasChildren && (
           <Button
             variant="ghost"
@@ -504,7 +512,12 @@ function ProductGroup({ productGroup, onSuccess }: { productGroup: ProductWithCh
           {productGroup.children!.map((childProduct) => (
             <div key={childProduct.id} className="relative">
               <div className="absolute -left-6 top-4 w-4 h-px bg-muted"></div>
-              <ProductCard product={childProduct} onSuccess={onSuccess} />
+              <ProductCard 
+                product={childProduct} 
+                onSuccess={onSuccess} 
+                requireAdjustmentConfirmation={requireAdjustmentConfirmation}
+                requireTransferConfirmation={requireTransferConfirmation}
+              />
             </div>
           ))}
         </div>
@@ -537,7 +550,7 @@ function ProductSkeleton() {
   );
 }
 
-function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: ProductWithChildren, onSuccess?: () => void }) {
+function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfirmation, requireTransferConfirmation }: { productGroup: ProductWithChildren, onSuccess?: () => void, requireAdjustmentConfirmation?: boolean, requireTransferConfirmation?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasChildren = productGroup.children && productGroup.children.length > 0;
 
@@ -584,6 +597,11 @@ function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: Produ
                 Group
               </Badge>
             )}
+            {productGroup.hasPendingApproval && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-amber-500 text-amber-500 bg-amber-500/10">
+                Pending
+              </Badge>
+            )}
           </div>
         </TableCell>
         <TableCell>{productGroup.sku}</TableCell>
@@ -596,19 +614,19 @@ function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: Produ
         <TableCell className="text-muted-foreground">{productGroup.reorderPoint}</TableCell>
         <TableCell className="text-right whitespace-nowrap">
           <div className="flex justify-end gap-2">
-            <StockAdjustmentDialog product={productGroup} onSuccess={onSuccess}>
+            <StockAdjustmentDialog product={productGroup} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
               <Button variant="outline" size="sm" className="h-8">
                 <Pencil className="mr-2 h-3 w-3" />
                 Adjust
               </Button>
             </StockAdjustmentDialog>
-            <StockAdjustmentDialog product={productGroup} defaultReason="Physical Count" onSuccess={onSuccess}>
+            <StockAdjustmentDialog product={productGroup} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
               <Button variant="outline" size="sm" className="h-8">
                 <ClipboardCheck className="mr-2 h-3 w-3" />
                 Count
               </Button>
             </StockAdjustmentDialog>
-            <StockTransferDialog product={productGroup} onSuccess={onSuccess}>
+            <StockTransferDialog product={productGroup} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
                <Button variant="outline" size="sm" className="h-8">
                 <MoveHorizontal className="mr-2 h-3 w-3" />
                 Transfer
@@ -644,6 +662,11 @@ function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: Produ
                 <div className="flex items-center gap-2 text-sm">
                   <CornerDownRight className="h-4 w-4 text-muted-foreground" />
                   {child.name}
+                  {child.hasPendingApproval && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-amber-500 text-amber-500 bg-amber-500/10">
+                      Pending
+                    </Badge>
+                  )}
                 </div>
               </TableCell>
               <TableCell className="text-sm">{child.sku}</TableCell>
@@ -656,17 +679,17 @@ function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: Produ
               <TableCell className="text-muted-foreground text-sm">{child.reorderPoint}</TableCell>
               <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
-                    <StockAdjustmentDialog product={child} onSuccess={onSuccess}>
+                    <StockAdjustmentDialog product={child} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
                       <Button variant="outline" size="icon" className="h-8 w-8" title="Adjust">
                         <Pencil className="h-4 w-4" />
                       </Button>
                     </StockAdjustmentDialog>
-                    <StockAdjustmentDialog product={child} defaultReason="Physical Count" onSuccess={onSuccess}>
+                    <StockAdjustmentDialog product={child} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
                       <Button variant="outline" size="icon" className="h-8 w-8" title="Count">
                         <ClipboardCheck className="h-4 w-4" />
                       </Button>
                     </StockAdjustmentDialog>
-                    <StockTransferDialog product={child} onSuccess={onSuccess}>
+                    <StockTransferDialog product={child} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
                        <Button variant="outline" size="icon" className="h-8 w-8" title="Transfer">
                         <MoveHorizontal className="h-4 w-4" />
                       </Button>
@@ -680,216 +703,231 @@ function ProductTableRowGroup({ productGroup, onSuccess }: { productGroup: Produ
   );
 }
 
-export default function InventoryPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
 
-  const fetchProducts = async () => {
+export default function InventoryPage() {
+  const { toast } = useToast();
+  const [products, setProducts] = useState<ProductWithChildren[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'stock' | 'sku'>('name');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [posSettings, setPosSettings] = useState<any>(null);
+
+  useEffect(() => {
+    loadProducts();
+    loadPosSettings();
+
+    const handleUpdate = () => loadProducts();
+    window.addEventListener('stock-updated', handleUpdate);
+    return () => window.removeEventListener('stock-updated', handleUpdate);
+  }, [currentPage, sortBy, searchTerm]);
+
+  const loadPosSettings = async () => {
     try {
-      const fetchedProducts = await getProducts();
-      setProducts(fetchedProducts);
+      const response = await fetch('/api/pos-settings');
+      if (response.ok) {
+        const data = await response.json();
+        setPosSettings(data);
+      }
     } catch (error) {
-      console.error('Failed to fetch products:', error);
-      setProducts([]);
+      console.error('Failed to load POS settings:', error);
     }
   };
 
-  useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        setIsLoading(true);
-        await fetchProducts();
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadProducts();
-  }, []);
-
-  const productTree = useMemo(() => {
-    if (!products) return [];
-
-    // Build a recursive tree structure
-    const buildTree = (parentId: string | null = null, depth = 0): ProductWithChildren[] => {
-      return products
-        .filter(p => p.parentId === parentId)
-        .map(p => ({
-          ...p,
-          children: depth < 10 ? buildTree(p.id, depth + 1) : [], // Prevent infinite recursion, max depth 10
-        }));
-    };
-
-    return buildTree();
-  }, [products]);
-
-  const filteredProducts = useMemo(() => {
-    if (!productTree) return [];
-
-    const term = searchTerm.toLowerCase();
-    if (!term) return productTree;
-
-    return productTree.filter(product => {
-      const parentMatch = product.name.toLowerCase().includes(term) ||
-        product.sku?.toLowerCase().includes(term) ||
-        product.brand?.toLowerCase().includes(term) ||
-        product.category?.toLowerCase().includes(term);
-
-      const childMatch = product.children?.some(
-        child => child.name.toLowerCase().includes(term) || child.sku?.toLowerCase().includes(term)
+  const loadProducts = async () => {
+    setIsLoading(true);
+    try {
+      const allProducts = await getProducts();
+      
+      let filtered = allProducts.filter((p: Product) => 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.sku.toLowerCase().includes(searchTerm.toLowerCase())
       );
 
-      return parentMatch || childMatch;
-    });
-  }, [productTree, searchTerm]);
+      // Group children under parents
+      const parents = filtered.filter((p: Product) => !p.parentId);
+      const withChildren = parents.map((parent: Product) => ({
+        ...parent,
+        children: filtered.filter((child: Product) => child.parentId === parent.id)
+      }));
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
+      setTotalProducts(withChildren.length);
 
-  const paginatedProducts = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    return filteredProducts.slice(startIndex, startIndex + pageSize);
-  }, [filteredProducts, currentPage, pageSize]);
+      // Sort
+      const sorted = [...withChildren].sort((a, b) => {
+        if (sortBy === 'name') return a.name.localeCompare(b.name);
+        if (sortBy === 'stock') return b.stock - a.stock;
+        if (sortBy === 'sku') return a.sku.localeCompare(b.sku);
+        return 0;
+      });
 
-  const totalProducts = filteredProducts.length;
+      // Paginate
+      const paginated = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+      setProducts(paginated);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load products.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <CardTitle>Inventory Stock Levels</CardTitle>
-            <CardDescription>
-              View and update your product stock levels. Products are grouped by parent with expandable child products.
-            </CardDescription>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Inventory</h1>
+          <p className="text-muted-foreground">
+            Monitor and adjust stock levels across all products.
+          </p>
         </div>
-        <div className="pt-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full sm:w-[400px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search by product name, SKU, brand, or category..."
-              className="pl-8 w-full"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'cards' | 'table')} className="w-full sm:w-auto">
-            <TabsList className="grid w-full sm:w-[200px] grid-cols-2">
-              <TabsTrigger value="table">
-                <List className="h-4 w-4 mr-2" />
-                Table
-              </TabsTrigger>
-              <TabsTrigger value="cards">
-                <LayoutGrid className="h-4 w-4 mr-2" />
-                Cards
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          viewMode === 'cards' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {Array.from({ length: 5 }).map((_, i) => <ProductSkeleton key={i} />)}
-            </div>
-          ) : (
-             <div className="space-y-4">
-               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
-             </div>
-          )
-        ) : filteredProducts.length === 0 ? (
-           <div className="text-center py-12 text-muted-foreground">
-             No products found.
-           </div>
-        ) : viewMode === 'cards' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {paginatedProducts.map((productGroup) => (
-              <ProductGroup key={productGroup.id} productGroup={productGroup} onSuccess={fetchProducts} />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-md border overflow-hidden">
-            <Table wrapperClassName="overflow-auto max-h-[calc(100vh-300px)]">
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[300px]">Product Name</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Reorder At</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedProducts.map((productGroup) => (
-                  <ProductTableRowGroup key={productGroup.id} productGroup={productGroup} onSuccess={fetchProducts} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-        
-        {!isLoading && totalProducts > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t">
-            <div className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalProducts)} of {totalProducts} products
-            </div>
-            <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-end">
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="page-size" className="text-sm">Items per page:</Label>
-                <Select
-                  value={pageSize.toString()}
-                  onValueChange={(value) => {
-                    const newSize = parseInt(value, 10);
-                    setPageSize(newSize);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger id="page-size" className="w-[80px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
+        <div className="flex items-center gap-2">
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grid' | 'list')}>
+                <TabsList className="grid w-[120px] grid-cols-2">
+                    <TabsTrigger value="grid"><LayoutGrid className="h-4 w-4" /></TabsTrigger>
+                    <TabsTrigger value="list"><List className="h-4 w-4" /></TabsTrigger>
+                </TabsList>
+            </Tabs>
+            <Link href="/inventory/history">
+                <Button variant="outline">
+                    <History className="mr-2 h-4 w-4" />
+                    History
                 </Button>
-                <span className="text-sm min-w-[4rem] text-center">
-                  Page {currentPage} of {Math.ceil(totalProducts / pageSize)}
+            </Link>
+            <Link href="/inventory/physical-count">
+                <Button>
+                    <ClipboardCheck className="mr-2 h-4 w-4" />
+                    Physical Count
+                </Button>
+            </Link>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+            placeholder="Search products by name or SKU..." 
+            className="pl-9"
+            value={searchTerm}
+            onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+            }}
+          />
+        </div>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+          <SelectTrigger className="w-full md:w-[180px]">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name">Name</SelectItem>
+            <SelectItem value="stock">Stock Level</SelectItem>
+            <SelectItem value="sku">SKU</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <ProductSkeleton key={i} />
+          ))}
+        </div>
+      ) : products.length === 0 ? (
+        <Card className="flex flex-col items-center justify-center p-12 text-center">
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Search className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <CardTitle>No products found</CardTitle>
+          <CardDescription>
+            Try adjusting your search or filters to find what you're looking for.
+          </CardDescription>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => {
+                setSearchTerm('');
+                setCurrentPage(1);
+            }}
+          >
+            Clear Search
+          </Button>
+        </Card>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {products.map((product) => (
+            <ProductGroup 
+              key={product.id} 
+              productGroup={product} 
+              onSuccess={loadProducts}
+              requireAdjustmentConfirmation={posSettings?.requireAdjustmentConfirmation}
+              requireTransferConfirmation={posSettings?.requireTransferConfirmation}
+            />
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[300px]">Product</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead>Stock</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Reorder Pt</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {products.map((product) => (
+                <ProductTableRowGroup 
+                  key={product.id} 
+                  productGroup={product} 
+                  onSuccess={loadProducts}
+                  requireAdjustmentConfirmation={posSettings?.requireAdjustmentConfirmation}
+                  requireTransferConfirmation={posSettings?.requireTransferConfirmation}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {!isLoading && products.length > 0 && (
+        <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-muted-foreground">
+                Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalProducts)} of {totalProducts} products
+            </p>
+            <div className="flex items-center gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                >
+                    Previous
+                </Button>
+                <span className="text-sm font-medium">
+                    Page {currentPage} of {Math.ceil(totalProducts / pageSize)}
                 </span>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalProducts / pageSize), prev + 1))}
-                  disabled={currentPage === Math.ceil(totalProducts / pageSize)}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalProducts / pageSize), prev + 1))}
+                    disabled={currentPage === Math.ceil(totalProducts / pageSize)}
                 >
-                  Next
+                    Next
                 </Button>
-              </div>
             </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }

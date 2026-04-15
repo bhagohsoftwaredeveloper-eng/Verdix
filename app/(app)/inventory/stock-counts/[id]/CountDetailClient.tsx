@@ -128,12 +128,14 @@ export function CountDetailClient({ countId }: { countId: string }) {
         body: JSON.stringify({ completedBy: 'Admin' })
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to complete stock count');
+      const result = await res.json();
+      
+      if (result.pendingApproval) {
+        toast({ title: 'Stock count submitted for approval.', description: 'Inventory will be updated once approved.' });
+      } else {
+        toast({ title: 'Stock count completed successfully! Inventory has been updated.' });
       }
-
-      toast({ title: 'Stock count completed successfully! Inventory has been updated.' });
+      
       setShowReviewDialog(false);
       router.push('/inventory/stock-counts');
     } catch (error: any) {

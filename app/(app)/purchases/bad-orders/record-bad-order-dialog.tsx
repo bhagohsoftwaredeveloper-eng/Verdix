@@ -291,10 +291,23 @@ function CurrencyInput({ value, onChange, className, ...props }: any) {
   );
 }
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
 export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
   const { user } = useUser();
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [posSettings, setPosSettings] = useState<any>(null);
   
   const { toast } = useToast();
 
@@ -317,10 +330,25 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
   });
 
   useEffect(() => {
-    if (open && user?.email && !form.getValues('reportedBy')) {
-      form.setValue('reportedBy', user.email);
+    if (open) {
+      loadPosSettings();
+      if (user?.email && !form.getValues('reportedBy')) {
+        form.setValue('reportedBy', user.email);
+      }
     }
   }, [open, user, form]);
+
+  const loadPosSettings = async () => {
+    try {
+      const response = await fetch(getApiUrl('/pos-settings'));
+      const result = await response.json();
+      if (result.success) {
+        setPosSettings(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to load POS settings:', error);
+    }
+  };
 
   const [total, setTotal] = useState(0);
 
@@ -366,8 +394,21 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
     }
   };
 
+  async function handleFinalSubmit() {
+    form.handleSubmit(processSubmit)();
+  }
+
   async function onSubmit(values: BadOrderFormValues) {
+    if (posSettings?.requireBadOrderConfirmation) {
+      setIsConfirmOpen(true);
+    } else {
+      processSubmit(values);
+    }
+  }
+
+  async function processSubmit(values: BadOrderFormValues) {
     setIsSubmitting(true);
+    setIsConfirmOpen(false);
 
     try {
       const formattedItems = values.items.map(item => ({
@@ -717,6 +758,24 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
           </form>
         </Form>
       </DialogContent>
+      <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Bad Order Report</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to record these {fields.length} items as bad orders? 
+              This will deduct them from active inventory and potentially submit for multi-level approval.
+              Total value: ₱{total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleFinalSubmit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Confirm & Record
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

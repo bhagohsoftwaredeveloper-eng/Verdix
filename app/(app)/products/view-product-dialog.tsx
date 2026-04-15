@@ -15,170 +15,276 @@ import { Button } from '@/components/ui/button';
 import { Product } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Eye, PlusCircle } from 'lucide-react';
+import { Eye, PlusCircle, Package, Tags, CreditCard, Info, LayoutDashboard, History, Warehouse, BarChart3, Banknote, Scissors } from 'lucide-react';
 import { EditProductDialog } from './edit-product-dialog';
 import { QuickAddChildDialog } from './quick-add-child-dialog';
+import { BreakPackDialog } from './break-pack-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
-function DetailItem({ label, value }: { label: string, value: React.ReactNode }) {
+function DetailItem({ label, value, icon: Icon, className }: { label: string, value: React.ReactNode, icon?: any, className?: string }) {
     return (
-        <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium text-muted-foreground">{label}</p>
-            <div className="text-lg font-semibold">{value}</div>
+        <div className={cn("flex flex-col gap-1.5 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/30 transition-colors", className)}>
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {Icon && <Icon className="h-3.5 w-3.5" />}
+                {label}
+            </div>
+            <div className="text-base font-medium text-foreground">{value}</div>
+        </div>
+    )
+}
+
+function SectionHeader({ title, icon: Icon }: { title: string, icon: any }) {
+    return (
+        <div className="flex items-center gap-2 pb-2 border-b mb-4">
+            <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                <Icon className="h-5 w-5" />
+            </div>
+            <h3 className="text-lg font-bold tracking-tight">{title}</h3>
         </div>
     )
 }
 
 
-export function ViewProductDialog({ product, onProductUpdated, products, onChildAdded, trigger }: { product: Product; onProductUpdated?: () => void; products?: Product[]; onChildAdded?: () => void; trigger?: React.ReactNode }) {
-    const [isOpen, setIsOpen] = useState(false);
+export function ViewProductDialog({ 
+    product, 
+    onProductUpdated, 
+    products, 
+    onChildAdded, 
+    trigger,
+    open: externalOpen,
+    onOpenChange: externalOnOpenChange
+}: { 
+    product: Product; 
+    onProductUpdated?: () => void; 
+    products?: Product[]; 
+    onChildAdded?: () => void; 
+    trigger?: React.ReactNode;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+}) {
+    const [internalOpen, setInternalOpen] = useState(false);
+    const isOpen = externalOpen !== undefined ? externalOpen : internalOpen;
+    const setIsOpen = externalOnOpenChange !== undefined ? externalOnOpenChange : setInternalOpen;
+
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                {trigger ? trigger : (
-                <Button variant="ghost" size="icon">
-                    <Eye className="h-4 w-4" />
-                    <span className="sr-only">View product</span>
-                </Button>
-                )}
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-4xl">
-                 <DialogHeader>
+            {trigger && (
+                <DialogTrigger asChild>
+                    {trigger}
+                </DialogTrigger>
+            )}
+            <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-0 gap-0">
+                 <DialogHeader className="sr-only">
                     <DialogTitle>{product.name}</DialogTitle>
-                    <DialogDescription>
-                        {product.description}
-                    </DialogDescription>
-                    {product.additionalDescription && (
-                        <p className="text-sm text-muted-foreground pt-2">{product.additionalDescription}</p>
-                    )}
-                </DialogHeader>
+                    <DialogDescription>{product.description}</DialogDescription>
+                 </DialogHeader>
 
-                <div className="space-y-8 py-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                 <div className="bg-gradient-to-r from-primary/5 via-background to-background p-6 border-b sticky top-0 bg-background z-10">
+                    <div className="flex flex-col gap-4">
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div className="space-y-1">
+                                <h2 className="text-2xl font-bold tracking-tight">{product.name}</h2>
+                                <p className="text-muted-foreground max-w-2xl">{product.description}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="px-3 py-1 font-mono text-sm shadow-sm">
+                                    {product.sku}
+                                </Badge>
+                                <Badge 
+                                    className={cn(
+                                        "px-3 py-1 text-sm shadow-sm font-medium",
+                                        product.availability === 'Available' || product.availability === 'in-stock' 
+                                            ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20" 
+                                            : "bg-destructive/15 text-destructive hover:bg-destructive/20 border-destructive/20"
+                                    )}
+                                    variant="outline"
+                                >
+                                    {product.availability}
+                                </Badge>
+                            </div>
+                        </div>
+                        {product.additionalDescription && (
+                            <div className="bg-muted/50 p-3 rounded-md text-sm text-muted-foreground italic border-l-4 border-primary/20">
+                                {product.additionalDescription}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-10">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
                         {/* Section 1: Identity & Classification */}
-                        <div className="space-y-6">
+                        <div className="md:col-span-4 space-y-6">
                             <div>
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Classification</h3>
-                                <div className="space-y-4">
-                                    <DetailItem label="Brand" value={product.brand} />
-                                    <DetailItem label="Category" value={product.category} />
-                                    {product.subcategory && <DetailItem label="Subcategory" value={product.subcategory} />}
-                                    {product.supplierName && <DetailItem label="Supplier" value={product.supplierName} />}
+                                <SectionHeader title="Classification" icon={Tags} />
+                                <div className="grid grid-cols-1 gap-2">
+                                    <DetailItem label="Brand" value={product.brand} icon={LayoutDashboard} />
+                                    {product.department && <DetailItem label="Department" value={product.department} icon={Package} />}
+                                    <DetailItem label="Category" value={product.category} icon={BarChart3} />
+                                    {product.subcategory && <DetailItem label="Subcategory" value={product.subcategory} icon={BarChart3} />}
+                                    {product.supplierName && <DetailItem label="Supplier" value={product.supplierName} icon={Warehouse} />}
                                 </div>
                             </div>
                         </div>
 
                         {/* Section 2: Codes & Inventory */}
-                        <div className="space-y-6">
+                        <div className="md:col-span-4 space-y-6">
                             <div>
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Codes & Inventory</h3>
-                                <div className="space-y-4">
-                                    <DetailItem label="SKU" value={<Badge variant="outline" className="font-mono">{product.sku}</Badge>} />
-                                    {product.barcode && <DetailItem label="Barcode" value={<Badge variant="outline" className="font-mono">{product.barcode}</Badge>} />}
-                                    <DetailItem label="Current Stock" value={<span className={product.stock <= (product.reorderPoint || 0) ? "text-destructive font-bold" : "font-bold"}>{product.stock}</span>} />
-                                    <DetailItem label="Unit of Measure" value={product.unitOfMeasure} />
-                                    <DetailItem label="Availability" value={<Badge variant={product.availability === 'in-stock' ? 'default' : 'destructive'}>{product.availability}</Badge>} />
+                                <SectionHeader title="Inventory" icon={Package} />
+                                <div className="grid grid-cols-1 gap-2">
+                                    {product.barcode && <DetailItem label="Barcode" value={product.barcode} icon={Info} className="font-mono" />}
+                                    <DetailItem 
+                                        label="Current Stock" 
+                                        value={
+                                            <div className="flex items-baseline gap-2">
+                                                <span className={cn(
+                                                    "text-2xl font-bold tracking-tight",
+                                                    product.stock <= (product.reorderPoint || 0) ? "text-destructive" : "text-foreground"
+                                                )}>
+                                                    {product.stock}
+                                                </span>
+                                                <span className="text-sm text-muted-foreground font-normal">{product.unitOfMeasure}</span>
+                                            </div>
+                                        } 
+                                        icon={BarChart3} 
+                                    />
+                                    <DetailItem label="Reorder Point" value={product.reorderPoint || 'Not set'} icon={History} />
+                                    {product.warehouseName && <DetailItem label="Warehouse" value={product.warehouseName} icon={Warehouse} />}
+                                    {(product.shelfLocationNames || product.shelfLocationName) && <DetailItem label="Shelf Location" value={product.shelfLocationNames || product.shelfLocationName} icon={Warehouse} />}
                                 </div>
                             </div>
                         </div>
 
                         {/* Section 3: Financials & Logistics */}
-                        <div className="space-y-6">
+                        <div className="md:col-span-4 space-y-6">
                             <div>
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Pricing & Logistics</h3>
-                                <div className="space-y-4">
-                                    <DetailItem label="Retail Price" value={typeof product.price === 'number' ? `₱${product.price.toFixed(2)}` : 'N/A'} />
-                                    <DetailItem label="Cost" value={product.cost && typeof product.cost === 'number' ? `₱${product.cost.toFixed(2)}` : 'N/A'} />
-                                    {product.vatStatus && <DetailItem label="VAT Status" value={<Badge variant="secondary">{product.vatStatus}</Badge>} />}
-                                    {product.reorderPoint && <DetailItem label="Reorder Point" value={product.reorderPoint} />}
-                                    {product.warehouseName && <DetailItem label="Warehouse" value={product.warehouseName} />}
-                                    {product.shelfLocationName && <DetailItem label="Shelf Location" value={product.shelfLocationName} />}
+                                <SectionHeader title="Pricing" icon={CreditCard} />
+                                <div className="grid grid-cols-1 gap-2">
+                                    <DetailItem 
+                                        label="Retail Price" 
+                                        value={
+                                            <span className="text-2xl font-bold text-primary tracking-tight">
+                                                {typeof product.price === 'number' ? `₱${product.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
+                                            </span>
+                                        } 
+                                        icon={Banknote}
+                                    />
+                                    <DetailItem 
+                                        label="Cost" 
+                                        value={product.cost && typeof product.cost === 'number' ? `₱${product.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
+                                        icon={Banknote}
+                                    />
+                                    {product.vatStatus && (
+                                        <DetailItem 
+                                            label="VAT Status" 
+                                            value={<Badge variant="secondary" className="font-normal">{product.vatStatus}</Badge>} 
+                                            icon={Info}
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <Separator />
+                    <Separator className="opacity-50" />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                         {/* More Info */}
                         <div className="space-y-4">
-                            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Additional Info</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <DetailItem label="Avg. Daily Sales" value={product.avgDailySales || 0} />
-                                {product.expirationDate && <DetailItem label="Expiration Date" value={<span className="text-orange-600 font-medium">{new Date(product.expirationDate).toLocaleDateString()}</span>} />}
-                                {product.createdAt && <DetailItem label="Created" value={new Date(product.createdAt).toLocaleDateString()} />}
-                                {product.updatedAt && <DetailItem label="Last Updated" value={new Date(product.updatedAt).toLocaleDateString()} />}
+                            <SectionHeader title="Statistics & Lifecycle" icon={History} />
+                            <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
+                                <DetailItem label="Avg. Daily Sales" value={product.avgDailySales || '0.00'} icon={BarChart3} />
+                                {product.expirationDate && (
+                                    <DetailItem 
+                                        label="Expiration Date" 
+                                        value={<span className="text-orange-600 font-medium">{new Date(product.expirationDate).toLocaleDateString()}</span>} 
+                                        icon={History}
+                                    />
+                                )}
+                                {product.createdAt && <DetailItem label="Created" value={new Date(product.createdAt).toLocaleDateString()} icon={History} />}
+                                {product.updatedAt && <DetailItem label="Last Updated" value={new Date(product.updatedAt).toLocaleDateString()} icon={History} />}
                             </div>
                         </div>
 
-                        {/* Accounting */}
-                        {(product.incomeAccount || product.expenseAccount) && (
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Accounting</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {product.incomeAccount && <DetailItem label="Income Account" value={product.incomeAccount} />}
-                                    {product.expenseAccount && <DetailItem label="Expense Account" value={product.expenseAccount} />}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {( (product.priceLevels && product.priceLevels.length > 0) || (product.conversionFactors && product.conversionFactors.length > 0) ) && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            {product.priceLevels && product.priceLevels.length > 0 && (
-                                <div className="space-y-4">
-                                    <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Price Levels</h3>
-                                    <div className="grid gap-2">
-                                        {product.priceLevels.map((pl, index) => (
-                                            <div key={index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg border border-border">
-                                                <span className="text-sm font-medium">Price Level {index + 1}</span>
-                                                <Badge variant="outline" className="font-semibold text-primary">₱{pl.price.toFixed(2)}</Badge>
-                                            </div>
-                                        ))}
+                        {/* Accounting & Advanced */}
+                        <div className="space-y-4">
+                            {(product.incomeAccount || product.expenseAccount) && (
+                                <>
+                                    <SectionHeader title="Accounting" icon={Banknote} />
+                                    <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
+                                        {product.incomeAccount && <DetailItem label="Income Account" value={product.incomeAccount} icon={Info} />}
+                                        {product.expenseAccount && <DetailItem label="Expense Account" value={product.expenseAccount} icon={Info} />}
                                     </div>
-                                </div>
+                                </>
                             )}
 
-                            {(() => {
-                                const hasConversionFactors = product.conversionFactors && product.conversionFactors.length > 0;
-                                const isChildProduct = product.parentId && products;
-                                const parentProduct = isChildProduct ? products?.find(p => p.id === product.parentId) : null;
-                                const childConversion = parentProduct?.conversionFactors?.find(cf => cf.unit === product.unitOfMeasure);
-
-                                if (hasConversionFactors || childConversion) {
-                                    return (
+                            {( (product.priceLevels && product.priceLevels.length > 0) || (product.conversionFactors && product.conversionFactors.length > 0) ) && (
+                                <div className="space-y-8 pt-4">
+                                    {product.priceLevels && product.priceLevels.length > 0 && (
                                         <div className="space-y-4">
-                                            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Conversion Units</h3>
-                                            <div className="grid gap-2">
-                                                {hasConversionFactors && product.conversionFactors?.map((cf, index) => (
-                                                    <div key={index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg border border-border">
-                                                        <span className="text-sm font-medium">{cf.unit}</span>
-                                                        <Badge variant="outline" className="font-semibold">{cf.factor}x</Badge>
+                                            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                                <CreditCard className="h-3.5 w-3.5" />
+                                                Price Levels
+                                            </h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {product.priceLevels.map((pl, index) => (
+                                                    <div key={index} className="flex justify-between items-center p-3 bg-card rounded-lg border border-border shadow-sm hover:border-primary/30 transition-colors">
+                                                        <span className="text-sm font-medium text-muted-foreground">Level {index + 1}</span>
+                                                        <span className="font-bold text-primary text-sm">₱{pl.price.toFixed(2)}</span>
                                                     </div>
                                                 ))}
-                                                {childConversion && parentProduct && (
-                                                    <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg border border-border">
-                                                        <span className="text-sm font-medium">{parentProduct.unitOfMeasure} to {product.unitOfMeasure}</span>
-                                                        <Badge variant="outline" className="font-semibold">1 = {childConversion.factor}</Badge>
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
-                                    );
-                                }
-                                return null;
-                            })()}
+                                    )}
+
+                                    {(() => {
+                                        const hasConversionFactors = product.conversionFactors && product.conversionFactors.length > 0;
+                                        const isChildProduct = product.parentId && products;
+                                        const parentProduct = isChildProduct ? products?.find(p => p.id === product.parentId) : null;
+                                        const childConversion = parentProduct?.conversionFactors?.find(cf => cf.unit === product.unitOfMeasure);
+
+                                        if (hasConversionFactors || childConversion) {
+                                            return (
+                                                <div className="space-y-4">
+                                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                                        <Package className="h-3.5 w-3.5" />
+                                                        Conversion Units
+                                                    </h4>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        {hasConversionFactors && product.conversionFactors?.map((cf, index) => (
+                                                            <div key={index} className="flex justify-between items-center p-3 bg-card rounded-lg border border-border shadow-sm hover:border-primary/30 transition-colors">
+                                                                <span className="text-sm font-medium">{cf.unit}</span>
+                                                                <Badge variant="outline" className="font-semibold px-2 py-0 bg-primary/5 text-primary border-primary/20">{cf.factor}x</Badge>
+                                                            </div>
+                                                        ))}
+                                                        {childConversion && parentProduct && (
+                                                            <div className="flex justify-between items-center p-3 bg-card rounded-lg border border-emerald-500/20 shadow-sm bg-emerald-500/5 col-span-full">
+                                                                <span className="text-sm font-medium flex items-center gap-2">
+                                                                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                                                    {parentProduct.unitOfMeasure} to {product.unitOfMeasure}
+                                                                </span>
+                                                                <Badge variant="outline" className="font-semibold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">1 = {childConversion.factor}</Badge>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
 
-                <DialogFooter className="sm:justify-between">
-                     <p className="text-xs text-muted-foreground">Product ID: {product.id}</p>
-                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setIsOpen(false)}>Close</Button>
-                        {!product.parentId && product.conversionFactors && product.conversionFactors.length > 0 && products && (
+                <DialogFooter className="sticky bottom-0 bg-background p-6 border-t sm:justify-between flex items-center gap-4">
+                     <p className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">ID: {product.id}</p>
+                     <div className="flex items-center gap-3">
+                        <Button variant="ghost" onClick={() => setIsOpen(false)} className="hover:bg-muted">Close</Button>
+                        {!product.parentId && (product.conversionFactors?.length ?? 0) > 0 && products && (
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -194,6 +300,23 @@ export function ViewProductDialog({ product, onProductUpdated, products, onChild
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p>Add child unit</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        {!product.parentId && (product.conversionFactors?.length || 0) > 0 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <BreakPackDialog
+                                  parentProduct={product}
+                                  onPackBroken={() => {
+                                    onProductUpdated?.();
+                                  }}
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Break this pack into smaller units</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

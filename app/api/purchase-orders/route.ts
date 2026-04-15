@@ -177,6 +177,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
+import { processPurchaseOrderCreation } from '../../../lib/purchase-actions';
+import { checkApprovalRequired, submitToApprovalQueue } from '../../../lib/approvals';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -188,14 +191,12 @@ export async function POST(request: NextRequest) {
       total,
       paymentMethod,
       status,
-      // New fields
       reference,
       shipping,
-      receiveToWarehouse, 
-      note,
+      purchaseType,
       orderedBy,
       vatAmount,
-      purchaseType // Add purchaseType
+      isInternalFinalization
     } = body;
 
     if (!supplierId || !supplierName || !items || items.length === 0) {
@@ -204,147 +205,32 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Server-side cost calculation
+    
+    const formattedDate = new Date(date || new Date()).toISOString().slice(0, 19).replace('T', ' ');
     const calculations = calculatePurchaseCosts(items, shipping || 0);
     const finalTotal = calculations.grandTotal;
     const finalVatAmount = calculations.vatAmount;
 
-    // Generate order ID
-    const orderId = `po_${Date.now()}`;
-
-    // Format date for MySQL
-    const formattedDate = new Date(date || new Date()).toISOString().slice(0, 19).replace('T', ' ');
-
-    // Wrap in transaction for atomicity
-    const result = await withTransaction(async (connection) => {
-      // Insert purchase order
-      const insertOrderQuery = `
-        INSERT INTO purchase_orders (
-          id, supplier_id, supplier_name, date, total, payment_method, status, 
-          reference_number, shipping_fee, ordered_by, vat_amount
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-
-      await connection.query(insertOrderQuery, [
-        orderId,
-        supplierId,
-        supplierName,
-        formattedDate,
-        finalTotal,
-        paymentMethod || '',
-        (purchaseType === 'Receive') ? 'Received' : (status || 'Pending'),
-        reference || null,
-        toSafeNumber(shipping),
-        orderedBy || null,
-        finalVatAmount
-      ]);
-
-      // Insert order items
-      const insertItemQuery = `
-        INSERT INTO purchase_order_items (
-          id, purchase_order_id, product_id, product_name, quantity, cost,
-          selling_price, discount, discount_type, vat_subject
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-
-      for (const item of items) {
-        const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
-        await connection.query(insertItemQuery, [
-          itemId,
-          orderId,
-          item.productId,
-          item.productName,
-          toSafeNumber(item.quantity),
-          toSafeNumber(item.cost),
-          item.sellingPrice ? toSafeNumber(item.sellingPrice) : null,
-          toSafeNumber(item.discount),
-          item.discountType || 'amount',
-          item.vatSubject ? 1 : 0
-        ]);
-      }
-
-      // Auto-record payment if status is 'Paid'
-      if (status === 'Paid' && finalTotal > 0) {
-        const paymentId = `sp_${Date.now()}_auto`;
-        const insertPaymentQuery = `
-          INSERT INTO supplier_payments (
-            id, supplier_id, amount, date, payment_method, reference, notes
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        `;
-
-        await connection.query(insertPaymentQuery, [
-          paymentId,
-          supplierId,
-          finalTotal,
-          date || new Date().toISOString(),
-          paymentMethod || 'Cash',
-          `PO-${orderId}`,
-          `Auto-payment for PO ${orderId}`
-        ]);
-      }
-
-      // Auto-Receive Logic: Update Inventory if type is 'Receive'
-      if (purchaseType === 'Receive') {
-        const [defaultLevelResult]: any = await connection.query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
-        const defaultLevelId = defaultLevelResult[0]?.id;
-        
-        for (const calculatedItem of calculations.items) {
-          // Get current stock for movement recording
-          const [productResult]: any = await connection.query('SELECT name, stock FROM products WHERE id = ?', [calculatedItem.productId]);
-          if (productResult && productResult.length > 0) {
-            const product = productResult[0];
-            const previousStock = toSafeNumber(product.stock);
-            const quantityAdded = toSafeNumber(calculatedItem.quantity);
-            const newStock = previousStock + quantityAdded;
-            const landedCost = toSafeNumber(calculatedItem.landedCostPerUnit);
-
-            // Find original item to get sellingPrice
-            const originalItem = items.find((i: any) => i.productId === calculatedItem.productId);
-            const sellingPrice = toSafeNumber(originalItem?.sellingPrice);
-            
-            // Update product stock, cost (landed cost), and selling price
-            await connection.query('UPDATE products SET stock = ?, cost = ?, price = ?, updated_at = NOW() WHERE id = ?', [
-              newStock, 
-              landedCost, 
-              sellingPrice,
-              calculatedItem.productId
-            ]);
-
-            // Track stock movement
-            const movementId = `MOV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-            await connection.query(`
-              INSERT INTO stock_movements (
-                id, product_id, product_name, movement_type, 
-                quantity_change, previous_stock, new_stock, 
-                reference_id, reference_type, notes, created_at, updated_at
-              ) VALUES (?, ?, ?, 'purchase', ?, ?, ?, ?, 'purchase', ?, NOW(), NOW())
-            `, [
-              movementId,
-              calculatedItem.productId,
-              product.name,
-              quantityAdded,
-              previousStock,
-              newStock,
-              orderId,
-              `Received Purchase (Quick Receive): ${orderId}`
-            ]);
-
-            // Also update/insert default price level to ensure it reflects in POS
-            if (defaultLevelId && sellingPrice > 0) {
-              await connection.query(`
-                INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
-                VALUES (?, ?, ?, 0) 
-                ON DUPLICATE KEY UPDATE price = VALUES(price)
-              `, [calculatedItem.productId, defaultLevelId, sellingPrice]);
-            }
-          }
-        }
-      }
+    // 1. Check for multi-level approval
+    const isApprovalRequired = !isInternalFinalization && await checkApprovalRequired('PURCHASE_ORDER');
+    if (isApprovalRequired) {
+      const userId = body.userId || 'system';
+      const { queueId, pendingApproval } = await submitToApprovalQueue('PURCHASE_ORDER', body, userId);
       
-      return { orderId };
-    });
+      if (pendingApproval) {
+        return NextResponse.json({
+          success: true,
+          pendingApproval: true,
+          data: { queueId },
+          message: 'Purchase order submitted for approval'
+        });
+      }
+      // If not pending (all steps auto-skipped), fall through to execution
+    }
+
+    // Use helper for creation
+    const result = await processPurchaseOrderCreation(body);
+    const orderId = (result as any).orderId;
 
     // Sync to external accounting API (non-blocking)
     try {

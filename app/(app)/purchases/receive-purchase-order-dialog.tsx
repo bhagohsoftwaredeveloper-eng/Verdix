@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { PurchaseOrder } from '../../../lib/types';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Info } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -27,6 +27,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { calculatePurchaseCosts } from '../../../lib/purchase-utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { toSafeNumber } from '@/lib/utils';
 
 interface BadItemInput {
   quantity: number;
@@ -39,9 +52,11 @@ interface ReceivePurchaseOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (
-    receivedItems: { productId: string; quantity: number }[],
-    badItems?: { productId: string; productName: string; quantity: number; cost: number; reason: string; description: string }[]
+    receivedItems: { productId: string; quantity: number; expirationDate?: string }[],
+    badItems?: { productId: string; productName: string; quantity: number; cost: number; reason: string; description: string }[],
+    allocationStrategy?: 'equal' | 'proportional'
   ) => Promise<void>;
+  requireConfirmation?: boolean;
 }
 
 export function ReceivePurchaseOrderDialog({
@@ -49,11 +64,14 @@ export function ReceivePurchaseOrderDialog({
   open,
   onOpenChange,
   onConfirm,
+  requireConfirmation,
 }: ReceivePurchaseOrderDialogProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [badItems, setBadItems] = useState<Record<string, BadItemInput>>({});
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [allocationStrategy, setAllocationStrategy] = useState<'equal' | 'proportional'>('equal');
 
   useEffect(() => {
     if (open && order) {
@@ -127,6 +145,11 @@ export function ReceivePurchaseOrderDialog({
   };
 
   const handleConfirm = async () => {
+    if (requireConfirmation && !isConfirmOpen) {
+      setIsConfirmOpen(true);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const receivedItems = Object.entries(quantities).map(([productId, quantity]) => ({
@@ -149,8 +172,9 @@ export function ReceivePurchaseOrderDialog({
           };
         });
 
-      await onConfirm(receivedItems, reportedBadItems.length > 0 ? reportedBadItems : undefined);
+      await onConfirm(receivedItems, reportedBadItems.length > 0 ? reportedBadItems : undefined, allocationStrategy);
       onOpenChange(false);
+      setIsConfirmOpen(false);
     } catch (error) {
       console.error('Failed to confirm receipt:', error);
     } finally {
@@ -163,33 +187,85 @@ export function ReceivePurchaseOrderDialog({
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Receive Purchase Order #{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</DialogTitle>
-          <DialogDescription>
-            Verify and confirm the quantities received. If there are damaged or defective items, record them as bad items.
+          <DialogDescription className="flex items-center justify-between">
+            <span>Verify and confirm the quantities received. If there are damaged or defective items, record them as bad items.</span>
+            {toSafeNumber(order.shippingFee) > 0 && (
+              <div className="flex items-center gap-2 bg-muted/50 p-2 rounded-md border">
+                <span className="text-xs font-semibold">Allocation Strategy:</span>
+                <Select 
+                  value={allocationStrategy} 
+                  onValueChange={(val: any) => setAllocationStrategy(val)}
+                >
+                  <SelectTrigger className="h-7 text-[10px] w-[110px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="equal" className="text-[10px]">Equal Per Line</SelectItem>
+                    <SelectItem value="proportional" className="text-[10px]">Proportional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-2">
+          <TooltipProvider>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[200px]">Product</TableHead>
-                <TableHead className="text-right w-[100px]">Ordered</TableHead>
-                <TableHead className="text-right w-[120px]">Good Qty</TableHead>
-                <TableHead className="w-[150px]">Expiry Date</TableHead>
-                <TableHead className="text-right w-[120px]">Bad Qty</TableHead>
-                <TableHead className="w-[150px]">Reason</TableHead>
-                <TableHead>Issue Description</TableHead>
+                <TableHead className="w-[180px]">Product</TableHead>
+                <TableHead className="text-right w-[80px]">Ordered</TableHead>
+                <TableHead className="text-right w-[100px]">Cost</TableHead>
+                <TableHead className="text-right w-[100px]">
+                  <div className="flex items-center justify-end gap-1">
+                    Landed Cost
+                    <Tooltip>
+                      <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                         Landed Cost includes the shipping fee allocation. This will be the new inventory cost for this item.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TableHead>
+                <TableHead className="text-right w-[100px]">Good Qty</TableHead>
+                <TableHead className="w-[130px]">Expiry Date</TableHead>
+                <TableHead className="text-right w-[100px]">Bad Qty</TableHead>
+                <TableHead className="w-[120px]">Reason</TableHead>
+                <TableHead>Issue Notes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {order.items.map((item) => (
-                <TableRow key={item.productId}>
-                  <TableCell>
-                    <div className="font-medium text-xs truncate max-w-[180px]" title={item.productName}>
-                      {item.productName}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right text-xs">{item.quantity}</TableCell>
+              {(() => {
+                const calculations = calculatePurchaseCosts(
+                  order.items.map(i => ({ 
+                    productId: i.productId, 
+                    productName: i.productName, 
+                    quantity: i.quantity, 
+                    cost: i.cost, 
+                    discount: i.discount || 0, 
+                    discountType: (i.discountType as any) || 'amount', 
+                    vatSubject: i.vatSubject 
+                  })), 
+                  order.shippingFee || 0, 
+                  12, 
+                  allocationStrategy
+                );
+
+                return order.items.map((item) => {
+                  const calculated = calculations.items.find(ci => ci.productId === item.productId);
+                  const landedCost = calculated?.landedCostPerUnit || item.cost;
+
+                  return (
+                    <TableRow key={item.productId}>
+                      <TableCell>
+                        <div className="font-medium text-xs truncate max-w-[170px]" title={item.productName}>
+                          {item.productName}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-xs">{item.quantity}</TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">₱{toSafeNumber(item.cost).toFixed(2)}</TableCell>
+                      <TableCell className="text-right text-xs font-bold text-primary">₱{toSafeNumber(landedCost).toFixed(2)}</TableCell>
                   <TableCell>
                     <Input
                       type="number"
@@ -246,9 +322,12 @@ export function ReceivePurchaseOrderDialog({
                     />
                   </TableCell>
                 </TableRow>
-              ))}
+                  );
+                });
+              })()}
             </TableBody>
           </Table>
+          </TooltipProvider>
         </div>
 
         {Object.values(badItems).some(item => item.quantity > 0) && (
@@ -269,6 +348,30 @@ export function ReceivePurchaseOrderDialog({
             Confirm Receipt
           </Button>
         </DialogFooter>
+
+        <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Receipt</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to confirm receipt for <strong>PO #{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</strong>?
+                Inventory levels will be updated immediately.
+                {Object.values(badItems).some(item => item.quantity > 0) && (
+                  <span className="block mt-2 font-bold text-destructive">
+                    Warning: You are also recording bad/damaged items.
+                  </span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirm} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Confirm & Update Stock
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

@@ -4,6 +4,7 @@ export interface ProductEntity {
   description: string;
   category: string;
   brand: string;
+  department?: string;
   stock: number;
   price: number;
   cost?: number;
@@ -16,7 +17,9 @@ export interface ProductEntity {
   avgDailySales: number;
   expirationDate?: string;
   warehouseId?: string;
-  shelfLocationId?: string | null;
+  shelfLocationId?: string | null; // @deprecated: Use shelfLocationIds
+  shelfLocationIds?: string[];
+  shelfQuantities?: Record<string, number>;
   createdAt?: string;
   updatedAt?: string;
   priceLevels?: ProductPriceLevel[];

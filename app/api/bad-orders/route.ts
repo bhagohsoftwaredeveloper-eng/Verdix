@@ -140,19 +140,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
+import { processBadOrderCreation } from '@/lib/bad-order-actions';
+import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      purchaseOrderId,
-      supplierId,
-      supplierName,
-      reportedBy,
-      reportDate,
-      status,
-      items,
-      notes,
-    } = body;
+    const { items, reportedBy } = body;
 
     if (!items || items.length === 0) {
       return NextResponse.json(
@@ -161,71 +155,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate bad order ID
-    const badOrderId = `bo_${Date.now()}`;
+    // Check if multi-level approval is required
+    const isApprovalRequired = await checkApprovalRequired('BAD_ORDER');
 
-    // Calculate total affected value
-    const totalAffectedValue = items.reduce((acc: number, item: any) => {
-      return acc + (item.cost * item.quantity);
-    }, 0);
-
-    // Format date for MySQL
-    const formattedDate = reportDate 
-      ? new Date(reportDate).toISOString().slice(0, 19).replace('T', ' ')
-      : new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-    // Insert bad order
-    const insertOrderQuery = `
-      INSERT INTO bad_orders (
-        id, purchase_order_id, supplier_id, supplier_name, reported_by,
-        report_date, status, total_affected_value, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    await query(insertOrderQuery, [
-      badOrderId,
-      purchaseOrderId || null,
-      supplierId || null,
-      supplierName || null,
-      reportedBy || null,
-      formattedDate,
-      status || 'Reported',
-      totalAffectedValue,
-      notes || null,
-    ]);
-
-    // Insert bad order items
-    const insertItemQuery = `
-      INSERT INTO bad_order_items (
-        id, bad_order_id, product_id, product_name, quantity, cost, reason, description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    for (const item of items) {
-      const itemId = `boi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    if (isApprovalRequired) {
+      const { queueId, pendingApproval } = await submitToApprovalQueue('BAD_ORDER', body, reportedBy || 'system');
       
-      await query(insertItemQuery, [
-        itemId,
-        badOrderId,
-        item.productId,
-        item.productName,
-        item.quantity,
-        item.cost,
-        item.reason,
-        item.description || null,
-      ]);
+      if (pendingApproval) {
+        return NextResponse.json({ 
+          success: true, 
+          pendingApproval: true, 
+          queueId,
+          message: 'Bad order submitted for multi-level approval' 
+        });
+      }
+      // If not pending (all steps auto-skipped), fall through to direct creation
     }
 
-    return NextResponse.json({
-      success: true,
-      data: { id: badOrderId },
-      message: 'Bad order created successfully',
-      timestamp: new Date().toISOString()
-    });
+    // Direct creation
+    const result: any = await processBadOrderCreation(body, reportedBy || 'system');
+
+    if (result.success) {
+      return NextResponse.json({
+        success: true,
+        data: { id: result.badOrderId },
+        message: 'Bad order created successfully',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+    }
   } catch (error) {
-    console.error('Error creating bad order:', error);
+    console.error('Error in Bad Orders POST:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to create bad order' },
+      { success: false, error: 'Failed to process bad order' },
       { status: 500 }
     );
   }

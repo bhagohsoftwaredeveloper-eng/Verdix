@@ -7,6 +7,7 @@ export interface StockCountEntity {
   warehouseName?: string;
   shelfLocationId?: string;
   shelfName?: string;
+  shelfNames?: string[];
   createdBy?: string;
   completedBy?: string;
   completedAt?: string;

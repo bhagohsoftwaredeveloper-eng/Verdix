@@ -27,7 +27,8 @@ export async function PATCH(
       status, 
       receivedTotal,
       vatAmount,
-      receivedItems // New field for partial/full receipt
+      receivedItems, // New field for partial/full receipt
+      allocationStrategy
     } = body;
 
     // Recalculate if items or shipping updated
@@ -141,7 +142,7 @@ export async function PATCH(
           if (currentShipping === undefined) currentShipping = parseFloat(po[0]?.shipping_fee || '0');
         }
 
-        const calculations = calculatePurchaseCosts(allItems, currentShipping || 0);
+        const calculations = calculatePurchaseCosts(allItems, currentShipping || 0, 12, allocationStrategy || 'equal');
 
         const [defaultLevel]: any = await connection.query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
         const defaultLevelId = defaultLevel[0]?.id;

@@ -8,6 +8,8 @@ export const ALL_PERMISSIONS = [
     { id: 'manage_customers', label: 'Manage Customers' },
     { id: 'manage_suppliers', label: 'Manage Suppliers' },
     { id: 'view_reports', label: 'View Reports' },
+    { id: 'view_approvals', label: 'View Approvals Board' },
+    { id: 'manage_approval_settings', label: 'Manage Approval Settings' },
     { id: 'manage_users', label: 'Manage Users' },
     { id: 'manage_settings', label: 'Manage Settings' },
 ] as const;

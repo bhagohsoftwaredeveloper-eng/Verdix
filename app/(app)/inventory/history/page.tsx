@@ -39,16 +39,25 @@ function AdjustmentRow({ adjustment }: { adjustment: StockAdjustment }) {
   }, [adjustment.date]);
 
   return (
-    <TableRow key={adjustment.id}>
-      <TableCell className="font-medium">{adjustment.product?.name || adjustment.productName}</TableCell>
+    <TableRow key={adjustment.id} className={cn(adjustment.status === 'Pending' && "bg-blue-50/30 italic")}>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+            {adjustment.product?.name || adjustment.productName}
+            {adjustment.status === 'Pending' && (
+                <Badge variant="secondary" className="text-[9px] h-4 bg-blue-100 text-blue-700 border-blue-200">Pending</Badge>
+            )}
+        </div>
+      </TableCell>
       <TableCell suppressHydrationWarning>{formattedDate}</TableCell>
       <TableCell>
-         <Badge variant={adjustment.quantity > 0 ? "default" : "destructive"} className="text-sm">
+         <Badge variant={adjustment.quantity > 0 ? "default" : "destructive"} className="text-xs">
           {adjustment.quantity > 0 ? '+' : ''}{adjustment.quantity}
         </Badge>
       </TableCell>
-      <TableCell>{adjustment.reason}</TableCell>
-      <TableCell className="text-right">{adjustment.newStock}</TableCell>
+      <TableCell className="text-muted-foreground italic text-xs">{adjustment.reason}</TableCell>
+      <TableCell className="text-right font-bold">
+        {adjustment.status === 'Pending' ? '---' : adjustment.newStock}
+      </TableCell>
     </TableRow>
   );
 }

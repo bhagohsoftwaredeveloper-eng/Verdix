@@ -1,4 +1,4 @@
-﻿// Load all migrations
+// Load all migrations
 import './001_initial_schema';
 import './002_drop_conversion_factor_from_units_of_measure';
 import './003_create_conversion_factors_table';
@@ -63,6 +63,12 @@ import './061_add_bir_compliance_columns';
 import './062_add_counters_to_z_readings';
 import './063_add_is_training_to_pos_transactions';
 import './064_add_is_training_to_all_sales_tables';
+import './065_create_departments_table';
+import './066_create_product_shelves_table';
+import './067_add_quantity_to_product_shelves';
+import './068_update_stock_movements_reference_type';
+import './070_create_user_types_tables';
+
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

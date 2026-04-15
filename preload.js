@@ -5,9 +5,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   connectPrinter: (portSetting) => ipcRenderer.invoke('printer:connect', portSetting),
   printData: (buffer) => ipcRenderer.invoke('printer:print', buffer),
   disconnectPrinter: () => ipcRenderer.invoke('printer:disconnect'),
+  
+  // Epson SDK
+  listEpsonPrinters: () => ipcRenderer.invoke('epson-printer:list'),
+  connectEpsonPrinter: (portSetting) => ipcRenderer.invoke('epson-printer:connect', portSetting),
+  printEpsonData: (buffer) => ipcRenderer.invoke('epson-printer:print', buffer),
+  disconnectEpsonPrinter: () => ipcRenderer.invoke('epson-printer:disconnect'),
+  cutEpsonPaper: () => ipcRenderer.invoke('epson-printer:cut'),
+  openEpsonDrawer: () => ipcRenderer.invoke('epson-printer:open-drawer'),
+
   minimize: () => ipcRenderer.invoke('window:minimize'),
   maximize: () => ipcRenderer.invoke('window:maximize'),
-  close: () => ipcRenderer.invoke('window:close')
+  close: () => ipcRenderer.invoke('window:close'),
+  
+  // Flag to tell the UI if it should show custom window controls
+  isFrameless: () => {
+    // Look for the argument we passed in BrowserWindow additionalArguments
+    const isAdminArg = process.argv.find(arg => arg.startsWith('--is-admin='));
+    return isAdminArg ? isAdminArg.split('=')[1] === 'false' : true; // Default to true for safety
+  }
 });
 
 window.addEventListener('DOMContentLoaded', () => {

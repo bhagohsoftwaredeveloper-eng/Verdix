@@ -2,11 +2,13 @@ import { ProductEntity } from './Product';
 
 export interface GetProductsFilters {
   category?: string | null;
+  department?: string | null;
   search?: string | null;
   warehouseId?: string | null;
   availability?: string | null;
   supplierId?: string | null;
-  shelfLocationId?: string | null;
+  shelfLocationId?: string | null; // @deprecated: Use shelfId
+  shelfId?: string | null;
 }
 
 export interface ProductRepository {

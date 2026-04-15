@@ -19,7 +19,13 @@ export async function GET(request: NextRequest) {
       { name: 'tax_rates_auth_password', type: 'VARCHAR(255) NULL' },
       { name: 'fiscal_year_start_month', type: 'INT DEFAULT 1' },
       { name: 'print_two_receipts', type: 'BOOLEAN DEFAULT FALSE' },
-      { name: 'native_printer_name', type: 'VARCHAR(255) DEFAULT "XP-58-P"' }
+      { name: 'native_printer_name', type: 'VARCHAR(255) DEFAULT "XP-58-P"' },
+      { name: 'require_adjustment_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'require_transfer_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'require_po_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'require_receive_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'require_bad_order_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'require_stock_count_approval', type: 'BOOLEAN DEFAULT FALSE' }
     ];
 
     const currentColumnsResult = await query(
@@ -91,7 +97,13 @@ export async function GET(request: NextRequest) {
         tax_rates_auth_password AS taxRatesAuthPassword,
         fiscal_year_start_month AS fiscalYearStartMonth,
         print_two_receipts AS printTwoReceipts,
-        native_printer_name AS nativePrinterName
+        native_printer_name AS nativePrinterName,
+        require_adjustment_confirmation AS requireAdjustmentConfirmation,
+        require_transfer_confirmation AS requireTransferConfirmation,
+        require_po_confirmation AS requirePurchaseOrderConfirmation,
+        require_receive_confirmation AS requireReceiveConfirmation,
+        require_bad_order_confirmation AS requireBadOrderConfirmation,
+        require_stock_count_approval AS requireStockCountApproval
       FROM pos_settings
       LIMIT 1
     `;
@@ -174,9 +186,12 @@ export async function POST(request: NextRequest) {
           enable_cash_count_auth, cash_count_auth_username, cash_count_auth_password,
           low_stock_threshold, enable_email_notifications, notification_email, enable_push_notifications,
           enable_tax_rates_auth, tax_rates_auth_username, tax_rates_auth_password,
-          fiscal_year_start_month, print_two_receipts, native_printer_name
+          fiscal_year_start_month, print_two_receipts, native_printer_name,
+          require_adjustment_confirmation, require_transfer_confirmation,
+          require_po_confirmation, require_receive_confirmation,
+          require_bad_order_confirmation, require_stock_count_approval
         )
-        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await query(insertSQL, [
         businessName || 'My Business',
@@ -227,7 +242,13 @@ export async function POST(request: NextRequest) {
         taxRatesAuthPassword || null,
         fiscalYearStartMonth || 1,
         printTwoReceipts ?? false,
-        nativePrinterName || 'XP-58-P'
+        nativePrinterName || 'XP-58-P',
+        body.requireAdjustmentConfirmation ?? false,
+        body.requireTransferConfirmation ?? false,
+        body.requirePurchaseOrderConfirmation ?? false,
+        body.requireReceiveConfirmation ?? false,
+        body.requireBadOrderConfirmation ?? false,
+        body.requireStockCountApproval ?? false
       ]);
     } else {
       // Update existing settings - Dynamic Update
@@ -281,7 +302,13 @@ export async function POST(request: NextRequest) {
         taxRatesAuthPassword: 'tax_rates_auth_password',
         fiscalYearStartMonth: 'fiscal_year_start_month',
         printTwoReceipts: 'print_two_receipts',
-        nativePrinterName: 'native_printer_name'
+        nativePrinterName: 'native_printer_name',
+        requireAdjustmentConfirmation: 'require_adjustment_confirmation',
+        requireTransferConfirmation: 'require_transfer_confirmation',
+        requirePurchaseOrderConfirmation: 'require_po_confirmation',
+        requireReceiveConfirmation: 'require_receive_confirmation',
+        requireBadOrderConfirmation: 'require_bad_order_confirmation',
+        requireStockCountApproval: 'require_stock_count_approval'
       };
 
       const updates: string[] = [];

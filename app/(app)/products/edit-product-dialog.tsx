@@ -39,6 +39,7 @@ import { Category, Product, Brand, UnitOfMeasure, Supplier, TaxRate, SystemSetti
 
 import { ManageCategoriesDialog } from './ManageCategoriesDialog';
 import { ManageBrandsDialog } from './ManageBrandsDialog';
+import { ManageDepartmentsDialog } from './ManageDepartmentsDialog';
 import { ManageSubcategoriesDialog } from './ManageSubcategoriesDialog';
 import { ManageUnitOfMeasureDialog } from './ManageUnitOfMeasureDialog';
 import { ManageSuppliersDialog } from './ManageSuppliersDialog';
@@ -50,6 +51,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
 import { ManageShelfLocationsDialog } from './ManageShelfLocationsDialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { ChevronsUpDown, Check } from 'lucide-react';
 
 function CurrencyIcon({ className }: { className?: string }) {
   return (
@@ -67,13 +73,14 @@ function CurrencyIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-import { updateProduct, getBrands, getCategories, getSubcategories, getUnitsOfMeasure, getSuppliers, getWarehouses } from './actions';
+import { updateProduct, getBrands, getCategories, getSubcategories, getUnitsOfMeasure, getSuppliers, getWarehouses, getDepartments } from './actions';
 
 
 
 const productSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
   brand: z.string().min(1, 'Brand is required'),
+  department: z.string().optional(),
   sku: z.string().min(1, 'SKU is required'),
   barcode: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
@@ -82,7 +89,7 @@ const productSchema = z.object({
   subcategory: z.string().optional(),
   supplier: z.string().optional(),
   warehouse: z.string().optional(),
-  shelfLocationId: z.string().optional(),
+  shelfLocationIds: z.array(z.string()).optional(),
   isSerialized: z.boolean().default(false),
   unitOfMeasure: z.string().min(1, 'Unit of measure is required'),
   reorderPoint: z.coerce.number().int().nonnegative().optional().default(0),
@@ -112,15 +119,22 @@ export function EditProductDialog({
   onProductUpdated,
   productOptions: externalProductOptions,
   onOptionsRefresh,
-  trigger
+  trigger,
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange
 }: { 
   product: Product; 
   onProductUpdated?: () => void;
   productOptions?: any;
   onOptionsRefresh?: () => void;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setIsOpen = externalOnOpenChange !== undefined ? externalOnOpenChange : setInternalOpen;
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -134,17 +148,9 @@ export function EditProductDialog({
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
-
-  const [dialogs, setDialogs] = useState({
-    categories: false,
-    brands: false,
-    subcategories: false,
-    suppliers: false,
-    warehouses: false,
-    shelfLocations: false,
-    units: false,
-  });
   
   const [selects, setSelects] = useState({
     categories: false,
@@ -154,6 +160,18 @@ export function EditProductDialog({
     warehouses: false,
     shelfLocations: false,
     units: false,
+    departments: false,
+  });
+
+  const [dialogs, setDialogs] = useState({
+    categories: false,
+    brands: false,
+    subcategories: false,
+    suppliers: false,
+    warehouses: false,
+    shelfLocations: false,
+    units: false,
+    departments: false,
   });
 
 
@@ -182,6 +200,7 @@ export function EditProductDialog({
       setSubcategories(externalProductOptions.subcategories || []);
       setUnits(externalProductOptions.units || []);
       setSuppliers(externalProductOptions.suppliers || []);
+      setDepartments(externalProductOptions.departments || []);
       setWarehouses(externalProductOptions.warehouses || []);
       setShelfLocations(externalProductOptions.shelfLocations || []);
       setPriceLevels(externalProductOptions.priceLevels || []);
@@ -194,14 +213,16 @@ export function EditProductDialog({
     resolver: zodResolver(productSchema),
     defaultValues: {
       ...product,
+      category: product.category ?? '',
       brand: product.brand ?? '',
+      department: product.department ?? '',
       cost: product.cost ?? 0,
       barcode: product.barcode ?? '',
       additionalDescription: product.additionalDescription ?? '',
       incomeAccount: product.incomeAccount ?? '',
       expenseAccount: product.expenseAccount ?? '',
       warehouse: product.warehouse ?? '',
-      shelfLocationId: product.shelfLocationId ?? '',
+      shelfLocationIds: product.shelfLocationIds || [],
       subcategory: product.subcategory ?? '', // Handle null
       supplier: product.supplier ?? '', // Handle null
       unitOfMeasure: product.unitOfMeasure ?? '', // Handle null
@@ -240,6 +261,7 @@ export function EditProductDialog({
     if (product && isOpen) {
       const sanitizedProduct = {
           ...product,
+          category: product.category ?? '',
           brand: product.brand ?? '',
           cost: product.cost ?? 0,
           barcode: product.barcode ?? '',
@@ -247,7 +269,7 @@ export function EditProductDialog({
           incomeAccount: product.incomeAccount ?? '',
           expenseAccount: product.expenseAccount ?? '',
           warehouse: product.warehouseId ?? product.warehouse ?? '',
-          shelfLocationId: product.shelfLocationId ?? '',
+          shelfLocationIds: product.shelfLocationIds || [],
           reorderPoint: product.reorderPoint ?? 0,
           subcategory: product.subcategory ?? '', // Handle null
           supplier: product.supplier ?? '', // Handle null
@@ -522,7 +544,7 @@ export function EditProductDialog({
           <DialogTrigger asChild>
             {trigger}
           </DialogTrigger>
-        ) : (
+        ) : externalOpen !== undefined ? null : (
           <Tooltip>
             <TooltipTrigger asChild>
               <DialogTrigger asChild>
@@ -618,16 +640,33 @@ export function EditProductDialog({
                                     <SelectValue placeholder="Select a brand" />
                                   </SelectTrigger>
                                 </FormControl>
-                                <SelectContent>
-                                  {brands?.length > 0 ? (
-                                    brands.map((brand: Brand) => (
-                                      <SelectItem key={brand.id} value={brand.name}>
-                                        {brand.name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <SelectItem value="none" disabled>No brands found</SelectItem>
-                                  )}
+                                 <SelectContent>
+                                   {(() => {
+                                     const items = [];
+                                     
+                                     // Add orphan brand if it exists and isn't in the list
+                                     if (watchedBrandName && !brands.some(b => b.name === watchedBrandName)) {
+                                       items.push(
+                                         <SelectItem key="orphan-brand" value={watchedBrandName}>
+                                           {watchedBrandName} (Missing in Settings)
+                                         </SelectItem>
+                                       );
+                                     }
+                                     
+                                     if (brands?.length > 0) {
+                                       brands.forEach((brand: Brand) => {
+                                         items.push(
+                                           <SelectItem key={brand.id} value={brand.name}>
+                                             {brand.name}
+                                           </SelectItem>
+                                         );
+                                       });
+                                     }
+                                     
+                                     return items.length > 0 ? items : (
+                                       <SelectItem value="none" disabled>No brands found</SelectItem>
+                                     );
+                                   })()}
                                   <div className="border-t mt-1 pt-1 px-1">
                                     <Button
                                       type="button"
@@ -743,15 +782,32 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {categories?.length > 0 ? (
-                                    categories.map((cat: Category) => (
-                                      <SelectItem key={cat.id} value={cat.name}>
-                                        {cat.name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <SelectItem value="none" disabled>No categories found</SelectItem>
-                                  )}
+                                   {(() => {
+                                     const items = [];
+                                     
+                                     // Add orphan category if it exists and isn't in the list
+                                     if (watchedCategoryName && !categories.some(cat => cat.name === watchedCategoryName)) {
+                                       items.push(
+                                         <SelectItem key="orphan-category" value={watchedCategoryName}>
+                                           {watchedCategoryName} (Missing in Settings)
+                                         </SelectItem>
+                                       );
+                                     }
+                                     
+                                     if (categories?.length > 0) {
+                                       categories.forEach((cat: Category) => {
+                                         items.push(
+                                           <SelectItem key={cat.id} value={cat.name}>
+                                             {cat.name}
+                                           </SelectItem>
+                                         );
+                                       });
+                                     }
+                                     
+                                     return items.length > 0 ? items : (
+                                       <SelectItem value="none" disabled>No categories found</SelectItem>
+                                     );
+                                   })()}
                                   <div className="border-t mt-1 pt-1 px-1">
                                     <Button
                                       type="button"
@@ -792,15 +848,32 @@ export function EditProductDialog({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {subcategories?.length > 0 ? (
-                                    subcategories.map((sub: Category) => (
-                                      <SelectItem key={sub.id} value={sub.name}>
-                                        {sub.name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <SelectItem value="none" disabled>No subcategories found</SelectItem>
-                                  )}
+                                   {(() => {
+                                     const items = [];
+                                     
+                                     // Add orphan subcategory if it exists and isn't in the list
+                                     if (watchedSubcategoryName && !subcategories.some(sub => sub.name === watchedSubcategoryName)) {
+                                       items.push(
+                                         <SelectItem key="orphan-subcategory" value={watchedSubcategoryName}>
+                                           {watchedSubcategoryName} (Missing in Settings)
+                                         </SelectItem>
+                                       );
+                                     }
+                                     
+                                     if (subcategories?.length > 0) {
+                                       subcategories.forEach((sub: Category) => {
+                                         items.push(
+                                           <SelectItem key={sub.id} value={sub.name}>
+                                             {sub.name}
+                                           </SelectItem>
+                                         );
+                                       });
+                                     }
+                                     
+                                     return items.length > 0 ? items : (
+                                       <SelectItem value="none" disabled>No subcategories found</SelectItem>
+                                     );
+                                   })()}
                                   <div className="border-t mt-1 pt-1 px-1">
                                     <Button
                                       type="button"
@@ -828,6 +901,57 @@ export function EditProductDialog({
                     <TabsContent value="inventory" className="space-y-4 p-6">
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="department"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Department</FormLabel>
+                                <Select 
+                                  open={selects.departments}
+                                  onOpenChange={(open: boolean) => setSelects(prev => ({ ...prev, departments: open }))}
+                                  onValueChange={field.onChange} 
+                                  value={field.value}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a department" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {isLoadingDepartments ? (
+                                      <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                    ) : departments?.length > 0 ? (
+                                      departments.map((dept: any) => (
+                                        <SelectItem key={dept.id} value={dept.name}>
+                                          {dept.name}
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <SelectItem value="none" disabled>No departments found</SelectItem>
+                                    )}
+                                    <div className="border-t mt-1 pt-1 px-1">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setDialogs(prev => ({ ...prev, departments: true }));
+                                          setSelects(prev => ({ ...prev, departments: false }));
+                                        }}
+                                      >
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Add Department
+                                      </Button>
+                                    </div>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                           <FormField
                             control={form.control}
                             name="vatStatus"
@@ -925,6 +1049,9 @@ export function EditProductDialog({
                             )}
                           />
 
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <FormField
                             control={form.control}
                             name="warehouse"
@@ -977,49 +1104,96 @@ export function EditProductDialog({
 
                           <FormField
                             control={form.control}
-                            name="shelfLocationId"
+                            name="shelfLocationIds"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Shelf Location (Optional)</FormLabel>
-                                <Select 
-                                  open={selects.shelfLocations}
-                                  onOpenChange={(open) => setSelects(prev => ({ ...prev, shelfLocations: open }))}
-                                  onValueChange={field.onChange} 
-                                  value={field.value}
-                                >
+                                <FormLabel>Shelf Locations (Optional)</FormLabel>
+                                <Popover>
                                   <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a location" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {shelfLocations?.length > 0 ? (
-                                      shelfLocations.map((loc: any) => (
-                                        <SelectItem key={loc.id} value={loc.id}>
-                                          {loc.name}
-                                        </SelectItem>
-                                      ))
-                                    ) : (
-                                      <SelectItem value="none" disabled>No shelf locations found</SelectItem>
-                                    )}
-                                    <div className="border-t mt-1 pt-1 px-1">
+                                    <PopoverTrigger asChild>
                                       <Button
                                         type="button"
-                                        variant="ghost"
-                                        className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          setDialogs(prev => ({ ...prev, shelfLocations: true }));
-                                          setSelects(prev => ({ ...prev, shelfLocations: false }));
-                                        }}
+                                        variant="outline"
+                                        role="combobox"
+                                        className={cn(
+                                          "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-auto min-h-10 text-left font-normal",
+                                          !field.value?.length && "text-muted-foreground"
+                                        )}
                                       >
-                                        <PlusCircle className="mr-2 h-4 w-4" />
-                                        Add Shelf Location
+                                        <div className="flex flex-wrap gap-1 pointer-events-none">
+                                          {field.value && field.value.length > 0 ? (
+                                            field.value.map((id: string) => {
+                                              const location = (shelfLocations || []).find((l: any) => l.id === id);
+                                              return (
+                                                <Badge
+                                                  variant="secondary"
+                                                  key={id}
+                                                  className="mr-1 mb-1"
+                                                >
+                                                  {location?.name || id}
+                                                </Badge>
+                                              );
+                                            })
+                                          ) : (
+                                            "Select locations..."
+                                          )}
+                                        </div>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                       </Button>
-                                    </div>
-                                  </SelectContent>
-                                </Select>
+                                    </PopoverTrigger>
+                                  </FormControl>
+                                  <PopoverContent 
+                                    className="w-full min-w-[300px] p-0" 
+                                    align="start"
+                                  >
+                                    <Command className="w-full">
+                                      <CommandInput placeholder="Search location..." />
+                                      <CommandList className="max-h-[300px] overflow-y-auto">
+                                        <CommandEmpty>No location found.</CommandEmpty>
+                                        <CommandGroup>
+                                          {(shelfLocations || []).map((loc: any) => (
+                                            <CommandItem
+                                              key={loc.id}
+                                              value={loc.name}
+                                              onSelect={() => {
+                                                const current = field.value || [];
+                                                const next = current.includes(loc.id)
+                                                  ? current.filter((id: string) => id !== loc.id)
+                                                  : [...current, loc.id];
+                                                field.onChange(next);
+                                              }}
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  "mr-2 h-4 w-4",
+                                                  field.value?.includes(loc.id)
+                                                    ? "opacity-100"
+                                                    : "opacity-0"
+                                                )}
+                                              />
+                                              {loc.name}
+                                            </CommandItem>
+                                          ))}
+                                        </CommandGroup>
+                                      </CommandList>
+                                      <div className="border-t mt-1 pt-1 px-1">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setDialogs(prev => ({ ...prev, shelfLocations: true }));
+                                          }}
+                                        >
+                                          <PlusCircle className="mr-2 h-4 w-4" />
+                                          Add Shelf Location
+                                        </Button>
+                                      </div>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -1455,12 +1629,18 @@ export function EditProductDialog({
         </DialogContent>
  
          {/* Lifted Manage Dialogs */}
-         <ManageBrandsDialog
-           trigger={null}
-           open={dialogs.brands}
-           onOpenChange={(open) => setDialogs(prev => ({ ...prev, brands: open }))}
-           onBrandAdded={() => getBrands().then(setBrands)}
-         />
+         <ManageBrandsDialog 
+          trigger={null} 
+          open={dialogs.brands} 
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, brands: open }))}
+          onBrandAdded={() => getBrands().then(setBrands)} 
+        />
+        <ManageDepartmentsDialog
+          trigger={null}
+          open={dialogs.departments}
+          onOpenChange={(open) => setDialogs(prev => ({ ...prev, departments: open }))}
+          onDepartmentAdded={() => getDepartments().then(setDepartments)} 
+        />
          <ManageCategoriesDialog
            trigger={null}
            open={dialogs.categories}
@@ -1489,9 +1669,12 @@ export function EditProductDialog({
            onOpenChange={(open) => setDialogs(prev => ({ ...prev, shelfLocations: open }))}
            onLocationAdded={(newLocationId?: string) => {
              if (onOptionsRefresh) onOptionsRefresh();
-             if (newLocationId) {
-               form.setValue('shelfLocationId', newLocationId, { shouldValidate: true, shouldDirty: true });
-             }
+              if (newLocationId) {
+                const currentIds = form.getValues('shelfLocationIds') || [];
+                if (!currentIds.includes(newLocationId)) {
+                  form.setValue('shelfLocationIds', [...currentIds, newLocationId], { shouldValidate: true, shouldDirty: true });
+                }
+              }
            }}
          />
          <ManageUnitOfMeasureDialog

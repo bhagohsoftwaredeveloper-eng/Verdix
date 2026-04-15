@@ -25,7 +25,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, warehouseId, shelfLocationId, notes, createdBy } = body;
+    const { name, warehouseId, shelfLocationId, shelfLocationIds, notes, createdBy } = body;
+    const effectiveShelfIds = shelfLocationIds || (shelfLocationId ? [shelfLocationId] : []);
     
     // 1. Fetch products to include in the snapshot based on filters
     let productsSql = `SELECT id, name, stock, sku, barcode FROM products WHERE availability = 'available'`;
@@ -36,9 +37,10 @@ export async function POST(request: NextRequest) {
       params.push(warehouseId);
     }
     
-    if (shelfLocationId) {
-      productsSql += ' AND shelf_location_id = ?';
-      params.push(shelfLocationId);
+    if (effectiveShelfIds && effectiveShelfIds.length > 0) {
+      const placeholders = effectiveShelfIds.map(() => '?').join(',');
+      productsSql += ` AND shelf_location_id IN (${placeholders})`;
+      params.push(...effectiveShelfIds);
     }
     
     const products: any[] = await query(productsSql, params);
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
       id: stockCountId,
       name,
       warehouseId,
-      shelfLocationId,
+      shelfLocationId: effectiveShelfIds.length > 0 ? effectiveShelfIds[0] : undefined,
       notes,
       createdBy: createdBy || 'Admin',
       status: 'in_progress',

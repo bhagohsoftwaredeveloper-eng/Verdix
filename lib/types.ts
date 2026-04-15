@@ -5,6 +5,7 @@ export interface Product {
   additionalDescription?: string;
   category: string;
   brand: string;
+  department?: string;
   subcategory?: string;
   supplier?: string;
   supplierName?: string;
@@ -34,8 +35,11 @@ export interface Product {
   warehouseId?: string;
 
   // Shelf Location
-  shelfLocationId?: string | null;
-  shelfLocationName?: string | null;
+  shelfLocationId?: string | null; // @deprecated: Use shelfLocationIds
+  shelfLocationIds?: string[];
+  shelfLocationName?: string | null; // @deprecated: Use shelfLocationNames
+  shelfLocationNames?: string | null;
+  shelfQuantities?: Record<string, number>;
 
   // Parent/Child relationship
   parentId?: string | null;
@@ -54,7 +58,11 @@ export interface Product {
   // Supplier Mapping
   primarySupplierRop?: number;
   mappings?: SupplierProductMapping[];
+
+  // Approval status
+  hasPendingApproval?: boolean;
 }
+
 
 export interface PriceLevel {
   id: string;
@@ -204,6 +212,12 @@ export interface Category {
   productCount?: number;
 }
 
+export interface Department {
+  id: string;
+  name: string;
+  markupPercentage?: number;
+}
+
 export interface Brand {
   id: string;
   name: string;
@@ -252,6 +266,7 @@ export interface StockAdjustment {
   reason: string;
   date: string;
   newStock: number;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Completed';
 }
 
 export interface Order {
@@ -347,6 +362,12 @@ export interface SystemSettings {
   printTwoReceipts?: boolean;
   nativePrinterName?: string;
   paperSize?: '58mm' | '80mm';
+  requireAdjustmentConfirmation?: boolean;
+  requireTransferConfirmation?: boolean;
+  requirePOConfirmation?: boolean;
+  requireReceiveConfirmation?: boolean;
+  requireBadOrderConfirmation?: boolean;
+  requireStockCountApproval?: boolean;
 }
 
 export interface User {

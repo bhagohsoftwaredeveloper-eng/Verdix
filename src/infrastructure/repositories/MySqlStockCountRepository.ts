@@ -32,6 +32,24 @@ export class MySqlStockCountRepository implements StockCountRepository {
       WHERE sci.stock_count_id IN (${placeholders})
     `;
     const itemsRaw: any[] = await query(itemsQuery, countIds);
+    
+    // 3. Fetch all involved shelf names for each count
+    const shelfNamesQuery = `
+      SELECT DISTINCT sci.stock_count_id as stockCountId, sl.name as shelfName
+      FROM stock_count_items sci
+      JOIN products p ON sci.product_id = p.id
+      JOIN shelf_locations sl ON p.shelf_location_id = sl.id
+      WHERE sci.stock_count_id IN (${placeholders})
+    `;
+    const shelfNamesRaw: any[] = await query(shelfNamesQuery, countIds);
+
+    const shelfNamesByCount: Record<string, string[]> = {};
+    shelfNamesRaw.forEach(row => {
+      if (!shelfNamesByCount[row.stockCountId]) {
+        shelfNamesByCount[row.stockCountId] = [];
+      }
+      shelfNamesByCount[row.stockCountId].push(row.shelfName);
+    });
 
     const itemsByCount: Record<string, StockCountItemEntity[]> = {};
     itemsRaw.forEach(item => {
@@ -50,7 +68,8 @@ export class MySqlStockCountRepository implements StockCountRepository {
 
     return countsRaw.map(c => ({
       ...c,
-      items: itemsByCount[c.id] || []
+      items: itemsByCount[c.id] || [],
+      shelfNames: shelfNamesByCount[c.id] || []
     }));
   }
 

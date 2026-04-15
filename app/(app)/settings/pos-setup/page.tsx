@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Building2, Settings, FileText, Monitor, Users, CreditCard, Lock, Undo, Printer } from 'lucide-react';
+import { Loader2, Upload, Building2, Settings, FileText, Monitor, Users, CreditCard, Lock, Undo, Printer, ClipboardCheck } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ManageTransactionReferenceDialog } from './manage-transaction-reference-dialog';
@@ -57,6 +57,12 @@ interface PosSettings {
   isTrainingMode?: boolean;
   printTwoReceipts?: boolean;
   nativePrinterName?: string | null;
+  requireAdjustmentConfirmation?: boolean;
+  requireTransferConfirmation?: boolean;
+  requirePurchaseOrderConfirmation?: boolean;
+  requireReceiveConfirmation?: boolean;
+  requireBadOrderConfirmation?: boolean;
+  requireStockCountApproval?: boolean;
 }
 
 export default function PosSetupPage() {
@@ -98,7 +104,13 @@ export default function PosSetupPage() {
     taxRatesAuthPassword: '',
     isTrainingMode: false,
     printTwoReceipts: false,
-    nativePrinterName: 'XP-58-P'
+    nativePrinterName: 'XP-58-P',
+    requireAdjustmentConfirmation: false,
+    requireTransferConfirmation: false,
+    requirePurchaseOrderConfirmation: false,
+    requireReceiveConfirmation: false,
+    requireBadOrderConfirmation: false,
+    requireStockCountApproval: false
   });
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [isScanningPrinters, setIsScanningPrinters] = useState(false);
@@ -573,6 +585,102 @@ export default function PosSetupPage() {
                 id="enableNegativeInventory"
                 checked={settings.enableNegativeInventory}
                 onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableNegativeInventory: checked }))}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Transaction Confirmations */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5" />
+              Transaction Confirmations
+            </CardTitle>
+            <CardDescription>Require confirmation before processing transactions</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="requireAdjustmentConfirmation">Stock Adjustment Confirmation</Label>
+                <p className="text-sm text-muted-foreground">
+                  Confirm before saving manual stock adjustments
+                </p>
+              </div>
+              <Switch
+                id="requireAdjustmentConfirmation"
+                checked={!!settings.requireAdjustmentConfirmation}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireAdjustmentConfirmation: checked }))}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="requireTransferConfirmation">Stock Transfer Confirmation</Label>
+                <p className="text-sm text-muted-foreground">
+                  Confirm before processing shelf-to-shelf transfers
+                </p>
+              </div>
+              <Switch
+                id="requireTransferConfirmation"
+                checked={!!settings.requireTransferConfirmation}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireTransferConfirmation: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="requirePurchaseOrderConfirmation">Purchase Order Confirmation</Label>
+                <p className="text-sm text-muted-foreground">
+                  Confirm before creating a new purchase order
+                </p>
+              </div>
+              <Switch
+                id="requirePurchaseOrderConfirmation"
+                checked={!!settings.requirePurchaseOrderConfirmation}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requirePurchaseOrderConfirmation: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="requireReceiveConfirmation">Receive PO Confirmation</Label>
+                <p className="text-sm text-muted-foreground">
+                  Confirm before receiving stock from a purchase order
+                </p>
+              </div>
+              <Switch
+                id="requireReceiveConfirmation"
+                checked={!!settings.requireReceiveConfirmation}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireReceiveConfirmation: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="requireBadOrderConfirmation">Bad Order Confirmation</Label>
+                <p className="text-sm text-muted-foreground">
+                  Confirm before recording items as bad orders (damages/returns)
+                </p>
+              </div>
+              <Switch
+                id="requireBadOrderConfirmation"
+                checked={!!settings.requireBadOrderConfirmation}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireBadOrderConfirmation: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="requireStockCountApproval">Stock Count Approval</Label>
+                <p className="text-sm text-muted-foreground">
+                  Require multi-level approval before applying stock count variances
+                </p>
+              </div>
+              <Switch
+                id="requireStockCountApproval"
+                checked={!!settings.requireStockCountApproval}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireStockCountApproval: checked }))}
               />
             </div>
           </CardContent>

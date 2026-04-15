@@ -33,11 +33,14 @@ export interface CalculatedPurchaseDetails {
  * @param items List of purchase items
  * @param shippingFee Total shipping fee for the order
  * @param taxRate VAT rate (e.g., 12 for 12%). VAT is assumed to be INCLUSIVE if vatSubject is true.
+ * @param allocationStrategy Strategy for distributing shipping costs: 
+ *                           'equal' (per line) or 'proportional' (by value/subtotal)
  */
 export function calculatePurchaseCosts(
   items: PurchaseItem[],
   shippingFee: number | string = 0,
-  taxRate: number | string = 12
+  taxRate: number | string = 12,
+  allocationStrategy: 'equal' | 'proportional' = 'equal'
 ): CalculatedPurchaseDetails {
   let subtotal = 0;
   let totalVat = 0;
@@ -79,12 +82,21 @@ export function calculatePurchaseCosts(
   const grandTotal = subtotal + numericShippingFee;
 
   // 2. Distribute shipping fee across items (Landed Cost Calculation)
-  // Allocation method: Divided equally by the number of item lines (not total quantity).
   const numLines = items.length;
-  const shippingPerLine = numLines > 0 ? numericShippingFee / numLines : 0;
-
+  
   const itemsWithLandedCost = processedItems.map(item => {
-    const shippingAllocation = shippingPerLine;
+    let shippingAllocation = 0;
+
+    if (numericShippingFee > 0) {
+      if (allocationStrategy === 'proportional' && subtotal > 0) {
+        // Allocation method: Proportional to line total / subtotal
+        shippingAllocation = (item.lineTotal / subtotal) * numericShippingFee;
+      } else {
+        // Allocation method: Divided equally by the number of item lines (not total quantity).
+        shippingAllocation = numLines > 0 ? numericShippingFee / numLines : 0;
+      }
+    }
+
     const landedCostTotal = item.lineTotal + shippingAllocation;
     const landedCostPerUnit = item.quantity > 0 ? landedCostTotal / item.quantity : 0;
 

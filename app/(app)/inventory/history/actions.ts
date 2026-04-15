@@ -6,29 +6,37 @@ import type { StockAdjustment } from '@/lib/types';
 
 export async function getStockAdjustments(limit?: number, offset?: number) {
   try {
-    let sql = `
+    // 1. Fetch completed adjustments
+    let adjSql = `
       SELECT
         sa.*,
+        'Completed' as status,
         p.name as product_name,
         p.sku as product_sku,
         p.category,
         p.brand
       FROM stock_adjustments sa
       LEFT JOIN products p ON sa.product_id = p.id
-      ORDER BY sa.created_at DESC
     `;
-
     const params: any[] = [];
+    const completedAdjustments = await query(adjSql);
 
-    if (limit !== undefined && offset !== undefined) {
-      sql += ` LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
-    }
+    // 2. Fetch pending adjustments from approval queue
+    let queueSql = `
+      SELECT 
+        aq.*,
+        p.name as product_name,
+        p.sku as product_sku,
+        p.category,
+        p.brand
+      FROM approval_queue aq
+      LEFT JOIN products p ON JSON_UNQUOTE(JSON_EXTRACT(aq.transaction_data, '$.productId')) = p.id
+      WHERE aq.transaction_type = 'STOCK_ADJUSTMENT' AND aq.status = 'Pending'
+    `;
+    const pendingQueue = await query(queueSql);
 
-    const adjustments = await query(sql, params.length > 0 ? params : undefined);
-
-    // Map database fields to StockAdjustment type
-    return adjustments.map((adj: any) => ({
+    // 3. Combine and sort
+    const mappedCompleted = (completedAdjustments || []).map((adj: any) => ({
       id: adj.id,
       productId: adj.product_id,
       productName: adj.product_name,
@@ -36,7 +44,7 @@ export async function getStockAdjustments(limit?: number, offset?: number) {
       reason: adj.reason,
       date: adj.created_at,
       newStock: parseInt(adj.new_stock),
-      // Include product info for better display
+      status: 'Completed',
       product: adj.product_name ? {
         id: adj.product_id,
         name: adj.product_name,
@@ -44,7 +52,38 @@ export async function getStockAdjustments(limit?: number, offset?: number) {
         category: adj.category,
         brand: adj.brand
       } : undefined
-    })) as StockAdjustment[];
+    }));
+
+    const mappedPending = (pendingQueue || []).map((item: any) => {
+      const txData = typeof item.transaction_data === 'string' ? JSON.parse(item.transaction_data) : item.transaction_data;
+      return {
+        id: item.id,
+        productId: txData.productId,
+        productName: item.product_name || 'Unknown Product',
+        quantity: parseInt(txData.quantity),
+        reason: txData.reason,
+        date: item.created_at,
+        newStock: 0, // Not finalized yet
+        status: 'Pending',
+        product: item.product_name ? {
+            id: txData.productId,
+            name: item.product_name,
+            sku: item.product_sku,
+            category: item.category,
+            brand: item.brand
+        } : undefined
+      };
+    });
+
+    const allAdjustments = [...mappedPending, ...mappedCompleted].sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    if (limit !== undefined && offset !== undefined) {
+      return allAdjustments.slice(offset, offset + limit) as StockAdjustment[];
+    }
+
+    return allAdjustments as StockAdjustment[];
   } catch (error) {
     console.error('Error fetching stock adjustments:', error);
     return [];
@@ -171,8 +210,35 @@ export async function migrateAdjustmentsToMovements() {
   }
 }
 
-export async function adjustStock(productId: string, quantity: number, reason: string) {
+import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
+
+export async function adjustStock(productId: string, quantity: number, reason: string, userId: string = 'system', isInternalFinalization: boolean = false) {
   try {
+    // 1. Check if multi-level approval is required
+    const isApprovalRequired = !isInternalFinalization && await checkApprovalRequired('STOCK_ADJUSTMENT');
+    
+    if (isApprovalRequired) {
+      // Get product info for enrichment
+      const productInfoRes: any = await query('SELECT name, stock, sku FROM products WHERE id = ?', [productId]);
+      const productInfo = productInfoRes[0] || { name: 'Unknown', stock: 0, sku: '' };
+
+      // Submit to approval queue instead of executing
+      console.log('Stock adjustment submitted for approval:', { productId, quantity, reason });
+      const { queueId, pendingApproval } = await submitToApprovalQueue('STOCK_ADJUSTMENT', { 
+        productId, 
+        quantity, 
+        reason,
+        productName: productInfo.name,
+        productSku: productInfo.sku,
+        currentStock: parseInt(productInfo.stock)
+      }, userId);
+      
+      if (pendingApproval) {
+        return { success: true, pendingApproval: true, queueId };
+      }
+      // If not pending (all steps auto-skipped), fall through to immediate execution
+    }
+
     // First, get current stock, name, conversion factor, and check if this product has children
     const getProductSql = `SELECT stock, name, parent_id, conversion_factor FROM products WHERE id = ?`;
     const productResult = await query(getProductSql, [productId]);

@@ -31,8 +31,24 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { format } from 'date-fns';
-import { Plus, Eye, Play } from 'lucide-react';
+import { Plus, Eye, Play, Check, ChevronsUpDown, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export function StockCountsClient() {
   const [counts, setCounts] = useState<any[]>([]);
@@ -98,10 +114,15 @@ export function StockCountsClient() {
                   </TableCell>
                   <TableCell className="font-medium">{count.name}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {count.warehouseName || count.shelfName ? (
+                    {count.warehouseName || count.shelfName || count.shelfNames ? (
                       <span className="flex flex-col text-xs">
                         {count.warehouseName && <span>WH: {count.warehouseName}</span>}
                         {count.shelfName && <span>Shelf: {count.shelfName}</span>}
+                        {count.shelfNames && count.shelfNames.length > 0 && (
+                          <span className="truncate max-w-[150px]" title={count.shelfNames.join(', ')}>
+                            Shelves: {count.shelfNames.join(', ')}
+                          </span>
+                        )}
                       </span>
                     ) : (
                       'Global'
@@ -146,7 +167,7 @@ function NewCountDialog({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
   const [warehouseId, setWarehouseId] = useState<string>('all');
-  const [shelfLocationId, setShelfLocationId] = useState<string>('all');
+  const [shelfLocationIds, setShelfLocationIds] = useState<string[]>([]);
   
   const [warehouses, setWarehouses] = useState<{id: string, name: string}[]>([]);
   const [shelves, setShelves] = useState<{id: string, name: string}[]>([]);
@@ -189,7 +210,7 @@ function NewCountDialog({ onCreated }: { onCreated: () => void }) {
           notes, 
           createdBy: 'Admin',
           warehouseId: warehouseId !== 'all' ? warehouseId : undefined,
-          shelfLocationId: shelfLocationId !== 'all' ? shelfLocationId : undefined
+          shelfLocationIds: shelfLocationIds.length > 0 ? shelfLocationIds : undefined
         }),
       });
 
@@ -201,7 +222,7 @@ function NewCountDialog({ onCreated }: { onCreated: () => void }) {
       setName('');
       setNotes('');
       setWarehouseId('all');
-      setShelfLocationId('all');
+      setShelfLocationIds([]);
       onCreated();
       // Optionally route directly to it
       router.push(`/inventory/stock-counts/${data.data.id}`);
@@ -258,18 +279,82 @@ function NewCountDialog({ onCreated }: { onCreated: () => void }) {
               </div>
 
               <div className="space-y-2">
-                <Label>Shelf (Optional)</Label>
-                <Select value={shelfLocationId} onValueChange={setShelfLocationId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Shelves" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Shelves</SelectItem>
-                    {shelves.map(s => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Shelves (Optional)</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between h-auto min-h-[40px] px-3 py-2 font-normal"
+                    >
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {shelfLocationIds.length > 0 ? (
+                          shelfLocationIds.map((id) => {
+                            const shelf = shelves.find((s) => s.id === id);
+                            return (
+                              <Badge key={id} variant="secondary" className="mr-1 mb-1 font-normal flex items-center gap-1">
+                                {shelf?.name || id}
+                                <X 
+                                  className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShelfLocationIds(prev => prev.filter(i => i !== id));
+                                  }}
+                                />
+                              </Badge>
+                            );
+                          })
+                        ) : (
+                          <span className="text-muted-foreground">All Shelves</span>
+                        )}
+                      </div>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search shelves..." />
+                      <CommandList>
+                        <CommandEmpty>No shelf found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            onSelect={() => {
+                              if (shelfLocationIds.length === shelves.length) {
+                                setShelfLocationIds([]);
+                              } else {
+                                setShelfLocationIds(shelves.map(s => s.id));
+                              }
+                            }}
+                          >
+                            <Checkbox 
+                              checked={shelfLocationIds.length === shelves.length && shelves.length > 0} 
+                              className="mr-2"
+                            />
+                            Select All
+                          </CommandItem>
+                          {shelves.map((shelf) => (
+                            <CommandItem
+                              key={shelf.id}
+                              onSelect={() => {
+                                setShelfLocationIds((prev) =>
+                                  prev.includes(shelf.id)
+                                    ? prev.filter((id) => id !== shelf.id)
+                                    : [...prev, shelf.id]
+                                );
+                              }}
+                            >
+                              <Checkbox 
+                                checked={shelfLocationIds.includes(shelf.id)} 
+                                className="mr-2"
+                              />
+                              {shelf.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 

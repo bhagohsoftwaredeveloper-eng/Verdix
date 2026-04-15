@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table';
 
 import { Badge } from '@/components/ui/badge';
-import { PurchaseOrder, Product } from '../../../lib/types';
+import { PurchaseOrder, Product, SystemSettings } from '../../../lib/types';
 import { mockProducts } from '../../../lib/data';
 import { usePurchaseOrders, useProducts, useBusinessProfile, useSuppliers } from '../../../hooks/use-api';
 import { format as formatFns } from 'date-fns';
@@ -61,7 +61,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, FileText, Ban, RotateCcw, Edit, Copy } from "lucide-react";
+import { MoreHorizontal, FileText, Ban, RotateCcw, Edit, Copy, PlusCircle } from "lucide-react";
 import {
   Select,
   SelectTrigger,
@@ -305,6 +305,18 @@ export default function PurchasesPage() {
 
   const [pageSize, setPageSize] = useState(50);
   const { toast } = useToast();
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+
+  useEffect(() => {
+    fetch(getApiUrl('/pos-settings'))
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setSettings(data.data);
+        }
+      })
+      .catch(err => console.error('Failed to fetch settings:', err));
+  }, []);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [supplierFilter, setSupplierFilter] = useState<string>('all');
@@ -350,7 +362,8 @@ export default function PurchasesPage() {
 
   const handleReceiveConfirm = async (
     receivedItems: { productId: string; quantity: number }[],
-    badItems?: { productId: string; productName: string; quantity: number; cost: number; reason: string; description: string }[]
+    badItems?: { productId: string; productName: string; quantity: number; cost: number; reason: string; description: string }[],
+    allocationStrategy?: 'equal' | 'proportional'
   ) => {
     if (!orderToReceive) return;
 
@@ -366,7 +379,8 @@ export default function PurchasesPage() {
       await updatePurchaseOrder(orderToReceive.id, { 
         status: 'Received',
         receivedTotal: receivedTotalValue,
-        receivedItems: receivedItems as any 
+        receivedItems: receivedItems as any,
+        allocationStrategy
       });
 
       // 2. Create bad order record if there are bad items
@@ -380,11 +394,12 @@ export default function PurchasesPage() {
             purchaseOrderId: orderToReceive.id,
             supplierId: orderToReceive.supplierId,
             supplierName: orderToReceive.supplierName,
-            reportedBy: localStorage.getItem('mock-user-session') ? JSON.parse(localStorage.getItem('mock-user-session')!).email : 'System',
+            reportedBy: localStorage.getItem('mock-user-session') ? JSON.parse(localStorage.getItem('mock-user-session')!).uid : 'system',
             reportDate: new Date().toISOString(),
             status: 'Reported',
             items: badItems,
             notes: `Automatically created during receipt of PO #${orderToReceive.referenceNumber || orderToReceive.id}`,
+            userId: localStorage.getItem('mock-user-session') ? JSON.parse(localStorage.getItem('mock-user-session')!).uid : 'system',
           }),
         });
 
@@ -530,7 +545,15 @@ export default function PurchasesPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <AddPurchaseOrderDialog onAddOrder={addPurchaseOrder} />
+            <AddPurchaseOrderDialog 
+              onAddOrder={addPurchaseOrder} 
+              trigger={
+                <Button size="sm" className="shadow-lg shadow-black/30">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add New Purchase Order
+                </Button>
+              }
+            />
             
             {isScheduledOrderOpen && (
                 <AddPurchaseOrderDialog 
@@ -574,6 +597,7 @@ export default function PurchasesPage() {
                 onOpenChange={setIsReceiveDialogOpen}
                 order={orderToReceive}
                 onConfirm={handleReceiveConfirm}
+                requireConfirmation={settings?.requireReceiveConfirmation}
               />
             )}
 

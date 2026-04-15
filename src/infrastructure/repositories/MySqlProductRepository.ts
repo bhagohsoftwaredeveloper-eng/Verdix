@@ -11,6 +11,7 @@ export class MySqlProductRepository implements ProductRepository {
         products.description,
         products.category,
         products.brand,
+        products.department,
         products.stock,
         products.price,
         products.cost,
@@ -23,9 +24,11 @@ export class MySqlProductRepository implements ProductRepository {
         products.avg_daily_sales as avgDailySales,
         products.expiration_date as expirationDate,
         products.warehouse_id as warehouseId,
-        products.shelf_location_id as shelfLocationId,
-        products.created_at as createdAt,
-        products.updated_at as updatedAt
+        (SELECT GROUP_CONCAT(shelf_id) FROM product_shelves WHERE product_id = products.id) as shelfLocationIds,
+        (SELECT GROUP_CONCAT(CONCAT(shelf_id, ':', quantity)) FROM product_shelves WHERE product_id = products.id) as shelfQuantitiesRaw,
+        products.updated_at as updatedAt,
+        products.parent_id as parentId,
+        products.conversion_factor as conversionFactor
       FROM products
       LEFT JOIN units_of_measure uom ON products.unit_of_measure = uom.name
       WHERE 1=1
@@ -35,6 +38,11 @@ export class MySqlProductRepository implements ProductRepository {
     if (filters.category) {
       sql += ' AND products.category = ?';
       params.push(filters.category);
+    }
+    
+    if (filters.department) {
+      sql += ' AND products.department = ?';
+      params.push(filters.department);
     }
 
     if (filters.search) {
@@ -57,8 +65,11 @@ export class MySqlProductRepository implements ProductRepository {
       params.push(filters.supplierId, filters.supplierId);
     }
     
-    if (filters.shelfLocationId) {
-      sql += ' AND products.shelf_location_id = ?';
+    if (filters.shelfId) {
+      sql += ' AND EXISTS (SELECT 1 FROM product_shelves WHERE product_id = products.id AND shelf_id = ?)';
+      params.push(filters.shelfId);
+    } else if (filters.shelfLocationId) {
+      sql += ' AND EXISTS (SELECT 1 FROM product_shelves WHERE product_id = products.id AND shelf_id = ?)';
       params.push(filters.shelfLocationId);
     }
 
@@ -86,6 +97,21 @@ export class MySqlProductRepository implements ProductRepository {
             minQuantity: pl.min_quantity ? parseInt(pl.min_quantity) : 0
           }));
         
+        if (product.shelfLocationIds) {
+          product.shelfLocationIds = product.shelfLocationIds.split(',');
+        } else {
+          product.shelfLocationIds = [];
+        }
+
+        product.shelfQuantities = {};
+        if (product.shelfQuantitiesRaw) {
+          product.shelfQuantitiesRaw.split(',').forEach((s: string) => {
+            const [id, qty] = s.split(':');
+            product.shelfQuantities[id] = parseInt(qty) || 0;
+          });
+        }
+        delete product.shelfQuantitiesRaw;
+
         if (defaultLevelId) {
             const retailOverrides = productSpecificLevels
                 .filter((pl: any) => pl.price_level_id === defaultLevelId)
@@ -110,6 +136,11 @@ export class MySqlProductRepository implements ProductRepository {
       countParams.push(filters.category);
     }
 
+    if (filters.department) {
+      countSql += ' AND department = ?';
+      countParams.push(filters.department);
+    }
+
     if (filters.search) {
       countSql += ' AND (name LIKE ? OR sku LIKE ? OR barcode LIKE ?)';
       countParams.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
@@ -130,8 +161,11 @@ export class MySqlProductRepository implements ProductRepository {
        countParams.push(filters.supplierId, filters.supplierId);
     }
     
-    if (filters.shelfLocationId) {
-      countSql += ' AND shelf_location_id = ?';
+    if (filters.shelfId) {
+      countSql += ' AND EXISTS (SELECT 1 FROM product_shelves WHERE product_id = products.id AND shelf_id = ?)';
+      countParams.push(filters.shelfId);
+    } else if (filters.shelfLocationId) {
+      countSql += ' AND EXISTS (SELECT 1 FROM product_shelves WHERE product_id = products.id AND shelf_id = ?)';
       countParams.push(filters.shelfLocationId);
     }
 
@@ -142,7 +176,7 @@ export class MySqlProductRepository implements ProductRepository {
   async findById(id: string): Promise<ProductEntity | null> {
     const results = await this.findAll(1, 0, { search: id }); // Overly simplified for now
     // Actually search should be by ID here
-    const productSql = `SELECT * FROM products WHERE id = ?`;
+    const productSql = `SELECT *, parent_id as parentId, conversion_factor as conversionFactor FROM products WHERE id = ?`;
     const rows = await query(productSql, [id]);
     if (rows.length === 0) return null;
     
@@ -156,12 +190,12 @@ export class MySqlProductRepository implements ProductRepository {
     const id = product.id || `prod_${Date.now()}`;
     const sql = `
       INSERT INTO products (
-        id, name, description, category, brand, stock, price, cost, sku, barcode, reorder_point, avg_daily_sales
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, description, category, brand, department, stock, price, cost, sku, barcode, reorder_point, avg_daily_sales
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     await query(sql, [
-      id, product.name, product.description, product.category, product.brand, 
+      id, product.name, product.description, product.category, product.brand, product.department,
       product.stock || 0, product.price, product.cost, product.sku, product.barcode, 0, 0
     ]);
 
@@ -172,6 +206,14 @@ export class MySqlProductRepository implements ProductRepository {
           VALUES (?, ?, ?, ?)
         `;
         await query(plSql, [id, pl.levelId, pl.price, pl.minQuantity || 0]);
+      }
+    }
+
+    if (product.shelfLocationIds && product.shelfLocationIds.length > 0) {
+      for (let i = 0; i < product.shelfLocationIds.length; i++) {
+        const shelfId = product.shelfLocationIds[i];
+        const qty = i === 0 ? (product.stock || 0) : 0;
+        await query('INSERT INTO product_shelves (product_id, shelf_id, quantity) VALUES (?, ?, ?)', [id, shelfId, qty]);
       }
     }
 
@@ -194,6 +236,24 @@ export class MySqlProductRepository implements ProductRepository {
       const sql = `UPDATE products SET ${updates.join(', ')} WHERE id = ?`;
       params.push(id);
       await query(sql, params);
+    }
+
+    if (product.shelfLocationIds) {
+      const [currentShelves]: any = await query('SELECT shelf_id, quantity FROM product_shelves WHERE product_id = ?', [id]);
+      const currentQtyMap = new Map(currentShelves.map((s: any) => [s.shelf_id, s.quantity]));
+
+      await query('DELETE FROM product_shelves WHERE product_id = ?', [id]);
+      for (let i = 0; i < product.shelfLocationIds.length; i++) {
+        const shelfId = product.shelfLocationIds[i];
+        let qty = currentQtyMap.get(shelfId) || 0;
+        
+        // If product was previously unassigned and now has shelves, move all stock to the first one
+        if (currentShelves.length === 0 && i === 0) {
+          qty = product.stock || 0;
+        }
+        
+        await query('INSERT INTO product_shelves (product_id, shelf_id, quantity) VALUES (?, ?, ?)', [id, shelfId, qty]);
+      }
     }
   }
 

@@ -26,8 +26,27 @@ import { addChildProduct, getProducts } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Wand2 } from 'lucide-react';
 
-export function QuickAddChildDialog({ parentProduct, baseStock, onChildAdded, products, trigger }: { parentProduct?: Product, baseStock?: number, onChildAdded: () => void, products: Product[], trigger?: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function QuickAddChildDialog({ 
+  parentProduct, 
+  baseStock, 
+  onChildAdded, 
+  products, 
+  trigger,
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange
+}: { 
+  parentProduct?: Product, 
+  baseStock?: number, 
+  onChildAdded: () => void, 
+  products: Product[], 
+  trigger?: React.ReactNode,
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setIsOpen = externalOnOpenChange !== undefined ? externalOnOpenChange : setInternalOpen;
+
   const [childName, setChildName] = useState('');
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
@@ -145,6 +164,7 @@ export function QuickAddChildDialog({ parentProduct, baseStock, onChildAdded, pr
         category: selectedParent.category,
         subcategory: selectedParent.subcategory,
         unitOfMeasure,
+        conversionFactor: cf?.factor || 1,
         stock: calculatedStock,
         reorderPoint: 0,
         price: numericPrice,
@@ -189,14 +209,11 @@ export function QuickAddChildDialog({ parentProduct, baseStock, onChildAdded, pr
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {trigger ? trigger : (
-        <Button variant="ghost" size="icon">
-          <PlusCircle className="h-4 w-4" />
-          <span className="sr-only">Add child product</span>
-        </Button>
-        )}
-      </DialogTrigger>
+      {trigger && (
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Add Child Product</DialogTitle>

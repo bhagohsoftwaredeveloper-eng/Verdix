@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // const auth = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
 
   const form = useForm<LoginFormValues>({
@@ -67,6 +69,7 @@ export default function LoginPage() {
         username: result.username,
         permissions: result.permissions,
         userType: result.userType,
+        roleId: result.roleId,
         uid: result.uid,
         displayName: result.displayName,
         photoURL: result.photoURL
@@ -81,7 +84,13 @@ export default function LoginPage() {
 
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid credentials. Please try again.');
+      const errorMessage = err.message || 'Invalid credentials. Please try again.';
+      setError(errorMessage);
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -126,12 +135,7 @@ export default function LoginPage() {
             </div>
             
             <div className="grid gap-2">
-              <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Link href="#" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors">
-                  Forgot password?
-                </Link>
-              </div>
               <div className="relative">
                 <Input 
                     id="password" 
@@ -166,17 +170,6 @@ export default function LoginPage() {
             </Button>
           </form>
           
-          <div className="relative my-4">
-             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-muted" /></div>
-             <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or continue with</span></div>
-          </div>
-
-          <div className="text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{' '}
-            <Link href="/signup" className="font-semibold text-primary hover:underline hover:text-primary/80 transition-all">
-              Sign up
-            </Link>
-          </div>
         </div>
       </div>
       

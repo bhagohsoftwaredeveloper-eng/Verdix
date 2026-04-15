@@ -17,7 +17,9 @@
     "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000/pos && node start-electron.js --route=/pos --role=\"POS Terminal\"\"",
     "electron-only": "node start-electron.js --route=/pos --role=\"POS Terminal\"",
     "electron-admin-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000/dashboard && node start-electron.js --route=/dashboard --role=\"Admin Dashboard\"\"",
-    "electron-admin": "node start-electron.js --route=/dashboard --role=\"Admin Dashboard\""
+    "electron-admin": "node start-electron.js --route=/dashboard --role=\"Admin Dashboard\"",
+    "dist": "electron-builder --win",
+    "build:installer": "iscc setup.iss"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
@@ -92,5 +94,24 @@
     "tsx": "^4.16.2",
     "typescript": "^5",
     "wait-on": "^9.0.4"
+  },
+  "build": {
+    "appId": "com.stockpilot.pos",
+    "productName": "Stock Pilot",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "printer-sdk.js",
+      "epson-sdk.js",
+      "package.json",
+      "public/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "public/Stockpilot.png"
+    }
   }
 }

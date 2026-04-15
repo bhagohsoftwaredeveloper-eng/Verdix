@@ -42,6 +42,7 @@ import {
   Settings,
   Package2,
   ChartNoAxesCombined,
+  ClipboardCheck,
 } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
@@ -65,6 +66,8 @@ import { getProducts, getLowStockAlerts } from './products/actions';
 import { Product } from '@/lib/types';
 import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
 import { Logo } from '@/components/logo';
+import { ApprovalsDrawer } from '@/components/approvals/approvals-drawer';
+import { WorkflowSettingsDrawer } from '@/components/approvals/workflow-settings-drawer';
 
 
 const navItems = [
@@ -110,6 +113,8 @@ const suppliersNavItems = [
 ];
 
 const otherNavItems = [
+  { href: '/approvals', icon: ClipboardCheck, label: 'Approvals Board', permission: 'view_approvals' },
+  { href: '/approvals/settings', icon: Settings, label: 'Workflow Settings', permission: 'manage_approval_settings' },
   { href: '/reports', icon: BarChart3, label: 'Reports', permission: 'view_reports' },
   // Suppliers moved to own section
   { href: '/user-management', icon: Users, label: 'User Management', permission: 'manage_users' },
@@ -128,6 +133,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<{ email: string, permissions?: string[], userType?: string } | null>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);
+  const [isApprovalsDrawerOpen, setIsApprovalsDrawerOpen] = useState(false);
+  const [isWorkflowSettingsDrawerOpen, setIsWorkflowSettingsDrawerOpen] = useState(false);
 
   const isPOSPage = pathname === '/pos';
 
@@ -205,7 +212,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <Sidebar className="non-printable border-r" collapsible="icon">
-        <SidebarHeader className="h-20 border-b border-sidebar-border sticky top-0 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl z-10 px-6 justify-center shadow-sm">
+        <SidebarHeader className="h-20 border-b border-sidebar-border sticky top-0 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl z-10 px-6 group-data-[collapsible=icon]:px-0 justify-center shadow-sm">
           <div className="flex items-center gap-3 transition-all duration-300 group-data-[collapsible=icon]:justify-center">
             <Logo variant="icon" size={36} />
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
@@ -214,33 +221,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </SidebarHeader>
-        <SidebarContent className="px-3 py-6 gap-6 overflow-y-auto flex-1">
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Platform</SidebarGroupLabel>
-            <SidebarMenu>
-              {filteredNavItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <Link href={item.href}>
-                    <SidebarMenuButton
-                      isActive={pathname === item.href}
-                      tooltip={{ children: item.label }}
-                      className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
-                    >
-                      <item.icon className="size-[18px]" />
-                      <span className="text-[14px]">{item.label}</span>
-                    </SidebarMenuButton>
-                  </Link>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+        <SidebarContent className="px-3 py-6 gap-6 overflow-y-auto flex-1 group-data-[collapsible=icon]:px-0">
+          {filteredNavItems.length > 0 && (
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Platform</SidebarGroupLabel>
+              <SidebarMenu>
+                {filteredNavItems.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <Link href={item.href}>
+                      <SidebarMenuButton
+                        isActive={pathname === item.href}
+                        tooltip={{ children: item.label }}
+                        className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
+                      >
+                        <item.icon />
+                        <span className="text-[14px]">{item.label}</span>
+                      </SidebarMenuButton>
+                    </Link>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          )}
 
           <SidebarGroup>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Operations</SidebarGroupLabel>
+            {(hasPermission('manage_inventory') || hasPermission('view_sales') || hasPermission('manage_customers') || hasPermission('manage_purchases') || hasPermission('manage_suppliers')) && (
+              <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Operations</SidebarGroupLabel>
+            )}
             <SidebarMenu>
+
               {hasPermission('manage_inventory') && (
                 <SidebarMenuItem>
-                  <Collapsible defaultOpen={isInventoryPage} className="group/collapsible">
+                  <Collapsible defaultOpen={isInventoryPage} className="group/collapsible group-data-[collapsible=icon]:items-center">
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         isActive={isInventoryPage}
@@ -248,7 +260,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                         <div className="flex items-center gap-3">
-                          <Warehouse className="size-[18px]" />
+                          <Warehouse />
                           <span className="text-[14px]">Inventory</span>
                         </div>
                         <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
@@ -279,7 +291,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                          <div className="flex items-center gap-3">
-                          <ChartNoAxesCombined className="size-[18px]" />
+                          <ChartNoAxesCombined />
                           <span className="text-[14px]">Sales</span>
                         </div>
                         <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
@@ -310,7 +322,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                         <div className="flex items-center gap-3">
-                          <UserIcon className="size-[18px]" />
+                          <UserIcon />
                           <span className="text-[14px]">Customers</span>
                         </div>
                         <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
@@ -341,7 +353,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                          className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                          <div className="flex items-center gap-3">
-                          <ShoppingCart className="size-[18px]" />
+                          <ShoppingCart />
                           <span className="text-[14px]">Purchases</span>
                         </div>
                         <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
@@ -372,7 +384,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                          className="justify-between gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                          <div className="flex items-center gap-3">
-                          <Users className="size-[18px]" />
+                          <Users />
                           <span className="text-[14px]">Suppliers</span>
                         </div>
                         <ChevronDown className="size-4 text-muted-foreground/60 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180" />
@@ -395,26 +407,51 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
           </SidebarGroup>
 
-           <SidebarGroup className="mt-auto">
-             <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Management</SidebarGroupLabel>
-            <SidebarMenu>
-              {filteredOtherNavItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <Link href={item.href}>
-                    <SidebarMenuButton
-                      isActive={pathname === item.href}
-                      tooltip={{ children: item.label }}
-                       className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
-                    >
-                      <item.icon className="size-[18px]" />
-                      <span className="text-[14px]">{item.label}</span>
-                    </SidebarMenuButton>
-                  </Link>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+          {filteredOtherNavItems.length > 0 && (
+            <SidebarGroup className="mt-auto">
+              <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Management</SidebarGroupLabel>
+              <SidebarMenu>
+                {filteredOtherNavItems.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    {item.href === '/approvals' ? (
+                      <SidebarMenuButton
+                        onClick={() => setIsApprovalsDrawerOpen(true)}
+                        isActive={isApprovalsDrawerOpen}
+                        tooltip={{ children: item.label }}
+                        className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
+                      >
+                        <item.icon />
+                        <span className="text-[14px]">{item.label}</span>
+                      </SidebarMenuButton>
+                    ) : item.href === '/approvals/settings' ? (
+                      <SidebarMenuButton
+                        onClick={() => setIsWorkflowSettingsDrawerOpen(true)}
+                        isActive={isWorkflowSettingsDrawerOpen}
+                        tooltip={{ children: item.label }}
+                        className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
+                      >
+                        <item.icon />
+                        <span className="text-[14px]">{item.label}</span>
+                      </SidebarMenuButton>
+                    ) : (
+                      <Link href={item.href}>
+                        <SidebarMenuButton
+                          isActive={pathname === item.href}
+                          tooltip={{ children: item.label }}
+                          className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
+                        >
+                          <item.icon />
+                          <span className="text-[14px]">{item.label}</span>
+                        </SidebarMenuButton>
+                      </Link>
+                    )}
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          )}
         </SidebarContent>
+
         <SidebarFooter className="sticky bottom-0 bg-gradient-to-t from-sidebar to-sidebar/95 backdrop-blur-xl border-t border-sidebar-border mt-auto shadow-lg">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -471,6 +508,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 p-4 overflow-auto sm:p-6">
           {children}
         </main>
+        <ApprovalsDrawer 
+          open={isApprovalsDrawerOpen} 
+          onOpenChange={setIsApprovalsDrawerOpen} 
+          onOpenSettings={() => {
+            setIsApprovalsDrawerOpen(false);
+            setIsWorkflowSettingsDrawerOpen(true);
+          }}
+        />
+        <WorkflowSettingsDrawer
+          open={isWorkflowSettingsDrawerOpen}
+          onOpenChange={setIsWorkflowSettingsDrawerOpen}
+          onBack={() => {
+            setIsWorkflowSettingsDrawerOpen(false);
+            setIsApprovalsDrawerOpen(true);
+          }}
+        />
       </SidebarInset>
     </SidebarProvider>
   );

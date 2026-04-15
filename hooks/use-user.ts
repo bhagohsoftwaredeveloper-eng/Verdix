@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 
 export interface User {
+  uid: string;
   email: string;
   permissions?: string[];
   userType?: string;
+  roleId?: string;
 }
 
 export function useUser() {

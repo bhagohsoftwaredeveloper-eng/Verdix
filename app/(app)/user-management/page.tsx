@@ -32,7 +32,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AddUserDialog } from './add-user-dialog';
 import { EditUserDialog } from './edit-user-dialog';
+import { ManageUserTypesDialog } from './manage-user-types-dialog';
 import { useToast } from '@/hooks/use-toast';
+
 import { getApiUrl } from '@/lib/api-config';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { Input } from '@/components/ui/input';
@@ -399,7 +401,9 @@ export default function UserManagementPage() {
               <Button onClick={handleSearch} size="icon" variant="secondary">
                 <Search className="h-4 w-4" />
               </Button>
+              <ManageUserTypesDialog />
               <AddUserDialog onUserAdded={fetchUsers} />
+
             </div>
           </div>
         </CardHeader>
