@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
       { name: 'require_po_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'require_receive_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'require_bad_order_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
-      { name: 'require_stock_count_approval', type: 'BOOLEAN DEFAULT FALSE' }
+      { name: 'require_stock_count_approval', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'require_repackaging_confirmation', type: 'BOOLEAN DEFAULT FALSE' }
     ];
 
     const currentColumnsResult = await query(
@@ -103,7 +104,8 @@ export async function GET(request: NextRequest) {
         require_po_confirmation AS requirePurchaseOrderConfirmation,
         require_receive_confirmation AS requireReceiveConfirmation,
         require_bad_order_confirmation AS requireBadOrderConfirmation,
-        require_stock_count_approval AS requireStockCountApproval
+        require_stock_count_approval AS requireStockCountApproval,
+        require_repackaging_confirmation AS requireRepackagingConfirmation
       FROM pos_settings
       LIMIT 1
     `;
@@ -189,7 +191,8 @@ export async function POST(request: NextRequest) {
           fiscal_year_start_month, print_two_receipts, native_printer_name,
           require_adjustment_confirmation, require_transfer_confirmation,
           require_po_confirmation, require_receive_confirmation,
-          require_bad_order_confirmation, require_stock_count_approval
+          require_bad_order_confirmation, require_stock_count_approval,
+          require_repackaging_confirmation
         )
         VALUES ('pos_settings_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
@@ -248,7 +251,8 @@ export async function POST(request: NextRequest) {
         body.requirePurchaseOrderConfirmation ?? false,
         body.requireReceiveConfirmation ?? false,
         body.requireBadOrderConfirmation ?? false,
-        body.requireStockCountApproval ?? false
+        body.requireStockCountApproval ?? false,
+        body.requireRepackagingConfirmation ?? false
       ]);
     } else {
       // Update existing settings - Dynamic Update
@@ -308,7 +312,8 @@ export async function POST(request: NextRequest) {
         requirePurchaseOrderConfirmation: 'require_po_confirmation',
         requireReceiveConfirmation: 'require_receive_confirmation',
         requireBadOrderConfirmation: 'require_bad_order_confirmation',
-        requireStockCountApproval: 'require_stock_count_approval'
+        requireStockCountApproval: 'require_stock_count_approval',
+        requireRepackagingConfirmation: 'require_repackaging_confirmation'
       };
 
       const updates: string[] = [];

@@ -28,7 +28,15 @@ import { getProducts } from '../products/actions';
 import { adjustStock } from './history/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useEffect, useMemo } from 'react';
-import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban, History } from 'lucide-react';
+import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban, History, MoreHorizontal } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { StockTransferDialog } from './StockTransferDialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -181,17 +189,18 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
       const userSession = localStorage.getItem('mock-user-session');
       const userId = userSession ? JSON.parse(userSession).uid : 'system';
       const parentResult = await adjustStock(product.id, adjustment, finalReason, userId);
+      const res = parentResult as any;
 
-      if (!parentResult.success) {
+      if (!res.success) {
         toast({
           variant: 'destructive',
           title: 'Adjustment Failed',
-          description: parentResult.error || 'Failed to adjust stock.',
+          description: res.error || 'Failed to adjust stock.',
         });
         return;
       }
 
-      if (parentResult.pendingApproval) {
+      if (res.pendingApproval) {
         toast({
           title: 'Adjustment Pending Approval',
           description: `Stock adjustment for ${product.name} has been submitted for multi-level approval.`,
@@ -199,7 +208,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
       } else {
         toast({
           title: 'Stock Adjusted',
-          description: `Stock for ${product.name} has been updated to ${parentResult.newStock}.`,
+          description: `Stock for ${product.name} has been updated to ${res.newStock}.`,
         });
       }
       setIsOpen(false);
@@ -613,26 +622,36 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
         </TableCell>
         <TableCell className="text-muted-foreground">{productGroup.reorderPoint}</TableCell>
         <TableCell className="text-right whitespace-nowrap">
-          <div className="flex justify-end gap-2">
-            <StockAdjustmentDialog product={productGroup} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-              <Button variant="outline" size="sm" className="h-8">
-                <Pencil className="mr-2 h-3 w-3" />
-                Adjust
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
               </Button>
-            </StockAdjustmentDialog>
-            <StockAdjustmentDialog product={productGroup} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-              <Button variant="outline" size="sm" className="h-8">
-                <ClipboardCheck className="mr-2 h-3 w-3" />
-                Count
-              </Button>
-            </StockAdjustmentDialog>
-            <StockTransferDialog product={productGroup} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
-               <Button variant="outline" size="sm" className="h-8">
-                <MoveHorizontal className="mr-2 h-3 w-3" />
-                Transfer
-              </Button>
-            </StockTransferDialog>
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <StockAdjustmentDialog product={productGroup} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  <span>Adjust</span>
+                </DropdownMenuItem>
+              </StockAdjustmentDialog>
+              <StockAdjustmentDialog product={productGroup} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                  <ClipboardCheck className="mr-2 h-4 w-4" />
+                  <span>Count</span>
+                </DropdownMenuItem>
+              </StockAdjustmentDialog>
+              <StockTransferDialog product={productGroup} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                  <MoveHorizontal className="mr-2 h-4 w-4" />
+                  <span>Transfer</span>
+                </DropdownMenuItem>
+              </StockTransferDialog>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TableCell>
       </TableRow>
       {isExpanded && hasChildren && productGroup.children!.map((child) => {
@@ -678,23 +697,36 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
               </TableCell>
               <TableCell className="text-muted-foreground text-sm">{child.reorderPoint}</TableCell>
               <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <StockAdjustmentDialog product={child} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-                      <Button variant="outline" size="icon" className="h-8 w-8" title="Adjust">
-                        <Pencil className="h-4 w-4" />
+                  <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <span className="sr-only">Open menu</span>
+                        <MoreHorizontal className="h-4 w-4" />
                       </Button>
-                    </StockAdjustmentDialog>
-                    <StockAdjustmentDialog product={child} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-                      <Button variant="outline" size="icon" className="h-8 w-8" title="Count">
-                        <ClipboardCheck className="h-4 w-4" />
-                      </Button>
-                    </StockAdjustmentDialog>
-                    <StockTransferDialog product={child} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
-                       <Button variant="outline" size="icon" className="h-8 w-8" title="Transfer">
-                        <MoveHorizontal className="h-4 w-4" />
-                      </Button>
-                    </StockTransferDialog>
-                  </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <StockAdjustmentDialog product={child} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          <span>Adjust</span>
+                        </DropdownMenuItem>
+                      </StockAdjustmentDialog>
+                      <StockAdjustmentDialog product={child} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <ClipboardCheck className="mr-2 h-4 w-4" />
+                          <span>Count</span>
+                        </DropdownMenuItem>
+                      </StockAdjustmentDialog>
+                      <StockTransferDialog product={child} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <MoveHorizontal className="mr-2 h-4 w-4" />
+                          <span>Transfer</span>
+                        </DropdownMenuItem>
+                      </StockTransferDialog>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
               </TableCell>
             </TableRow>
           );

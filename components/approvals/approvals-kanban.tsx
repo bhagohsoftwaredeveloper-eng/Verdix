@@ -9,15 +9,16 @@ import { useRouter } from 'next/navigation';
 import { 
   ClipboardCheck, 
   Clock, 
+  CheckCircle,
   CheckCircle2, 
   XCircle, 
+  XCircle as XCircleIcon,
   ArrowRight, 
   Eye, 
   Search, 
   LayoutGrid, 
   History, 
   AlertCircle, 
-  Settings, 
   RefreshCcw, 
   UserCheck, 
   Printer 
@@ -64,11 +65,10 @@ interface WorkflowColumn {
 }
 
 interface ApprovalsKanbanProps {
-  onOpenSettings?: () => void;
   open?: boolean;
 }
 
-export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) {
+export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [items, setItems] = useState<ApprovalItem[]>([]);
@@ -269,6 +269,8 @@ export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) 
         case 'PURCHASE_ORDER': return 'bg-purple-100 text-purple-800 border-purple-200';
         case 'RECEIVE_PO': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
         case 'BAD_ORDER': return 'bg-red-100 text-red-800 border-red-200';
+        case 'STOCK_COUNT': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+        case 'REPACKAGING': return 'bg-teal-100 text-teal-800 border-teal-200';
         default: return 'bg-secondary/50 text-muted-foreground';
     }
   };
@@ -289,6 +291,8 @@ export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) 
                     <TabsTrigger value="PURCHASE_ORDER" className="text-[11px] h-7">POs</TabsTrigger>
                     <TabsTrigger value="RECEIVE_PO" className="text-[11px] h-7">Receives</TabsTrigger>
                     <TabsTrigger value="BAD_ORDER" className="text-[11px] h-7">Bad Orders</TabsTrigger>
+                    <TabsTrigger value="STOCK_COUNT" className="text-[11px] h-7">Stock Counts</TabsTrigger>
+                    <TabsTrigger value="REPACKAGING" className="text-[11px] h-7">Repackaging</TabsTrigger>
                 </TabsList>
             </Tabs>
             <div className="relative w-full max-w-xs">
@@ -304,13 +308,7 @@ export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) 
             <Button onClick={fetchQueue} variant="outline" size="icon" className="h-9 w-9" title="Refresh Board">
                 <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
             </Button>
-            <Button 
-                onClick={() => onOpenSettings?.()} 
-                variant="outline" 
-                className="h-9 px-3 gap-2"
-            >
-                <Settings className="h-4 w-4" /> <span className="hidden sm:inline">Workflow Settings</span>
-            </Button>
+
         </div>
       </div>
 
@@ -323,6 +321,8 @@ export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) 
                 <TabsTrigger value="PURCHASE_ORDER" className="text-[10px] break-all">POs</TabsTrigger>
                 <TabsTrigger value="RECEIVE_PO" className="text-[10px] break-all">Receive</TabsTrigger>
                 <TabsTrigger value="BAD_ORDER" className="text-[10px] break-all">Bad</TabsTrigger>
+                <TabsTrigger value="STOCK_COUNT" className="text-[10px] break-all">Count</TabsTrigger>
+                <TabsTrigger value="REPACKAGING" className="text-[10px] break-all">Repack</TabsTrigger>
             </TabsList>
           </Tabs>
       </div>
@@ -393,7 +393,19 @@ export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) 
                                                 {` ${item.transaction_data.fromWarehouseName || 'Source'} → ${item.transaction_data.toWarehouseName || 'Target'}`}
                                             </>
                                         )}
-                                        {!['STOCK_ADJUSTMENT', 'PURCHASE_ORDER', 'RECEIVE_PO', 'BAD_ORDER', 'STOCK_TRANSFER'].includes(item.transaction_type) && 'Review transaction details'}
+                                        {item.transaction_type.toUpperCase() === 'STOCK_COUNT' && (
+                                            <>
+                                                <span className="font-bold text-foreground">{item.transaction_data.name || 'Stock Count'}</span>:
+                                                {` ${item.transaction_data.items?.length || 0} variances found`}
+                                            </>
+                                        )}
+                                        {item.transaction_type.toUpperCase() === 'REPACKAGING' && (
+                                            <>
+                                                <span className="font-bold text-foreground">{item.transaction_data.sourceProductName || 'Bulk Item'}</span>
+                                                {` → ${item.transaction_data.targetProductName || 'Pack Item'} (${item.transaction_data.quantityToBreak} used)`}
+                                            </>
+                                        )}
+                                        {!['STOCK_ADJUSTMENT', 'PURCHASE_ORDER', 'RECEIVE_PO', 'BAD_ORDER', 'STOCK_TRANSFER', 'STOCK_COUNT', 'REPACKAGING'].includes(item.transaction_type.toUpperCase()) && 'Review transaction details'}
                                     </p>
                                     <div className="flex items-center justify-between mt-4">
                                         <div className="flex items-center gap-2">
@@ -522,13 +534,35 @@ export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) 
                         </>
                     )}
 
-                    {!['STOCK_ADJUSTMENT', 'STOCK_TRANSFER', 'PURCHASE_ORDER'].includes(selectedItem.transaction_type) && (
+                    {selectedItem.transaction_type.toUpperCase() === 'STOCK_COUNT' && (
+                      <>
+                        <span className="text-muted-foreground font-medium">Count Name:</span>
+                        <span className="font-bold">{selectedItem.transaction_data.name}</span>
+                        <span className="text-muted-foreground font-medium">Stock Count ID:</span>
+                        <span className="font-mono text-[11px] bg-background/50 px-2 py-0.5 rounded border">{selectedItem.transaction_data.stockCountId}</span>
+                        <span className="text-muted-foreground font-medium">Total Items:</span>
+                        <span className="font-bold text-primary">{selectedItem.transaction_data.items?.length || 0} Products with Variances</span>
+                      </>
+                    )}
+
+                    {!['STOCK_ADJUSTMENT', 'STOCK_TRANSFER', 'PURCHASE_ORDER', 'STOCK_COUNT', 'REPACKAGING'].includes(selectedItem.transaction_type.toUpperCase()) && (
                         <>
                             <span className="text-muted-foreground font-medium">Value/Qty:</span>
                             <span className="font-bold text-primary">
                                 {selectedItem.transaction_data.quantity || selectedItem.transaction_data.total || selectedItem.transaction_data.grandTotal || selectedItem.transaction_data.items?.length || 'N/A'}
                             </span>
                         </>
+                    )}
+
+                    {selectedItem.transaction_type.toUpperCase() === 'REPACKAGING' && (
+                      <>
+                        <span className="text-muted-foreground font-medium">Source:</span>
+                        <span className="font-bold">{selectedItem.transaction_data.sourceProductName}</span>
+                        <span className="text-muted-foreground font-medium">Qty Used:</span>
+                        <span className="font-bold text-primary">{selectedItem.transaction_data.quantityToBreak} {selectedItem.transaction_data.sourceUnit}</span>
+                        <span className="text-muted-foreground font-medium">Target:</span>
+                        <span className="font-bold">{selectedItem.transaction_data.targetProductName}</span>
+                      </>
                     )}
 
                     <span className="text-muted-foreground font-medium">Notes/Reason:</span>
@@ -540,12 +574,43 @@ export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) 
                           <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Line Items</p>
                           <ScrollArea className="h-32">
                               <div className="space-y-1 pr-3">
-                                  {selectedItem.transaction_data.items.map((it: any, k: number) => (
-                                      <div key={k} className="flex justify-between text-[11px] p-2 bg-background/30 rounded border border-border/30">
-                                          <span className="font-medium">{it.productName || it.name}</span>
-                                          <span className="font-bold text-primary">x{it.quantity}</span>
+                                  {selectedItem.transaction_type.toUpperCase() === 'STOCK_COUNT' ? (
+                                      <div className="space-y-2">
+                                          <div className="grid grid-cols-4 text-[9px] font-bold uppercase text-muted-foreground px-2">
+                                              <span className="col-span-1">Item</span>
+                                              <span className="text-right">Snap</span>
+                                              <span className="text-right">Count</span>
+                                              <span className="text-right">Var</span>
+                                          </div>
+                                          {selectedItem.transaction_data.items.map((it: any, k: number) => {
+                                              const snap = Number(it.snapshot_quantity ?? it.snapshotQuantity ?? 0);
+                                              const counted = Number(it.counted_quantity ?? it.countedQuantity ?? 0);
+                                              const variance = counted - snap;
+                                              const pName = it.productName || it.product_name || 'Unknown Item';
+                                              const pSku = it.productSku || it.product_sku || 'N/A';
+                                              
+                                              return (
+                                              <div key={k} className="grid grid-cols-4 text-[11px] p-2 bg-background/30 rounded border border-border/30 items-center">
+                                                  <div className="col-span-1 flex flex-col">
+                                                      <span className="font-medium truncate">{pName}</span>
+                                                      <span className="text-[8px] text-muted-foreground font-mono">{pSku}</span>
+                                                  </div>
+                                                  <span className="text-right text-muted-foreground">{snap}</span>
+                                                  <span className="text-right font-bold">{counted}</span>
+                                                  <span className={cn("text-right font-bold", variance > 0 ? "text-green-600" : variance < 0 ? "text-red-600" : "text-muted-foreground")}>
+                                                      {variance > 0 ? '+' : ''}{variance}
+                                                  </span>
+                                              </div>
+                                          )})}
                                       </div>
-                                  ))}
+                                  ) : (
+                                      selectedItem.transaction_data.items.map((it: any, k: number) => (
+                                          <div key={k} className="flex justify-between text-[11px] p-2 bg-background/30 rounded border border-border/30">
+                                              <span className="font-medium">{it.productName || it.name}</span>
+                                              <span className="font-bold text-primary">x{it.quantity}</span>
+                                          </div>
+                                      ))
+                                  )}
                               </div>
                           </ScrollArea>
                       </div>
@@ -568,25 +633,57 @@ export function ApprovalsKanban({ onOpenSettings, open }: ApprovalsKanbanProps) 
                 <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-2">
                     <UserCheck className="h-3 w-3" /> Approval Path
                 </h4>
-                <div className="relative pl-6 space-y-5 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-gradient-to-b before:from-primary/50 before:to-border">
-                    {selectedItem.workflow.map((step, idx) => {
+                <div className="relative pl-6 space-y-6">
+                    {/* Continuous path background line */}
+                    <div className="absolute left-[8.5px] top-2 bottom-2 w-0.5 bg-border/30 rounded-full" />
+                    
+                    {/* Sort workflow to ensure correct sequence */}
+                    {[...(selectedItem.workflow || [])].sort((a, b) => a.step_order - b.step_order).map((step, idx, arr) => {
                         const historyItem = selectedItem.history.find(h => h.step_number === step.step_order);
                         const isCurrent = selectedItem.status === 'Pending' && selectedItem.current_step === step.step_order;
+                        const isApproved = !!historyItem && historyItem.action === 'Approve';
+                        const isRejected = !!historyItem && historyItem.action === 'Reject';
+                        
+                        // Determiner for segment lines
+                        const showLineToNext = idx < arr.length - 1;
+                        const isLineActive = isApproved;
+
                         return (
                             <div key={idx} className="relative">
-                                <span className={cn(
-                                    "absolute -left-[22px] top-1.5 h-3 w-3 rounded-full border-2 transition-all shadow-sm",
-                                    historyItem ? "border-green-500 bg-green-500" : 
-                                    isCurrent ? "border-primary bg-primary animate-pulse" : "border-border bg-background"
-                                )} />
+                                {/* Segment Line to next step */}
+                                {showLineToNext && (
+                                    <div className={cn(
+                                        "absolute left-[-15px] top-4 w-0.5 h-11 z-0 transition-colors duration-500",
+                                        isLineActive ? "bg-green-500" : isCurrent ? "bg-primary/20" : "bg-transparent"
+                                    )} />
+                                )}
+
+                                <div className={cn(
+                                    "absolute -left-[22px] top-1 h-4 w-4 rounded-full border-2 bg-background z-10 transition-all duration-300 shadow-sm flex items-center justify-center",
+                                    isApproved ? "border-green-500 bg-green-500 text-white" : 
+                                    isRejected ? "border-red-500 bg-red-500 text-white" :
+                                    isCurrent ? "border-primary bg-primary animate-pulse" : 
+                                    "border-muted-foreground/30"
+                                )}>
+                                    {isApproved && <CheckCircle className="h-2.5 w-2.5" />}
+                                    {isRejected && <XCircle className="h-2.5 w-2.5" />}
+                                </div>
+
                                 <div className="space-y-0.5">
-                                    <p className={cn("text-xs font-bold", isCurrent ? "text-primary" : "text-foreground")}>{step.role_name}</p>
+                                    <p className={cn(
+                                        "text-xs font-bold leading-tight",
+                                        isApproved ? "text-green-600" : isRejected ? "text-red-500" : isCurrent ? "text-primary" : "text-muted-foreground"
+                                    )}>
+                                        {step.role_name}
+                                    </p>
                                     {historyItem ? (
-                                        <p className="text-[10px] text-green-600 font-medium">{historyItem.action}ed on {new Date(historyItem.created_at).toLocaleDateString()}</p>
-                                    ) : (
-                                        <p className="text-[10px] text-muted-foreground font-medium italic">
-                                            {isCurrent ? "Awaiting Review..." : "Pending"}
+                                        <p className="text-[10px] text-green-600 font-medium">
+                                            {historyItem.action}{historyItem.action?.toLowerCase().endsWith('e') ? 'd' : 'ed'} on {new Date(historyItem.created_at).toLocaleDateString()}
                                         </p>
+                                    ) : isCurrent ? (
+                                        <p className="text-[10px] text-primary font-medium italic animate-pulse">Awaiting Review...</p>
+                                    ) : (
+                                        <p className="text-[10px] text-muted-foreground/50">Pending Stage</p>
                                     )}
                                 </div>
                             </div>

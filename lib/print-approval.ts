@@ -149,7 +149,39 @@ export const printApproval = (data: ApprovalItem) => {
         </table>
       ` : ''}
 
-      ${data.transaction_data.items ? `
+      ${data.transaction_type.toUpperCase() === 'STOCK_COUNT' ? `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th width="40%">PRODUCT / ITEM</th>
+              <th>SKU</th>
+              <th class="numeric">SNAPSHOT</th>
+              <th class="numeric">COUNTED</th>
+              <th class="numeric">VARIANCE</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.transaction_data.items.map((it: any) => {
+              const snap = Number(it.snapshot_quantity ?? it.snapshotQuantity ?? 0);
+              const counted = Number(it.counted_quantity ?? it.countedQuantity ?? 0);
+              const variance = counted - snap;
+              const pName = it.productName || it.product_name || 'Unknown Item';
+              const pSku = it.productSku || it.product_sku || 'N/A';
+              
+              return `
+              <tr>
+                <td>${pName}</td>
+                <td class="id-value">${pSku}</td>
+                <td class="numeric">${snap}</td>
+                <td class="numeric">${counted}</td>
+                <td class="numeric ${variance > 0 ? 'positive' : variance < 0 ? 'negative' : ''}">${variance > 0 ? '+' : ''}${variance}</td>
+              </tr>
+            `}).join('')}
+          </tbody>
+        </table>
+      ` : ''}
+
+      ${data.transaction_data.items && !['STOCK_COUNT', 'STOCK_TRANSFER', 'STOCK_ADJUSTMENT'].includes(data.transaction_type.toUpperCase()) ? `
         <table class="data-table">
           <thead>
             <tr>
@@ -172,8 +204,27 @@ export const printApproval = (data: ApprovalItem) => {
         </table>
         
         <div style="text-align: right; font-weight: 700; margin-top: 10px;">
-          GRAND TOTAL: ₱${(Number(data.transaction_data.total || data.transaction_data.grandTotal) || 0).toLocaleString()}
+          GRAND TOTAL: ₱${(Number(data.transaction_data.total || data.transaction_data.grandTotal || data.transaction_data.total_amount) || 0).toLocaleString()}
         </div>
+      ` : ''}
+
+      ${data.transaction_data.items && ['STOCK_TRANSFER', 'STOCK_ADJUSTMENT'].includes(data.transaction_type.toUpperCase()) ? `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th width="70%">ITEM DESCRIPTION</th>
+              <th class="numeric">QTY</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.transaction_data.items.map((it: any) => `
+              <tr>
+                <td>${it.productName || it.name}</td>
+                <td class="numeric">${it.quantity}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       ` : ''}
 
       <div class="section-title">Approval Audit Trail</div>

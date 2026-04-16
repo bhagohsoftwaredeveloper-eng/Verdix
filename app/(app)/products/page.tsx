@@ -180,19 +180,13 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
                   </DropdownMenuItem>
               )}
 
-              {/* Add child product option */}
-              {(() => {
-                const parentProduct = product.parentId
-                    ? products.find(p => p.id === product.parentId)
-                    : product;
-                const canAddChildren = parentProduct?.conversionFactors && parentProduct.conversionFactors.length > 0;
-                return canAddChildren ? (
-                    <DropdownMenuItem onClick={() => setAddChildDialogOpen(true)}>
-                      <Copy className="mr-2 h-4 w-4" />
-                      <span>Add Child Unit</span>
-                    </DropdownMenuItem>
-                ) : null;
-               })()}
+              {/* Add child product option - available on any product with its own conversion factors */}
+              {product.conversionFactors && product.conversionFactors.length > 0 ? (
+                  <DropdownMenuItem onClick={() => setAddChildDialogOpen(true)}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    <span>Add Child Unit</span>
+                  </DropdownMenuItem>
+              ) : null}
               
               <DropdownMenuSeparator />
               <DropdownMenuItem 
@@ -214,6 +208,8 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
                 onProductUpdated={onProductUpdated}
                 products={products}
                 onChildAdded={onProductDeleted}
+                productOptions={productOptions}
+                onOptionsRefresh={onOptionsRefresh}
             />
             <EditProductDialog 
                 open={editDialogOpen}
@@ -231,21 +227,17 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
                   if (onProductUpdated) onProductUpdated();
                 }}
             />
-            {(() => {
-                const parentProduct = product.parentId
-                    ? products.find(p => p.id === product.parentId)
-                    : product;
-                return parentProduct ? (
-                    <QuickAddChildDialog
-                        open={addChildDialogOpen}
-                        onOpenChange={setAddChildDialogOpen}
-                        parentProduct={parentProduct}
-                        baseStock={product.parentId ? product.stock : undefined}
-                        onChildAdded={onProductDeleted || (() => { })}
-                        products={products}
-                    />
-                ) : null;
-            })()}
+            {/* Always use the current product itself as the parent - supports multi-level nesting */}
+            {product.conversionFactors && product.conversionFactors.length > 0 ? (
+                <QuickAddChildDialog
+                    open={addChildDialogOpen}
+                    onOpenChange={setAddChildDialogOpen}
+                    parentProduct={product}
+                    baseStock={product.stock}
+                    onChildAdded={onProductDeleted || (() => { })}
+                    products={products}
+                />
+            ) : null}
           </div>
         </TableCell>
       </TableRow>

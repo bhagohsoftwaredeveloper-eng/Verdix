@@ -1346,16 +1346,35 @@ export function EditProductDialog({
                                             </SelectTrigger>
                                           </FormControl>
                                           <SelectContent>
-                                            {units?.map((uom: UnitOfMeasure) => ( // Removed filter for edit mode or need to be careful? Add product filtered it. Edit product might need to ensure current value is valid. I'll stick to displaying all OTHER units.
-                                              // Wait, in Add Product I did: unitsOfMeasure?.filter(u => u.name !== selectedUnitOfMeasure)
-                                              // I should probably do same here if I have selectedUnitOfMeasure available.
-                                              // In step 223 I added `const selectedUnitOfMeasure = form.watch('unitOfMeasure');`. So I can use it.
-                                              uom.name !== selectedUnitOfMeasure && (
-                                                <SelectItem key={uom.id} value={uom.name}>
-                                                  {uom.name} ({uom.abbreviation})
-                                                </SelectItem>
-                                              )
-                                            ))}
+                                            {(() => {
+                                              const items = [];
+                                              const currentVal = field.value;
+                                              
+                                              // Add orphan unit if it exists and isn't in the list
+                                              if (currentVal && !units?.some(u => u.name === currentVal)) {
+                                                items.push(
+                                                  <SelectItem key={`orphan-${currentVal}`} value={currentVal}>
+                                                    {currentVal} (Missing in Settings)
+                                                  </SelectItem>
+                                                );
+                                              }
+                                              
+                                              if (units?.length > 0) {
+                                                units.forEach((uom: UnitOfMeasure) => {
+                                                  if (uom.name !== selectedUnitOfMeasure) {
+                                                    items.push(
+                                                      <SelectItem key={uom.id} value={uom.name}>
+                                                        {uom.name} ({uom.abbreviation})
+                                                      </SelectItem>
+                                                    );
+                                                  }
+                                                });
+                                              }
+                                              
+                                              return items.length > 0 ? items : (
+                                                <SelectItem value="none" disabled>No units available</SelectItem>
+                                              );
+                                            })()}
                                           </SelectContent>
                                         </Select>
                                         <FormMessage />

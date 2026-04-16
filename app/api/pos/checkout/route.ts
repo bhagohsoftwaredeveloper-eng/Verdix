@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
+import { deductFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 
 export async function POST(request: NextRequest) {
   try {
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
           item.price * (1 - (item.discount || 0) / 100)
         ]);
 
-        // --- Stock Deduction with Family Sync & Loyalty Calculation ---
+        // --- Stock Deduction with Full Hierarchy Sync & Loyalty Calculation ---
         const [soldProdResult]: any = await connection.query(`
           SELECT 
             p.id, p.parent_id, p.unit_of_measure, p.name, p.stock, 
@@ -119,174 +120,53 @@ export async function POST(request: NextRequest) {
         if (soldProdResult && soldProdResult.length > 0) {
           const soldProd = soldProdResult[0];
 
-          // Loyalty Points Calculation:
-          // Check if this item is eligible for points 
-          // Rule: Excluded if earns_points is FALSE OR markup is 5%
+          // Loyalty Points Calculation
           const hasFivePercentMarkup = Math.abs((soldProd.markup_percentage || 0) - 5) < 0.01;
-          const earnsPointsEnabled = soldProd.earns_points !== 0 && soldProd.earns_points !== false; // handle both tinyint and boolean
-          
+          const earnsPointsEnabled = soldProd.earns_points !== 0 && soldProd.earns_points !== false;
           const isExcluded = hasFivePercentMarkup || !earnsPointsEnabled;
-          
           if (!isExcluded) {
              eligiblePointsAmount += item.price * item.quantity;
           } else {
              console.log(`Item ${item.name} excluded from points. Markup: ${soldProd.markup_percentage}, Earns: ${soldProd.earns_points}`);
           }
-          
-          const rootId = soldProd.parent_id || soldProd.id;
 
-          // Identifying Product Family
-          const [familyMembers]: any = await connection.query(
-            'SELECT id, unit_of_measure, name, stock, parent_id FROM products WHERE id = ? OR parent_id = ?',
-            [rootId, rootId]
-          );
+          // Walk the FULL ancestor chain to find the ultimate root and the
+          // cumulative factor (handles grandchildren, great-grandchildren, etc.)
+          //
+          // Example — selling Sugar 500g (grandchild):
+          //   findUltimateRoot(Sugar500g)
+          //     → rootId = Sugar25kg, factorToRoot = 50
+          //   rootQty = 10 Sugar500g / 50 = 0.2 Sugar25kg
+          //   deductFamilyStock(Sugar25kg, 0.2) then cascades:
+          //     → deduct 0.2 from Sugar25kg
+          //     → find Sugar1kg (factor 25) → deduct 5 from Sugar1kg
+          //         → find Sugar500g (factor 2) → deduct 10 from Sugar500g ✓
+          const { rootId, factorToRoot } = await findUltimateRoot(soldProd.id, connection);
 
-          // Conversion factors
-          // Fetch factors for the ROOT product to capture all relationships
-          const [convFactors]: any = await connection.query(
-            'SELECT unit, factor FROM conversion_factors WHERE product_id = ?',
-            [rootId]
-          );
-          
-          // Create a map of Unit -> Factor relative to the Root (Parent)
-          // Parent is always 1.
-          // Child factors are typically > 1 (e.g. 1 Box = 12 Pieces).
-          const factorMap = new Map();
-          factorMap.set(soldProd.unit_of_measure, 1); // Default, will be overwritten if found relative to root
-
-          // Helper to get factor relative to ROOT
-          const getFactorToRoot = (unit: string) => {
-             // If unit is Root's unit (we need to know Root's unit, let's find it in familyMembers)
-             const rootMember = familyMembers.find((m: any) => m.id === rootId);
-             if (rootMember && rootMember.unit_of_measure === unit) return 1;
-             
-             // Check explicit factors
-             const factor = convFactors.find((cf: any) => cf.unit === unit);
-             if (factor) return parseFloat(factor.factor);
-             
-             return undefined;
-          };
-
-          // We need to determine the quantity change in terms of the ROOT unit first, 
-          // then propagate to all members.
-          
-          // 1. Get the factor of the SOLD item relative to the ROOT.
-          // If Sold Item is Root, factor is 1.
-          // If Sold Item is Child (Piece) and Root is Box, factor might be 12.
-          // This means 1 Box = 12 Pieces.
-          // So selling 1 Piece = 1/12 Box.
-          
-          let quantitySoldInRootUnits = 0;
-          const soldItemFactor = getFactorToRoot(soldProd.unit_of_measure);
-          
-          if (soldItemFactor) {
-             // If factor is 12, it means 1 Root = 12 Child.
-             // Quantity in Root = Sold Quantity / Factor
-             quantitySoldInRootUnits = item.quantity / soldItemFactor;
+          if (factorToRoot > 1 || rootId !== soldProd.id) {
+            // Sold item is NOT the root — convert qty to root units and deduct from root down
+            const rootQty = item.quantity / factorToRoot;
+            await deductFamilyStock(
+              rootId,
+              rootQty,
+              saleId,
+              'sale',
+              `POS Sale: ${saleId} (sold: ${soldProd.name}, syncing full tree)`,
+              connection
+            );
           } else {
-             // Fallback: If no factor found, treat as independent or 1:1 if it's the root?
-             // If it's the root, getFactorToRoot should have returned 1.
-             // If it's a child without factor, we can't sync. Only update itself.
-             quantitySoldInRootUnits = 0; 
-          }
-
-          // If we can't link to root, we just update the sold item itself.
-          if (quantitySoldInRootUnits === 0 && soldProd.parent_id) {
-             // Just update the child independently if no conversion logic exists
-             // BUT strictly speaking we should have handled this in the loop below.
-             // Let's rely on the loop handling "self" correctly if we treat "Root Units" as local units.
-          }
-
-          // Update All Family Members
-          for (const member of familyMembers) {
-            let memberFactor = getFactorToRoot(member.unit_of_measure);
-            
-            // Should update if:
-            // 1. It is the sold item (always update)
-            // 2. We have a valid link to Root AND the sold item also had a valid link to Root.
-            
-            if (member.id === soldProd.id) {
-                // Direct update for the sold item (simplest case, ensures exact match)
-                // We calculate specific new stock to avoid floating point drift from round-tripping if possible,
-                // but for consistency let's use the unified logic if possible.
-                // Actually, simply deducting the sold quantity is safest for the sold item.
-                const currentStock = member.stock;
-                const newStock = currentStock - item.quantity;
-                
-                // Record movement
-                const movementId = `MOV-${Date.now()}-${i}-${member.id.substring(member.id.length - 4)}`;
-                const insertMovementSql = `
-                  INSERT INTO stock_movements (
-                    id, product_id, product_name, movement_type, 
-                    quantity_change, previous_stock, new_stock, 
-                    reference_id, reference_type, notes, created_at, updated_at
-                  ) VALUES (?, ?, ?, 'sale', ?, ?, ?, ?, 'sale', ?, NOW(), NOW())
-                `;
-                await connection.query(insertMovementSql, [
-                  movementId,
-                  member.id,
-                  member.name,
-                  -item.quantity,
-                  currentStock,
-                  newStock,
-                  saleId,
-                  `POS Sale: ${saleId}`
-                ]);
-
-                // Update stock
-                await connection.query('UPDATE products SET stock = ?, updated_at = NOW() WHERE id = ?', [newStock, member.id]);
-                
-            } else if (quantitySoldInRootUnits > 0 && memberFactor) {
-               // Update other family members (Parent or Siblings)
-               // New Stock = Old Stock - (QuantitySoldInRootUnits * MemberFactor)
-               // Example: Sold 6 Pieces (Factor 12). Root Units = 6/12 = 0.5.
-               // Update Box (Factor 1): Old - (0.5 * 1) = Old - 0.5. Floor it?
-               // Creating "partial" boxes is usually not desired in simple inventory, but internal stock might be float.
-               // However, usually detailed stock is integer.
-               // If we floor, we might jump. 
-               // Standard logic: Tracking "Total Pieces" internally? 
-               // unique requirement: "parent stock quantity ... must deduct ... for 12 pcs per box when i get an 6pcs of then the box is 10 the eqauls is 9 because the boxes have deducted pcs"
-               // This implies the user accepts that 10.5 boxes shows as 10? Or does it verify partials?
-               // "equals is 9" -> 10 initial. Sold 6 (0.5 box). 10 - 0.5 = 9.5.
-               // If it shows 9, it means it FLOORs the result?
-               // Let's assume FLOOR for display or storage if integer column. 
-               // But if we store 9.5, next time we sell 6, it becomes 9.0.
-               // Products table `stock` column type matters. If it's INT, we lose precision.
-               // If it's FLOAT/DECIMAL, we keep it.
-               // Assuming it allows decimals or we must floor. 
-               // Let's assume we update with the calculated value.
-               
-               const deductionForMember = quantitySoldInRootUnits * memberFactor;
-               const currentStock = member.stock;
-               const newStock = currentStock - deductionForMember; 
-               
-               // Only update if there's a change
-               if (deductionForMember !== 0) {
-                    const movementId = `MOV-${Date.now()}-${i}-${member.id.substring(member.id.length - 4)}`;
-                    const insertMovementSql = `
-                      INSERT INTO stock_movements (
-                        id, product_id, product_name, movement_type, 
-                        quantity_change, previous_stock, new_stock, 
-                        reference_id, reference_type, notes, created_at, updated_at
-                      ) VALUES (?, ?, ?, 'sale', ?, ?, ?, ?, 'sale', ?, NOW(), NOW())
-                    `;
-    
-                    await connection.query(insertMovementSql, [
-                      movementId,
-                      member.id,
-                      member.name,
-                      -deductionForMember,
-                      currentStock,
-                      newStock,
-                      saleId,
-                      `POS Sale (Family Sync): ${saleId}`
-                    ]);
-    
-                    await connection.query('UPDATE products SET stock = ?, updated_at = NOW() WHERE id = ?', [newStock, member.id]);
-               }
-            }
+            // Sold item IS the root — deduct and propagate to all descendants
+            await deductFamilyStock(
+              soldProd.id,
+              item.quantity,
+              saleId,
+              'sale',
+              `POS Sale: ${saleId}`,
+              connection
+            );
           }
         }
+
       }
 
       // 3. Insert into sales_invoices (to show up in /sales reports)

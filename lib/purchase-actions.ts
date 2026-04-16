@@ -15,7 +15,8 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
     shipping,
     purchaseType,
     orderedBy,
-    vatAmount
+    vatAmount,
+    isInternalFinalization
   } = body;
 
   const calculations = calculatePurchaseCosts(items, shipping || 0);
@@ -40,7 +41,7 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
       formattedDate,
       finalTotal,
       paymentMethod || '',
-      (purchaseType === 'Receive') ? 'Received' : (status || 'Pending'),
+      (purchaseType === 'Receive') ? 'Received' : (isInternalFinalization ? 'Approved' : (status || 'Pending')),
       reference || null,
       toSafeNumber(shipping),
       orderedBy || userId,

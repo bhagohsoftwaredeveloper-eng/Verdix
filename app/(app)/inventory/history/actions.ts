@@ -211,6 +211,8 @@ export async function migrateAdjustmentsToMovements() {
 }
 
 import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
+import { withTransaction } from '@/lib/mysql';
+import { deductFamilyStock, addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 
 export async function adjustStock(productId: string, quantity: number, reason: string, userId: string = 'system', isInternalFinalization: boolean = false) {
   try {
@@ -239,9 +241,8 @@ export async function adjustStock(productId: string, quantity: number, reason: s
       // If not pending (all steps auto-skipped), fall through to immediate execution
     }
 
-    // First, get current stock, name, conversion factor, and check if this product has children
-    const getProductSql = `SELECT stock, name, parent_id, conversion_factor FROM products WHERE id = ?`;
-    const productResult = await query(getProductSql, [productId]);
+    // Get current stock and product info
+    const productResult = await query('SELECT stock, name, parent_id FROM products WHERE id = ?', [productId]);
 
     if (productResult.length === 0) {
       return { success: false, error: 'Product not found' };
@@ -249,6 +250,7 @@ export async function adjustStock(productId: string, quantity: number, reason: s
 
     const currentStock = parseInt(productResult[0].stock);
     const productName = productResult[0].name;
+    const parentId = productResult[0].parent_id;
     const newStock = currentStock + quantity;
 
     // Validate new stock is not negative
@@ -256,69 +258,44 @@ export async function adjustStock(productId: string, quantity: number, reason: s
       return { success: false, error: 'Stock cannot go below zero' };
     }
 
-    // Update product stock
-    const updateStockSql = `UPDATE products SET stock = ? WHERE id = ?`;
-    await query(updateStockSql, [newStock, productId]);
-
-    // Create stock adjustment record for the main product
+    // Create stock adjustment record ID (used as the reference for movements)
     const adjustmentId = `adj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Create stock adjustment record for the main product (before we update stock)
     const createAdjustmentSql = `
       INSERT INTO stock_adjustments (id, product_id, quantity, reason, new_stock)
       VALUES (?, ?, ?, ?, ?)
     `;
     await query(createAdjustmentSql, [adjustmentId, productId, quantity, reason, newStock]);
 
-    // Record the adjustment in stock movements
-    await recordAdjustmentMovement(adjustmentId, productId, productName, quantity, reason);
+    // Use recursive family sync within a transaction so all levels update atomically
+    const result = await withTransaction(async (connection) => {
+      // Walk the FULL ancestor chain (handles grandchildren, any depth)
+      const { rootId, factorToRoot } = await findUltimateRoot(productId, connection);
 
-    // Check if this product has children and adjust them automatically based on conversion factors
-    const getChildrenSql = `SELECT id, stock, unit_of_measure FROM products WHERE parent_id = ?`;
-    const children = await query(getChildrenSql, [productId]);
-
-    if (children.length > 0) {
-      // Get the parent's conversion factors
-      const getParentCFSql = `SELECT unit, factor FROM conversion_factors WHERE product_id = ?`;
-      const parentCFs = await query(getParentCFSql, [productId]);
-
-      // Apply conversion-factor-based adjustment to all children
-      // Each child gets synchronized to: parent_new_stock * child's_conversion_factor
-      for (const child of children) {
-        const newParentStock = currentStock + quantity;
-
-        // Find the conversion factor for this child's unit
-        const childCF = parentCFs.find((cf: any) => cf.unit === child.unit_of_measure);
-        const conversionFactor = childCF ? parseFloat(childCF.factor) : 1;
-
-        const childTargetStock = Math.floor(newParentStock * conversionFactor);
-        const childCurrentStock = parseInt(child.stock);
-        const childAdjustment = childTargetStock - childCurrentStock;
-
-        // Update child stock to the target amount
-        const updateChildStockSql = `UPDATE products SET stock = ? WHERE id = ?`;
-        await query(updateChildStockSql, [childTargetStock, child.id]);
-
-        // Get child product name
-        const getChildNameSql = `SELECT name FROM products WHERE id = ?`;
-        const childResult = await query(getChildNameSql, [child.id]);
-        const childName = childResult[0]?.name || 'Unknown Product';
-
-        // Create stock adjustment record for the child
-        const childAdjustmentId = `adj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const childReason = `${reason} (Auto-adjusted from parent: ${newParentStock} × ${conversionFactor} = ${childTargetStock})`;
-        const createChildAdjustmentSql = `
-          INSERT INTO stock_adjustments (id, product_id, quantity, reason, new_stock)
-          VALUES (?, ?, ?, ?, ?)
-        `;
-        await query(createChildAdjustmentSql, [childAdjustmentId, child.id, childAdjustment, childReason, childTargetStock]);
-
-        // Record the child adjustment in stock movements
-        await recordAdjustmentMovement(childAdjustmentId, child.id, childName, childAdjustment, childReason);
+      if (factorToRoot > 1 || rootId !== productId) {
+        // This product is NOT the root — convert to root units and sync from root
+        const rootQty = Math.abs(quantity) / factorToRoot;
+        if (quantity < 0) {
+          await deductFamilyStock(rootId, rootQty, adjustmentId, 'adjustment', reason, connection);
+        } else {
+          await addFamilyStock(rootId, rootQty, adjustmentId, 'adjustment', reason, connection);
+        }
+      } else {
+        // This IS the root — propagate down through all descendants
+        if (quantity < 0) {
+          await deductFamilyStock(productId, Math.abs(quantity), adjustmentId, 'adjustment', reason, connection);
+        } else {
+          await addFamilyStock(productId, quantity, adjustmentId, 'adjustment', reason, connection);
+        }
       }
-    }
+      return { success: true, adjustmentId, newStock };
+    });
 
-    return { success: true, adjustmentId, newStock };
+    return result;
   } catch (error) {
     console.error('Error adjusting stock:', error);
     return { success: false, error: 'Failed to adjust stock' };
   }
 }
+

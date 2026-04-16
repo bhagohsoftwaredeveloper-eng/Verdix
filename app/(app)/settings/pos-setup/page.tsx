@@ -683,7 +683,22 @@ export default function PosSetupPage() {
                 onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireStockCountApproval: checked }))}
               />
             </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="requireRepackagingConfirmation">Repackaging / Break Pack Approval</Label>
+                <p className="text-sm text-muted-foreground">
+                  Require multi-level approval before executing stock repackaging conversions
+                </p>
+              </div>
+              <Switch
+                id="requireRepackagingConfirmation"
+                checked={!!settings.requireRepackagingConfirmation}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireRepackagingConfirmation: checked }))}
+              />
+            </div>
           </CardContent>
+
         </Card>
 
 

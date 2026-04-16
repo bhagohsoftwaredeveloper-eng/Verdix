@@ -1,7 +1,9 @@
 'use server';
 
 import { query, withTransaction } from '@/lib/mysql';
+import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
 import { PriceLevel, Category, Brand, Supplier, Warehouse, Department, UnitOfMeasure, ShelfLocation, Account, TaxRate } from '@/lib/types';
+
 
 export type ProductFormData = {
   name: string;
@@ -161,6 +163,9 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
                    spm.supplier_id as primary_supplier_id,
                    spm.supplier_specific_rop as primary_supplier_rop,
                    s_primary.name as primary_supplier_name,
+                   p.warehouse_id as inherited_warehouse_id,
+                   p.department as inherited_department,
+                   p.vat_status as inherited_vat_status,
                    EXISTS (SELECT 1 FROM approval_queue aq WHERE (JSON_UNQUOTE(JSON_EXTRACT(aq.transaction_data, '$.productId')) = p.id OR JSON_UNQUOTE(JSON_EXTRACT(aq.transaction_data, '$.sourceProductId')) = p.id) AND aq.status = 'Pending') as has_pending_approval
             FROM products p
             LEFT JOIN suppliers s_legacy ON p.supplier_id = s_legacy.id
@@ -172,14 +177,17 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
             UNION ALL
             
             SELECT p.*, 
-                   s_legacy.name as legacy_supplier_name, 
-                   w.name as warehouse_name,
+                   COALESCE(s_legacy.name, pt.legacy_supplier_name) as legacy_supplier_name, 
+                   COALESCE(w.name, pt.warehouse_name) as warehouse_name,
                    (SELECT GROUP_CONCAT(sl.name) FROM product_shelves ps JOIN shelf_locations sl ON ps.shelf_id = sl.id WHERE ps.product_id = p.id) as shelf_location_names,
                    (SELECT GROUP_CONCAT(ps.shelf_id) FROM product_shelves ps WHERE ps.product_id = p.id) as shelf_location_ids,
                    (SELECT GROUP_CONCAT(CONCAT(ps.shelf_id, ':', ps.quantity)) FROM product_shelves ps WHERE ps.product_id = p.id) as shelf_id_quantities,
-                   spm.supplier_id as primary_supplier_id,
-                   spm.supplier_specific_rop as primary_supplier_rop,
-                   s_primary.name as primary_supplier_name,
+                   COALESCE(spm.supplier_id, pt.primary_supplier_id) as primary_supplier_id,
+                   COALESCE(spm.supplier_specific_rop, pt.primary_supplier_rop) as primary_supplier_rop,
+                   COALESCE(s_primary.name, pt.primary_supplier_name) as primary_supplier_name,
+                   COALESCE(p.warehouse_id, pt.inherited_warehouse_id) as inherited_warehouse_id,
+                   COALESCE(p.department, pt.inherited_department) as inherited_department,
+                   COALESCE(p.vat_status, pt.inherited_vat_status) as inherited_vat_status,
                    EXISTS (SELECT 1 FROM approval_queue aq WHERE (JSON_UNQUOTE(JSON_EXTRACT(aq.transaction_data, '$.productId')) = p.id OR JSON_UNQUOTE(JSON_EXTRACT(aq.transaction_data, '$.sourceProductId')) = p.id) AND aq.status = 'Pending') as has_pending_approval
             FROM products p
             INNER JOIN product_tree pt ON p.parent_id = pt.id
@@ -242,7 +250,7 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
 
       return {
         ...product,
-        department: product.department,
+        department: product.inherited_department || product.department,
         shelfLocationId: product.shelf_location_ids ? product.shelf_location_ids.split(',')[0] : product.shelf_location_id,
         shelfLocationIds: product.shelf_location_ids ? product.shelf_location_ids.split(',') : (product.shelf_location_id ? [product.shelf_location_id] : []),
         shelfLocationName: product.shelf_location_names || product.shelf_location_name,
@@ -267,11 +275,11 @@ export async function getProducts(limit?: number, offset?: number, filters?: Pro
         expenseAccount: product.expense_account,
         supplier: product.primary_supplier_id || product.supplier_id,
         supplierName: product.primary_supplier_name || product.legacy_supplier_name,
-        warehouse: product.warehouse_id,
-        warehouseId: product.warehouse_id,
+        warehouse: product.inherited_warehouse_id || product.warehouse_id,
+        warehouseId: product.inherited_warehouse_id || product.warehouse_id,
         warehouseName: product.warehouse_name,
         priceLevels: productPriceLevels,
-        vatStatus: product.vat_status,
+        vatStatus: product.inherited_vat_status || product.vat_status,
         availability: product.availability,
         earns_points: product.earns_points === 1,
         expirationDate: product.expiration_date,
@@ -675,25 +683,122 @@ export async function updateProductStock(id: string, newStock: number) {
   }
 }
 
-export async function breakPack(parentId: string, childId: string, quantityToBreak: number) {
+export type BreakPackNewProductData = {
+  name: string;
+  unitOfMeasure: string;
+  conversionFactor: number;
+  price: number;
+  cost?: number;
+};
+
+export async function breakPack(
+  parentId: string, 
+  childId: string | null, 
+  quantityToBreak: number, 
+  manualFactor?: number,
+  newProductData?: BreakPackNewProductData,
+  userId: string = 'system',
+  isInternalFinalization: boolean = false
+) {
   try {
-    return await withTransaction(async (connection) => {
-      // 1. Fetch parent and child info
-      const [parentResult]: any = await connection.query('SELECT name, stock, unit_of_measure FROM products WHERE id = ?', [parentId]);
-      const [childResult]: any = await connection.query('SELECT name, stock, unit_of_measure, conversion_factor FROM products WHERE id = ?', [childId]);
-
-      const parent = parentResult[0];
-      const child = childResult[0];
-
-      if (!parent || !child) {
-        throw new Error('Parent or child product not found.');
+    // --- Check if approval is required ---
+    if (!isInternalFinalization) {
+      const isApprovalRequired = await checkApprovalRequired('REPACKAGING');
+      if (isApprovalRequired) {
+        // Enrich data for the approval card
+        const [parentInfoRows]: any = await query('SELECT name, stock, unit_of_measure FROM products WHERE id = ?', [parentId]);
+        const parentInfo = Array.isArray(parentInfoRows) ? parentInfoRows[0] : null;
+        let targetName = newProductData?.name || 'New Product';
+        if (childId) {
+          const [childInfoRows]: any = await query('SELECT name FROM products WHERE id = ?', [childId]);
+          const childInfo = Array.isArray(childInfoRows) ? childInfoRows[0] : null;
+          if (childInfo) targetName = childInfo.name;
+        }
+        const { queueId, pendingApproval } = await submitToApprovalQueue('REPACKAGING', {
+          parentId,
+          childId,
+          quantityToBreak,
+          manualFactor,
+          newProductData,
+          sourceProductName: parentInfo?.name || parentId,
+          targetProductName: targetName,
+          sourceUnit: parentInfo?.unit_of_measure || '',
+          currentStock: parentInfo?.stock || 0,
+        }, userId);
+        if (pendingApproval) {
+          return { success: true, pendingApproval: true, queueId, message: `Repackaging request submitted for approval.` };
+        }
+        // If all steps auto-skipped, fall through to immediate execution
       }
+    }
 
+    return await withTransaction(async (connection) => {
+      // 1. Fetch parent info
+      const [parentResult]: any = await connection.query(
+        'SELECT id, name, stock, unit_of_measure, sku, brand, category, subcategory, department, supplier_id, warehouse_id, vat_status, income_account, expense_account FROM products WHERE id = ?', 
+        [parentId]
+      );
+      const parent = parentResult[0];
+      if (!parent) throw new Error('Parent product not found.');
       if (parent.stock < quantityToBreak) {
         throw new Error(`Insufficient stock of ${parent.name}. Available: ${parent.stock}`);
       }
 
-      const factor = parseFloat(child.conversion_factor) || 1;
+      let resolvedChildId = childId;
+      let childName: string;
+      let childStock: number;
+      let childUnit: string;
+      let factor: number;
+
+      // --- Scenario A: Auto-create a new child product ---
+      if (!resolvedChildId && newProductData) {
+        const newId = `product_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const newSku = `${parent.sku}-${newProductData.unitOfMeasure.replace(/\s+/g, '').toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+        factor = newProductData.conversionFactor;
+
+        await connection.query(
+          `INSERT INTO products (
+            id, name, brand, sku, description, category, subcategory, 
+            unit_of_measure, stock, reorder_point, price, cost, 
+            warehouse_id, department, supplier_id, vat_status, 
+            income_account, expense_account, availability
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            newId, newProductData.name, parent.brand, newSku,
+            `Repackaged from ${parent.name}`,
+            parent.category, parent.subcategory,
+            newProductData.unitOfMeasure, 0, 0,
+            newProductData.price, newProductData.cost || null,
+            parent.warehouse_id, parent.department, parent.supplier_id,
+            parent.vat_status, parent.income_account, parent.expense_account,
+            'Available'
+          ]
+        );
+
+        resolvedChildId = newId;
+        childName = newProductData.name;
+        childStock = 0;
+        childUnit = newProductData.unitOfMeasure;
+
+      // --- Scenario B or C: Existing product ---
+      } else if (resolvedChildId) {
+        const [childResult]: any = await connection.query(
+          'SELECT id, name, stock, unit_of_measure, conversion_factor, parent_id FROM products WHERE id = ?', 
+          [resolvedChildId]
+        );
+        const child = childResult[0];
+        if (!child) throw new Error('Target product not found.');
+
+        childName = child.name;
+        childStock = child.stock;
+        childUnit = child.unit_of_measure;
+
+        // Use manual factor provided in transaction
+        factor = manualFactor || 1;
+      } else {
+        throw new Error('No target product specified for break pack.');
+      }
+
       const childQuantityToAdd = quantityToBreak * factor;
 
       // 2. Update parent stock
@@ -712,36 +817,44 @@ export async function breakPack(parentId: string, childId: string, quantityToBre
       }
 
       // 3. Update child stock
-      await connection.query('UPDATE products SET stock = stock + ? WHERE id = ?', [childQuantityToAdd, childId]);
+      await connection.query('UPDATE products SET stock = stock + ? WHERE id = ?', [childQuantityToAdd, resolvedChildId]);
 
       // Update child shelves
-      const [childShelves]: any = await connection.query('SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1', [childId]);
+      const [childShelves]: any = await connection.query('SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1', [resolvedChildId]);
       let targetChildShelf = childShelves[0]?.shelf_id;
 
       if (!targetChildShelf && parentShelves[0]?.shelf_id) {
           targetChildShelf = parentShelves[0].shelf_id;
-          await connection.query('INSERT INTO product_shelves (product_id, shelf_id, quantity) VALUES (?, ?, ?)', [childId, targetChildShelf, childQuantityToAdd]);
+          await connection.query('INSERT INTO product_shelves (product_id, shelf_id, quantity) VALUES (?, ?, ?)', [resolvedChildId, targetChildShelf, childQuantityToAdd]);
       } else if (targetChildShelf) {
-          await connection.query('UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?', [childQuantityToAdd, childId, targetChildShelf]);
+          await connection.query('UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?', [childQuantityToAdd, resolvedChildId, targetChildShelf]);
       }
 
       // 4. Record stock movements
       const movementId1 = `mov_break_p_${Date.now()}`;
-      const movementId2 = `mov_break_c_${Date.now()}`;
+      const movementId2 = `mov_break_c_${Date.now() + 1}`;
 
       await connection.query(
         `INSERT INTO stock_movements (id, product_id, product_name, movement_type, quantity_change, previous_stock, new_stock, reference_id, reference_type, notes)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [movementId1, parentId, parent.name, 'adjustment', -quantityToBreak, parent.stock, parent.stock - quantityToBreak, childId, 'break_pack', `Broke ${quantityToBreak} ${parent.unit_of_measure} into ${child.name}`]
+        [movementId1, parentId, parent.name, 'adjustment', -quantityToBreak, parent.stock, parent.stock - quantityToBreak, resolvedChildId, 'break_pack', `Broke ${quantityToBreak} ${parent.unit_of_measure} into ${childName!}`]
       );
 
       await connection.query(
         `INSERT INTO stock_movements (id, product_id, product_name, movement_type, quantity_change, previous_stock, new_stock, reference_id, reference_type, notes)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [movementId2, childId, child.name, 'adjustment', childQuantityToAdd, child.stock, child.stock + childQuantityToAdd, parentId, 'break_pack', `Received ${childQuantityToAdd} ${child.unit_of_measure} from breaking ${parent.name}`]
+        [movementId2, resolvedChildId!, childName!, 'adjustment', childQuantityToAdd, childStock!, childStock! + childQuantityToAdd, parentId, 'break_pack', `Received ${childQuantityToAdd} ${childUnit!} from breaking ${parent.name}`]
       );
 
-      return { success: true, message: `Successfully broke ${quantityToBreak} ${parent.unit_of_measure} into ${childQuantityToAdd} ${child.unit_of_measure}.` };
+      // 5. Log to repackaging_logs
+      const logId = `rpkg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      await connection.query(
+        `INSERT INTO repackaging_logs (id, source_product_id, source_product_name, source_qty, target_product_id, target_product_name, target_qty_produced, factor, status, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`,
+        [logId, parentId, parent.name, quantityToBreak, resolvedChildId!, childName!, childQuantityToAdd, factor, userId]
+      );
+
+      return { success: true, message: `Successfully repackaged ${quantityToBreak} ${parent.unit_of_measure} into ${childQuantityToAdd} ${childUnit!}.` };
     });
   } catch (error: any) {
     console.error('Error in breakPack:', error);
@@ -1319,15 +1432,21 @@ export async function addChildProduct(parentId: string, data: any) {
         INSERT INTO products (
           id, name, brand, sku, barcode, description, category, subcategory, 
           unit_of_measure, stock, reorder_point, price, cost, parent_id,
-          conversion_factor
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          conversion_factor, warehouse_id, department, supplier_id, vat_status, income_account, expense_account
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       await connection.query(productSql, [
         id, data.name, data.brand, data.sku, data.barcode || null, 
         data.description, data.category, data.subcategory || null,
         data.unitOfMeasure, data.stock || 0, data.reorderPoint || 0, 
         data.price, data.cost, parentId,
-        data.conversionFactor || 1
+        data.conversionFactor || 1,
+        data.warehouseId || null,
+        data.department || null,
+        data.supplierId || null,
+        data.vatStatus || 'YES (Subject to 12% VAT)',
+        data.incomeAccount || null,
+        data.expenseAccount || null
       ]);
     });
     return { success: true, message: 'Child product added successfully.' };
@@ -1521,8 +1640,13 @@ export async function setPrimarySupplier(productId: string, mappingId: string) {
 export async function getChildProducts(parentId: string) {
   try {
     const products = await query(`
-      SELECT p.*, p.parent_id as parentId, p.conversion_factor as conversionFactor 
+      SELECT p.*, p.parent_id as parentId, p.conversion_factor as conversionFactor,
+             COALESCE(w.name, pw.name) as warehouseName,
+             (SELECT GROUP_CONCAT(sl.name) FROM product_shelves ps JOIN shelf_locations sl ON ps.shelf_id = sl.id WHERE ps.product_id = p.id) as shelfLocationNames
       FROM products p 
+      LEFT JOIN warehouses w ON p.warehouse_id = w.id
+      LEFT JOIN products parent ON p.parent_id = parent.id
+      LEFT JOIN warehouses pw ON parent.warehouse_id = pw.id
       WHERE p.parent_id = ?
     `, [parentId]);
     return products as any[];
@@ -1607,5 +1731,33 @@ export async function getProductOptions() {
       shelfLocations: [],
       errors: { message: 'Failed to load options' }
     };
+  }
+}
+
+export async function searchProducts(searchQuery: string) {
+  try {
+    if (!searchQuery || searchQuery.trim().length < 2) return [];
+    const like = `%${searchQuery.trim()}%`;
+    const sql = `
+      SELECT p.id, p.name, p.sku, p.barcode, p.stock, p.unit_of_measure, p.parent_id, p.conversion_factor
+      FROM products p
+      WHERE (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)
+      ORDER BY p.name ASC
+      LIMIT 20
+    `;
+    const results = await query(sql, [like, like, like]);
+    return results.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      sku: r.sku,
+      barcode: r.barcode,
+      stock: r.stock,
+      unitOfMeasure: r.unit_of_measure,
+      parentId: r.parent_id,
+      conversionFactor: r.conversion_factor,
+    }));
+  } catch (error) {
+    console.error('Error searching products:', error);
+    return [];
   }
 }

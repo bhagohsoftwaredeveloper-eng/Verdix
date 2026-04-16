@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
       SELECT aw.*, ut.name as role_name 
       FROM approval_workflows aw 
       JOIN user_types ut ON aw.user_type_id = ut.id
+      ORDER BY aw.step_order ASC
     `);
 
     // Group history and add workflow info

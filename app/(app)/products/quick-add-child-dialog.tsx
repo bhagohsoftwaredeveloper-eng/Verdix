@@ -169,6 +169,12 @@ export function QuickAddChildDialog({
         reorderPoint: 0,
         price: numericPrice,
         cost: numericCost,
+        warehouseId: selectedParent.warehouseId || selectedParent.warehouse,
+        department: selectedParent.department,
+        supplierId: selectedParent.supplier,
+        vatStatus: selectedParent.vatStatus,
+        incomeAccount: selectedParent.incomeAccount,
+        expenseAccount: selectedParent.expenseAccount
       });
 
       if (result.success) {

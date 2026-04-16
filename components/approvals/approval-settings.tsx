@@ -35,7 +35,8 @@ const TRANSACTION_TYPES = [
   { value: 'PURCHASE_ORDER', label: 'Purchase Order' },
   { value: 'RECEIVE_PO', label: 'Receive Purchase Order' },
   { value: 'BAD_ORDER', label: 'Bad Order (Damages/Returns)' },
-  { value: 'STOCK_COUNT', label: 'Stock Count' }
+  { value: 'STOCK_COUNT', label: 'Stock Count' },
+  { value: 'REPACKAGING', label: 'Repackaging / Break Pack' },
 ];
 
 interface ApprovalSettingsProps {

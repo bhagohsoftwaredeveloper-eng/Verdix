@@ -282,7 +282,7 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
               </>
             )}
 
-            {item.transaction_data.items && (
+            {item.transaction_data.items && !['STOCK_COUNT', 'STOCK_TRANSFER', 'STOCK_ADJUSTMENT'].includes(item.transaction_type.toUpperCase()) && (
               <>
                 <table className="data-table w-full border-collapse mb-2 text-left">
                   <thead>
@@ -311,8 +311,32 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                   </tbody>
                 </table>
                 <div className="flex justify-end font-bold text-[11pt] mt-3 uppercase tracking-tight">
-                    <span>Grand Total: ₱{(Number(item.transaction_data.total || item.transaction_data.grandTotal) || 0).toLocaleString()}</span>
+                    <span>Grand Total: ₱{(Number(item.transaction_data.total || item.transaction_data.grandTotal || item.transaction_data.total_amount) || 0).toLocaleString()}</span>
                 </div>
+              </>
+            )}
+
+            {/* General items for Stock related types that don't have their own detailed table yet */}
+            {item.transaction_data.items && ['STOCK_TRANSFER', 'STOCK_ADJUSTMENT'].includes(item.transaction_type.toUpperCase()) && (
+              <>
+                <table className="data-table w-full border-collapse mb-2 text-left">
+                  <thead>
+                    <tr className="border-b border-black">
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[60%]">Item Description</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[30%]">SKU / Part No</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right w-[10%]">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {item.transaction_data.items.map((it: any, idx: number) => (
+                      <tr key={idx} className="border-b border-zinc-100">
+                        <td className="p-2 text-[10pt] font-medium">{it.productName || it.name}</td>
+                        <td className="p-2 text-[10pt] font-mono text-slate-600">{it.productSku || it.sku || '-'}</td>
+                        <td className="p-2 text-[10pt] font-mono text-right">{it.quantity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </>
             )}
 

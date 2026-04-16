@@ -80,6 +80,7 @@ const inventoryNavItems = [
   { href: '/inventory/transfer-board', label: 'Stock Transfer Board' },
   { href: '/inventory/shelf-board', label: 'Shelf Transfer Board' },
   { href: '/inventory/stock-counts', label: 'Stock Counts (Snapshots)' },
+  { href: '/inventory/repackaging', label: 'Repackaging / Break Pack' },
   { href: '/inventory/history', label: 'Adjustment History' },
   { href: '/inventory/movement', label: 'Stock Movement' },
 ]
@@ -221,7 +222,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </SidebarHeader>
-        <SidebarContent className="px-3 py-6 gap-6 overflow-y-auto flex-1 group-data-[collapsible=icon]:px-0">
+        <SidebarContent className="px-3 py-6 gap-2 overflow-y-auto flex-1 group-data-[collapsible=icon]:px-0">
           {filteredNavItems.length > 0 && (
             <SidebarGroup>
               <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Platform</SidebarGroupLabel>
@@ -244,10 +245,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarGroup>
           )}
 
-          <SidebarGroup>
-            {(hasPermission('manage_inventory') || hasPermission('view_sales') || hasPermission('manage_customers') || hasPermission('manage_purchases') || hasPermission('manage_suppliers')) && (
+          {(hasPermission('manage_inventory') || hasPermission('view_sales') || hasPermission('manage_customers') || hasPermission('manage_purchases') || hasPermission('manage_suppliers')) && (
+            <SidebarGroup>
               <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Operations</SidebarGroupLabel>
-            )}
+
             <SidebarMenu>
 
               {hasPermission('manage_inventory') && (
@@ -406,9 +407,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </SidebarMenu>
           </SidebarGroup>
+          )}
 
           {filteredOtherNavItems.length > 0 && (
-            <SidebarGroup className="mt-auto">
+            <SidebarGroup>
               <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Management</SidebarGroupLabel>
               <SidebarMenu>
                 {filteredOtherNavItems.map((item) => (
@@ -511,10 +513,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <ApprovalsDrawer 
           open={isApprovalsDrawerOpen} 
           onOpenChange={setIsApprovalsDrawerOpen} 
-          onOpenSettings={() => {
-            setIsApprovalsDrawerOpen(false);
-            setIsWorkflowSettingsDrawerOpen(true);
-          }}
         />
         <WorkflowSettingsDrawer
           open={isWorkflowSettingsDrawerOpen}

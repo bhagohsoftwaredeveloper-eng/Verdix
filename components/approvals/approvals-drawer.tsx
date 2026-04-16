@@ -14,10 +14,9 @@ import { ClipboardCheck } from 'lucide-react';
 interface ApprovalsDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenSettings: () => void;
 }
 
-export function ApprovalsDrawer({ open, onOpenChange, onOpenSettings }: ApprovalsDrawerProps) {
+export function ApprovalsDrawer({ open, onOpenChange }: ApprovalsDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent 
@@ -29,7 +28,7 @@ export function ApprovalsDrawer({ open, onOpenChange, onOpenSettings }: Approval
           <SheetDescription>View and manage pending approvals in a Kanban board.</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-hidden px-4 pb-4 sm:px-6 lg:px-8">
-            <ApprovalsKanban onOpenSettings={onOpenSettings} open={open} />
+            <ApprovalsKanban open={open} />
         </div>
       </SheetContent>
     </Sheet>

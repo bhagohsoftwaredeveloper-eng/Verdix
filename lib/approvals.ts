@@ -10,7 +10,8 @@ export async function checkApprovalRequired(txType: string): Promise<boolean> {
       'PURCHASE_ORDER': 'require_po_confirmation',
       'RECEIVE_PO': 'require_receive_confirmation',
       'BAD_ORDER': 'require_bad_order_confirmation',
-      'STOCK_COUNT': 'require_stock_count_approval'
+      'STOCK_COUNT': 'require_stock_count_approval',
+      'REPACKAGING': 'require_repackaging_confirmation'
     };
 
     const settingColumn = settingsMap[txType];

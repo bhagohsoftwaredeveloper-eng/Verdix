@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTransaction, query } from '../../../../lib/mysql';
+import { deductFamilyStock, findUltimateRoot } from '../../../../lib/family-sync';
 
 // Helper function to format ISO date strings to MySQL format
 function formatDateForMySQL(dateValue: string | null | undefined): string | null {
@@ -321,65 +322,30 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // --- Inventory Deduction & Sync (Mirroring Sales Invoice) ---
-        // Fetch sold product details to identify family
-        const [soldProdResult]: any = await connection.query('SELECT id, parent_id, unit_of_measure, name, stock FROM products WHERE id = ?', [item.product.id]);
+        // --- Recursive Inventory Deduction (Full Ancestor + Descendant Hierarchy) ---
+        const [soldProdResult]: any = await connection.query(
+          'SELECT id, parent_id, unit_of_measure, name, stock FROM products WHERE id = ?',
+          [item.product.id]
+        );
         if (soldProdResult && soldProdResult.length > 0) {
           const soldProd = soldProdResult[0];
-          const rootId = soldProd.parent_id || soldProd.id;
 
-          // 1. Identify Product Family (Root + all children)
-          const [familyMembers]: any = await connection.query(`
-                  SELECT id, unit_of_measure, name, stock 
-                  FROM products 
-                  WHERE id = ? OR parent_id = ?
-              `, [rootId, rootId]);
+          // Walk ALL the way up the ancestor chain (handles any depth)
+          const { rootId, factorToRoot } = await findUltimateRoot(soldProd.id, connection);
 
-          // 2. Fetch conversion factors relative to the SOLD product (our anchor)
-          const [convFactors]: any = await connection.query('SELECT unit, factor FROM conversion_factors WHERE product_id = ?', [soldProd.id]);
-          const factorMap = new Map();
-          convFactors.forEach((cf: any) => factorMap.set(cf.unit, parseFloat(cf.factor)));
-          factorMap.set(soldProd.unit_of_measure, 1);
-
-          // 3. Define the "Anchor" new stock
-          const anchorPreviousStock = soldProd.stock;
-          const anchorNewStock = anchorPreviousStock - item.quantity;
-
-          // 4. Force-update all family members based on the anchor's new state
-          for (const member of familyMembers) {
-            let factor = factorMap.get(member.unit_of_measure);
-            if (factor !== undefined) {
-              const currentStock = member.stock;
-              // Core fix: calculate new stock from anchor to avoid rounding drift
-              const newStock = Math.floor(anchorNewStock * factor);
-              const quantityChange = newStock - currentStock;
-
-              // Only record and update if there's a change or it's the anchor
-              if (quantityChange !== 0 || member.id === soldProd.id) {
-                const movementId = `mov_so_${Date.now()}_${i}_${member.id.substr(-4)}`;
-                const insertMovementSql = `
-                            INSERT INTO stock_movements (
-                                id, product_id, product_name, movement_type, 
-                                quantity_change, previous_stock, new_stock, 
-                                reference_id, reference_type, notes, created_at, updated_at
-                            ) VALUES (?, ?, ?, 'sales_order', ?, ?, ?, ?, 'sales_order', ?, NOW(), NOW())
-                        `;
-
-                await connection.query(insertMovementSql, [
-                  movementId,
-                  member.id,
-                  member.name,
-                  quantityChange,
-                  currentStock,
-                  newStock,
-                  orderId,
-                  `Sales Order: ${reference || orderId} (Sync from Anchor: ${soldProd.name})`
-                ]);
-
-                // Update product stock
-                await connection.query('UPDATE products SET stock = ?, updated_at = NOW() WHERE id = ?', [newStock, member.id]);
-              }
-            }
+          if (factorToRoot > 1 || rootId !== soldProd.id) {
+            // Sold a non-root item — convert to root units and deduct from root downward
+            const rootQty = item.quantity / factorToRoot;
+            await deductFamilyStock(
+              rootId, rootQty, orderId, 'sale',
+              `Sales Order: ${reference || orderId} (sold: ${soldProd.name})`, connection
+            );
+          } else {
+            // Sold the root — deduct and propagate to all descendants
+            await deductFamilyStock(
+              soldProd.id, item.quantity, orderId, 'sale',
+              `Sales Order: ${reference || orderId}`, connection
+            );
           }
         }
       }

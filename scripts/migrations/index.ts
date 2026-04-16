@@ -68,6 +68,8 @@ import './066_create_product_shelves_table';
 import './067_add_quantity_to_product_shelves';
 import './068_update_stock_movements_reference_type';
 import './070_create_user_types_tables';
+import './071_create_repackaging_logs_table';
+import './072_add_repackaging_approval_setting';
 
 
 // Import runner functions

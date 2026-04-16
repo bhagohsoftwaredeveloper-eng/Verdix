@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Product } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Eye, PlusCircle, Package, Tags, CreditCard, Info, LayoutDashboard, History, Warehouse, BarChart3, Banknote, Scissors } from 'lucide-react';
+import { Eye, PlusCircle, Package, Tags, CreditCard, Info, LayoutDashboard, History, Warehouse, BarChart3, Banknote, Scissors, Pencil } from 'lucide-react';
 import { EditProductDialog } from './edit-product-dialog';
 import { QuickAddChildDialog } from './quick-add-child-dialog';
 import { BreakPackDialog } from './break-pack-dialog';
@@ -51,6 +51,8 @@ export function ViewProductDialog({
     onProductUpdated, 
     products, 
     onChildAdded, 
+    productOptions,
+    onOptionsRefresh,
     trigger,
     open: externalOpen,
     onOpenChange: externalOnOpenChange
@@ -58,7 +60,9 @@ export function ViewProductDialog({
     product: Product; 
     onProductUpdated?: () => void; 
     products?: Product[]; 
-    onChildAdded?: () => void; 
+    onChildAdded?: () => void;
+    productOptions?: any;
+    onOptionsRefresh?: () => void;
     trigger?: React.ReactNode;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
@@ -254,9 +258,12 @@ export function ViewProductDialog({
                                                     </h4>
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                         {hasConversionFactors && product.conversionFactors?.map((cf, index) => (
-                                                            <div key={index} className="flex justify-between items-center p-3 bg-card rounded-lg border border-border shadow-sm hover:border-primary/30 transition-colors">
-                                                                <span className="text-sm font-medium">{cf.unit}</span>
-                                                                <Badge variant="outline" className="font-semibold px-2 py-0 bg-primary/5 text-primary border-primary/20">{cf.factor}x</Badge>
+                                                            <div key={index} className="flex justify-between items-center p-3 bg-card rounded-lg border border-primary/20 shadow-sm bg-primary/5 hover:border-primary/30 transition-colors">
+                                                                <span className="text-sm font-medium flex items-center gap-2">
+                                                                    <div className="w-2 h-2 rounded-full bg-primary" />
+                                                                    {cf.unit} to {product.unitOfMeasure}
+                                                                </span>
+                                                                <Badge variant="outline" className="font-semibold px-2 py-0 bg-primary/10 text-primary border-primary/20">1 = {cf.factor}</Badge>
                                                             </div>
                                                         ))}
                                                         {childConversion && parentProduct && (
@@ -304,7 +311,7 @@ export function ViewProductDialog({
                             </Tooltip>
                           </TooltipProvider>
                         )}
-                        {!product.parentId && (product.conversionFactors?.length || 0) > 0 && (
+                        {!product.parentId && (
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -321,7 +328,18 @@ export function ViewProductDialog({
                             </Tooltip>
                           </TooltipProvider>
                         )}
-                        <EditProductDialog product={product} onProductUpdated={onProductUpdated} />
+                        <EditProductDialog 
+                          product={product} 
+                          onProductUpdated={onProductUpdated}
+                          productOptions={productOptions}
+                          onOptionsRefresh={onOptionsRefresh}
+                          trigger={
+                            <Button className="gap-2">
+                              <Pencil className="h-4 w-4" />
+                              Edit Product
+                            </Button>
+                          }
+                        />
                      </div>
                 </DialogFooter>
             </DialogContent>

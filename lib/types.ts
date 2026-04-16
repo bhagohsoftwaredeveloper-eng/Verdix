@@ -162,6 +162,10 @@ export interface PurchaseOrder {
     expirationDate?: string;
     barcode?: string;
     currentStock?: number;
+    // Landed cost fields (calculated, not stored)
+    landedCostPerUnit?: number;
+    shippingAllocation?: number;
+    landedCostTotal?: number;
   }[];
   total: number;
   paymentMethod: string;
