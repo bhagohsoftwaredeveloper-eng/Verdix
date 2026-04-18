@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/mysql';
 import { v4 as uuidv4 } from 'uuid';
 import { adjustStock } from '@/app/(app)/inventory/history/actions';
-import { processPurchaseOrderCreation } from '@/lib/purchase-actions';
+import { processPurchaseOrderCreation, processPurchaseOrderReceipt } from '@/lib/purchase-actions';
 import { processBadOrderCreation } from '@/lib/bad-order-actions';
 import { processTransferStock } from '@/lib/transfer-actions';
 import { processCompleteStockCount } from '@/lib/stock-count-actions';
@@ -126,9 +126,19 @@ export async function POST(request: NextRequest) {
             const adjResult = await adjustStock(txData.productId, adjQty, txData.reason, item.created_by, true);
             result = { success: adjResult.success, error: (adjResult as any).error || '' };
           }
-        } else if (item.transaction_type === 'PURCHASE_ORDER' || item.transaction_type === 'RECEIVE_PO') {
+        } else if (item.transaction_type === 'PURCHASE_ORDER') {
           const poResult = await processPurchaseOrderCreation({ ...txData, isInternalFinalization: true }, item.created_by);
           result = { success: poResult.success, error: (poResult as any).error || '' };
+        } else if (item.transaction_type === 'RECEIVE_PO') {
+          if (txData.id) {
+            // Receipt of existing PO
+            const rcptResult = await processPurchaseOrderReceipt(txData.id, txData, item.created_by);
+            result = { success: rcptResult.success, error: (rcptResult as any).error || '' };
+          } else {
+            // Direct receipt (creation + receipt)
+            const poResult = await processPurchaseOrderCreation({ ...txData, isInternalFinalization: true }, item.created_by);
+            result = { success: poResult.success, error: (poResult as any).error || '' };
+          }
         } else if (item.transaction_type === 'BAD_ORDER') {
           const boResult = await processBadOrderCreation({ ...txData, isInternalFinalization: true }, item.created_by);
           result = { success: boResult.success, error: (boResult as any).error || '' };

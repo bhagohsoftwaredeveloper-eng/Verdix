@@ -134,10 +134,10 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
         <TableCell>
           <Badge variant={badgeVariant}>{badgeText}</Badge>
         </TableCell>
-        <TableCell className="hidden md:table-cell text-center">
+        <TableCell className="hidden sm:table-cell text-center text-muted-foreground">
           {product.unitOfMeasure}
         </TableCell>
-        <TableCell className="hidden md:table-cell text-center">
+        <TableCell className="text-center font-bold">
           {product.stock}
         </TableCell>
         <TableCell className="hidden md:table-cell text-right">
@@ -824,8 +824,8 @@ function ProductsContent() {
                 <TableHead className="hidden md:table-cell">SKU</TableHead>
                 <TableHead className="hidden lg:table-cell">Barcode</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="hidden md:table-cell text-center">Unit</TableHead>
-                <TableHead className="hidden md:table-cell text-center">Stock</TableHead>
+                <TableHead className="hidden sm:table-cell text-center">Unit</TableHead>
+                <TableHead className="text-center">Stock</TableHead>
                 <TableHead className="hidden md:table-cell text-right">Cost</TableHead>
                 <TableHead className="hidden md:table-cell text-right">Retail Price</TableHead>
                 <TableHead className="hidden md:table-cell text-center">Warehouse</TableHead>

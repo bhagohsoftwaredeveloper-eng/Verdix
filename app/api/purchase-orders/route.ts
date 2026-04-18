@@ -4,6 +4,8 @@ import { getExternalApiConfig } from '../../../lib/external-api-config';
 import { syncPurchaseTransaction } from '../../../lib/services/external-accounting-api';
 import { calculatePurchaseCosts } from '../../../lib/purchase-utils';
 import { toSafeNumber } from '../../../lib/utils';
+import { processPurchaseOrderCreation } from '../../../lib/purchase-actions';
+import { checkApprovalRequired, submitToApprovalQueue } from '../../../lib/approvals';
 
 export async function GET(request: NextRequest) {
   try {
@@ -114,7 +116,7 @@ export async function GET(request: NextRequest) {
             productName: item.product_name,
             quantity: toSafeNumber(item.quantity),
             cost: toSafeNumber(item.cost),
-            sellingPrice: item.selling_price ? toSafeNumber(item.selling_price) : undefined,
+            sellingPrice: item.selling_price ? toSafeNumber(item.sellingPrice) : undefined,
             discount: item.discount ? toSafeNumber(item.discount) : 0,
             discountType: item.discount_type || 'amount',
             vatSubject: item.vat_subject === 1,
@@ -177,9 +179,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-import { processPurchaseOrderCreation } from '../../../lib/purchase-actions';
-import { checkApprovalRequired, submitToApprovalQueue } from '../../../lib/approvals';
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -212,17 +211,18 @@ export async function POST(request: NextRequest) {
     const finalVatAmount = calculations.vatAmount;
 
     // 1. Check for multi-level approval
-    const isApprovalRequired = !isInternalFinalization && await checkApprovalRequired('PURCHASE_ORDER');
+    const approvalType = purchaseType === 'Receive' ? 'RECEIVE_PO' : 'PURCHASE_ORDER';
+    const isApprovalRequired = !isInternalFinalization && await checkApprovalRequired(approvalType);
     if (isApprovalRequired) {
       const userId = body.userId || 'system';
-      const { queueId, pendingApproval } = await submitToApprovalQueue('PURCHASE_ORDER', body, userId);
+      const { queueId, pendingApproval } = await submitToApprovalQueue(approvalType, body, userId);
       
       if (pendingApproval) {
         return NextResponse.json({
           success: true,
           pendingApproval: true,
           data: { queueId },
-          message: 'Purchase order submitted for approval'
+          message: `${approvalType === 'RECEIVE_PO' ? 'Purchase receipt' : 'Purchase order'} submitted for approval`
         });
       }
       // If not pending (all steps auto-skipped), fall through to execution

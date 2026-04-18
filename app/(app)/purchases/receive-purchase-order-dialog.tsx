@@ -187,25 +187,27 @@ export function ReceivePurchaseOrderDialog({
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Receive Purchase Order #{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</DialogTitle>
-          <DialogDescription className="flex items-center justify-between">
-            <span>Verify and confirm the quantities received. If there are damaged or defective items, record them as bad items.</span>
-            {toSafeNumber(order.shippingFee) > 0 && (
-              <div className="flex items-center gap-2 bg-muted/50 p-2 rounded-md border">
-                <span className="text-xs font-semibold">Allocation Strategy:</span>
-                <Select 
-                  value={allocationStrategy} 
-                  onValueChange={(val: any) => setAllocationStrategy(val)}
-                >
-                  <SelectTrigger className="h-7 text-[10px] w-[110px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="equal" className="text-[10px]">Equal Per Line</SelectItem>
-                    <SelectItem value="proportional" className="text-[10px]">Proportional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+          <DialogDescription asChild>
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Verify and confirm the quantities received. If there are damaged or defective items, record them as bad items.</span>
+              {toSafeNumber(order.shippingFee) > 0 && (
+                <div className="flex items-center gap-2 bg-muted/50 p-2 rounded-md border">
+                  <span className="text-xs font-semibold">Allocation Strategy:</span>
+                  <Select 
+                    value={allocationStrategy} 
+                    onValueChange={(val: any) => setAllocationStrategy(val)}
+                  >
+                    <SelectTrigger className="h-7 text-[10px] w-[110px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="equal" className="text-[10px]">Equal Per Line</SelectItem>
+                      <SelectItem value="proportional" className="text-[10px]">Proportional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
 

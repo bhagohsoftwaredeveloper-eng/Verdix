@@ -361,27 +361,73 @@ export default function PurchasesPage() {
   };
 
   const handleReceiveConfirm = async (
-    receivedItems: { productId: string; quantity: number }[],
+    receivedItems: { productId: string; quantity: number; expirationDate?: string; sellingPrice?: number }[],
     badItems?: { productId: string; productName: string; quantity: number; cost: number; reason: string; description: string }[],
     allocationStrategy?: 'equal' | 'proportional'
   ) => {
     if (!orderToReceive) return;
 
     try {
-      // Calculate received total value
-      const receivedTotalValue = receivedItems.reduce((acc, receivedItem) => {
-        const originalItem = orderToReceive.items.find(i => i.productId === receivedItem.productId);
-        const cost = originalItem ? originalItem.cost : 0;
-        return acc + (cost * receivedItem.quantity);
-      }, 0);
+      const enrichedReceivedItems = receivedItems.map(item => {
+        // Robust ID matching (case-insensitive and type-neutral)
+        const originalItem = orderToReceive.items.find(i => 
+          String(i.productId).trim().toLowerCase() === String(item.productId).trim().toLowerCase()
+        );
+        
+        const cost = originalItem ? toSafeNumber(originalItem.cost) : 0;
+        return {
+          ...item,
+          productName: originalItem?.productName || (originalItem as any)?.name || 'Unknown Product',
+          sku: originalItem?.productSku || (originalItem as any)?.sku || '',
+          barcode: (originalItem as any)?.barcode || (originalItem as any)?.productBarcode || '',
+          cost: cost,
+          subtotal: cost * toSafeNumber(item.quantity)
+        };
+      });
+
+      const receivedTotalValue = enrichedReceivedItems.reduce((acc, item) => acc + (item.subtotal || 0), 0);
+      const userId = localStorage.getItem('mock-user-session') ? JSON.parse(localStorage.getItem('mock-user-session')!).uid : 'system';
 
       // 1. Update purchase order status and total (stock update, movements, AP sync handled by backend)
-      await updatePurchaseOrder(orderToReceive.id, { 
-        status: 'Received',
-        receivedTotal: receivedTotalValue,
-        receivedItems: receivedItems as any,
-        allocationStrategy
+      const response = await fetch(getApiUrl(`/purchase-orders/${orderToReceive.id}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          status: 'Received',
+          receivedTotal: receivedTotalValue,
+          receivedItems: enrichedReceivedItems as any,
+          allocationStrategy,
+          userId,
+          // Metadata for approvals snapshot
+          supplierName: orderToReceive.supplierName || 'N/A',
+          referenceNumber: orderToReceive.referenceNumber || orderToReceive.id,
+          poTotal: toSafeNumber(orderToReceive.total),
+          poGrandTotal: toSafeNumber(orderToReceive.grandTotal)
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to update status');
+      }
+
+      const result = await response.json();
+
+      if (result.pendingApproval) {
+        toast({ 
+          title: "Approval Required", 
+          description: "Purchase receipt has been submitted for approval.",
+        });
+        setIsReceiveDialogOpen(false);
+        setOrderToReceive(null);
+        refetch();
+        return;
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update order');
+      }
 
       // 2. Create bad order record if there are bad items
       if (badItems && badItems.length > 0) {
@@ -394,12 +440,12 @@ export default function PurchasesPage() {
             purchaseOrderId: orderToReceive.id,
             supplierId: orderToReceive.supplierId,
             supplierName: orderToReceive.supplierName,
-            reportedBy: localStorage.getItem('mock-user-session') ? JSON.parse(localStorage.getItem('mock-user-session')!).uid : 'system',
+            reportedBy: userId,
             reportDate: new Date().toISOString(),
             status: 'Reported',
             items: badItems,
             notes: `Automatically created during receipt of PO #${orderToReceive.referenceNumber || orderToReceive.id}`,
-            userId: localStorage.getItem('mock-user-session') ? JSON.parse(localStorage.getItem('mock-user-session')!).uid : 'system',
+            userId: userId,
           }),
         });
 

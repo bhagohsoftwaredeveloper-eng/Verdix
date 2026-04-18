@@ -1,6 +1,7 @@
 import { withTransaction } from './mysql';
 import { calculatePurchaseCosts } from './purchase-utils';
 import { toSafeNumber } from './utils';
+import { findUltimateRoot, addFamilyStock } from './family-sync';
 
 export async function processPurchaseOrderCreation(body: any, userId: string = 'system') {
   const {
@@ -74,46 +75,99 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
 
     // 3. Auto-Receive Logic
     if (purchaseType === 'Receive') {
-        const [defaultLevelResult]: any = await connection.query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
-        const defaultLevelId = defaultLevelResult[0]?.id;
-        
-        for (const calculatedItem of calculations.items) {
-          const [productResult]: any = await connection.query('SELECT name, stock FROM products WHERE id = ?', [calculatedItem.productId]);
-          if (productResult && productResult.length > 0) {
-            const product = productResult[0];
-            const previousStock = toSafeNumber(product.stock);
-            const quantityAdded = toSafeNumber(calculatedItem.quantity);
-            const newStock = previousStock + quantityAdded;
-            const landedCost = toSafeNumber(calculatedItem.landedCostPerUnit);
-            const originalItem = items.find((i: any) => i.productId === calculatedItem.productId);
-            const sellingPrice = toSafeNumber(originalItem?.sellingPrice);
-            
-            await connection.query('UPDATE products SET stock = ?, cost = ?, price = ?, updated_at = NOW() WHERE id = ?', [
-              newStock, landedCost, sellingPrice, calculatedItem.productId
-            ]);
-
-            const movementId = `MOV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-            await connection.query(`
-              INSERT INTO stock_movements (
-                id, product_id, product_name, movement_type, 
-                quantity_change, previous_stock, new_stock, 
-                reference_id, reference_type, notes, created_at, updated_at
-              ) VALUES (?, ?, ?, 'purchase', ?, ?, ?, ?, 'purchase', ?, NOW(), NOW())
-            `, [
-              movementId, calculatedItem.productId, product.name, quantityAdded, previousStock, newStock, orderId, `Received Purchase (Quick Receive): ${orderId}`
-            ]);
-
-            if (defaultLevelId && sellingPrice > 0) {
-              await connection.query(`
-                INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
-                VALUES (?, ?, ?, 0) 
-                ON DUPLICATE KEY UPDATE price = VALUES(price)
-              `, [calculatedItem.productId, defaultLevelId, sellingPrice]);
-            }
-          }
-        }
+        const receiptData = {
+            id: orderId,
+            receivedItems: items,
+            receivedTotal: finalTotal,
+            allocationStrategy: 'equal' // Default for new creation
+        };
+        await processPurchaseOrderReceipt(orderId, receiptData, userId, connection);
     }
 
     return { success: true, orderId };
   });
+}
+
+export async function processPurchaseOrderReceipt(orderId: string, receiptData: any, userId: string = 'system', existingConnection?: any) {
+  const executeLogic = async (connection: any) => {
+    const { receivedItems, receivedTotal, allocationStrategy } = receiptData;
+
+    // 1. Get PO details and items for landed cost calculation if not provided
+    const [poRows]: any = await connection.query('SELECT shipping_fee, supplier_id FROM purchase_orders WHERE id = ?', [orderId]);
+    if (!poRows || poRows.length === 0) throw new Error('Purchase order not found');
+    
+    const shipping = toSafeNumber(poRows[0].shipping_fee);
+    const supplierId = poRows[0].supplier_id;
+
+    // 2. We need items to calculate correct landed cost distribution
+    const [itemRows]: any = await connection.query(
+      'SELECT product_id as productId, product_name as productName, quantity, cost, selling_price as sellingPrice, discount, discount_type as discountType, vat_subject as vatSubject FROM purchase_order_items WHERE purchase_order_id = ?',
+      [orderId]
+    );
+
+    // 3. Calculate landed costs
+    const calculations = calculatePurchaseCosts(
+      itemRows.map((i: any) => ({ ...i, vatSubject: i.vatSubject === 1 })),
+      shipping,
+      12,
+      allocationStrategy || 'equal'
+    );
+
+    const [defaultLevelResult]: any = await connection.query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
+    const defaultLevelId = defaultLevelResult[0]?.id;
+
+    // 4. Process each received item
+    for (const receivedItem of receivedItems) {
+      const calculatedItem = calculations.items.find(ci => ci.productId === receivedItem.productId);
+      if (!calculatedItem) continue;
+
+      const quantityAdded = toSafeNumber(receivedItem.quantity);
+      if (quantityAdded <= 0) continue;
+
+      const landedCost = toSafeNumber(calculatedItem.landedCostPerUnit);
+      const sellingPrice = toSafeNumber(receivedItem.sellingPrice || itemRows.find((i: any) => i.productId === receivedItem.productId)?.sellingPrice);
+
+      // Update cost and price for the specific product received
+      await connection.query(
+        'UPDATE products SET cost = ?, price = ?, expiration_date = ?, updated_at = NOW() WHERE id = ?',
+        [landedCost, sellingPrice, receivedItem.expirationDate ? new Date(receivedItem.expirationDate).toISOString().slice(0, 10) : null, receivedItem.productId]
+      );
+
+      // Sync stock across the entire product family
+      const { rootId, factorToRoot } = await findUltimateRoot(receivedItem.productId, connection);
+      const quantityInRootUnits = quantityAdded / factorToRoot;
+
+      await addFamilyStock(
+        rootId,
+        quantityInRootUnits,
+        orderId,
+        'purchase',
+        `Received Purchase: ${orderId}`,
+        connection
+      );
+
+      // Update default price level
+      if (defaultLevelId && sellingPrice > 0) {
+        await connection.query(`
+          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
+          VALUES (?, ?, ?, 0) 
+          ON DUPLICATE KEY UPDATE price = VALUES(price)
+        `, [receivedItem.productId, defaultLevelId, sellingPrice]);
+      }
+    }
+
+    // 5. Update PO status and received total
+    await connection.query(
+      'UPDATE purchase_orders SET status = ?, received_total = ?, updated_at = NOW() WHERE id = ?',
+      ['Received', toSafeNumber(receivedTotal), orderId]
+    );
+
+    return { success: true };
+  };
+
+  if (existingConnection) {
+    return await executeLogic(existingConnection);
+  } else {
+    return await withTransaction(executeLogic);
+  }
 }

@@ -31,14 +31,19 @@ import { getApiUrl } from '@/lib/api-config';
 
 interface StockTransferDialogProps {
   product: Product;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   onSuccess?: () => void;
   requireConfirmation?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function StockTransferDialog({ product, children, onSuccess, requireConfirmation }: StockTransferDialogProps) {
+export function StockTransferDialog({ product, children, onSuccess, requireConfirmation, open, onOpenChange }: StockTransferDialogProps) {
   const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isOpen = open !== undefined ? open : internalOpen;
+  const setIsOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [targetWarehouseId, setTargetWarehouseId] = useState<string>('');
@@ -178,7 +183,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
   return (
     <>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogTrigger asChild>{children}</DialogTrigger>
+        {children && <DialogTrigger asChild>{children}</DialogTrigger>}
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

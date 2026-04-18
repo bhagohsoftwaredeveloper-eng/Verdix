@@ -689,6 +689,7 @@ export type BreakPackNewProductData = {
   conversionFactor: number;
   price: number;
   cost?: number;
+  barcode?: string;
 };
 
 export async function breakPack(
@@ -706,24 +707,67 @@ export async function breakPack(
       const isApprovalRequired = await checkApprovalRequired('REPACKAGING');
       if (isApprovalRequired) {
         // Enrich data for the approval card
-        const [parentInfoRows]: any = await query('SELECT name, stock, unit_of_measure FROM products WHERE id = ?', [parentId]);
-        const parentInfo = Array.isArray(parentInfoRows) ? parentInfoRows[0] : null;
+        const parentRows: any = await query('SELECT name, stock, unit_of_measure, sku, barcode, price, cost FROM products WHERE id = ? OR sku = ?', [parentId, parentId]);
+        const parentInfo = (Array.isArray(parentRows) && parentRows.length > 0) ? parentRows[0] : null;
+        
         let targetName = newProductData?.name || 'New Product';
+        let targetUnit = newProductData?.unitOfMeasure || '';
+        let targetBarcode = newProductData?.barcode || '';
+        let targetSku = 'NEW';
+        let targetPrice = newProductData?.price || 0;
+        let targetCost = newProductData?.cost || 0;
+        
         if (childId) {
-          const [childInfoRows]: any = await query('SELECT name FROM products WHERE id = ?', [childId]);
-          const childInfo = Array.isArray(childInfoRows) ? childInfoRows[0] : null;
-          if (childInfo) targetName = childInfo.name;
+          const childRows: any = await query('SELECT name, unit_of_measure, sku, barcode, price, cost FROM products WHERE id = ? OR sku = ?', [childId, childId]);
+          const childInfo = (Array.isArray(childRows) && childRows.length > 0) ? childRows[0] : null;
+          if (childInfo) {
+            targetName = childInfo.name;
+            targetUnit = childInfo.unit_of_measure;
+            targetBarcode = childInfo.barcode;
+            targetSku = childInfo.sku;
+            targetPrice = childInfo.price;
+            targetCost = childInfo.cost;
+          }
         }
+
+        const factor = manualFactor || newProductData?.conversionFactor || 1;
+        const sourceName = parentInfo?.name || parentId;
+        
+        // Create an items array for standard UI rendering in approvals
+        const items = [
+          {
+            productId: parentId,
+            productName: sourceName,
+            sku: parentInfo?.sku || '',
+            barcode: parentInfo?.barcode || '',
+            price: parentInfo?.price || 0,
+            cost: parentInfo?.cost || 0,
+            quantity: -quantityToBreak,
+            unit: parentInfo?.unit_of_measure || ''
+          },
+          {
+            productId: childId || 'NEW',
+            productName: targetName,
+            sku: targetSku,
+            barcode: targetBarcode,
+            price: targetPrice,
+            cost: targetCost,
+            quantity: quantityToBreak * factor,
+            unit: targetUnit
+          }
+        ];
+
         const { queueId, pendingApproval } = await submitToApprovalQueue('REPACKAGING', {
           parentId,
           childId,
           quantityToBreak,
           manualFactor,
           newProductData,
-          sourceProductName: parentInfo?.name || parentId,
+          sourceProductName: sourceName,
           targetProductName: targetName,
           sourceUnit: parentInfo?.unit_of_measure || '',
           currentStock: parentInfo?.stock || 0,
+          items // Add items array for consistency with other transaction types
         }, userId);
         if (pendingApproval) {
           return { success: true, pendingApproval: true, queueId, message: `Repackaging request submitted for approval.` };
@@ -759,16 +803,16 @@ export async function breakPack(
         await connection.query(
           `INSERT INTO products (
             id, name, brand, sku, description, category, subcategory, 
-            unit_of_measure, stock, reorder_point, price, cost, 
+            unit_of_measure, stock, reorder_point, price, cost, barcode, 
             warehouse_id, department, supplier_id, vat_status, 
             income_account, expense_account, availability
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             newId, newProductData.name, parent.brand, newSku,
             `Repackaged from ${parent.name}`,
             parent.category, parent.subcategory,
             newProductData.unitOfMeasure, 0, 0,
-            newProductData.price, newProductData.cost || null,
+            newProductData.price, newProductData.cost || null, newProductData.barcode || null,
             parent.warehouse_id, parent.department, parent.supplier_id,
             parent.vat_status, parent.income_account, parent.expense_account,
             'Available'
@@ -1739,7 +1783,10 @@ export async function searchProducts(searchQuery: string) {
     if (!searchQuery || searchQuery.trim().length < 2) return [];
     const like = `%${searchQuery.trim()}%`;
     const sql = `
-      SELECT p.id, p.name, p.sku, p.barcode, p.stock, p.unit_of_measure, p.parent_id, p.conversion_factor
+      SELECT p.id, p.name, p.sku, p.barcode, p.stock, p.unit_of_measure, p.parent_id, p.conversion_factor, p.price, p.cost,
+             (SELECT JSON_ARRAYAGG(JSON_OBJECT('unit', unit, 'factor', factor)) 
+              FROM conversion_factors cf 
+              WHERE cf.product_id = p.id) as conversion_factors
       FROM products p
       WHERE (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)
       ORDER BY p.name ASC
@@ -1755,6 +1802,9 @@ export async function searchProducts(searchQuery: string) {
       unitOfMeasure: r.unit_of_measure,
       parentId: r.parent_id,
       conversionFactor: r.conversion_factor,
+      price: parseFloat(r.price) || 0,
+      cost: r.cost ? parseFloat(r.cost) : undefined,
+      conversionFactors: typeof r.conversion_factors === 'string' ? JSON.parse(r.conversion_factors) : (r.conversion_factors || []),
     }));
   } catch (error) {
     console.error('Error searching products:', error);

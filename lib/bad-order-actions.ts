@@ -1,5 +1,6 @@
 import { query, withTransaction } from './mysql';
 import { v4 as uuidv4 } from 'uuid';
+import { findUltimateRoot, deductFamilyStock } from './family-sync';
 
 export async function processBadOrderCreation(body: any, userId: string) {
   try {
@@ -74,6 +75,22 @@ export async function processBadOrderCreation(body: any, userId: string) {
                 item.reason,
                 item.description || null,
             ]);
+
+            // Sync stock deduction across the entire product family
+            const { rootId, factorToRoot } = await findUltimateRoot(item.productId, connection);
+            const quantityAdded = parseFloat(item.quantity) || 0;
+            const quantityInRootUnits = quantityAdded / factorToRoot;
+
+            if (quantityInRootUnits > 0) {
+                await deductFamilyStock(
+                    rootId,
+                    quantityInRootUnits,
+                    badOrderId,
+                    'adjustment', // Using adjustment as the movement type for bad orders
+                    `Bad Order: ${item.reason || 'Not specified'} (${badOrderId})`,
+                    connection
+                );
+            }
         }
 
         return { success: true, badOrderId };

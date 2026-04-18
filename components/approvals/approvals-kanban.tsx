@@ -398,7 +398,7 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                                             </>
                                         )}
                                         {item.transaction_type === 'PURCHASE_ORDER' && `PO from ${item.transaction_data.supplierName || 'Supplier'} for ₱${(item.transaction_data.total || item.transaction_data.grandTotal || 0).toLocaleString()}`}
-                                        {item.transaction_type === 'RECEIVE_PO' && `Receiving items for PO #${item.transaction_data.purchaseOrderId}`}
+                                        {item.transaction_type === 'RECEIVE_PO' && `Receiving items for PO #${item.transaction_data.id || item.transaction_data.purchaseOrderId}`}
                                         {item.transaction_type === 'BAD_ORDER' && `Bad Order: ${item.transaction_data.items?.length || 0} items reported by ${item.transaction_data.reportedBy || 'Staff'}`}
                                         {item.transaction_type === 'STOCK_TRANSFER' && (
                                             <>
@@ -570,7 +570,22 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                       </>
                     )}
 
-                    {!['STOCK_ADJUSTMENT', 'STOCK_TRANSFER', 'PURCHASE_ORDER', 'STOCK_COUNT', 'REPACKAGING'].includes(selectedItem.transaction_type.toUpperCase()) && (
+                    {selectedItem.transaction_type.toUpperCase() === 'RECEIVE_PO' && (
+                      <>
+                        <span className="text-muted-foreground font-medium">Supplier:</span>
+                        <span className="font-bold text-primary">{selectedItem.transaction_data.supplierName || 'N/A'}</span>
+                        <span className="text-muted-foreground font-medium">PO Reference:</span>
+                        <span className="font-mono text-[11px] bg-background/50 px-2 py-0.5 rounded border">
+                            {selectedItem.transaction_data.referenceNumber || selectedItem.transaction_data.id || selectedItem.transaction_data.purchaseOrderId}
+                        </span>
+                        <span className="text-muted-foreground font-medium">Received Total:</span>
+                        <span className="font-bold text-primary text-lg">
+                          ₱{(Number(selectedItem.transaction_data.receivedTotal || selectedItem.transaction_data.total || selectedItem.transaction_data.grandTotal) || 0).toLocaleString()}
+                        </span>
+                      </>
+                    )}
+
+                    {!['STOCK_ADJUSTMENT', 'STOCK_TRANSFER', 'PURCHASE_ORDER', 'RECEIVE_PO', 'STOCK_COUNT', 'REPACKAGING'].includes(selectedItem.transaction_type.toUpperCase()) && (
                         <>
                             <span className="text-muted-foreground font-medium">Value/Qty:</span>
                             <span className="font-bold text-primary">
@@ -594,7 +609,7 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                     <span className="font-medium italic">"{selectedItem.transaction_data.reason || selectedItem.transaction_data.notes || 'Not specified'}"</span>
                   </div>
                   
-                  {selectedItem.transaction_data.items && (
+                  {(selectedItem.transaction_data.items || selectedItem.transaction_data.receivedItems) && (
                       <div className="mt-4 pt-4 border-t border-border/50">
                           <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Line Items</p>
                           <ScrollArea className="h-32">
@@ -628,10 +643,53 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                                               </div>
                                           )})}
                                       </div>
+                                  ) : selectedItem.transaction_type.toUpperCase() === 'RECEIVE_PO' ? (
+                                      <div className="space-y-2">
+                                          <div className="grid grid-cols-5 text-[9px] font-bold uppercase text-muted-foreground px-2">
+                                              <span className="col-span-2">Item</span>
+                                              <span className="text-right">Qty</span>
+                                              <span className="text-right">Cost</span>
+                                              <span className="text-right">Subtotal</span>
+                                          </div>
+                                          {(selectedItem.transaction_data.receivedItems || []).map((it: any, k: number) => (
+                                              <div key={k} className="grid grid-cols-5 text-[11px] p-2 bg-background/30 rounded border border-border/30 items-center">
+                                                  <div className="col-span-2 flex flex-col">
+                                                      <span className="font-medium truncate">{it.productName || it.name || it.productId}</span>
+                                                      <span className="text-[8px] text-muted-foreground font-mono">BC: {it.barcode || 'N/A'}</span>
+                                                  </div>
+                                                  <span className="text-right font-bold text-primary">x{it.quantity}</span>
+                                                  <span className="text-right text-muted-foreground">₱{(it.cost || 0).toLocaleString()}</span>
+                                                  <span className="text-right font-bold">₱{(it.subtotal || 0).toLocaleString()}</span>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  ) : selectedItem.transaction_type.toUpperCase() === 'REPACKAGING' ? (
+                                      (selectedItem.transaction_data.items || []).map((it: any, k: number) => (
+                                          <div key={k} className="flex justify-between items-center text-[11px] p-2 bg-background/30 rounded border border-border/30">
+                                              <div className="flex flex-col">
+                                                  <span className="font-bold text-[8px] uppercase text-muted-foreground">{Number(it.quantity) < 0 ? '[SOURCE] BULK' : '[TARGET] PACK'}</span>
+                                                  <span className="font-medium">{it.productName || it.name || it.productId}</span>
+                                                  <div className="flex items-center gap-2 text-[8px] font-mono text-muted-foreground">
+                                                      <span>SKU: {it.sku || 'N/A'}</span>
+                                                      {it.barcode && <span>· BC: {it.barcode}</span>}
+                                                  </div>
+
+                                              </div>
+                                              <div className="text-right">
+                                                  <span className={cn(
+                                                      "font-black text-xs",
+                                                      Number(it.quantity) < 0 ? "text-red-600" : "text-green-600"
+                                                  )}>
+                                                      {Number(it.quantity) > 0 ? '+' : ''}{it.quantity}
+                                                  </span>
+                                                  <span className="ml-1 text-[9px] text-muted-foreground uppercase">{it.unit}</span>
+                                              </div>
+                                          </div>
+                                      ))
                                   ) : (
-                                      selectedItem.transaction_data.items.map((it: any, k: number) => (
+                                      (selectedItem.transaction_data.items || selectedItem.transaction_data.receivedItems).map((it: any, k: number) => (
                                           <div key={k} className="flex justify-between text-[11px] p-2 bg-background/30 rounded border border-border/30">
-                                              <span className="font-medium">{it.productName || it.name}</span>
+                                              <span className="font-medium">{it.productName || it.name || it.productId}</span>
                                               <span className="font-bold text-primary">x{it.quantity}</span>
                                           </div>
                                       ))

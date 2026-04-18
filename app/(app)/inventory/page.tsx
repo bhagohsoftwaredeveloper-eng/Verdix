@@ -68,13 +68,18 @@ import {
 } from '@/components/ui/alert-dialog';
 import { getApiUrl } from '@/lib/api-config';
 
-function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, requireConfirmation }: { product: Product, children: React.ReactNode, defaultReason?: string, onSuccess?: () => void, requireConfirmation?: boolean }) {
+function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, requireConfirmation, open, onOpenChange }: { product: Product, children?: React.ReactNode, defaultReason?: string, onSuccess?: () => void, requireConfirmation?: boolean, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isOpen = open !== undefined ? open : internalOpen;
+  const setIsOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
+
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const [quantity, setQuantity] = useState(0);
   const [reason, setReason] = useState(defaultReason || '');
+  const [customReason, setCustomReason] = useState('');
   const [adjustmentType, setAdjustmentType] = useState<'add' | 'remove'>('add');
 
   const [physicalCount, setPhysicalCount] = useState<number | null>(null);
@@ -84,7 +89,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
 
   const isPhysicalCountMode = defaultReason === 'Physical Count';
 
-  const dialogTitle = isPhysicalCountMode ? `Physical Count for ${product.name}` : `Adjust Stock for ${product.name}`;
+  const dialogTitle = isPhysicalCountMode ? `Physical Count` : `Adjust Stock`;
 
   const variance = useMemo(() => {
     if (isPhysicalCountMode && physicalCount !== null) {
@@ -92,6 +97,16 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
     }
     return 0;
   }, [isPhysicalCountMode, physicalCount, product.stock]);
+
+  const projectedStock = useMemo(() => {
+    const adj = adjustmentType === 'add' ? quantity : -quantity;
+    return Math.max(0, product.stock + adj);
+  }, [product.stock, quantity, adjustmentType]);
+
+  const reasons = {
+    add: ['New Shipment', 'Customer Return', 'Stock Correction', 'Found in Warehouse', 'Other'],
+    remove: ['Damage', 'Expired', 'Lost/Theft', 'Internal Use', 'Stock Correction', 'Other']
+  };
 
   // Load child products when dialog opens
   useEffect(() => {
@@ -117,6 +132,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
   useEffect(() => {
     if (isOpen) {
       setReason(defaultReason || '');
+      setCustomReason('');
       setQuantity(0);
       setAdjustmentType('add');
       setPhysicalCount(product.stock);
@@ -155,7 +171,8 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
       adjustment = variance;
       finalReason = 'Physical Count';
     } else {
-      if (!quantity || !reason) {
+      const effectiveReason = reason === 'Other' ? customReason : reason;
+      if (!quantity || !effectiveReason) {
         toast({
           variant: 'destructive',
           title: 'Missing Information',
@@ -165,7 +182,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
       }
       const signedQuantity = adjustmentType === 'add' ? quantity : -quantity;
       adjustment = signedQuantity; 
-      finalReason = reason;
+      finalReason = effectiveReason;
     }
 
     const newStock = product.stock + adjustment;
@@ -241,124 +258,199 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
     : `Are you sure you want to record a ${adjustmentTypeLabel.toLowerCase()} of ${quantity} ${product.unitOfMeasure} for ${product.name}?`;
 
   const renderPhysicalCountMode = () => (
-     <>
-        <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="physicalCount" className="text-right">
-                Physical Count
-            </Label>
-            <Input
-                id="physicalCount"
-                type="number"
-                value={physicalCount === null ? '' : physicalCount}
-                onChange={(e) => handlePhysicalCountChange(e.target.value)}
-                className="col-span-3"
-                placeholder="Enter new stock total"
-            />
-            </div>
-             <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="reason" className="text-right">
-                Reason
-                </Label>
-                <Input
-                id="reason"
-                value={reason}
-                readOnly
-                className="col-span-3 bg-muted"
-                />
-            </div>
-             {physicalCount !== null && (
-                 <div className="grid grid-cols-4 items-center gap-4 text-sm">
-                    <Label className="text-right">Variance</Label>
-                    <div className="col-span-3 flex items-center gap-2">
-                        <Badge variant="outline">{product.stock}</Badge>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground"/>
-                        <Badge variant="outline">{physicalCount}</Badge>
-                        <span className="font-bold text-lg">=</span>
-                        <Badge variant={variance === 0 ? "secondary" : variance > 0 ? "default" : "destructive"}>
-                           {variance > 0 ? '+' : ''}{variance}
-                        </Badge>
+     <div className="space-y-6 py-4">
+        <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-dashed border-muted-foreground/20">
+            <span className="text-sm text-muted-foreground mb-1">Current Balance</span>
+            <span className="text-4xl font-bold">{product.stock}</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">{product.unitOfMeasure}</span>
+        </div>
+
+        <div className="space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="physicalCount" className="text-sm font-medium">Actual Quantity Counted</Label>
+                <div className="relative">
+                    <Input
+                        id="physicalCount"
+                        type="number"
+                        value={physicalCount === null ? '' : physicalCount}
+                        onChange={(e) => handlePhysicalCountChange(e.target.value)}
+                        className="text-lg h-12 pl-4 pr-12 font-semibold"
+                        placeholder="0"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                        {product.unitOfMeasure}
                     </div>
-                 </div>
+                </div>
+            </div>
+
+            {physicalCount !== null && (
+                <div className={cn(
+                    "flex items-center justify-between p-4 rounded-xl border transition-all duration-300",
+                    variance === 0 ? "bg-muted/50 border-muted" : 
+                    variance > 0 ? "bg-emerald-500/5 border-emerald-500/20" : "bg-destructive/5 border-destructive/20"
+                )}>
+                    <div className="flex items-center gap-3">
+                        <div className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center",
+                            variance === 0 ? "bg-muted text-muted-foreground" : 
+                            variance > 0 ? "bg-emerald-500/20 text-emerald-600" : "bg-destructive/20 text-destructive"
+                        )}>
+                            {variance === 0 ? <ArrowRight className="h-5 w-5" /> : 
+                             variance > 0 ? <Plus className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground font-medium uppercase">Inventory Variance</p>
+                            <p className={cn(
+                                "text-sm font-bold",
+                                variance === 0 ? "text-muted-foreground" : 
+                                variance > 0 ? "text-emerald-600" : "text-destructive"
+                            )}>
+                                {variance > 0 ? '+' : ''}{variance} {product.unitOfMeasure}
+                            </p>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+
+        <DialogFooter className="pt-2">
+          <Button variant="ghost" onClick={() => setIsOpen(false)} className="flex-1 sm:flex-none">Cancel</Button>
           <Button 
             onClick={handleAdjustStock} 
             disabled={physicalCount === null}
+            className="flex-1 sm:flex-none px-8"
           >
-            Submit Count
+            Submit Physical Count
           </Button>
         </DialogFooter>
-    </>
+    </div>
   );
 
   const renderStandardMode = () => {
     return (
-      <>
-          <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-2">
-                  <Button variant={adjustmentType === 'add' ? 'default' : 'outline'} onClick={() => setAdjustmentType('add')}>
-                      <Plus className="mr-2 h-4 w-4"/>
-                      Add Stock
-                  </Button>
-                  <Button variant={adjustmentType === 'remove' ? 'destructive' : 'outline'} onClick={() => setAdjustmentType('remove')}>
-                      <Minus className="mr-2 h-4 w-4"/>
-                      Remove Stock
-                  </Button>
-              </div>
-              <div className={cn("grid gap-4 rounded-lg border p-4",
-                  adjustmentType === 'add' ? 'border-primary/50' : 'border-destructive/50'
-              )}>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="quantity" className="text-right">
-                    Quantity
-                  </Label>
+      <div className="space-y-6 py-4">
+          <Tabs value={adjustmentType} onValueChange={(val) => setAdjustmentType(val as 'add' | 'remove')} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 h-11 p-1 bg-muted/50">
+                <TabsTrigger value="add" className="rounded-md data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Stock
+                </TabsTrigger>
+                <TabsTrigger value="remove" className="rounded-md data-[state=active]:bg-background data-[state=active]:text-destructive data-[state=active]:shadow-sm">
+                    <Minus className="mr-2 h-4 w-4" />
+                    Remove Stock
+                </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="quantity" className="text-sm font-medium">Quantity to {adjustmentType === 'add' ? 'Add' : 'Remove'}</Label>
+                <div className="relative">
                   <Input
                     id="quantity"
                     type="number"
                     value={quantity === 0 ? '' : quantity}
                     onChange={(e) => handleQuantityChange(e.target.value)}
-                    className="col-span-3"
-                    placeholder="e.g., 10"
+                    className="text-lg h-12 pl-4 pr-12 font-semibold"
+                    placeholder="0"
                   />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="reason" className="text-right">
-                    Reason
-                  </Label>
-                  <Input
-                    id="reason"
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="col-span-3"
-                    placeholder="e.g., New shipment"
-                    disabled={!!defaultReason}
-                  />
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                    {product.unitOfMeasure}
+                  </div>
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="reason" className="text-sm font-medium">Reason for Adjustment</Label>
+                <Select value={reason} onValueChange={setReason} disabled={!!defaultReason}>
+                    <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Select a reason..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {reasons[adjustmentType].map((r) => (
+                            <SelectItem key={r} value={r}>{r}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+              </div>
+
+              {reason === 'Other' && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <Label htmlFor="customReason" className="text-sm font-medium">Custom Reason</Label>
+                    <Input
+                        id="customReason"
+                        value={customReason}
+                        onChange={(e) => setCustomReason(e.target.value)}
+                        placeholder="Please specify..."
+                        className="h-11"
+                    />
+                </div>
+              )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
+
+          <div className="bg-muted/30 rounded-2xl p-4 border border-muted-foreground/10">
+              <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-muted-foreground font-medium text-xs uppercase tracking-tight">Projected Impact</span>
+                  <Badge variant={adjustmentType === 'add' ? "secondary" : "destructive"} className="text-[10px] h-5">
+                      {adjustmentType === 'add' ? 'Stock Increase' : 'Stock Decrease'}
+                  </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                  <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Current</p>
+                      <p className="text-lg font-semibold">{product.stock}</p>
+                  </div>
+                  <div className="flex items-center text-muted-foreground/40">
+                      <div className="w-8 h-px bg-current mx-2" />
+                      <div className={cn(
+                          "flex items-center justify-center p-1 rounded-full",
+                          adjustmentType === 'add' ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
+                      )}>
+                          {adjustmentType === 'add' ? <Plus className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                      </div>
+                      <div className="w-8 h-px bg-current mx-2" />
+                  </div>
+                  <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Adjustment</p>
+                      <p className={cn(
+                          "text-lg font-semibold",
+                          adjustmentType === 'add' ? "text-primary" : "text-destructive"
+                      )}>{quantity}</p>
+                  </div>
+                  <div className="flex items-center text-muted-foreground/40 px-2">
+                      <span className="text-xl font-light">=</span>
+                  </div>
+                  <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">New Total</p>
+                      <p className="text-xl font-bold">{projectedStock}</p>
+                  </div>
+              </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="ghost" onClick={() => setIsOpen(false)} className="flex-1 sm:flex-none">Cancel</Button>
             <Button
               onClick={handleAdjustStock}
-              disabled={quantity === 0 || !reason.trim()}
+              disabled={quantity === 0 || !(reason === 'Other' ? customReason.trim() : reason.trim())}
               variant={adjustmentType === 'add' ? 'default' : 'destructive'}
+              className="flex-1 sm:flex-none px-8 h-11"
             >
-              {`${adjustmentType === 'add' ? 'Add' : 'Remove'} ${quantity} Units`}
+              Confirm Adjustment
             </Button>
           </DialogFooter>
-      </>
+      </div>
     );
   };
+
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogTrigger asChild>
-          {children}
-        </DialogTrigger>
+        {children && (
+          <DialogTrigger asChild>
+            {children}
+          </DialogTrigger>
+        )}
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
@@ -392,6 +484,10 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
 
 
 function ProductCard({ product, hasChildren = false, onSuccess, requireAdjustmentConfirmation, requireTransferConfirmation }: { product: Product, hasChildren?: boolean, onSuccess?: () => void, requireAdjustmentConfirmation?: boolean, requireTransferConfirmation?: boolean }) {
+  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
+  const [isCountOpen, setIsCountOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+
   const displayStock = product.stock;
 
   const stockStatus =
@@ -415,72 +511,102 @@ function ProductCard({ product, hasChildren = false, onSuccess, requireAdjustmen
       : 'In Stock';
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex gap-4">
+    <Card className="relative h-full min-h-[220px] flex flex-col shadow-sm hover:shadow-md transition-all duration-300">
+      <CardContent className="p-4 flex-1 flex flex-col">
+        <div className="flex justify-between items-start">
           <div className="flex-1">
-            <h3 className="font-medium text-lg flex items-center gap-2">
+            <h3 className="font-medium text-lg flex items-center gap-2 pr-8">
               {product.name}
               {hasChildren && (
-                <Badge variant="outline" className="text-xs px-2 py-0.5">
+                <Badge variant="outline" className="text-xs px-2 py-0.5 whitespace-nowrap">
                   Group
                 </Badge>
               )}
             </h3>
             <p className="text-sm text-muted-foreground">SKU: {product.sku}</p>
-            <div className="flex flex-wrap items-center gap-4 mt-2">
-              <span className="text-sm">
-                <span className="font-medium">{displayStock}</span> {product.unitOfMeasure}
-              </span>
-              <Badge variant={badgeVariant} className="text-xs">{badgeText}</Badge>
-              {product.hasPendingApproval && (
-                <Badge variant="outline" className="text-xs border-amber-500 text-amber-500 bg-amber-500/10">
-                  Pending Approval
-                </Badge>
-              )}
-              <span className="text-sm text-muted-foreground">
-                Reorder at: {product.reorderPoint}
-              </span>
-              {product.conversionFactors && product.conversionFactors.length > 0 && (
-                <>
-                  <span className="text-sm text-muted-foreground">Conversion Factors:</span>
-                  {product.conversionFactors.map((cf, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {cf.unit} ×{cf.factor}
-                    </Badge>
-                  ))}
-                </>
-              )}
-              {(!product.conversionFactors || product.conversionFactors.length === 0) && (
-                <>
-                  <span className="text-sm text-muted-foreground">Conversion Factor:</span>
-                  <Badge variant="outline" className="text-xs">
-                    ×{product.conversionFactor || 1}
-                  </Badge>
-                </>
-              )}
-            </div>
+          </div>
+          <div className={cn("flex items-center gap-2", hasChildren && "mr-10")}>
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">Actions</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setIsAdjustOpen(true)}>
+                  <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span>Adjust Stock</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsCountOpen(true)}>
+                  <ClipboardCheck className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span>Physical Count</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setIsTransferOpen(true)}>
+                  <MoveHorizontal className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span>Transfer Stock</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 mt-4">
-          <StockAdjustmentDialog product={product} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-            <Button variant="outline" size="sm" className="flex-1 min-w-0">
-              <Pencil className="mr-2 h-4 w-4 flex-shrink-0" />
-              Adjust
-            </Button>
-          </StockAdjustmentDialog>
-          <StockAdjustmentDialog product={product} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-            <Button variant="outline" size="sm" className="flex-1 min-w-0">
-              <ClipboardCheck className="mr-2 h-4 w-4 flex-shrink-0" />
-              Count
-            </Button>
-          </StockAdjustmentDialog>
-          <StockTransferDialog product={product} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
-            <Button variant="outline" size="sm" className="flex-1 min-w-0">
-              <MoveHorizontal className="mr-2 h-4 w-4 flex-shrink-0" />
-              Transfer
-            </Button>
-          </StockTransferDialog>
+
+        <StockAdjustmentDialog 
+          product={product} 
+          onSuccess={onSuccess} 
+          requireConfirmation={requireAdjustmentConfirmation}
+          open={isAdjustOpen}
+          onOpenChange={setIsAdjustOpen}
+        />
+        <StockAdjustmentDialog 
+          product={product} 
+          defaultReason="Physical Count" 
+          onSuccess={onSuccess} 
+          requireConfirmation={requireAdjustmentConfirmation}
+          open={isCountOpen}
+          onOpenChange={setIsCountOpen}
+        />
+        <StockTransferDialog 
+          product={product} 
+          onSuccess={onSuccess} 
+          requireConfirmation={requireTransferConfirmation}
+          open={isTransferOpen}
+          onOpenChange={setIsTransferOpen}
+        />
+
+        <div className="mt-auto pt-4 flex flex-wrap items-center gap-4 border-t border-muted/30 text-xs sm:text-sm">
+          <span className="text-sm">
+            <span className="font-medium">{displayStock}</span> {product.unitOfMeasure}
+          </span>
+          <Badge variant={badgeVariant} className="text-xs">{badgeText}</Badge>
+          {product.hasPendingApproval && (
+            <Badge variant="outline" className="text-xs border-amber-500 text-amber-500 bg-amber-500/10">
+              Pending Approval
+            </Badge>
+          )}
+          <span className="text-sm text-muted-foreground">
+            Reorder at: {product.reorderPoint}
+          </span>
+          {product.conversionFactors && product.conversionFactors.length > 0 && (
+            <>
+              <span className="text-sm text-muted-foreground">Conversion Factors:</span>
+              {product.conversionFactors.map((cf, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {cf.unit} ×{cf.factor}
+                </Badge>
+              ))}
+            </>
+          )}
+          {(!product.conversionFactors || product.conversionFactors.length === 0) && (
+            <>
+              <span className="text-sm text-muted-foreground">Conversion Factor:</span>
+              <Badge variant="outline" className="text-xs">
+                ×{product.conversionFactor || 1}
+              </Badge>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -491,12 +617,74 @@ interface ProductWithChildren extends Product {
   children?: Product[];
 }
 
+function CondensedProductRow({ product, isLast = false, onSuccess, requireAdjustmentConfirmation, requireTransferConfirmation }: { product: Product, isLast?: boolean, onSuccess?: () => void, requireAdjustmentConfirmation?: boolean, requireTransferConfirmation?: boolean }) {
+  const displayStock = product.stock;
+  const stockStatus =
+    displayStock === 0
+      ? 'out-of-stock'
+      : displayStock < product.reorderPoint
+      ? 'low-stock'
+      : 'in-stock';
+
+  const badgeVariant =
+    stockStatus === 'out-of-stock'
+      ? 'destructive'
+      : stockStatus === 'low-stock'
+      ? 'secondary'
+      : 'default';
+  const badgeText =
+    stockStatus === 'out-of-stock'
+      ? 'Out'
+      : stockStatus === 'low-stock'
+      ? 'Low'
+      : 'In';
+
+  return (
+    <div className="relative flex items-center gap-3 pl-10 py-1.5 pr-2 hover:bg-muted/30 transition-colors rounded-lg group mx-1">
+      {/* Connector lines */}
+      <div className={cn(
+        "absolute left-5 top-0 w-px bg-muted",
+        isLast ? "h-1/2" : "h-full"
+      )} />
+      <div className="absolute left-5 top-1/2 w-3 h-px bg-muted" />
+
+      {/* Product info slab */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-xs truncate" title={product.name}>{product.name}</span>
+          {product.hasPendingApproval && (
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+          )}
+        </div>
+        <p className="text-[9px] text-muted-foreground truncate uppercase font-mono">SKU: {product.sku}</p>
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="text-right">
+          <div className="text-xs font-bold leading-none">{displayStock} <span className="text-[9px] font-normal text-muted-foreground">{product.unitOfMeasure}</span></div>
+          <Badge variant={badgeVariant} className="text-[8px] px-1 py-0 h-3.5 mt-0.5 uppercase tracking-tighter">{badgeText}</Badge>
+        </div>
+        
+        <ProductRowActions 
+           product={product} 
+           onSuccess={onSuccess} 
+           requireAdjustmentConfirmation={requireAdjustmentConfirmation}
+           requireTransferConfirmation={requireTransferConfirmation}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ProductGroup({ productGroup, onSuccess, requireAdjustmentConfirmation, requireTransferConfirmation }: { productGroup: ProductWithChildren, onSuccess?: () => void, requireAdjustmentConfirmation?: boolean, requireTransferConfirmation?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasChildren = productGroup.children && productGroup.children.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className={cn(
+      "flex flex-col transition-all duration-300 rounded-2xl h-full",
+      isExpanded ? "ring-1 ring-border bg-muted/20 p-1 shadow-sm" : "bg-transparent"
+    )}>
       {/* Parent Product */}
       <div className="relative">
         <ProductCard 
@@ -510,31 +698,93 @@ function ProductGroup({ productGroup, onSuccess, requireAdjustmentConfirmation, 
           <Button
             variant="ghost"
             size="sm"
-            className="absolute right-4 top-4 z-10"
+            className="absolute right-10 top-4 z-10 h-8 w-8 p-0"
             onClick={() => setIsExpanded(!isExpanded)}
           >
-            <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+            <ChevronDown className={cn("h-4 w-4 transition-transform duration-500", isExpanded && "rotate-180")} />
           </Button>
         )}
       </div>
 
-      {/* Child Products */}
-      {isExpanded && hasChildren && (
-        <div className="ml-8 space-y-4 border-l-2 border-muted pl-4">
-          {productGroup.children!.map((childProduct) => (
-            <div key={childProduct.id} className="relative">
-              <div className="absolute -left-6 top-4 w-4 h-px bg-muted"></div>
-              <ProductCard 
-                product={childProduct} 
-                onSuccess={onSuccess} 
-                requireAdjustmentConfirmation={requireAdjustmentConfirmation}
-                requireTransferConfirmation={requireTransferConfirmation}
-              />
-            </div>
-          ))}
+      {/* Child Products Unified List - CSS Transition for height */}
+      <div className={cn(
+        "grid transition-all duration-300 ease-in-out",
+        isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+      )}>
+        <div className="overflow-hidden">
+          <div className="py-1 mt-1 space-y-0.5">
+             {productGroup.children!.map((childProduct, index) => (
+                <CondensedProductRow 
+                  key={childProduct.id} 
+                  product={childProduct} 
+                  isLast={index === productGroup.children!.length - 1}
+                  onSuccess={onSuccess} 
+                  requireAdjustmentConfirmation={requireAdjustmentConfirmation}
+                  requireTransferConfirmation={requireTransferConfirmation}
+                />
+              ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
+  );
+}
+
+function ProductRowActions({ product, onSuccess, requireAdjustmentConfirmation, requireTransferConfirmation }: { product: Product, onSuccess?: () => void, requireAdjustmentConfirmation?: boolean, requireTransferConfirmation?: boolean }) {
+  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
+  const [isCountOpen, setIsCountOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-8 w-8 p-0">
+            <span className="sr-only">Open menu</span>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setIsAdjustOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span>Adjust Stock</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setIsCountOpen(true)}>
+            <ClipboardCheck className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span>Physical Count</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setIsTransferOpen(true)}>
+            <MoveHorizontal className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span>Transfer Stock</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <StockAdjustmentDialog 
+        product={product} 
+        onSuccess={onSuccess} 
+        requireConfirmation={requireAdjustmentConfirmation}
+        open={isAdjustOpen}
+        onOpenChange={setIsAdjustOpen}
+      />
+      <StockAdjustmentDialog 
+        product={product} 
+        defaultReason="Physical Count" 
+        onSuccess={onSuccess} 
+        requireConfirmation={requireAdjustmentConfirmation}
+        open={isCountOpen}
+        onOpenChange={setIsCountOpen}
+      />
+      <StockTransferDialog 
+        product={product} 
+        onSuccess={onSuccess} 
+        requireConfirmation={requireTransferConfirmation}
+        open={isTransferOpen}
+        onOpenChange={setIsTransferOpen}
+      />
+    </>
   );
 }
 
@@ -625,36 +875,12 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
         </TableCell>
         <TableCell className="text-muted-foreground">{productGroup.reorderPoint}</TableCell>
         <TableCell className="text-right whitespace-nowrap">
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <StockAdjustmentDialog product={productGroup} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  <span>Adjust</span>
-                </DropdownMenuItem>
-              </StockAdjustmentDialog>
-              <StockAdjustmentDialog product={productGroup} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <ClipboardCheck className="mr-2 h-4 w-4" />
-                  <span>Count</span>
-                </DropdownMenuItem>
-              </StockAdjustmentDialog>
-              <StockTransferDialog product={productGroup} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <MoveHorizontal className="mr-2 h-4 w-4" />
-                  <span>Transfer</span>
-                </DropdownMenuItem>
-              </StockTransferDialog>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ProductRowActions 
+            product={productGroup} 
+            onSuccess={onSuccess} 
+            requireAdjustmentConfirmation={requireAdjustmentConfirmation}
+            requireTransferConfirmation={requireTransferConfirmation}
+          />
         </TableCell>
       </TableRow>
       {isExpanded && hasChildren && productGroup.children!.map((child) => {
@@ -700,36 +926,12 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
               </TableCell>
               <TableCell className="text-muted-foreground text-sm">{child.reorderPoint}</TableCell>
               <TableCell className="text-right">
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <StockAdjustmentDialog product={child} onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          <span>Adjust</span>
-                        </DropdownMenuItem>
-                      </StockAdjustmentDialog>
-                      <StockAdjustmentDialog product={child} defaultReason="Physical Count" onSuccess={onSuccess} requireConfirmation={requireAdjustmentConfirmation}>
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <ClipboardCheck className="mr-2 h-4 w-4" />
-                          <span>Count</span>
-                        </DropdownMenuItem>
-                      </StockAdjustmentDialog>
-                      <StockTransferDialog product={child} onSuccess={onSuccess} requireConfirmation={requireTransferConfirmation}>
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <MoveHorizontal className="mr-2 h-4 w-4" />
-                          <span>Transfer</span>
-                        </DropdownMenuItem>
-                      </StockTransferDialog>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <ProductRowActions 
+                    product={child} 
+                    onSuccess={onSuccess} 
+                    requireAdjustmentConfirmation={requireAdjustmentConfirmation}
+                    requireTransferConfirmation={requireTransferConfirmation}
+                  />
               </TableCell>
             </TableRow>
           );
@@ -835,35 +1037,55 @@ export default function InventoryPage() {
             
             <div className="h-8 w-px bg-muted mx-1" />
 
-            <Button variant="outline" onClick={() => setIsTransferBoardOpen(true)}>
-                <Kanban className="mr-2 h-4 w-4" />
-                Transfer Board
-            </Button>
-            
-            <Button variant="outline" onClick={() => setIsShelfBoardOpen(true)}>
-                <Rows3 className="mr-2 h-4 w-4" />
-                Shelf Board
-            </Button>
-
-            <Button variant="default" className="bg-primary hover:bg-primary/90 shadow-md" onClick={() => setIsBulkAdjustmentOpen(true)}>
-                <Layers className="mr-2 h-4 w-4" />
-                Bulk Adjustment
-            </Button>
-
-            <div className="h-8 w-px bg-muted mx-1" />
-
-            <Link href="/inventory/history">
-                <Button variant="ghost" size="sm">
-                    <History className="mr-2 h-4 w-4" />
-                    History
+            <div className="flex items-center gap-1 p-1.5 bg-muted/30 rounded-xl border border-border/50 shadow-sm ml-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setIsTransferBoardOpen(true)} 
+                  className="h-8 gap-2 hover:bg-muted font-medium px-3"
+                >
+                    <Kanban className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs">Transfer Board</span>
                 </Button>
-            </Link>
-            <Link href="/inventory/physical-count">
-                <Button variant="ghost" size="sm">
-                    <ClipboardCheck className="mr-2 h-4 w-4" />
-                    Count
+                
+                <div className="h-4 w-px bg-border/60 mx-1" />
+
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setIsShelfBoardOpen(true)} 
+                  className="h-8 gap-2 hover:bg-muted font-medium px-3"
+                >
+                    <Rows3 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs">Shelf Board</span>
                 </Button>
-            </Link>
+
+                <div className="h-4 w-px bg-border/60 mx-1" />
+
+                <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setIsBulkAdjustmentOpen(true)} 
+                    className="h-8 gap-2 font-bold text-primary hover:text-primary hover:bg-primary/10 px-3 transition-colors"
+                >
+                    <Layers className="h-4 w-4" />
+                    <span className="text-xs">Bulk Adjustment</span>
+                </Button>
+
+                <div className="h-4 w-px bg-border/60 mx-1" />
+
+                <Link href="/inventory/history">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 gap-2 hover:bg-muted font-medium px-3 text-muted-foreground hover:text-foreground"
+                    >
+                        <History className="h-4 w-4" />
+                        <span className="text-xs">History</span>
+                    </Button>
+                </Link>
+            </div>
+
         </div>
       </div>
 

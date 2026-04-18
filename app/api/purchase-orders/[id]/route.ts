@@ -4,6 +4,8 @@ import { getExternalApiConfig } from '../../../../lib/external-api-config';
 import { syncPurchaseTransaction, syncAccountsPayable } from '../../../../lib/services/external-accounting-api';
 import { calculatePurchaseCosts } from '../../../../lib/purchase-utils';
 import { toSafeNumber } from '../../../../lib/utils';
+import { checkApprovalRequired, submitToApprovalQueue } from '../../../../lib/approvals';
+import { processPurchaseOrderReceipt } from '../../../../lib/purchase-actions';
 
 export async function PATCH(
   request: NextRequest,
@@ -28,8 +30,27 @@ export async function PATCH(
       receivedTotal,
       vatAmount,
       receivedItems, // New field for partial/full receipt
-      allocationStrategy
+      allocationStrategy,
+      isInternalFinalization,
+      userId
     } = body;
+
+    // 0. Check for RECEIVE_PO approval if status is moving to Received
+    if (status === 'Received' && !isInternalFinalization) {
+      const isApprovalRequired = await checkApprovalRequired('RECEIVE_PO');
+      if (isApprovalRequired) {
+        const { queueId, pendingApproval } = await submitToApprovalQueue('RECEIVE_PO', { ...body, id }, userId || 'system');
+        
+        if (pendingApproval) {
+          return NextResponse.json({
+            success: true,
+            pendingApproval: true,
+            data: { queueId },
+            message: 'Purchase receipt submitted for approval'
+          });
+        }
+      }
+    }
 
     // Recalculate if items or shipping updated
     let finalTotal = toSafeNumber(total);
@@ -128,81 +149,14 @@ export async function PATCH(
         }
       }
 
-      // 3. Handle Receipt Side Effects (Stock Update & Movements)
+      // 3. Handle Receipt Side Effects using helper
       if (status === 'Received' && receivedItems && Array.isArray(receivedItems)) {
-        // We need all items and shipping fee to calculate correct landed cost distribution
-        let allItems = items;
-        let currentShipping = shipping;
-
-        if (!allItems || currentShipping === undefined) {
-          const [po]: any = await connection.query('SELECT shipping_fee FROM purchase_orders WHERE id = ?', [id]);
-          const [pItems]: any = await connection.query('SELECT product_id as productId, quantity, cost, selling_price as sellingPrice, discount, discount_type as discountType, vat_subject as vatSubject FROM purchase_order_items WHERE purchase_order_id = ?', [id]);
-          
-          if (!allItems) allItems = pItems.map((pi: any) => ({ ...pi, vatSubject: pi.vatSubject === 1 }));
-          if (currentShipping === undefined) currentShipping = parseFloat(po[0]?.shipping_fee || '0');
-        }
-
-        const calculations = calculatePurchaseCosts(allItems, currentShipping || 0, 12, allocationStrategy || 'equal');
-
-        const [defaultLevel]: any = await connection.query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
-        const defaultLevelId = defaultLevel[0]?.id;
-
-        for (const item of receivedItems) {
-          // Get current stock and product details
-          const [productResult]: any = await connection.query(
-            'SELECT name, stock FROM products WHERE id = ?',
-            [item.productId]
-          );
-
-          if (productResult && productResult.length > 0) {
-            const product = productResult[0];
-            const previousStock = toSafeNumber(product.stock);
-            const quantityAdded = toSafeNumber(item.quantity);
-            const newStock = previousStock + quantityAdded;
-
-            // Find calculated landed cost for this product
-            const calculatedItem = calculations.items.find(ci => ci.productId === item.productId);
-            const landedCost = calculatedItem ? calculatedItem.landedCostPerUnit : toSafeNumber(item.cost);
-
-            // Get selling price from current received item or the PO items
-            const sellingPrice = toSafeNumber(item.sellingPrice || allItems.find((ai: any) => ai.productId === item.productId)?.sellingPrice);
-
-            // Update product stock, cost (landed), selling price, and expiration date
-            await connection.query(
-              'UPDATE products SET stock = ?, cost = ?, price = ?, expiration_date = ?, updated_at = NOW() WHERE id = ?',
-              [newStock, landedCost, sellingPrice, item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null, item.productId]
-            );
-
-            // Also update/insert default price level to ensure it reflects in POS
-            if (defaultLevelId && sellingPrice > 0) {
-                await connection.query(`
-                    INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
-                    VALUES (?, ?, ?, 0) 
-                    ON DUPLICATE KEY UPDATE price = VALUES(price)
-                `, [item.productId, defaultLevelId, sellingPrice]);
-            }
-
-            // Record stock movement
-            const movementId = `MOV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-            await connection.query(`
-              INSERT INTO stock_movements (
-                id, product_id, product_name, movement_type, 
-                quantity_change, previous_stock, new_stock, 
-                reference_id, reference_type, notes, expiration_date, created_at, updated_at
-              ) VALUES (?, ?, ?, 'purchase', ?, ?, ?, ?, 'purchase', ?, ?, NOW(), NOW())
-            `, [
-              movementId,
-              item.productId,
-              product.name,
-              quantityAdded,
-              previousStock,
-              newStock,
-              id,
-              `Received Purchase Order: ${id}`,
-              item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null
-            ]);
-          }
-        }
+        const receiptData = {
+          receivedItems,
+          receivedTotal: receivedTotal || finalTotal,
+          allocationStrategy
+        };
+        await processPurchaseOrderReceipt(id, receiptData, userId || 'system', connection);
       }
 
       // 4. Trigger External API Sync (if enabled)

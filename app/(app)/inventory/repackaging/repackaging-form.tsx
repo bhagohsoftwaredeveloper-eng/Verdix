@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Package, ArrowRight, PlusCircle, CheckCircle2, AlertCircle, Info } from 'lucide-react';
-import { breakPack, searchProducts } from '../../products/actions';
+import { breakPack, searchProducts, getUnitsOfMeasure } from '../../products/actions';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Package, ArrowRight, CheckCircle2, Info, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -21,6 +22,9 @@ type SearchResult = {
   barcode: string;
   stock: number;
   unitOfMeasure: string;
+  price: number;
+  cost?: number;
+  conversionFactors?: { unit: string; factor: number }[];
 };
 
 export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
@@ -45,6 +49,45 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
   const [newUnit, setNewUnit] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newCost, setNewCost] = useState('');
+  const [newBarcode, setNewBarcode] = useState('');
+  const [units, setUnits] = useState<{ id: string; name: string }[]>([]);
+
+  // Fetch Units
+  useEffect(() => {
+    getUnitsOfMeasure().then(setUnits);
+  }, []);
+
+  const generateBarcode = useCallback(() => {
+    const randomNumber = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    setNewBarcode(randomNumber);
+  }, []);
+
+  // Auto-generate barcode when switching to create mode
+  useEffect(() => {
+    if (targetType === 'create' && !newBarcode) {
+      generateBarcode();
+    }
+  }, [targetType, newBarcode, generateBarcode]);
+
+  // Auto-calculate Price & Cost
+  useEffect(() => {
+    if (targetType === 'create' && newUnit && selectedSource) {
+      const cf = selectedSource.conversionFactors?.find(f => f.unit === newUnit);
+      if (cf && cf.factor > 0) {
+        const factor = cf.factor;
+        const suggestedPrice = (selectedSource.price / factor).toFixed(2);
+        const suggestedCost = selectedSource.cost ? (selectedSource.cost / factor).toFixed(2) : '';
+        
+        setNewPrice(suggestedPrice);
+        setNewCost(suggestedCost);
+        
+        // Also suggest a name if empty
+        if (!newName) {
+          setNewName(`${selectedSource.name} ${newUnit}`);
+        }
+      }
+    }
+  }, [newUnit, selectedSource, targetType, newName]);
 
   // Counting State
   const [packsProduced, setPacksProduced] = useState('');
@@ -99,7 +142,8 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
           unitOfMeasure: newUnit,
           conversionFactor: factor,
           price: parseFloat(newPrice),
-          cost: newCost ? parseFloat(newCost) : undefined
+          cost: newCost ? parseFloat(newCost) : undefined,
+          barcode: newBarcode
         });
       } else {
          toast({ variant: 'destructive', title: 'Target Missing', description: 'Please select or create a target product.' });
@@ -319,11 +363,39 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
                   </div>
                   <div className="space-y-2">
                     <Label>Unit of Measure</Label>
-                    <Input value={newUnit} onChange={(e) => setNewUnit(e.target.value)} placeholder="e.g. Pack" />
+                    <Select value={newUnit} onValueChange={setNewUnit}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {units.map(u => (
+                          <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Barcode</Label>
+                    <div className="relative">
+                      <Input value={newBarcode} onChange={(e) => setNewBarcode(e.target.value)} placeholder="Barcode" className="pr-10" />
+                      <Button
+                        variant="ghost" 
+                        size="icon" 
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground"
+                        onClick={generateBarcode}
+                        type="button"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Retail Price</Label>
                     <Input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="0.00" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Cost</Label>
+                    <Input type="number" value={newCost} onChange={(e) => setNewCost(e.target.value)} placeholder="0.00" />
                   </div>
                 </div>
               )}
