@@ -70,6 +70,9 @@ import './068_update_stock_movements_reference_type';
 import './070_create_user_types_tables';
 import './071_create_repackaging_logs_table';
 import './072_add_repackaging_approval_setting';
+import './073_alter_stock_adjustments_add_metadata_fields';
+import './074_create_inventory_transfers_table';
+import './075_add_warehouse_id_to_stock_movements';
 
 
 // Import runner functions

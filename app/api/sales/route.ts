@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       const countQuery = `
         SELECT COUNT(*) as total
         FROM sales_transactions
-        WHERE warehouse = ?
+        WHERE warehouse_id = ?
       `;
       const countResult = await query(countQuery, [warehouse]);
       return NextResponse.json({

@@ -77,6 +77,7 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
         .sig-name { font-size: 10pt; min-height: 45px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; border-bottom: 1.5pt solid #000; font-weight: 700; text-align: center; }
         .sig-label { font-size: 8pt; color: #555; text-align: center; margin-top: 5px; text-transform: uppercase; font-weight: 600; }
         .footer { border-top: 0.5pt solid #eee; padding-top: 10px; font-size: 8pt; color: #999; text-align: center; margin-top: 50px; }
+        .barcode-value { font-family: monospace; font-size: 13pt; font-weight: 700; color: #000; margin-top: 2px; display: block; }
         @media print {
           body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .no-print { display: none; }
@@ -181,8 +182,8 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                 <table className="data-table w-full border-collapse mb-5">
                   <thead>
                     <tr className="border-b border-black">
-                      <th className="text-left p-2 text-[9pt] font-bold uppercase w-[40%]">Product Name</th>
-                      <th className="text-left p-2 text-[9pt] font-bold uppercase">SKU / Part No</th>
+                      <th className="text-left p-2 text-[9pt] font-bold uppercase w-[35%]">Product Name</th>
+                      <th className="text-left p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
                       <th className="text-right p-2 text-[9pt] font-bold uppercase">Change</th>
                       <th className="text-right p-2 text-[9pt] font-bold uppercase">Prev Bal</th>
                       <th className="text-right p-2 text-[9pt] font-bold uppercase">New Bal</th>
@@ -191,8 +192,13 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                   <tbody>
                     <tr className="border-b border-zinc-100">
                       <td className="p-2 text-[10pt] font-medium">{item.transaction_data.productName || item.transaction_data.name || 'Unknown Product'}</td>
-                      <td className="p-2 text-[10pt] font-mono font-bold text-slate-600">
-                        {item.transaction_data.productSku || item.transaction_data.sku || '-'}
+                      <td className="p-2 text-[10pt]">
+                        <div className="font-mono font-bold text-slate-600 text-[9pt]">
+                          {item.transaction_data.productSku || item.transaction_data.sku || '-'}
+                        </div>
+                        <div className="barcode-value font-mono font-bold text-black text-[12pt] mt-1">
+                          {item.transaction_data.productBarcode || item.transaction_data.barcode || '-'}
+                        </div>
                       </td>
                       <td className="p-2 text-[10pt] font-mono text-right font-bold">
                         {(Number(item.transaction_data.quantity) || 0) > 0 ? '+' : ''}{item.transaction_data.quantity || 0}
@@ -216,8 +222,8 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
               <table className="data-table w-full border-collapse mb-5">
                 <thead>
                   <tr className="border-b border-black text-left">
-                    <th className="p-2 text-[9pt] font-bold uppercase w-[40%]">Product Name</th>
-                    <th className="p-2 text-[9pt] font-bold uppercase">SKU / Part No</th>
+                    <th className="p-2 text-[9pt] font-bold uppercase w-[35%]">Product Name</th>
+                    <th className="p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
                     <th className="p-2 text-[9pt] font-bold uppercase">Source</th>
                     <th className="p-2 text-[9pt] font-bold uppercase">Destination</th>
                     <th className="p-2 text-[9pt] font-bold uppercase text-right">Qty</th>
@@ -226,8 +232,13 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                 <tbody>
                   <tr className="border-b border-zinc-100">
                     <td className="p-2 text-[10pt] font-medium">{item.transaction_data.productName || 'Multiple Items'}</td>
-                    <td className="p-2 text-[10pt] font-mono font-bold text-slate-600">
-                      {item.transaction_data.productSku || item.transaction_data.sku || '-'}
+                    <td className="p-2 text-[10pt]">
+                      <div className="font-mono font-bold text-slate-600 text-[9pt]">
+                        {item.transaction_data.productSku || item.transaction_data.sku || '-'}
+                      </div>
+                      <div className="barcode-value font-mono font-bold text-black text-[12pt] mt-1">
+                        {item.transaction_data.productBarcode || item.transaction_data.barcode || '-'}
+                      </div>
                     </td>
                     <td className="p-2 text-[10pt]">
                        <span className="inline-block px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 text-[8pt] font-bold border border-amber-100/50">
@@ -255,8 +266,8 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                 <table className="data-table w-full border-collapse mb-5">
                   <thead>
                     <tr className="border-b border-black text-left">
-                      <th className="p-2 text-[9pt] font-bold uppercase w-[40%]">Product Name</th>
-                      <th className="p-2 text-[9pt] font-bold uppercase">SKU / Part No</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[35%]">Product Name</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
                       <th className="p-2 text-[9pt] font-bold uppercase text-right">Expected</th>
                       <th className="p-2 text-[9pt] font-bold uppercase text-right">Counted</th>
                       <th className="p-2 text-[9pt] font-bold uppercase text-right">Variance</th>
@@ -268,7 +279,10 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                       return (
                         <tr key={idx} className="border-b border-zinc-100">
                           <td className="p-2 text-[10pt] font-medium">{it.productName || it.name}</td>
-                          <td className="p-2 text-[10pt] font-mono text-slate-600">{it.productSku || it.sku || '-'}</td>
+                          <td className="p-2 text-[10pt]">
+                            <div className="font-mono font-bold text-slate-600 text-[8pt]">{it.productSku || it.sku || '-'}</div>
+                            <div className="barcode-value font-mono font-bold text-black text-[11pt] mt-0.5">{it.productBarcode || it.barcode || '-'}</div>
+                          </td>
                           <td className="p-2 text-[10pt] text-right">{it.snapshot_quantity}</td>
                           <td className="p-2 text-[10pt] text-right font-bold">{it.counted_quantity}</td>
                           <td className={`p-2 text-[10pt] text-right font-bold ${variance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
@@ -287,8 +301,8 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                 <table className="data-table w-full border-collapse mb-2 text-left">
                   <thead>
                     <tr className="border-b border-black">
-                      <th className="p-2 text-[9pt] font-bold uppercase w-[40%]">Item Description</th>
-                      <th className="p-2 text-[9pt] font-bold uppercase w-[20%]">SKU / Part No</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[35%]">Item Description</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
                       <th className="p-2 text-[9pt] font-bold uppercase text-right w-[60px]">Qty</th>
                       <th className="p-2 text-[9pt] font-bold uppercase text-right">Unit Rate</th>
                       <th className="p-2 text-[9pt] font-bold uppercase text-right">Extended</th>
@@ -298,7 +312,10 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                     {item.transaction_data.items.map((it: any, idx: number) => (
                       <tr key={idx} className="border-b border-zinc-100">
                         <td className="p-2 text-[10pt] font-medium">{it.productName || it.name}</td>
-                        <td className="p-2 text-[10pt] font-mono text-slate-600">{it.productSku || it.sku || '-'}</td>
+                        <td className="p-2 text-[10pt]">
+                           <div className="font-mono font-bold text-slate-600 text-[8pt]">{it.productSku || it.sku || '-'}</div>
+                           <div className="barcode-value font-mono font-bold text-black text-[11pt] mt-0.5">{it.productBarcode || it.barcode || '-'}</div>
+                        </td>
                         <td className="p-2 text-[10pt] font-mono text-right">{it.quantity}</td>
                         <td className="p-2 text-[10pt] font-mono text-right">
                             {it.cost ? it.cost.toLocaleString() : it.price ? it.price.toLocaleString() : '-'}
@@ -322,16 +339,19 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                 <table className="data-table w-full border-collapse mb-2 text-left">
                   <thead>
                     <tr className="border-b border-black">
-                      <th className="p-2 text-[9pt] font-bold uppercase w-[60%]">Item Description</th>
-                      <th className="p-2 text-[9pt] font-bold uppercase w-[30%]">SKU / Part No</th>
-                      <th className="p-2 text-[9pt] font-bold uppercase text-right w-[10%]">Qty</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[40%]">Item Description</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[40%]">SKU / Barcode</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right w-[20%]">Qty</th>
                     </tr>
                   </thead>
                   <tbody>
                     {item.transaction_data.items.map((it: any, idx: number) => (
                       <tr key={idx} className="border-b border-zinc-100">
                         <td className="p-2 text-[10pt] font-medium">{it.productName || it.name}</td>
-                        <td className="p-2 text-[10pt] font-mono text-slate-600">{it.productSku || it.sku || '-'}</td>
+                        <td className="p-2 text-[10pt]">
+                           <div className="font-mono font-bold text-slate-600 text-[8pt]">{it.productSku || it.sku || '-'}</div>
+                           <div className="barcode-value font-mono font-bold text-black text-[11pt] mt-0.5">{it.productBarcode || it.barcode || '-'}</div>
+                        </td>
                         <td className="p-2 text-[10pt] font-mono text-right">{it.quantity}</td>
                       </tr>
                     ))}

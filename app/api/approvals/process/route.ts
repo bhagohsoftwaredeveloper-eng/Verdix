@@ -101,8 +101,31 @@ export async function POST(request: NextRequest) {
         let result = { success: false, error: 'Unknown transaction type' };
         
         if (item.transaction_type === 'STOCK_ADJUSTMENT') {
-          const adjResult = await adjustStock(txData.productId, txData.quantity, txData.reason, item.created_by, true);
-          result = { success: adjResult.success, error: (adjResult as any).error || '' };
+          // Check if this is a transfer handled within the adjustment flow (fallback)
+          if (txData.adjustmentType === 'transfer' && (txData.targetWarehouseId || txData.toWarehouseId)) {
+            const transferRequest = {
+              sourceWarehouseId: txData.warehouseId || txData.fromWarehouseId,
+              targetWarehouseId: txData.targetWarehouseId || txData.toWarehouseId,
+              transferDate: new Date().toISOString().slice(0, 19).replace('T', ' '),
+              reference: txData.referenceNo || 'BULK-TRF-FINAL',
+              notes: txData.reason || 'Processed from Bulk Adjustment',
+              items: [{
+                productId: txData.productId,
+                productName: txData.productName || 'Unknown',
+                quantity: txData.quantity
+              }]
+            };
+            const trfResult = await processTransferStock(transferRequest);
+            result = { success: trfResult.success, error: trfResult.error || '' };
+          } else {
+            // Safety: If it's a removal but quantity is somehow positive, flip it
+            let adjQty = txData.quantity;
+            if (txData.adjustmentType === 'remove' && adjQty > 0) {
+              adjQty = -adjQty;
+            }
+            const adjResult = await adjustStock(txData.productId, adjQty, txData.reason, item.created_by, true);
+            result = { success: adjResult.success, error: (adjResult as any).error || '' };
+          }
         } else if (item.transaction_type === 'PURCHASE_ORDER' || item.transaction_type === 'RECEIVE_PO') {
           const poResult = await processPurchaseOrderCreation({ ...txData, isInternalFinalization: true }, item.created_by);
           result = { success: poResult.success, error: (poResult as any).error || '' };

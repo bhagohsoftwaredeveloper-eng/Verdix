@@ -39,15 +39,16 @@ export async function POST(request: NextRequest) {
     if (isApprovalRequired) {
       // Fetch names for enrichment
       const [productRes, sourceRes, targetRes]: any = await Promise.all([
-        query(`SELECT name, sku FROM products WHERE id = ?`, [body.productId]),
-        query(`SELECT name FROM warehouses WHERE id = ?`, [body.fromWarehouseId]),
-        query(`SELECT name FROM warehouses WHERE id = ?`, [body.toWarehouseId])
+        query(`SELECT name, sku, barcode FROM products WHERE id = ?`, [body.productId]),
+        query(`SELECT name FROM warehouses WHERE id = ?`, [body.fromWarehouseId || body.warehouseId || body.sourceWarehouseId]),
+        query(`SELECT name FROM warehouses WHERE id = ?`, [body.toWarehouseId || body.targetWarehouseId])
       ]);
 
       const enrichedData = {
         ...body,
         productName: productRes[0]?.name || 'Unknown Product',
         productSku: productRes[0]?.sku || '',
+        productBarcode: productRes[0]?.barcode || '',
         fromWarehouseName: sourceRes[0]?.name || 'Unknown Warehouse',
         toWarehouseName: targetRes[0]?.name || 'Unknown Warehouse'
       };
@@ -68,7 +69,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Direct execution
-    const result = await processTransferStock(body);
+    const transferPayload = {
+      ...body,
+      transferDate: body.transferDate || new Date().toISOString().slice(0, 19).replace('T', ' ')
+    };
+    const result = await processTransferStock(transferPayload);
 
     if (result.success) {
       return NextResponse.json({

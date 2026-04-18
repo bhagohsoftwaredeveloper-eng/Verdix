@@ -28,7 +28,10 @@ import { getProducts } from '../products/actions';
 import { adjustStock } from './history/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useEffect, useMemo } from 'react';
-import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban, History, MoreHorizontal } from 'lucide-react';
+import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban, History, MoreHorizontal, Layers, Rows3 } from 'lucide-react';
+import { TransferBoardDrawer } from './TransferBoardDrawer';
+import { ShelfBoardDrawer } from './ShelfBoardDrawer';
+import { BulkAdjustmentDrawer } from './BulkAdjustmentDrawer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -747,6 +750,9 @@ export default function InventoryPage() {
   const [pageSize] = useState(10);
   const [totalProducts, setTotalProducts] = useState(0);
   const [posSettings, setPosSettings] = useState<any>(null);
+  const [isTransferBoardOpen, setIsTransferBoardOpen] = useState(false);
+  const [isShelfBoardOpen, setIsShelfBoardOpen] = useState(false);
+  const [isBulkAdjustmentOpen, setIsBulkAdjustmentOpen] = useState(false);
 
   useEffect(() => {
     loadProducts();
@@ -826,20 +832,54 @@ export default function InventoryPage() {
                     <TabsTrigger value="list"><List className="h-4 w-4" /></TabsTrigger>
                 </TabsList>
             </Tabs>
+            
+            <div className="h-8 w-px bg-muted mx-1" />
+
+            <Button variant="outline" onClick={() => setIsTransferBoardOpen(true)}>
+                <Kanban className="mr-2 h-4 w-4" />
+                Transfer Board
+            </Button>
+            
+            <Button variant="outline" onClick={() => setIsShelfBoardOpen(true)}>
+                <Rows3 className="mr-2 h-4 w-4" />
+                Shelf Board
+            </Button>
+
+            <Button variant="default" className="bg-primary hover:bg-primary/90 shadow-md" onClick={() => setIsBulkAdjustmentOpen(true)}>
+                <Layers className="mr-2 h-4 w-4" />
+                Bulk Adjustment
+            </Button>
+
+            <div className="h-8 w-px bg-muted mx-1" />
+
             <Link href="/inventory/history">
-                <Button variant="outline">
+                <Button variant="ghost" size="sm">
                     <History className="mr-2 h-4 w-4" />
                     History
                 </Button>
             </Link>
             <Link href="/inventory/physical-count">
-                <Button>
+                <Button variant="ghost" size="sm">
                     <ClipboardCheck className="mr-2 h-4 w-4" />
-                    Physical Count
+                    Count
                 </Button>
             </Link>
         </div>
       </div>
+
+      <TransferBoardDrawer 
+        open={isTransferBoardOpen} 
+        onOpenChange={setIsTransferBoardOpen} 
+      />
+      <ShelfBoardDrawer 
+        open={isShelfBoardOpen} 
+        onOpenChange={setIsShelfBoardOpen} 
+      />
+      <BulkAdjustmentDrawer 
+        open={isBulkAdjustmentOpen} 
+        onOpenChange={setIsBulkAdjustmentOpen}
+        onSuccess={loadProducts}
+      />
 
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="relative flex-1">

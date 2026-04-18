@@ -221,8 +221,8 @@ export async function adjustStock(productId: string, quantity: number, reason: s
     
     if (isApprovalRequired) {
       // Get product info for enrichment
-      const productInfoRes: any = await query('SELECT name, stock, sku FROM products WHERE id = ?', [productId]);
-      const productInfo = productInfoRes[0] || { name: 'Unknown', stock: 0, sku: '' };
+      const productInfoRes: any = await query('SELECT name, stock, sku, barcode FROM products WHERE id = ?', [productId]);
+      const productInfo = productInfoRes[0] || { name: 'Unknown', stock: 0, sku: '', barcode: '' };
 
       // Submit to approval queue instead of executing
       console.log('Stock adjustment submitted for approval:', { productId, quantity, reason });
@@ -232,6 +232,7 @@ export async function adjustStock(productId: string, quantity: number, reason: s
         reason,
         productName: productInfo.name,
         productSku: productInfo.sku,
+        productBarcode: productInfo.barcode,
         currentStock: parseInt(productInfo.stock)
       }, userId);
       

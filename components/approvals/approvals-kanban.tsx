@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { printApproval } from '@/lib/print-approval';
 import { PrintPreviewDialog } from './print-preview-dialog';
+import { ApprovalsHistoryDialog } from './approvals-history-dialog';
 import {
   Dialog,
   DialogContent,
@@ -81,6 +82,7 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
   const [dynamicColumns, setDynamicColumns] = useState<WorkflowColumn[]>([]);
   const [workflowConfigs, setWorkflowConfigs] = useState<Record<string, any[]>>({});
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
 
   const fetchQueue = async () => {
     try {
@@ -246,7 +248,9 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
         return filteredItems.filter(i => i.status === 'Pending' && i.current_step === 1 && i.created_by === user?.uid);
     }
     if (column.status) {
-        return filteredItems.filter(i => i.status === column.status);
+        const filtered = filteredItems.filter(i => i.status === column.status);
+        // Limit finalized/rejected items to latest 20 for performance
+        return column.isMeta ? filtered.slice(0, 20) : filtered;
     }
     if (column.role) {
         return filteredItems.filter(i => i.status === 'Pending' && i.currentStepRole === column.role);
@@ -305,6 +309,15 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
+            <Button 
+                onClick={() => setShowHistoryDialog(true)} 
+                variant="outline" 
+                size="icon" 
+                className="h-9 w-9 text-primary border-primary/20 hover:bg-primary/5" 
+                title="View Full History Logs"
+            >
+                <History className="h-4 w-4" />
+            </Button>
             <Button onClick={fetchQueue} variant="outline" size="icon" className="h-9 w-9" title="Refresh Board">
                 <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
             </Button>
@@ -424,6 +437,18 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                             </Card>
                         ))
                     )}
+                    {column.isMeta && filteredItems.filter(i => i.status === column.status).length > 20 && (
+                        <div className="pt-2">
+                            <Button 
+                                variant="outline" 
+                                className="w-full text-[10px] text-muted-foreground hover:text-primary hover:border-primary/30 py-2 h-auto flex items-center justify-center gap-1.5 bg-background/50 border-dashed"
+                                onClick={() => setShowHistoryDialog(true)}
+                            >
+                                <History className="h-3 w-3" />
+                                View All History ({filteredItems.filter(i => i.status === column.status).length})
+                            </Button>
+                        </div>
+                     )}
                 </div>
             </ScrollArea>
           </div>
@@ -481,7 +506,7 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                         <span className="text-muted-foreground font-medium">Product:</span>
                         <div className="flex flex-col">
                             <span className="font-bold">{selectedItem.transaction_data.productName}</span>
-                            <span className="text-[10px] text-muted-foreground font-mono">{selectedItem.transaction_data.productSku}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">BC: {selectedItem.transaction_data.productBarcode || selectedItem.transaction_data.barcode || 'N/A'}</span>
                         </div>
                         <span className="text-muted-foreground font-medium">Stock Change:</span>
                         <div className="flex items-center gap-2 font-bold">
@@ -587,13 +612,13 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                                               const counted = Number(it.counted_quantity ?? it.countedQuantity ?? 0);
                                               const variance = counted - snap;
                                               const pName = it.productName || it.product_name || 'Unknown Item';
-                                              const pSku = it.productSku || it.product_sku || 'N/A';
+                                              const pBarcode = it.productBarcode || it.barcode || 'N/A';
                                               
                                               return (
                                               <div key={k} className="grid grid-cols-4 text-[11px] p-2 bg-background/30 rounded border border-border/30 items-center">
                                                   <div className="col-span-1 flex flex-col">
                                                       <span className="font-medium truncate">{pName}</span>
-                                                      <span className="text-[8px] text-muted-foreground font-mono">{pSku}</span>
+                                                      <span className="text-[8px] text-muted-foreground font-mono">BC: {pBarcode}</span>
                                                   </div>
                                                   <span className="text-right text-muted-foreground">{snap}</span>
                                                   <span className="text-right font-bold">{counted}</span>
@@ -736,6 +761,16 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
         item={selectedItem}
         open={showPrintPreview}
         onOpenChange={setShowPrintPreview}
+      />
+
+      <ApprovalsHistoryDialog
+        items={items}
+        open={showHistoryDialog}
+        onOpenChange={setShowHistoryDialog}
+        onViewDetails={(item) => {
+            setSelectedItem(item);
+            setShowHistoryDialog(false);
+        }}
       />
     </div>
   );
