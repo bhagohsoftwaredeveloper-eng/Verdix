@@ -133,6 +133,21 @@ export async function processPurchaseOrderReceipt(orderId: string, receiptData: 
         [landedCost, sellingPrice, receivedItem.expirationDate ? new Date(receivedItem.expirationDate).toISOString().slice(0, 10) : null, receivedItem.productId]
       );
 
+      // --- BATCH COSTING: Record this delivery as a new inventory batch ---
+      try {
+        const batchId = Math.floor(100000 + Math.random() * 900000).toString();
+        await connection.query(
+          `INSERT INTO inventory_batches
+             (id, product_id, purchase_order_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type)
+           VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?, 'purchase')`,
+          [batchId, receivedItem.productId, orderId, quantityAdded, quantityAdded, landedCost, sellingPrice]
+        );
+      } catch (batchErr) {
+        // Non-fatal: batch table may not exist yet (pre-migration). Log and continue.
+        console.warn('[BatchCosting] Could not insert inventory_batch (migration pending?):', batchErr);
+      }
+      // --- END BATCH COSTING ---
+
       // Sync stock across the entire product family
       const { rootId, factorToRoot } = await findUltimateRoot(receivedItem.productId, connection);
       const quantityInRootUnits = quantityAdded / factorToRoot;

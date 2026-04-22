@@ -898,11 +898,336 @@ export async function breakPack(
         [logId, parentId, parent.name, quantityToBreak, resolvedChildId!, childName!, childQuantityToAdd, factor, userId]
       );
 
+      // 6. --- BATCH COSTING: Create child batch (inherit parent cost or use current cost) ---
+      try {
+        const [bcsRows]: any = await connection.query(
+          'SELECT batch_costing_repack_inherit FROM pos_settings LIMIT 1'
+        );
+        const repackInherit = !bcsRows || bcsRows.length === 0 || bcsRows[0].batch_costing_repack_inherit !== 0;
+
+        let childUnitCost: number;
+        let sourceType: string;
+
+        if (repackInherit) {
+          // Find the oldest batch for the parent with remaining qty
+          const [parentBatches]: any = await connection.query(
+            `SELECT unit_cost FROM inventory_batches
+             WHERE product_id = ? AND quantity_remaining > 0
+             ORDER BY received_date ASC, created_at ASC LIMIT 1`,
+            [parentId]
+          );
+          if (parentBatches && parentBatches.length > 0) {
+            // Cost per child unit = parent batch cost / conversion factor
+            childUnitCost = parseFloat(parentBatches[0].unit_cost) / factor;
+            sourceType = 'repack_inherit';
+          } else {
+            // Fallback: use parent product.cost
+            const [parentCostRow]: any = await connection.query('SELECT cost FROM products WHERE id = ?', [parentId]);
+            childUnitCost = parseFloat(parentCostRow?.[0]?.cost || 0) / factor;
+            sourceType = 'repack_inherit';
+          }
+        } else {
+          // Use current child product cost directly
+          const [childCostRow]: any = await connection.query('SELECT cost FROM products WHERE id = ?', [resolvedChildId]);
+          childUnitCost = parseFloat(childCostRow?.[0]?.cost || 0);
+          sourceType = 'repack_new';
+        }
+
+        // Get child selling price
+        const [childPriceRow]: any = await connection.query('SELECT price FROM products WHERE id = ?', [resolvedChildId]);
+        const childSellingPrice = parseFloat(childPriceRow?.[0]?.price || 0);
+
+        const childBatchId = Math.floor(100000 + Math.random() * 900000).toString();
+        await connection.query(
+          `INSERT INTO inventory_batches
+             (id, product_id, purchase_order_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type, notes)
+           VALUES (?, ?, NULL, CURDATE(), ?, ?, ?, ?, ?, ?)`,
+          [childBatchId, resolvedChildId!, childQuantityToAdd, childQuantityToAdd, childUnitCost, childSellingPrice, sourceType, `Repackaged from ${parent.name} (${logId})`]
+        );
+      } catch (batchErr) {
+        // Non-fatal (migration may not have run yet)
+        console.warn('[BatchCosting] Could not create repack child batch:', batchErr);
+      }
+      // --- END BATCH COSTING ---
+
       return { success: true, message: `Successfully repackaged ${quantityToBreak} ${parent.unit_of_measure} into ${childQuantityToAdd} ${childUnit!}.` };
+
     });
   } catch (error: any) {
     console.error('Error in breakPack:', error);
     return { success: false, message: error.message || 'Internal server error during break pack operation.' };
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CONSOLIDATE PACK  (Reverse of Break Pack: Pack/Small → Bulk/Large)
+// Source = pack product (stock ↓)
+// Target = bulk product (stock ↑)
+// bulkQtyProduced = packQtyUsed / factor
+// ──────────────────────────────────────────────────────────────────────────────
+
+export type ConsolidatePackNewProductData = {
+  name: string;
+  unitOfMeasure: string;
+  conversionFactor: number; // how many pack units make 1 bulk unit
+  price: number;
+  cost?: number;
+  barcode?: string;
+};
+
+export async function consolidatePack(
+  packId: string,
+  bulkId: string | null,
+  packQtyUsed: number,
+  manualFactor?: number,
+  newProductData?: ConsolidatePackNewProductData,
+  userId: string = 'system',
+  isInternalFinalization: boolean = false
+) {
+  try {
+    // --- Check if approval is required ---
+    if (!isInternalFinalization) {
+      const isApprovalRequired = await checkApprovalRequired('REPACKAGING');
+      if (isApprovalRequired) {
+        const packRows: any = await query(
+          'SELECT name, stock, unit_of_measure, sku, barcode, price, cost FROM products WHERE id = ?',
+          [packId]
+        );
+        const packInfo = Array.isArray(packRows) && packRows.length > 0 ? packRows[0] : null;
+
+        let targetName = newProductData?.name || 'New Bulk Product';
+        let targetUnit = newProductData?.unitOfMeasure || '';
+        let targetBarcode = newProductData?.barcode || '';
+        let targetSku = 'NEW';
+        let targetPrice = newProductData?.price || 0;
+        let targetCost = newProductData?.cost || 0;
+
+        if (bulkId) {
+          const bulkRows: any = await query(
+            'SELECT name, unit_of_measure, sku, barcode, price, cost FROM products WHERE id = ?',
+            [bulkId]
+          );
+          const bulkInfo = Array.isArray(bulkRows) && bulkRows.length > 0 ? bulkRows[0] : null;
+          if (bulkInfo) {
+            targetName = bulkInfo.name;
+            targetUnit = bulkInfo.unit_of_measure;
+            targetBarcode = bulkInfo.barcode;
+            targetSku = bulkInfo.sku;
+            targetPrice = bulkInfo.price;
+            targetCost = bulkInfo.cost;
+          }
+        }
+
+        const factor = manualFactor ?? newProductData?.conversionFactor ?? 1;
+        const sourceName = packInfo?.name || packId;
+        const bulkQtyProduced = packQtyUsed / factor;
+
+        const items = [
+          {
+            productId: packId,
+            productName: sourceName,
+            sku: packInfo?.sku || '',
+            barcode: packInfo?.barcode || '',
+            price: packInfo?.price || 0,
+            cost: packInfo?.cost || 0,
+            quantity: -packQtyUsed,
+            unit: packInfo?.unit_of_measure || '',
+          },
+          {
+            productId: bulkId || 'NEW',
+            productName: targetName,
+            sku: targetSku,
+            barcode: targetBarcode,
+            price: targetPrice,
+            cost: targetCost,
+            quantity: bulkQtyProduced,
+            unit: targetUnit,
+          },
+        ];
+
+        const { queueId, pendingApproval } = await submitToApprovalQueue(
+          'REPACKAGING',
+          {
+            direction: 'consolidate',
+            packId,
+            bulkId,
+            packQtyUsed,
+            manualFactor,
+            newProductData,
+            sourceProductName: sourceName,
+            targetProductName: targetName,
+            sourceUnit: packInfo?.unit_of_measure || '',
+            currentStock: packInfo?.stock || 0,
+            items,
+          },
+          userId
+        );
+
+        if (pendingApproval) {
+          return {
+            success: true,
+            pendingApproval: true,
+            queueId,
+            message: 'Consolidation request submitted for approval.',
+          };
+        }
+      }
+    }
+
+    return await withTransaction(async (connection) => {
+      // 1. Fetch pack (source) info
+      const [packResult]: any = await connection.query(
+        'SELECT id, name, stock, unit_of_measure, sku, brand, category, subcategory, department, supplier_id, warehouse_id, vat_status, income_account, expense_account FROM products WHERE id = ?',
+        [packId]
+      );
+      const pack = packResult[0];
+      if (!pack) throw new Error('Pack product not found.');
+      if (pack.stock < packQtyUsed) {
+        throw new Error(
+          `Insufficient stock of ${pack.name}. Available: ${pack.stock}`
+        );
+      }
+
+      let resolvedBulkId = bulkId;
+      let bulkName: string;
+      let bulkStock: number;
+      let bulkUnit: string;
+      let factor: number;
+
+      // --- Scenario A: Auto-create a new bulk product ---
+      if (!resolvedBulkId && newProductData) {
+        const newId = `product_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const newSku = `${pack.sku}-BULK-${Date.now().toString(36).toUpperCase()}`;
+        factor = newProductData.conversionFactor;
+
+        await connection.query(
+          `INSERT INTO products (
+            id, name, brand, sku, description, category, subcategory,
+            unit_of_measure, stock, reorder_point, price, cost, barcode,
+            warehouse_id, department, supplier_id, vat_status,
+            income_account, expense_account, availability
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            newId, newProductData.name, pack.brand, newSku,
+            `Consolidated from ${pack.name}`,
+            pack.category, pack.subcategory,
+            newProductData.unitOfMeasure, 0, 0,
+            newProductData.price, newProductData.cost || null, newProductData.barcode || null,
+            pack.warehouse_id, pack.department, pack.supplier_id,
+            pack.vat_status, pack.income_account, pack.expense_account,
+            'Available',
+          ]
+        );
+
+        resolvedBulkId = newId;
+        bulkName = newProductData.name;
+        bulkStock = 0;
+        bulkUnit = newProductData.unitOfMeasure;
+
+      // --- Scenario B: Existing bulk product ---
+      } else if (resolvedBulkId) {
+        const [bulkResult]: any = await connection.query(
+          'SELECT id, name, stock, unit_of_measure, conversion_factor FROM products WHERE id = ?',
+          [resolvedBulkId]
+        );
+        const bulk = bulkResult[0];
+        if (!bulk) throw new Error('Bulk/target product not found.');
+
+        bulkName = bulk.name;
+        bulkStock = bulk.stock;
+        bulkUnit = bulk.unit_of_measure;
+        factor = manualFactor ?? 1;
+      } else {
+        throw new Error('No target bulk product specified for consolidation.');
+      }
+
+      const bulkQtyToAdd = packQtyUsed / factor;
+
+      // 2. Deduct pack stock
+      await connection.query(
+        'UPDATE products SET stock = stock - ? WHERE id = ?',
+        [packQtyUsed, packId]
+      );
+
+      // Deduct from pack shelves (highest qty first)
+      const [packShelves]: any = await connection.query(
+        'SELECT shelf_id, quantity FROM product_shelves WHERE product_id = ? ORDER BY quantity DESC',
+        [packId]
+      );
+      let remainingToDeduct = packQtyUsed;
+      for (const shelf of packShelves) {
+        const deduct = Math.min(shelf.quantity, remainingToDeduct);
+        if (deduct > 0) {
+          await connection.query(
+            'UPDATE product_shelves SET quantity = quantity - ? WHERE product_id = ? AND shelf_id = ?',
+            [deduct, packId, shelf.shelf_id]
+          );
+          remainingToDeduct -= deduct;
+        }
+        if (remainingToDeduct <= 0) break;
+      }
+
+      // 3. Add bulk stock
+      await connection.query(
+        'UPDATE products SET stock = stock + ? WHERE id = ?',
+        [bulkQtyToAdd, resolvedBulkId]
+      );
+
+      // Add to bulk shelves
+      const [bulkShelves]: any = await connection.query(
+        'SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1',
+        [resolvedBulkId]
+      );
+      let targetBulkShelf = bulkShelves[0]?.shelf_id;
+
+      if (!targetBulkShelf && packShelves[0]?.shelf_id) {
+        targetBulkShelf = packShelves[0].shelf_id;
+        await connection.query(
+          'INSERT INTO product_shelves (product_id, shelf_id, quantity) VALUES (?, ?, ?)',
+          [resolvedBulkId, targetBulkShelf, bulkQtyToAdd]
+        );
+      } else if (targetBulkShelf) {
+        await connection.query(
+          'UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?',
+          [bulkQtyToAdd, resolvedBulkId, targetBulkShelf]
+        );
+      }
+
+      // 4. Record stock movements
+      const movementId1 = `mov_cons_p_${Date.now()}`;
+      const movementId2 = `mov_cons_b_${Date.now() + 1}`;
+
+      await connection.query(
+        `INSERT INTO stock_movements (id, product_id, product_name, movement_type, quantity_change, previous_stock, new_stock, reference_id, reference_type, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [movementId1, packId, pack.name, 'adjustment', -packQtyUsed, pack.stock, pack.stock - packQtyUsed, resolvedBulkId, 'consolidate_pack', `Consolidated ${packQtyUsed} ${pack.unit_of_measure} into ${bulkName!}`]
+      );
+
+      await connection.query(
+        `INSERT INTO stock_movements (id, product_id, product_name, movement_type, quantity_change, previous_stock, new_stock, reference_id, reference_type, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [movementId2, resolvedBulkId!, bulkName!, 'adjustment', bulkQtyToAdd, bulkStock!, bulkStock! + bulkQtyToAdd, packId, 'consolidate_pack', `Received ${bulkQtyToAdd} ${bulkUnit!} from consolidating ${pack.name}`]
+      );
+
+      // 5. Log to repackaging_logs (reuses same table)
+      const logId = `rpkg_cons_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      await connection.query(
+        `INSERT INTO repackaging_logs (id, source_product_id, source_product_name, source_qty, target_product_id, target_product_name, target_qty_produced, factor, status, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', 'consolidate', ?)`,
+        [logId, packId, pack.name, packQtyUsed, resolvedBulkId!, bulkName!, bulkQtyToAdd, factor, userId]
+      );
+
+      return {
+        success: true,
+        message: `Successfully consolidated ${packQtyUsed} ${pack.unit_of_measure} into ${bulkQtyToAdd} ${bulkUnit!}.`,
+      };
+    });
+  } catch (error: any) {
+    console.error('Error in consolidatePack:', error);
+    return {
+      success: false,
+      message: error.message || 'Internal server error during consolidation operation.',
+    };
   }
 }
 

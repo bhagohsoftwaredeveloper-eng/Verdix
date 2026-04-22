@@ -26,7 +26,9 @@ export async function GET(request: NextRequest) {
       { name: 'require_receive_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'require_bad_order_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'require_stock_count_approval', type: 'BOOLEAN DEFAULT FALSE' },
-      { name: 'require_repackaging_confirmation', type: 'BOOLEAN DEFAULT FALSE' }
+      { name: 'require_repackaging_confirmation', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'batch_costing_repack_inherit', type: 'TINYINT(1) DEFAULT 1' },
+      { name: 'batch_costing_oversell_block', type: 'TINYINT(1) DEFAULT 0' }
     ];
 
     const currentColumnsResult = await query(
@@ -105,7 +107,9 @@ export async function GET(request: NextRequest) {
         require_receive_confirmation AS requireReceiveConfirmation,
         require_bad_order_confirmation AS requireBadOrderConfirmation,
         require_stock_count_approval AS requireStockCountApproval,
-        require_repackaging_confirmation AS requireRepackagingConfirmation
+        require_repackaging_confirmation AS requireRepackagingConfirmation,
+        batch_costing_repack_inherit AS batchCostingRepackInherit,
+        batch_costing_oversell_block AS batchCostingOversellBlock
       FROM pos_settings
       LIMIT 1
     `;
@@ -313,7 +317,9 @@ export async function POST(request: NextRequest) {
         requireReceiveConfirmation: 'require_receive_confirmation',
         requireBadOrderConfirmation: 'require_bad_order_confirmation',
         requireStockCountApproval: 'require_stock_count_approval',
-        requireRepackagingConfirmation: 'require_repackaging_confirmation'
+        requireRepackagingConfirmation: 'require_repackaging_confirmation',
+        batchCostingRepackInherit: 'batch_costing_repack_inherit',
+        batchCostingOversellBlock: 'batch_costing_oversell_block'
       };
 
       const updates: string[] = [];

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
 import { deductFamilyStock, findUltimateRoot } from '@/lib/family-sync';
+import { deductFromBatches, getBatchCostingSettings } from '@/lib/batch-deduction';
 
 export async function POST(request: NextRequest) {
   try {
@@ -87,6 +88,14 @@ export async function POST(request: NextRequest) {
         isTrainingMode
       ]);
 
+      // 2a. Fetch batch costing settings once (do it once before the loop for efficiency)
+      // We'll store it in a variable accessible inside the loop.
+      let _batchSettings: { repackInherit: boolean; oversellBlock: boolean } | null = null;
+      const getBCS = async () => {
+        if (!_batchSettings) _batchSettings = await getBatchCostingSettings(connection as any);
+        return _batchSettings;
+      };
+
       // 2. Insert into sale_items and update stock
       const insertItemSql = `
         INSERT INTO sale_items (
@@ -106,6 +115,30 @@ export async function POST(request: NextRequest) {
           item.quantity,
           item.price * (1 - (item.discount || 0) / 100)
         ]);
+
+        // --- BATCH COSTING: FIFO deduction & cost recording ---
+        try {
+          const bcs = await getBCS();
+          const deduction = await deductFromBatches(
+            item.id,
+            item.quantity,
+            bcs.oversellBlock,
+            connection as any
+          );
+          // Update the sale_items row with batch source data
+          await connection.query(
+            'UPDATE sale_items SET cost_at_sale = ?, batch_source = ? WHERE id = ?',
+            [deduction.weightedAvgCost, JSON.stringify(deduction.splits), itemId]
+          );
+        } catch (batchErr: any) {
+          // If oversell_block is ON, rethrow to abort the transaction
+          if (batchErr.message && batchErr.message.startsWith('Batch stock exhausted')) {
+            throw batchErr;
+          }
+          // Otherwise non-fatal (e.g. migration not yet run) — log and continue
+          console.warn('[BatchCosting] Could not deduct batch (migration pending?):', batchErr.message);
+        }
+        // --- END BATCH COSTING ---
 
         // --- Stock Deduction with Full Hierarchy Sync & Loyalty Calculation ---
         const [soldProdResult]: any = await connection.query(`

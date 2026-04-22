@@ -14,6 +14,7 @@ export type RepackagingLog = {
   status: string;
   approvalQueueId: string | null;
   notes: string | null;
+  direction: 'break' | 'consolidate';
   createdBy: string | null;
   createdAt: string;
 };
@@ -47,6 +48,7 @@ export async function getRepackagingHistory(limit: number = 50, offset: number =
       status: r.status,
       approvalQueueId: r.approval_queue_id,
       notes: r.notes,
+      direction: r.notes === 'consolidate' ? 'consolidate' : 'break',
       createdBy: r.created_by,
       createdAt: r.created_at,
     }));

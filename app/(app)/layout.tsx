@@ -78,7 +78,7 @@ const navItems = [
 const inventoryNavItems = [
   { href: '/inventory', label: 'Stock Levels' },
   { href: '/inventory/stock-counts', label: 'Stock Counts (Snapshots)' },
-  { href: '/inventory/repackaging', label: 'Repackaging / Break Pack' },
+  { href: '/inventory/repackaging', label: 'Repackaging' },
   { href: '/inventory/history', label: 'Adjustment History' },
   { href: '/inventory/movement', label: 'Stock Movement' },
 ]

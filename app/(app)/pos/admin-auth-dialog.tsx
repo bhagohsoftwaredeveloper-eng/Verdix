@@ -13,7 +13,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Loader2, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { getApiUrl } from '@/lib/api-config';
 
 interface AdminAuthDialogProps {
@@ -117,7 +118,15 @@ export function AdminAuthDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{title || 'Admin Authentication Required'}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            {title || 'Admin Authentication Required'}
+            {error && (
+              <Badge variant="destructive" className="px-2 py-0.5 animate-in zoom-in-95 duration-300">
+                <XCircle className="w-3 h-3 mr-1" />
+                Invalid
+              </Badge>
+            )}
+          </DialogTitle>
           <DialogDescription>
             {description || 'Enter admin credentials to authorize this action.'}
           </DialogDescription>

@@ -4,14 +4,14 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, Loader2, Eye, EyeOff, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/logo';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -33,7 +33,6 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // const auth = useAuth();
-  const { toast } = useToast();
   const router = useRouter();
 
   const form = useForm<LoginFormValues>({
@@ -83,14 +82,8 @@ export default function LoginPage() {
       }
 
     } catch (err: any) {
-      console.error('Login error:', err);
       const errorMessage = err.message || 'Invalid credentials. Please try again.';
       setError(errorMessage);
-      toast({
-        title: "Login Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
     } finally {
       setIsSubmitting(false);
     }
@@ -106,7 +99,15 @@ export default function LoginPage() {
                 <Logo size={120} />
              </div>
              <div className="space-y-1 text-center">
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome back</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
+                  Welcome back
+                  {error && (
+                    <Badge variant="destructive" className="ml-2 px-2 py-0.5 animate-in zoom-in-95 duration-300">
+                      <XCircle className="w-3 h-3 mr-1" />
+                      Invalid
+                    </Badge>
+                  )}
+                </h1>
                  <p className="text-muted-foreground text-sm">Enter your credentials to access your account</p>
              </div>
           </div>

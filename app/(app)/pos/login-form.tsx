@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, Eye, EyeOff, Settings } from 'lucide-react';
+import { AlertCircle, Loader2, Eye, EyeOff, Settings, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -57,10 +58,12 @@ export function PosLoginForm({ onLoginSuccess }: PosLoginFormProps) {
       if (response.ok) {
         onLoginSuccess(result);
       } else {
-        setError(result.error || 'Invalid credentials');
+        const errorMessage = result.error || 'Invalid credentials';
+        setError(errorMessage);
       }
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
+      const errorMessage = 'An unexpected error occurred. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -79,7 +82,15 @@ export function PosLoginForm({ onLoginSuccess }: PosLoginFormProps) {
           >
             <Settings className="h-4 w-4" />
           </Button>
-          <CardTitle className="text-2xl">POS Login</CardTitle>
+          <CardTitle className="text-2xl flex items-center justify-center gap-2">
+            POS Login
+            {error && (
+              <Badge variant="destructive" className="px-2 py-0.5 animate-in zoom-in-95 duration-300">
+                <XCircle className="w-3 h-3 mr-1" />
+                Invalid
+              </Badge>
+            )}
+          </CardTitle>
           <CardDescription>Enter your cashier credentials to proceed</CardDescription>
         </CardHeader>
         <CardContent>

@@ -767,18 +767,84 @@ export default function SalesInvoicesPage() {
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {(sale.items || []).map((item, idxx) => (
-                                                        <TableRow key={item.product?.id || (item as any).productId || idxx}>
-                                                            <TableCell className="py-1 text-xs">{item.product?.name || (item as any).productName || 'Unknown Product'}</TableCell>
-                                                            <TableCell className="text-right py-1 text-xs">{item.quantity}</TableCell>
-                                                            <TableCell className="text-right py-1 text-xs">₱{formatAmount(item.price)}</TableCell>
-                                                            <TableCell className="text-right py-1 text-xs">₱{formatAmount(Number(item.price || 0) * Number(item.quantity || 0))}</TableCell>
-                                                        </TableRow>
-                                                        ))}
+                                                        {(sale.items || []).map((item, idxx) => {
+                                                            const batchSource: any[] = (item as any).batchSource || [];
+                                                            const costAtSale: number | null = (item as any).costAtSale ?? null;
+                                                            const hasBatchData = batchSource.length > 0;
+                                                            const itemRevenue = Number(item.price || 0) * Number(item.quantity || 0);
+                                                            const itemCost = costAtSale != null ? costAtSale * Number(item.quantity || 0) : null;
+                                                            const itemProfit = itemCost != null ? itemRevenue - itemCost : null;
+
+                                                            return (
+                                                            <Fragment key={item.product?.id || (item as any).productId || idxx}>
+                                                                <TableRow>
+                                                                    <TableCell className="py-1 text-xs">{item.product?.name || (item as any).productName || 'Unknown Product'}</TableCell>
+                                                                    <TableCell className="text-right py-1 text-xs">{item.quantity}</TableCell>
+                                                                    <TableCell className="text-right py-1 text-xs">₱{formatAmount(item.price)}</TableCell>
+                                                                    <TableCell className="text-right py-1 text-xs">₱{formatAmount(itemRevenue)}</TableCell>
+                                                                </TableRow>
+                                                                {hasBatchData && (
+                                                                    <TableRow className="bg-amber-50/50 hover:bg-amber-50/50">
+                                                                        <TableCell colSpan={4} className="py-0 px-3 pb-2">
+                                                                            <div className="mt-1 rounded border border-amber-200 overflow-hidden">
+                                                                                <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-100/70 border-b border-amber-200">
+                                                                                    <span className="text-[10px] font-semibold text-amber-800 uppercase tracking-wider">Batch Cost Breakdown</span>
+                                                                                    {itemProfit != null && (
+                                                                                        <span className={`ml-auto text-[10px] font-medium ${itemProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                                                                                            Gross Profit: ₱{formatAmount(itemProfit)} ({itemRevenue > 0 ? ((itemProfit / itemRevenue) * 100).toFixed(1) : '0.0'}%)
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <table className="w-full text-[10px]">
+                                                                                    <thead>
+                                                                                        <tr className="bg-amber-50/80">
+                                                                                            <th className="text-left px-2 py-1 text-amber-700 font-medium">Source Batch</th>
+                                                                                            <th className="text-right px-2 py-1 text-amber-700 font-medium">Qty</th>
+                                                                                            <th className="text-right px-2 py-1 text-amber-700 font-medium">Unit Cost</th>
+                                                                                            <th className="text-right px-2 py-1 text-amber-700 font-medium">Sell Price</th>
+                                                                                            <th className="text-right px-2 py-1 text-amber-700 font-medium">Line Cost</th>
+                                                                                            <th className="text-right px-2 py-1 text-amber-700 font-medium">Line Revenue</th>
+                                                                                            <th className="text-right px-2 py-1 text-amber-700 font-medium">Profit</th>
+                                                                                        </tr>
+                                                                                    </thead>
+                                                                                    <tbody>
+                                                                                        {batchSource.map((split: any, si: number) => {
+                                                                                            const splitRevenue = split.qty * Number(item.price || 0);
+                                                                                            const splitCost = split.qty * split.unitCost;
+                                                                                            const splitProfit = splitRevenue - splitCost;
+                                                                                            return (
+                                                                                                <tr key={si} className={si % 2 === 0 ? 'bg-white' : 'bg-amber-50/30'}>
+                                                                                                    <td className="px-2 py-0.5">
+                                                                                                        {split.type === 'fallback'
+                                                                                                            ? <span className="italic text-muted-foreground">(untracked — fallback)</span>
+                                                                                                            : <span className="font-mono">{split.batchId}</span>
+                                                                                                        }
+                                                                                                    </td>
+                                                                                                    <td className="text-right px-2 py-0.5">{split.qty}</td>
+                                                                                                    <td className="text-right px-2 py-0.5 text-blue-700">₱{formatAmount(split.unitCost)}</td>
+                                                                                                    <td className="text-right px-2 py-0.5">₱{formatAmount(Number(item.price || 0))}</td>
+                                                                                                    <td className="text-right px-2 py-0.5">₱{formatAmount(splitCost)}</td>
+                                                                                                    <td className="text-right px-2 py-0.5">₱{formatAmount(splitRevenue)}</td>
+                                                                                                    <td className={`text-right px-2 py-0.5 font-medium ${splitProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                                                                                                        ₱{formatAmount(splitProfit)}
+                                                                                                    </td>
+                                                                                                </tr>
+                                                                                            );
+                                                                                        })}
+                                                                                    </tbody>
+                                                                                </table>
+                                                                            </div>
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                )}
+                                                            </Fragment>
+                                                            );
+                                                        })}
                                                     </TableBody>
                                                     </Table>
                                                 </div>
                                             </TableCell>
+
                                         </TableRow>
                                     )}
                                 </Fragment>

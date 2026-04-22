@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import Link from 'next/link';
-import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart } from 'lucide-react';
+import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart, Layers } from 'lucide-react';
 
 export default function ReportsPage() {
   return (
@@ -160,6 +160,18 @@ export default function ReportsPage() {
                   Sales Returns
                 </CardTitle>
                 <CardDescription>Merchandise credit report with returned items and refund tracking.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/batch-profit">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full border-amber-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-amber-600" />
+                  Batch Profit Analysis
+                </CardTitle>
+                <CardDescription>Granular profit analysis per inventory batch with FIFO cost tracking.</CardDescription>
               </CardHeader>
             </Card>
           </Link>

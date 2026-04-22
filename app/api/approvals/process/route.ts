@@ -149,17 +149,30 @@ export async function POST(request: NextRequest) {
           const scResult = await processCompleteStockCount(txData.stockCountId);
           result = { success: scResult.success, error: scResult.error || '' };
         } else if (item.transaction_type === 'REPACKAGING') {
-          const { breakPack } = await import('@/app/(app)/products/actions');
-          const rpResult = await breakPack(
-            txData.parentId,
-            txData.childId || null,
-            txData.quantityToBreak,
-            txData.manualFactor,
-            txData.newProductData,
-            item.created_by,
-            true // isInternalFinalization
-          );
-          result = { success: rpResult.success, error: (rpResult as any).message || '' };
+          const { breakPack, consolidatePack } = await import('@/app/(app)/products/actions');
+          if (txData.direction === 'consolidate') {
+            const cpResult = await consolidatePack(
+              txData.packId,
+              txData.bulkId || null,
+              txData.packQtyUsed,
+              txData.manualFactor,
+              txData.newProductData,
+              item.created_by,
+              true // isInternalFinalization
+            );
+            result = { success: cpResult.success, error: (cpResult as any).message || '' };
+          } else {
+            const rpResult = await breakPack(
+              txData.parentId,
+              txData.childId || null,
+              txData.quantityToBreak,
+              txData.manualFactor,
+              txData.newProductData,
+              item.created_by,
+              true // isInternalFinalization
+            );
+            result = { success: rpResult.success, error: (rpResult as any).message || '' };
+          }
         }
 
         if (!result.success) {

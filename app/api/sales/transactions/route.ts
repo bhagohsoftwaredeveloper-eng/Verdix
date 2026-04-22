@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 // Force rebuild: Fixed import path
 import { query, withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
+import { deductFromBatches, getBatchCostingSettings } from '@/lib/batch-deduction';
 
 export async function GET(request: NextRequest) {
   try {
@@ -311,15 +312,20 @@ export async function POST(request: NextRequest) {
       ]);
 
       // 3. Insert into sale_items and update stock
+      const { oversellBlock } = await getBatchCostingSettings(connection);
+
       const insertItemSql = `
         INSERT INTO sale_items (
-          id, sale_id, product_id, product_name, quantity, price, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+          id, sale_id, product_id, product_name, quantity, price, cost_at_sale, batch_source, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
       `;
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const itemId = `${saleId}-ITEM-${i + 1}`;
+
+        // --- BATCH COSTING: FIFO Deduction ---
+        const deduction = await deductFromBatches(item.id, item.quantity, oversellBlock, connection);
 
         await connection.query(insertItemSql, [
           itemId,
@@ -327,8 +333,11 @@ export async function POST(request: NextRequest) {
           item.id,
           item.name,
           item.quantity,
-          item.price
+          item.price,
+          deduction.weightedAvgCost,
+          JSON.stringify(deduction.splits)
         ]);
+        // --- END BATCH COSTING ---
 
         // Stock Deduction Logic (Simplified for API - assumes standard product flow)
         // Note: Full family sync logic from checkout is omitted for brevity unless critical.

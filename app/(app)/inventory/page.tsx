@@ -524,6 +524,9 @@ function ProductCard({ product, hasChildren = false, onSuccess, requireAdjustmen
               )}
             </h3>
             <p className="text-sm text-muted-foreground">SKU: {product.sku}</p>
+            {product.barcode && (
+              <p className="text-sm text-muted-foreground font-mono">BC: {product.barcode}</p>
+            )}
           </div>
           <div className={cn("flex items-center gap-2", hasChildren && "mr-10")}>
             <DropdownMenu modal={false}>
@@ -656,7 +659,9 @@ function CondensedProductRow({ product, isLast = false, onSuccess, requireAdjust
             <div className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
           )}
         </div>
-        <p className="text-[9px] text-muted-foreground truncate uppercase font-mono">SKU: {product.sku}</p>
+        <p className="text-[9px] text-muted-foreground truncate uppercase font-mono">
+          SKU: {product.sku} {product.barcode && `| BC: ${product.barcode}`}
+        </p>
       </div>
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -686,7 +691,7 @@ function ProductGroup({ productGroup, onSuccess, requireAdjustmentConfirmation, 
       isExpanded ? "ring-1 ring-border bg-muted/20 p-1 shadow-sm" : "bg-transparent"
     )}>
       {/* Parent Product */}
-      <div className="relative">
+      <div className="relative flex-1 flex flex-col">
         <ProductCard 
           product={productGroup} 
           hasChildren={hasChildren} 
@@ -867,6 +872,7 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
           </div>
         </TableCell>
         <TableCell>{productGroup.sku}</TableCell>
+        <TableCell className="font-mono text-xs">{productGroup.barcode || '-'}</TableCell>
         <TableCell>
           <span className="font-medium">{displayStock}</span> <span className="text-muted-foreground text-xs">{productGroup.unitOfMeasure}</span>
         </TableCell>
@@ -918,6 +924,7 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
                 </div>
               </TableCell>
               <TableCell className="text-sm">{child.sku}</TableCell>
+              <TableCell className="text-sm font-mono text-xs">{child.barcode || '-'}</TableCell>
               <TableCell className="text-sm">
                  <span className="font-medium">{child.stock}</span> <span className="text-muted-foreground text-xs">{child.unitOfMeasure}</span>
               </TableCell>
@@ -984,7 +991,8 @@ export default function InventoryPage() {
       
       let filtered = allProducts.filter((p: Product) => 
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+        p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.barcode && p.barcode.toLowerCase().includes(searchTerm.toLowerCase()))
       );
 
       // Group children under parents
@@ -1173,6 +1181,7 @@ export default function InventoryPage() {
               <TableRow>
                 <TableHead className="w-[300px]">Product</TableHead>
                 <TableHead>SKU</TableHead>
+                <TableHead>Barcode</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Reorder Pt</TableHead>

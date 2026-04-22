@@ -3,6 +3,7 @@ import { SaleEntity, SaleItemEntity } from '../domain/Sale';
 import { InventorySyncService } from '../../../infrastructure/services/InventorySyncService';
 import { getNextReference, getNextReceiptNumber } from '../../../../lib/mysql';
 import { PoolConnection } from 'mysql2/promise';
+import { deductFromBatches, getBatchCostingSettings } from '../../../../lib/batch-deduction';
 
 export interface CreateSaleRequest {
   customer: { id: string; name: string };
@@ -64,11 +65,32 @@ export class CreateSaleUseCase {
 
     // Execute within repository transaction
     await this.saleRepository.saveWithTransaction(saleEntity, async (connection: PoolConnection) => {
+      // Get batch costing settings
+      const { oversellBlock } = await getBatchCostingSettings(connection);
+
       // 1. Check and deduct inventory for each item
-      for (const item of request.items) {
-        await this.inventoryService.checkStockAvailability(item.product.id, item.quantity, connection);
+      for (let i = 0; i < request.items.length; i++) {
+        const item = request.items[i];
+        const productId = item.product.id;
+        const qty = item.quantity;
+        const saleItemId = `${saleId}_item_${i + 1}`;
+
+        await this.inventoryService.checkStockAvailability(productId, qty, connection);
+        
+        // --- BATCH COSTING: FIFO Deduction ---
+        const deduction = await deductFromBatches(productId, qty, oversellBlock, connection);
+        
+        // Update the specific sale_item with cost info and batch splits
+        await connection.query(
+          `UPDATE sale_items 
+           SET cost_at_sale = ?, batch_source = ? 
+           WHERE id = ?`,
+          [deduction.weightedAvgCost, JSON.stringify(deduction.splits), saleItemId]
+        );
+        // --- END BATCH COSTING ---
+
         await this.inventoryService.deductStockWithFamilySync(
-          { productId: item.product.id, quantity: item.quantity },
+          { productId: productId, quantity: qty },
           saleId,
           `Sales Invoice: ${finalReference} (Sync from Anchor: ${item.product.name})`,
           connection

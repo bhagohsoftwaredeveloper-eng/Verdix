@@ -44,9 +44,14 @@ export class MySqlSaleRepository implements SaleRepository {
         p.sku,
         p.barcode,
         sii.quantity,
-        sii.price
+        sii.price,
+        si.cost_at_sale as costAtSale,
+        si.batch_source as batchSource
       FROM sales_invoice_items sii
       LEFT JOIN products p ON sii.product_id = p.id
+      LEFT JOIN sales_invoices inv ON sii.sales_invoice_id = inv.id
+      LEFT JOIN sales_transactions st ON inv.reference = st.reference AND inv.reference IS NOT NULL AND inv.reference != ''
+      LEFT JOIN sale_items si ON st.id = si.sale_id AND si.product_id = sii.product_id
       WHERE sii.sales_invoice_id IN (${placeholders})
       ORDER BY sii.created_at ASC
     `;
@@ -58,6 +63,15 @@ export class MySqlSaleRepository implements SaleRepository {
       if (!itemsBySale[item.salesId]) {
         itemsBySale[item.salesId] = [];
       }
+
+      // Parse batchSource JSON safely
+      let batchSource: any = null;
+      try {
+        batchSource = item.batchSource
+          ? (typeof item.batchSource === 'string' ? JSON.parse(item.batchSource) : item.batchSource)
+          : null;
+      } catch { batchSource = null; }
+
       itemsBySale[item.salesId].push({
         id: item.id,
         saleId: item.salesId,
@@ -66,9 +80,12 @@ export class MySqlSaleRepository implements SaleRepository {
         quantity: parseFloat(item.quantity),
         price: parseFloat(item.price),
         sku: item.sku,
-        barcode: item.barcode
-      });
+        barcode: item.barcode,
+        costAtSale: item.costAtSale != null ? parseFloat(item.costAtSale) : null,
+        batchSource,
+      } as any);
     });
+
 
     return salesInvoices.map((row: any) => ({
       ...row,

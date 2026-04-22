@@ -495,6 +495,11 @@ export function EditProductDialog({
     }
   }, [selectedPriceLevelId, priceLevels, priceLevelFields, form, categories, subcategories, brands, systemSettings]);
 
+  const generateBarcode = () => {
+    const randomNumber = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    form.setValue('barcode', randomNumber);
+  };
+
   const saveChanges = async (values: ProductFormValues) => {
     console.log('EditProductDialog saveChanges called with values:', values);
     // Filter out conversion factors with empty units to avoid schema validation errors
@@ -711,9 +716,21 @@ export function EditProductDialog({
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Barcode (UPC)</FormLabel>
-                              <FormControl>
-                                <Input placeholder="e.g., 123456789012" {...field} />
-                              </FormControl>
+                              <div className="relative">
+                                <FormControl>
+                                <Input placeholder="e.g., 123456789012" {...field} className="pr-10" />
+                                </FormControl>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground"
+                                  onClick={generateBarcode}
+                                >
+                                  <Wand2 className="h-4 w-4" />
+                                  <span className="sr-only">Generate Barcode</span>
+                                </Button>
+                              </div>
                               <FormMessage />
                             </FormItem>
                           )}

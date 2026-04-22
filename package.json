@@ -60,6 +60,7 @@
     "esc-pos-encoder": "^3.0.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
+    "jspdf-autotable": "^5.0.7",
     "koffi": "^2.15.1",
     "lucide-react": "^0.562.0",
     "mysql2": "^3.15.3",
