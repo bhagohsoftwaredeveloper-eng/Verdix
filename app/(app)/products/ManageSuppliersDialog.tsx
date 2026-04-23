@@ -55,8 +55,24 @@ const SCHEDULE_OPTIONS = [
 ];
 
 
-export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: Supplier, onSave: (data: any) => Promise<void>, children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function SupplierFormDialog({ 
+  supplier, 
+  onSave, 
+  children,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen
+}: { 
+  supplier?: Supplier, 
+  onSave: (data: any) => Promise<void>, 
+  children?: React.ReactNode,
+  open?: boolean,
+  onOpenChange?: (open: boolean) => void
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const isOpen = isControlled ? controlledOpen : internalOpen;
+  const setIsOpen = isControlled ? setControlledOpen || (() => {}) : setInternalOpen;
+
   const [name, setName] = useState(supplier?.name || '');
   const [telephone, setTelephone] = useState(supplier?.telephone || '');
   const [mobilePhone, setMobilePhone] = useState(supplier?.mobilePhone || '');
@@ -76,6 +92,32 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
     };
     loadPaymentTerms();
   }, []);
+
+  // Sync state with supplier prop
+  React.useEffect(() => {
+    if (supplier) {
+      setName(supplier.name || '');
+      setTelephone(supplier.telephone || '');
+      setMobilePhone(supplier.mobilePhone || '');
+      setEmail(supplier.email || '');
+      setAddress(supplier.address || '');
+      setCompany(supplier.company || '');
+      setTin(supplier.tin || '');
+      setPaymentTerms(supplier.paymentTerms || 'CASH');
+      setOrderSchedule(supplier.orderSchedule || '');
+    } else {
+      // Clear for adding
+      setName('');
+      setTelephone('');
+      setMobilePhone('');
+      setEmail('');
+      setAddress('');
+      setCompany('');
+      setTin('');
+      setPaymentTerms('CASH');
+      setOrderSchedule('');
+    }
+  }, [supplier]);
   
   // Keep legacy fields internally if needed, or deprecate
   // const [contactNumber, setContactNumber] = useState(supplier?.contactNumber || '');
@@ -140,7 +182,7 @@ export function SupplierFormDialog({ supplier, onSave, children }: { supplier?: 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{supplier ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle>
         </DialogHeader>

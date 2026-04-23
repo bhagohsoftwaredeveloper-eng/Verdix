@@ -37,6 +37,7 @@ const TRANSACTION_TYPES = [
   { value: 'BAD_ORDER', label: 'Bad Order (Damages/Returns)' },
   { value: 'STOCK_COUNT', label: 'Stock Count' },
   { value: 'REPACKAGING', label: 'Repackaging' },
+  { value: 'SHELF_TRANSFER', label: 'Shelf Transfer' },
 ];
 
 interface ApprovalSettingsProps {

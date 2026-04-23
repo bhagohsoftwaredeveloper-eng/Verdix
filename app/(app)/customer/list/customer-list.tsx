@@ -60,67 +60,17 @@ interface CustomerListProps {
   onDeleteCustomer: (customerId: string) => Promise<void>;
 }
 
-function CustomerRow({ customer, onUpdate, onDelete }: { customer: Customer, onUpdate: (values: CustomerFormValues) => Promise<void>, onDelete: () => Promise<void> }) {
-  const { toast } = useToast();
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isCheckingTransactions, setIsCheckingTransactions] = useState(false);
-  const [hasTransactions, setHasTransactions] = useState(false);
-  const [transactionTypes, setTransactionTypes] = useState<string[]>([]);
-
-  const checkTransactions = async () => {
-    try {
-      setIsCheckingTransactions(true);
-      const response = await fetch(getApiUrl(`/customers/${customer.id}/check-transactions`));
-      const result = await response.json();
-      if (result.success) {
-        setHasTransactions(result.hasTransactions);
-        setTransactionTypes(result.transactionTypes || []);
-      }
-    } catch (error) {
-      console.error('Error checking transactions:', error);
-    } finally {
-      setIsCheckingTransactions(false);
-    }
-  };
-
-  const handleOpenDeleteDialog = (open: boolean) => {
-    setIsDeleteDialogOpen(open);
-    if (open) {
-      checkTransactions();
-    }
-  };
-
-  const handleUpdate = async (values: CustomerFormValues) => {
-    await onUpdate(values);
-  };
-
-  const handleDelete = async () => {
-    try {
-      await onDelete();
-      toast({
-        title: 'Customer Deleted',
-        description: `Customer "${customer.name}" has been deleted.`,
-      });
-      setIsDeleteDialogOpen(false);
-    } catch (error: any) {
-      console.error("Error deleting customer: ", error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.message || 'Failed to delete customer. Please try again.',
-      });
-    }
-  };
-
-  // Convert customer to the format expected by AddLoyaltyCardDialog
-  const customerWithLoyalty = {
-    ...customer,
-    loyaltyPoints: customer.loyaltyPoints || 0,
-    lastTransaction: (customer as any).lastTransaction || '',
-    expiryDate: (customer as any).expiryDate || '',
-    pointSetting: (customer as any).pointSetting || '',
-  };
-
+function CustomerRow({ 
+  customer, 
+  onEditSelected,
+  onDeleteSelected,
+  onLoyaltySelected,
+}: { 
+  customer: Customer, 
+  onEditSelected: () => void,
+  onDeleteSelected: () => void,
+  onLoyaltySelected: () => void,
+}) {
   return (
     <TableRow>
       <TableCell className="font-medium">{customer.name}</TableCell>
@@ -142,60 +92,22 @@ function CustomerRow({ customer, onUpdate, onDelete }: { customer: Customer, onU
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <EditCustomerDialog customer={customer} onSave={handleUpdate}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit Customer
-                </DropdownMenuItem>
-              </EditCustomerDialog>
-              <AddLoyaltyCardDialog customer={customerWithLoyalty}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Add Loyalty Card
-                </DropdownMenuItem>
-              </AddLoyaltyCardDialog>
+              <DropdownMenuItem onClick={onEditSelected}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit Customer
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onLoyaltySelected}>
+                <CreditCard className="mr-2 h-4 w-4" />
+                Add Loyalty Card
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <AlertDialog open={isDeleteDialogOpen} onOpenChange={handleOpenDeleteDialog}>
-                <AlertDialogTrigger asChild>
-                  <DropdownMenuItem 
-                    className="text-destructive focus:text-destructive"
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete Customer
-                  </DropdownMenuItem>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                   <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {hasTransactions ? "Deletion Blocked" : "Are you absolutely sure?"}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {isCheckingTransactions ? (
-                        "Checking for existing transactions..."
-                      ) : hasTransactions ? (
-                        <>
-                          This customer cannot be deleted because they have records in: <b>{transactionTypes.join(", ")}</b>. 
-                          Please settle or remove these records first.
-                        </>
-                      ) : (
-                        `This action cannot be undone. This will permanently delete the customer "${customer.name}" and remove their data from our servers.`
-                      )}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    {!hasTransactions && !isCheckingTransactions && (
-                      <AlertDialogAction 
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        onClick={handleDelete}
-                      >
-                        Delete
-                      </AlertDialogAction>
-                    )}
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <DropdownMenuItem 
+                className="text-destructive focus:text-destructive"
+                onClick={onDeleteSelected}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Customer
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -255,11 +167,68 @@ export default function CustomerList({
   itemsPerPage?: number,
   onItemsPerPageChange?: (limit: number) => void
 }) {
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState<Customer | null>(null);
+  const [isLoyaltyDialogOpen, setIsLoyaltyDialogOpen] = useState(false);
+  
+  const [isCheckingTransactions, setIsCheckingTransactions] = useState(false);
+  const [hasTransactions, setHasTransactions] = useState(false);
+  const [transactionTypes, setTransactionTypes] = useState<string[]>([]);
+  const { toast } = useToast();
+
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
   const handlePageChange = (page: number) => {
     if (onPageChange) onPageChange(page);
   };
+
+  const checkTransactions = async (customer: Customer) => {
+    try {
+      setIsCheckingTransactions(true);
+      const response = await fetch(getApiUrl(`/customers/${customer.id}/check-transactions`));
+      const result = await response.json();
+      if (result.success) {
+        setHasTransactions(result.hasTransactions);
+        setTransactionTypes(result.transactionTypes || []);
+      }
+    } catch (error) {
+      console.error('Error checking transactions:', error);
+    } finally {
+      setIsCheckingTransactions(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingCustomer) return;
+    try {
+      await onDeleteCustomer(deletingCustomer.id);
+      toast({
+        title: 'Customer Deleted',
+        description: `Customer "${deletingCustomer.name}" has been deleted.`,
+      });
+      setIsDeleteDialogOpen(false);
+      setDeletingCustomer(null);
+    } catch (error: any) {
+      console.error("Error deleting customer: ", error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to delete customer. Please try again.',
+      });
+    }
+  };
+
+  // Convert customer to the format expected by AddLoyaltyCardDialog
+  const customerWithLoyalty = loyaltyCustomer ? {
+    ...loyaltyCustomer,
+    loyaltyPoints: loyaltyCustomer.loyaltyPoints || 0,
+    lastTransaction: (loyaltyCustomer as any).lastTransaction || '',
+    expiryDate: (loyaltyCustomer as any).expiryDate || '',
+    pointSetting: (loyaltyCustomer as any).pointSetting || '',
+  } : undefined;
 
   return (
     <div className="space-y-4">
@@ -285,8 +254,19 @@ export default function CustomerList({
               <CustomerRow
                 key={customer.id}
                 customer={customer}
-                onUpdate={(values) => onUpdateCustomer(customer.id, values)}
-                onDelete={() => onDeleteCustomer(customer.id)}
+                onEditSelected={() => {
+                  setEditingCustomer(customer);
+                  setIsEditDialogOpen(true);
+                }}
+                onLoyaltySelected={() => {
+                  setLoyaltyCustomer(customer);
+                  setIsLoyaltyDialogOpen(true);
+                }}
+                onDeleteSelected={() => {
+                  setDeletingCustomer(customer);
+                  setIsDeleteDialogOpen(true);
+                  checkTransactions(customer);
+                }}
               />
             ))}
             {!isLoading && customers.length === 0 && (
@@ -387,6 +367,59 @@ export default function CustomerList({
           </Pagination>
         )}
       </div>
+
+      {/* Edit Customer Dialog */}
+      {editingCustomer && (
+        <EditCustomerDialog
+          customer={editingCustomer}
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          onSave={(values) => onUpdateCustomer(editingCustomer.id, values)}
+        />
+      )}
+
+      {/* Add Loyalty Card Dialog */}
+      {loyaltyCustomer && (
+        <AddLoyaltyCardDialog
+          customer={customerWithLoyalty as any}
+          open={isLoyaltyDialogOpen}
+          onOpenChange={setIsLoyaltyDialogOpen}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {hasTransactions ? "Deletion Blocked" : "Are you absolutely sure?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {isCheckingTransactions ? (
+                "Checking for existing transactions..."
+              ) : hasTransactions ? (
+                <>
+                  This customer cannot be deleted because they have records in: <b>{transactionTypes.join(", ")}</b>. 
+                  Please settle or remove these records first.
+                </>
+              ) : (
+                `This action cannot be undone. This will permanently delete the customer "${deletingCustomer?.name}" and remove their data from our servers.`
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingCustomer(null)}>Cancel</AlertDialogCancel>
+            {!hasTransactions && !isCheckingTransactions && (
+              <AlertDialogAction 
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleDelete}
+              >
+                Delete
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

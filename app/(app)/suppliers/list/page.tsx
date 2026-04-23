@@ -58,6 +58,10 @@ export default function SuppliersListPage() {
   const [pageSize, setPageSize] = useState(10);
   const { toast } = useToast();
   const { profile } = useBusinessProfile();
+  const [editingSupplier, setEditingSupplier] = useState<SupplierWithBalance | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [deletingSupplier, setDeletingSupplier] = useState<SupplierWithBalance | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const loadSuppliers = async () => {
     setLoading(true);
@@ -388,43 +392,24 @@ export default function SuppliersListPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <SupplierFormDialog 
-                              supplier={supplier as any}
-                              onSave={(data) => handleUpdateSupplier(supplier.id, data)}
-                          >
-                              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  Edit Supplier
-                              </DropdownMenuItem>
-                          </SupplierFormDialog>
+                          <DropdownMenuItem onClick={() => {
+                              setEditingSupplier(supplier);
+                              setIsEditDialogOpen(true);
+                          }}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit Supplier
+                          </DropdownMenuItem>
 
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete Supplier
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will permanently delete the supplier
-                                  <span className="font-medium text-foreground"> {supplier.name} </span>
-                                  and remove their data from our servers.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteSupplier(supplier.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <DropdownMenuItem 
+                            onClick={() => {
+                                setDeletingSupplier(supplier);
+                                setIsDeleteDialogOpen(true);
+                            }}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Supplier
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -517,6 +502,42 @@ export default function SuppliersListPage() {
           )}
         </CardContent>
       </Card>
+      {/* Edit Supplier Dialog */}
+      <SupplierFormDialog
+        supplier={editingSupplier as any}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSave={(data) => handleUpdateSupplier(editingSupplier!.id, data)}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the supplier
+              <span className="font-medium text-foreground"> {deletingSupplier?.name} </span>
+              and remove their data from our servers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingSupplier(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deletingSupplier) {
+                  handleDeleteSupplier(deletingSupplier.id);
+                  setDeletingSupplier(null);
+                  setIsDeleteDialogOpen(false);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

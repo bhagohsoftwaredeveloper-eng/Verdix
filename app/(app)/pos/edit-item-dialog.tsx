@@ -91,51 +91,91 @@ export function EditItemDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit Item: {item.name}</DialogTitle>
-          <DialogDescription>{item.description}</DialogDescription>
+          <DialogTitle>
+            {mode === 'price-only' ? 'Authorize Price Change' : 'Edit Item Details'}
+          </DialogTitle>
+          <DialogDescription>
+            {mode === 'price-only' 
+              ? `Adjusting price for ${item.name}`
+              : 'Temporary changes for this transaction only.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="py-4 space-y-6">
           <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="price" className="text-base">Price (₱)</Label>
-              <Input
-                id="price"
-                type="number"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    save();
-                  }
-                }}
-                className="font-medium focus-visible:ring-primary text-[30px] md:text-[30px] h-20 py-4 text-center leading-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="quantity" className="text-base">Quantity</Label>
-              <Input
-                id="quantity"
-                type="number"
-                value={quantity}
-                onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
-                className="font-medium focus-visible:ring-primary h-12 text-center"
-              />
+            {mode === 'price-only' ? (
+              <div className="space-y-2">
+                <Label htmlFor="price" className="text-base font-semibold">Price (₱)</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  value={price}
+                  onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      save();
+                    }
+                  }}
+                  className="font-medium focus-visible:ring-primary text-[30px] md:text-[30px] h-20 py-4 text-center leading-none"
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-base font-semibold">Item Name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      save();
+                    }
+                  }}
+                  className="font-medium focus-visible:ring-primary h-12"
+                  placeholder="Enter new item name"
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground italic">
+                  Original: {item.name}
+                </p>
+              </div>
+            )}
+            
+            <div className="bg-muted/30 p-3 rounded-lg space-y-1">
+              {mode !== 'price-only' && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Unit Price:</span>
+                  <span className="font-medium">₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Quantity:</span>
+                <span className="font-medium">{quantity}</span>
+              </div>
+              {mode === 'full' && item.discount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Discount:</span>
+                  <span className="font-medium text-green-600">{item.discount}%</span>
+                </div>
+              )}
             </div>
           </div>
 
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
             type="button"
             onClick={save}
+            className="bg-primary"
           >
-            Save Changes
+            {mode === 'price-only' ? 'Update Price' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

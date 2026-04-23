@@ -38,10 +38,22 @@ interface SupplierTransactionDialogProps {
   supplierId: string;
   supplierName: string;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function SupplierTransactionDialog({ supplierId, supplierName, trigger }: SupplierTransactionDialogProps) {
-  const [open, setOpen] = useState(false);
+export function SupplierTransactionDialog({ 
+  supplierId, 
+  supplierName, 
+  trigger,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen
+}: SupplierTransactionDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? setControlledOpen || (() => {}) : setInternalOpen;
+  
   const [transactions, setTransactions] = useState<SupplierTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -221,14 +233,11 @@ export function SupplierTransactionDialog({ supplierId, supplierName, trigger }:
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button variant="ghost" size="sm">
-            <FileText className="h-4 w-4 mr-2" />
-            History
-          </Button>
-        )}
-      </DialogTrigger>
+      {trigger && (
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center justify-between">

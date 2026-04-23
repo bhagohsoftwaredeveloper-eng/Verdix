@@ -275,6 +275,7 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
         case 'BAD_ORDER': return 'bg-red-100 text-red-800 border-red-200';
         case 'STOCK_COUNT': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
         case 'REPACKAGING': return 'bg-teal-100 text-teal-800 border-teal-200';
+        case 'SHELF_TRANSFER': return 'bg-orange-100 text-orange-800 border-orange-200';
         default: return 'bg-secondary/50 text-muted-foreground';
     }
   };
@@ -297,6 +298,7 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                     <TabsTrigger value="BAD_ORDER" className="text-[11px] h-7">Bad Orders</TabsTrigger>
                     <TabsTrigger value="STOCK_COUNT" className="text-[11px] h-7">Stock Counts</TabsTrigger>
                     <TabsTrigger value="REPACKAGING" className="text-[11px] h-7">Repackaging</TabsTrigger>
+                    <TabsTrigger value="SHELF_TRANSFER" className="text-[11px] h-7">Shelf Transfers</TabsTrigger>
                 </TabsList>
             </Tabs>
             <div className="relative w-full max-w-xs">
@@ -336,6 +338,7 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                 <TabsTrigger value="BAD_ORDER" className="text-[10px] break-all">Bad</TabsTrigger>
                 <TabsTrigger value="STOCK_COUNT" className="text-[10px] break-all">Count</TabsTrigger>
                 <TabsTrigger value="REPACKAGING" className="text-[10px] break-all">Repack</TabsTrigger>
+                <TabsTrigger value="SHELF_TRANSFER" className="text-[10px] break-all">Shelves</TabsTrigger>
             </TabsList>
           </Tabs>
       </div>
@@ -418,7 +421,13 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                                                 {` → ${item.transaction_data.targetProductName || 'Pack Item'} (${item.transaction_data.quantityToBreak} used)`}
                                             </>
                                         )}
-                                        {!['STOCK_ADJUSTMENT', 'PURCHASE_ORDER', 'RECEIVE_PO', 'BAD_ORDER', 'STOCK_TRANSFER', 'STOCK_COUNT', 'REPACKAGING'].includes(item.transaction_type.toUpperCase()) && 'Review transaction details'}
+                                        {item.transaction_type.toUpperCase() === 'SHELF_TRANSFER' && (
+                                            <>
+                                                <span className="font-bold text-foreground">{item.transaction_data.updates?.length || 0} Products</span>
+                                                {` : Moving stock between shelves`}
+                                            </>
+                                        )}
+                                        {!['STOCK_ADJUSTMENT', 'PURCHASE_ORDER', 'RECEIVE_PO', 'BAD_ORDER', 'STOCK_TRANSFER', 'STOCK_COUNT', 'REPACKAGING', 'SHELF_TRANSFER'].includes(item.transaction_type.toUpperCase()) && 'Review transaction details'}
                                     </p>
                                     <div className="flex items-center justify-between mt-4">
                                         <div className="flex items-center gap-2">
@@ -585,7 +594,16 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                       </>
                     )}
 
-                    {!['STOCK_ADJUSTMENT', 'STOCK_TRANSFER', 'PURCHASE_ORDER', 'RECEIVE_PO', 'STOCK_COUNT', 'REPACKAGING'].includes(selectedItem.transaction_type.toUpperCase()) && (
+                    {selectedItem.transaction_type.toUpperCase() === 'SHELF_TRANSFER' && (
+                      <>
+                        <span className="text-muted-foreground font-medium">Batch Size:</span>
+                        <span className="font-bold text-primary">{selectedItem.transaction_data.updates?.length || 0} Products</span>
+                        <span className="text-muted-foreground font-medium">Total Items:</span>
+                        <span className="font-bold">{selectedItem.transaction_data.updates?.reduce((acc: number, u: any) => acc + Number(u.quantity || 0), 0) || 0} units</span>
+                      </>
+                    )}
+
+                    {!['STOCK_ADJUSTMENT', 'STOCK_TRANSFER', 'PURCHASE_ORDER', 'RECEIVE_PO', 'STOCK_COUNT', 'REPACKAGING', 'SHELF_TRANSFER'].includes(selectedItem.transaction_type.toUpperCase()) && (
                         <>
                             <span className="text-muted-foreground font-medium">Value/Qty:</span>
                             <span className="font-bold text-primary">
@@ -603,6 +621,27 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
                         <span className="text-muted-foreground font-medium">Target:</span>
                         <span className="font-bold">{selectedItem.transaction_data.targetProductName}</span>
                       </>
+                    )}
+
+                    {selectedItem.transaction_type.toUpperCase() === 'SHELF_TRANSFER' && (
+                      <div className="col-span-2 mt-2">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Shelf Movements</p>
+                        <div className="space-y-1.5">
+                          {(selectedItem.transaction_data.updates || []).slice(0, 3).map((u: any, i: number) => (
+                            <div key={i} className="text-[11px] flex items-center gap-2 bg-background/50 p-2 rounded border border-border/30">
+                              <span className="font-bold truncate max-w-[100px]">{u.productName}</span>
+                              <span className="text-primary font-bold">x{u.quantity}</span>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                              <Badge variant="outline" className="text-[9px] h-4 py-0">{u.sourceShelfName}</Badge>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                              <Badge variant="outline" className="text-[9px] h-4 py-0 bg-primary/10 text-primary">{u.targetShelfName}</Badge>
+                            </div>
+                          ))}
+                          {(selectedItem.transaction_data.updates?.length || 0) > 3 && (
+                            <p className="text-[9px] text-muted-foreground italic pl-2">...and {selectedItem.transaction_data.updates.length - 3} more items</p>
+                          )}
+                        </div>
+                      </div>
                     )}
 
                     <span className="text-muted-foreground font-medium">Notes/Reason:</span>

@@ -392,7 +392,7 @@ export function AddPurchaseOrderDialog({
       deliveryDate: '',
       reference: '',
       supplierId: '',
-      shipping: 0,
+      shipping: undefined,
       receiveToWarehouse: '',
       deliveryAddress: '',
       paymentMethod: '',
@@ -430,8 +430,40 @@ export function AddPurchaseOrderDialog({
 
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
+      // 1. Calculate totals
       if (name?.startsWith('items') || name === 'shipping') {
          calculateTotal(value.items || [], value.shipping);
+      }
+
+      // 2. Automate Due Date based on Supplier Payment Terms
+      if (name === 'supplierId' || name === 'issueDate') {
+        const supplierId = value.supplierId;
+        const issueDate = value.issueDate;
+        
+        if (supplierId && issueDate) {
+          const supplier = suppliers.find(s => s.id === supplierId);
+          if (supplier && supplier.paymentTerms) {
+            // Function to parse days from terms string (e.g. "Net 30", "30 days", "COD")
+            const parseDays = (terms: string) => {
+              const lower = terms.toLowerCase();
+              if (lower.includes('cod') || lower.includes('cash')) return 0;
+              const match = terms.match(/\d+/);
+              return match ? parseInt(match[0], 10) : 0;
+            };
+
+            const days = parseDays(supplier.paymentTerms);
+            const date = new Date(issueDate);
+            
+            if (!isNaN(date.getTime())) {
+              date.setDate(date.getDate() + days);
+              const dueDateFormatted = date.toISOString().split('T')[0];
+              
+              if (form.getValues('deliveryDate') !== dueDateFormatted) {
+                form.setValue('deliveryDate', dueDateFormatted, { shouldDirty: true });
+              }
+            }
+          }
+        }
       }
     });
 
@@ -439,7 +471,7 @@ export function AddPurchaseOrderDialog({
     calculateTotal(currentValues.items, currentValues.shipping);
 
     return () => subscription.unsubscribe();
-  }, [activeTaxRate]); 
+  }, [activeTaxRate, suppliers]); 
 
   const calculateTotal = (items: any[], shipping?: number | string) => {
     const results = calculatePurchaseCosts(
@@ -488,7 +520,7 @@ export function AddPurchaseOrderDialog({
               deliveryDate: editOrder.deliveryDate ? new Date(editOrder.deliveryDate).toISOString().split('T')[0] : '',
               reference: editOrder.referenceNumber || '',
               supplierId: editOrder.supplierId,
-              shipping: editOrder.shippingFee || 0,
+              shipping: editOrder.shippingFee || undefined,
               receiveToWarehouse: '',
               deliveryAddress: '',
               paymentMethod: editOrder.paymentMethod,
@@ -539,7 +571,7 @@ export function AddPurchaseOrderDialog({
               deliveryDate: '', // Clear delivery date
               reference: autoReference, // New reference
               supplierId: reorderData.supplierId,
-              shipping: reorderData.shippingFee || 0,
+              shipping: reorderData.shippingFee || undefined,
               receiveToWarehouse: '',
               deliveryAddress: '',
               paymentMethod: reorderData.paymentMethod,
@@ -650,6 +682,7 @@ export function AddPurchaseOrderDialog({
         note: values.note,
         purchaseType: values.purchaseType,
         receiveToWarehouse: values.receiveToWarehouse,
+        receiveToWarehouseName: warehouses.find(w => w.id.toString() === values.receiveToWarehouse.toString())?.name,
         orderedBy: editOrder ? editOrder.orderedBy : (user?.email || 'System'),
         userId: user?.uid || 'system',
         deliveryDate: values.deliveryDate ? new Date(values.deliveryDate).toISOString() : null,
@@ -913,7 +946,7 @@ export function AddPurchaseOrderDialog({
                                     <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping Cost</FormLabel>
                                 </div>
                                 <FormControl>
-                                <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
+                                <Input type="number" step="0.01" className="h-8 bg-white text-xs" placeholder="0.00" {...field} value={field.value ?? ''} />
                                 </FormControl>
                             </FormItem>
                             )}
@@ -942,10 +975,10 @@ export function AddPurchaseOrderDialog({
                           render={({ field }) => (
                             <FormItem className="space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Notes/Payment Reference</FormLabel>
                                 </div>
                               <FormControl>
-                                <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
+                                <Input className="h-8 bg-white text-xs" placeholder="Notes/Payment Reference..." {...field} value={field.value || ''} />
                               </FormControl>
                             </FormItem>
                           )}
@@ -993,7 +1026,6 @@ export function AddPurchaseOrderDialog({
                                 </TableRow>
                             ) : (
                                 fields.map((field, index) => {
-                                    const landedCostPerUnit = purchaseResults?.items[index]?.landedCostPerUnit || 0;
                                     const product = products.find(p => p.id === field.productId);
                                     
                                     const { markup, source } = calculateMarkupPercentage(
@@ -1010,8 +1042,13 @@ export function AddPurchaseOrderDialog({
                                         suppliers
                                     );
 
+                                    const itemResult = purchaseResults?.items[index];
+                                    const baseCost = itemResult?.cost || 0;
+                                    const shippingPerUnit = itemResult?.quantity > 0 ? (itemResult.shippingAllocation / itemResult.quantity) : 0;
+                                    const landedCostPerUnit = baseCost + shippingPerUnit;
+                                    
                                     const defaultLevel = priceLevels.find(l => l.isDefault) || priceLevels[0];
-                                    const suggestedPrice = calculateSuggestedPrice(landedCostPerUnit, markup, defaultLevel);
+                                    const suggestedPrice = calculateSuggestedPrice(baseCost, markup, shippingPerUnit, defaultLevel);
                                     
                                     return (
                             <TableRow key={field.id} className="group bg-white hover:bg-muted/5">

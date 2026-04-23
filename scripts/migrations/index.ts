@@ -73,6 +73,8 @@ import './072_add_repackaging_approval_setting';
 import './073_alter_stock_adjustments_add_metadata_fields';
 import './074_create_inventory_transfers_table';
 import './075_add_warehouse_id_to_stock_movements';
+import './076_add_warehouse_to_purchase_orders';
+import './077_add_subtotal_to_purchase_order_items';
 
 
 // Import runner functions

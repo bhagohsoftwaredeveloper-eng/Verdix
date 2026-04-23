@@ -132,38 +132,71 @@ export function calculateMarkupPercentage(
     return { markup: 0, source: '' };
   }
 
-  const category = categories.find(c => c.name === product.category);
-  const subcategory = subcategories.find(s => s.name === product.subcategory);
-  const brand = brands.find(b => b.name === product.brand);
-  const supplier = suppliers.find(s => s.id === product.supplierId);
+  const clean = (val: any) => String(val || '').trim().toLowerCase();
+  
+  const productCat = clean(product.category);
+  const productSub = clean(product.subcategory);
+  const productBrand = clean(product.brand);
+
+  const category = categories.find(c => c.id === product.category || clean(c.name) === productCat);
+  const subcategory = subcategories.find(s => s.id === product.subcategory || clean(s.name) === productSub);
+  const brand = brands.find(b => b.id === product.brand || clean(b.name) === productBrand);
+  
+  const supplierId = product.supplierId || (product as any).supplier_id || (product as any).supplier;
+  const supplier = suppliers.find(s => s.id === supplierId);
+
+  // Parse markupPriority if it's a string (from DB)
+  let priority: string[] = ["subcategory", "category", "brand", "supplier"];
+  if (settings.markupPriority) {
+    if (typeof settings.markupPriority === 'string') {
+      try {
+        priority = JSON.parse(settings.markupPriority);
+      } catch (e) {
+        console.error('Failed to parse markupPriority:', e);
+      }
+    } else if (Array.isArray(settings.markupPriority)) {
+      priority = settings.markupPriority;
+    }
+  }
 
   let markup = 0;
   let source = '';
-  const priority = settings.markupPriority || ["subcategory", "category", "brand", "supplier"];
 
   for (const type of priority) {
-    if (type === 'subcategory' && subcategory && subcategory.markupPercentage && subcategory.markupPercentage > 0) {
-      markup = subcategory.markupPercentage;
-      source = 'Subcategory';
-      break;
-    } else if (type === 'category' && category && category.markupPercentage && category.markupPercentage > 0) {
-      markup = category.markupPercentage;
-      source = 'Category';
-      break;
-    } else if (type === 'brand' && brand && brand.markupPercentage && brand.markupPercentage > 0) {
-      markup = brand.markupPercentage;
-      source = 'Brand';
-      break;
-    } else if (type === 'supplier' && supplier && supplier.markupPercentage && supplier.markupPercentage > 0) {
-        markup = supplier.markupPercentage;
+    if (type === 'subcategory' && subcategory && subcategory.markupPercentage) {
+      markup = Number(subcategory.markupPercentage);
+      if (markup > 0) {
+        source = 'Subcategory';
+        break;
+      }
+    }
+    else if (type === 'category' && category && category.markupPercentage) {
+      markup = Number(category.markupPercentage);
+      if (markup > 0) {
+        source = 'Category';
+        break;
+      }
+    }
+    else if (type === 'brand' && brand && brand.markupPercentage) {
+      markup = Number(brand.markupPercentage);
+      if (markup > 0) {
+        source = 'Brand';
+        break;
+      }
+    }
+    else if (type === 'supplier' && supplier && supplier.markupPercentage) {
+      markup = Number(supplier.markupPercentage);
+      if (markup > 0) {
         source = 'Supplier';
         break;
+      }
     }
   }
 
   // Fallback to global default if no specific markup found
-  if (!source && settings.defaultMarkupPercentage !== undefined) {
-    markup = settings.defaultMarkupPercentage;
+  const globalDefault = settings.defaultMarkupPercentage !== undefined ? Number(settings.defaultMarkupPercentage) : undefined;
+  if (!source && globalDefault !== undefined) {
+    markup = globalDefault;
     source = 'Global Default';
   }
 
@@ -171,15 +204,18 @@ export function calculateMarkupPercentage(
 }
 
 /**
- * Calculates the suggested selling price based on landed cost and markup.
+ * Calculates the suggested selling price based on item cost, markup, and shipping.
  */
 export function calculateSuggestedPrice(
-  landedCost: number,
+  unitCost: number,
   markupPercentage: number,
+  shippingPerUnit: number = 0,
   priceLevel?: any // Default level from system
 ): number {
-  // 1. Calculate the base retail price (Landed Cost + Automatic Markup)
-  const baseRetailPrice = landedCost * (1 + (toSafeNumber(markupPercentage)) / 100);
+  // Formula: (Cost * (1 + Markup%)) + Shipping
+  // This ensures markup is ONLY applied to the base cost, not the shipping.
+  const baseRetailPrice = (toSafeNumber(unitCost) * (1 + (toSafeNumber(markupPercentage)) / 100)) + toSafeNumber(shippingPerUnit);
+  const landedCost = toSafeNumber(unitCost) + toSafeNumber(shippingPerUnit);
   
   if (priceLevel) {
     const adjustment = toSafeNumber(priceLevel.percentageAdjustment);
@@ -187,7 +223,7 @@ export function calculateSuggestedPrice(
     
     if (adjustment !== 0) {
       if (base === 'cost') {
-        // Option A: Adjust directly on top of Landed Cost
+        // Option A: Adjust directly on top of Landed Cost (Cost + Shipping)
         return landedCost * (1 + adjustment / 100);
       } else {
         // Option B: Adjust on top of the calculated Retail Price

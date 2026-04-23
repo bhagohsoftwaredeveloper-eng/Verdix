@@ -142,7 +142,7 @@ export default function InventoryReportPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Stock on Hand Report</h2>
           <p className="text-muted-foreground">
-            Current inventory levels and valuation.
+            Current inventory levels and valuation (based on batch-level FIFO costs).
           </p>
         </div>
         <Button onClick={() => handlePrint()} variant="outline" className="gap-2">

@@ -64,6 +64,7 @@ interface PosSettings {
   requireBadOrderConfirmation?: boolean;
   requireStockCountApproval?: boolean;
   requireRepackagingConfirmation?: boolean;
+  requireShelfTransferApproval?: boolean;
   batchCostingRepackInherit?: boolean;
   batchCostingOversellBlock?: boolean;
 }
@@ -115,6 +116,7 @@ export default function PosSetupPage() {
     requireBadOrderConfirmation: false,
     requireStockCountApproval: false,
     requireRepackagingConfirmation: false,
+    requireShelfTransferApproval: false,
     batchCostingRepackInherit: true,
     batchCostingOversellBlock: false,
   });
@@ -701,6 +703,20 @@ export default function PosSetupPage() {
                 id="requireRepackagingConfirmation"
                 checked={!!settings.requireRepackagingConfirmation}
                 onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireRepackagingConfirmation: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="space-y-0.5">
+                <Label htmlFor="requireShelfTransferApproval">Shelf Transfer Approval</Label>
+                <p className="text-sm text-muted-foreground">
+                  Require multi-level approval before moving stock between shelves
+                </p>
+              </div>
+              <Switch
+                id="requireShelfTransferApproval"
+                checked={!!settings.requireShelfTransferApproval}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, requireShelfTransferApproval: checked }))}
               />
             </div>
           </CardContent>

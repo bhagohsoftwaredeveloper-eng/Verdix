@@ -377,9 +377,9 @@ export default function PurchasesPage() {
         const cost = originalItem ? toSafeNumber(originalItem.cost) : 0;
         return {
           ...item,
-          productName: originalItem?.productName || (originalItem as any)?.name || 'Unknown Product',
-          sku: originalItem?.productSku || (originalItem as any)?.sku || '',
-          barcode: (originalItem as any)?.barcode || (originalItem as any)?.productBarcode || '',
+          productName: originalItem?.productName || originalItem?.name || 'Unknown Product',
+          sku: originalItem?.productSku || originalItem?.sku || '',
+          barcode: originalItem?.barcode || originalItem?.productBarcode || '',
           cost: cost,
           subtotal: cost * toSafeNumber(item.quantity)
         };
@@ -404,7 +404,7 @@ export default function PurchasesPage() {
           supplierName: orderToReceive.supplierName || 'N/A',
           referenceNumber: orderToReceive.referenceNumber || orderToReceive.id,
           poTotal: toSafeNumber(orderToReceive.total),
-          poGrandTotal: toSafeNumber(orderToReceive.grandTotal)
+          poGrandTotal: toSafeNumber(orderToReceive.grandTotal || orderToReceive.total)
         }),
       });
 

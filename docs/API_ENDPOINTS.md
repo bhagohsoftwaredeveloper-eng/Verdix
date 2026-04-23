@@ -8,6 +8,12 @@ This file matches the `app/api` directory structure.
 - `/api/auth/login`
 - `/api/auth/signup`
 
+## Approvals
+
+- `/api/approvals/process`
+- `/api/approvals/queue`
+- `/api/approvals/workflows`
+
 ## Bad Orders
 
 - `/api/bad-orders`
@@ -19,10 +25,12 @@ This file matches the `app/api` directory structure.
 - `/api/customer-loyalty`
 - `/api/customer-loyalty/[id]`
 - `/api/customer-loyalty/adjust-points`
+- `/api/customer-loyalty/lookup`
 - `/api/customer-loyalty/point-history`
 - `/api/customer-payments`
 - `/api/customers`
 - `/api/customers/[id]`
+- `/api/customers/[id]/check-transactions`
 - `/api/customers/balances`
 - `/api/customers/invoices/[id]`
 - `/api/customers/invoices/[id]/payment`
@@ -32,10 +40,14 @@ This file matches the `app/api` directory structure.
 ## Data Management
 
 - `/api/data`
+- `/api/data-management/export/customers`
 - `/api/data-management/export/products`
+- `/api/data-management/import/customers`
 - `/api/data-management/import/products`
 - `/api/data-management/reset`
 - `/api/migrate`
+- `/api/migrate/batch-costing`
+- `/api/migrate/fix-batch-ids`
 
 ## External API
 
@@ -65,9 +77,19 @@ This file matches the `app/api` directory structure.
 - `/api/stock-adjustments`
 - `/api/stock-adjustments/[id]`
 - `/api/stock-movements`
+- `/api/inventory/adjust/bulk`
+- `/api/inventory/stock-counts`
+- `/api/inventory/stock-counts/[id]`
+- `/api/inventory/stock-counts/[id]/complete`
+- `/api/inventory/stock-counts/[id]/items`
+- `/api/inventory/transfer`
+- `/api/inventory/transfer/bulk`
+- `/api/shelf-locations`
+- `/api/shelf-locations/[id]`
 - `/api/suppliers`
 - `/api/suppliers/[id]`
 - `/api/suppliers/[id]/balance`
+- `/api/suppliers/export`
 - `/api/temp-suppliers`
 - `/api/warehouses`
 - `/api/warehouses/[id]`
@@ -76,12 +98,15 @@ This file matches the `app/api` directory structure.
 
 - `/api/purchase-orders`
 - `/api/purchase-orders/[id]`
+- `/api/purchase-orders/export`
 
 ## Reports
 
 - `/api/reports/adjustments`
 - `/api/reports/inventory`
 - `/api/reports/movements`
+- `/api/reports/purchases/by-product`
+- `/api/reports/purchases/by-supplier`
 - `/api/reports/soa`
 - `/api/reports/stats`
 - `/api/reports/velocity`
@@ -89,8 +114,10 @@ This file matches the `app/api` directory structure.
 ## Sales & Orders
 
 - `/api/sales`
+- `/api/sales/batch-analysis`
 - `/api/sales/by-date`
 - `/api/sales/by-product`
+- `/api/sales/ejournal`
 - `/api/sales/hourly`
 - `/api/sales/invoices/[id]/void`
 - `/api/sales/monthly-category`
@@ -114,6 +141,7 @@ This file matches the `app/api` directory structure.
 - `/api/settings/backup/download/[filename]`
 - `/api/settings/backup/files`
 - `/api/settings/backup/manual`
+- `/api/settings/backup/restore`
 - `/api/settings/backup/schedule`
 - `/api/settings/database`
 - `/api/settings/external-api`
@@ -128,6 +156,8 @@ This file matches the `app/api` directory structure.
 - `/api/transaction-references`
 - `/api/transactions/all-references`
 - `/api/transactions/last-references`
+- `/api/user-types`
+- `/api/user-types/[id]`
 - `/api/users`
 - `/api/users/[uid]`
 

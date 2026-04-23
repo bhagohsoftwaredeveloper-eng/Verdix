@@ -161,6 +161,10 @@ export interface PurchaseOrder {
     vatSubject?: boolean;
     expirationDate?: string;
     barcode?: string;
+    productBarcode?: string;
+    sku?: string;
+    productSku?: string;
+    name?: string;
     currentStock?: number;
     // Landed cost fields (calculated, not stored)
     landedCostPerUnit?: number;
@@ -177,6 +181,7 @@ export interface PurchaseOrder {
   deliveryDate?: string; // or Date
   receivedTotal?: number;
   referenceNumber?: string;
+  grandTotal?: number;
   paidAmount: number;
 }
 

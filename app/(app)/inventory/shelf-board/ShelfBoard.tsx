@@ -62,9 +62,14 @@ export default function ShelfBoard() {
     sourceShelfId: string;
     targetShelfId: string;
   } | null>(null);
+  const [user, setUser] = useState<{ uid: string; [key: string]: any } | null>(null);
 
   useEffect(() => {
     fetchData();
+    const userSession = localStorage.getItem('mock-user-session');
+    if (userSession) {
+      setUser(JSON.parse(userSession));
+    }
   }, []);
 
   const fetchData = async () => {
@@ -96,27 +101,39 @@ export default function ShelfBoard() {
     }
   };
 
+  const getUnassignedQty = (p: Product) => {
+    return p.stock - Object.values(p.shelfQuantities || {}).reduce((a, b) => a + b, 0);
+  };
+
   const onDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
 
     if (!destination) return;
     if (source.droppableId === destination.droppableId) return;
 
+    // draggableId is "shelfId|productId"
+    const [sourceShelfId, draggedProductId] = draggableId.split('|');
+
     let selectedProducts: Product[] = [];
     if (selectedIds.has(draggableId)) {
-        selectedProducts = products.filter(p => selectedIds.has(p.id));
+        // Find all products whose unique instance (shelf|product) is selected
+        const selectedForThisSource = Array.from(selectedIds)
+            .filter(id => id.startsWith(`${source.droppableId}|`))
+            .map(id => id.split('|')[1]);
+            
+        selectedProducts = products.filter(p => selectedForThisSource.includes(p.id));
     } else {
-        const p = products.find(p => p.id === draggableId);
+        const p = products.find(p => p.id === draggedProductId);
         if (p) selectedProducts = [p];
     }
 
     if (selectedProducts.length === 0) return;
 
-    // Initialize transfer quantities with full available amount
+    // Initialize transfer quantities with available amount in the specific source
     const initialQuantities: Record<string, number> = {};
     selectedProducts.forEach(p => {
         const available = source.droppableId === 'unassigned'
-            ? (p.stock - Object.values(p.shelfQuantities || {}).reduce((a, b) => a + b, 0))
+            ? getUnassignedQty(p)
             : (p.shelfQuantities?.[source.droppableId] || 0);
         initialQuantities[p.id] = available;
     });
@@ -144,13 +161,20 @@ export default function ShelfBoard() {
           quantity: (pendingTransfer as any).transferQuantities?.[p.id] ?? p.stock
       }));
 
-      const result = await updateProductShelfLocations(updates);
+      const result = await updateProductShelfLocations(updates, user?.uid || 'system');
 
       if (result.success) {
-        toast({
-          title: "Transfer successful",
-          description: `Transferred stock to ${shelfLocations.find(s => s.id === targetId)?.name || 'Unassigned Shelf'}`
-        });
+        if ((result as any).pendingApproval) {
+          toast({
+            title: "Approval Required",
+            description: "Shelf transfer has been submitted for multi-level approval.",
+          });
+        } else {
+          toast({
+            title: "Transfer successful",
+            description: `Transferred stock to ${shelfLocations.find(s => s.id === targetId)?.name || 'Unassigned Shelf'}`
+          });
+        }
         setPendingTransfer(null);
         setSelectedIds(new Set());
         fetchData();
@@ -197,7 +221,7 @@ export default function ShelfBoard() {
   const brands = Array.from(new Set(products.map(p => p.brand).filter(Boolean)));
 
   const displayShelves = [
-    ...(products.some(p => !p.shelfLocationIds || p.shelfLocationIds.length === 0) ? [{ id: 'unassigned', name: 'Unassigned Shelf' }] : []),
+    ...(products.some(p => getUnassignedQty(p) !== 0) ? [{ id: 'unassigned', name: 'Unassigned Shelf' }] : []),
     ...shelfLocations
   ];
 
@@ -338,7 +362,11 @@ export default function ShelfBoard() {
                   <h3 className="font-bold text-sm tracking-tight truncate">{shelf.name}</h3>
                 </div>
                 <Badge variant="secondary" className="font-mono">
-                  {filteredProducts.filter(p => shelf.id === 'unassigned' ? (!p.shelfLocationIds || p.shelfLocationIds.length === 0) : p.shelfLocationIds?.includes(shelf.id)).length}
+                  {filteredProducts.filter(p => 
+                    shelf.id === 'unassigned' 
+                      ? getUnassignedQty(p) !== 0 
+                      : (p.shelfQuantities?.[shelf.id] || 0) !== 0
+                  ).length}
                 </Badge>
               </div>
 
@@ -353,16 +381,22 @@ export default function ShelfBoard() {
                     )}
                   >
                     {filteredProducts
-                      .filter((p) => shelf.id === 'unassigned' ? (!p.shelfLocationIds || p.shelfLocationIds.length === 0) : p.shelfLocationIds?.includes(shelf.id))
+                      .filter((p) => 
+                        shelf.id === 'unassigned' 
+                          ? getUnassignedQty(p) !== 0 
+                          : (p.shelfQuantities?.[shelf.id] || 0) !== 0
+                      )
                       .map((product, index) => {
                           const shelfQty = shelf.id === 'unassigned' 
-                            ? (product.stock - Object.values(product.shelfQuantities || {}).reduce((a, b) => a + b, 0))
+                            ? getUnassignedQty(product)
                             : (product.shelfQuantities?.[shelf.id] || 0);
+                          
+                          const uniqueId = `${shelf.id}|${product.id}`;
                           
                           return (
                             <Draggable
-                              key={product.id}
-                              draggableId={product.id}
+                              key={uniqueId}
+                              draggableId={uniqueId}
                               index={index}
                             >
                               {(provided, snapshot) => (
@@ -374,15 +408,15 @@ export default function ShelfBoard() {
                                   className={cn(
                                     "group bg-background rounded-lg border p-3 shadow-sm hover:shadow-md hover:border-primary/50 transition-all relative",
                                     snapshot.isDragging && "ring-2 ring-primary shadow-lg scale-105 rotate-2 z-50",
-                                    selectedIds.has(product.id) && "ring-2 ring-primary bg-primary/[0.02]",
+                                    selectedIds.has(uniqueId) && "ring-2 ring-primary bg-primary/[0.02]",
                                     product.stock <= 0 && "opacity-60 grayscale-[0.5]"
                                   )}
-                                  onClick={(e) => toggleSelect(product.id, e)}
+                                  onClick={(e) => toggleSelect(uniqueId, e)}
                                 >
                                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                     <Checkbox 
-                                        checked={selectedIds.has(product.id)}
-                                        onCheckedChange={() => toggleSelect(product.id)} 
+                                        checked={selectedIds.has(uniqueId)}
+                                        onCheckedChange={() => toggleSelect(uniqueId)} 
                                     />
                                   </div>
 
@@ -458,7 +492,7 @@ export default function ShelfBoard() {
             <div className="space-y-4">
                 {pendingTransfer?.products.map(product => {
                     const maxQty = pendingTransfer.sourceShelfId === 'unassigned'
-                      ? (product.stock - Object.values(product.shelfQuantities || {}).reduce((a, b) => a + b, 0))
+                      ? getUnassignedQty(product)
                       : (product.shelfQuantities?.[pendingTransfer.sourceShelfId] || 0);
 
                     return (

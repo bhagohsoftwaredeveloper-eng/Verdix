@@ -70,14 +70,22 @@ export function AddLoyaltyCardDialog({
   customer, 
   showLabel = false, 
   onSuccess,
-  children
+  children,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen
 }: { 
   customer?: CustomerWithLoyalty, 
   showLabel?: boolean, 
   onSuccess?: () => void,
-  children?: React.ReactNode
+  children?: React.ReactNode,
+  open?: boolean,
+  onOpenChange?: (open: boolean) => void
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const isOpen = isControlled ? controlledOpen : internalOpen;
+  const setIsOpen = isControlled ? setControlledOpen || (() => {}) : setInternalOpen;
+  
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySetting[]>([]);
   const { toast } = useToast();

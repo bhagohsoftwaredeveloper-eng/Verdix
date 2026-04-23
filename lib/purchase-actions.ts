@@ -1,4 +1,5 @@
 import { withTransaction } from './mysql';
+import { generateBatchId } from './batch-utils';
 import { calculatePurchaseCosts } from './purchase-utils';
 import { toSafeNumber } from './utils';
 import { findUltimateRoot, addFamilyStock } from './family-sync';
@@ -17,7 +18,9 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
     purchaseType,
     orderedBy,
     vatAmount,
-    isInternalFinalization
+    isInternalFinalization,
+    receiveToWarehouse,
+    receiveToWarehouseName
   } = body;
 
   const calculations = calculatePurchaseCosts(items, shipping || 0);
@@ -31,8 +34,8 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
     const insertOrderQuery = `
       INSERT INTO purchase_orders (
         id, supplier_id, supplier_name, date, total, payment_method, status, 
-        reference_number, shipping_fee, ordered_by, vat_amount
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        reference_number, shipping_fee, ordered_by, vat_amount, warehouse_id, warehouse_name
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     await connection.query(insertOrderQuery, [
@@ -46,30 +49,45 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
       reference || null,
       toSafeNumber(shipping),
       orderedBy || userId,
-      finalVatAmount
+      finalVatAmount,
+      receiveToWarehouse || null,
+      receiveToWarehouseName || null
     ]);
 
     // 2. Insert items
     const insertItemQuery = `
       INSERT INTO purchase_order_items (
         id, purchase_order_id, product_id, product_name, quantity, cost,
-        selling_price, discount, discount_type, vat_subject
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        selling_price, discount, discount_type, vat_subject, subtotal
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for (const item of items) {
       const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const quantity = toSafeNumber(item.quantity);
+      const cost = toSafeNumber(item.cost);
+      const discount = toSafeNumber(item.discount);
+      const discountType = item.discountType || 'amount';
+      
+      let itemSubtotal = quantity * cost;
+      if (discountType === 'percentage') {
+        itemSubtotal = itemSubtotal - (itemSubtotal * (discount / 100));
+      } else {
+        itemSubtotal = itemSubtotal - discount;
+      }
+
       await connection.query(insertItemQuery, [
         itemId,
         orderId,
         item.productId,
         item.productName,
-        toSafeNumber(item.quantity),
-        toSafeNumber(item.cost),
+        quantity,
+        cost,
         item.sellingPrice ? toSafeNumber(item.sellingPrice) : null,
-        toSafeNumber(item.discount),
-        item.discountType || 'amount',
-        item.vatSubject ? 1 : 0
+        discount,
+        discountType,
+        item.vatSubject ? 1 : 0,
+        itemSubtotal
       ]);
     }
 
@@ -135,7 +153,7 @@ export async function processPurchaseOrderReceipt(orderId: string, receiptData: 
 
       // --- BATCH COSTING: Record this delivery as a new inventory batch ---
       try {
-        const batchId = Math.floor(100000 + Math.random() * 900000).toString();
+        const batchId = generateBatchId();
         await connection.query(
           `INSERT INTO inventory_batches
              (id, product_id, purchase_order_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type)

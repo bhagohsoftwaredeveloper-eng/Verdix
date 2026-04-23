@@ -58,7 +58,10 @@ export async function GET(request: NextRequest) {
         p.cost,
         p.price,
         p.reorder_point,
-        (p.stock * COALESCE(p.cost, 0)) as total_value
+        COALESCE(
+          (SELECT SUM(quantity_remaining * unit_cost) FROM inventory_batches WHERE product_id = p.id AND quantity_remaining > 0),
+          (p.stock * COALESCE(p.cost, 0))
+        ) as total_value
       ${baseSql}
       ORDER BY p.name ASC
       LIMIT ? OFFSET ?
@@ -74,7 +77,12 @@ export async function GET(request: NextRequest) {
       SELECT 
         COUNT(*) as totalItems,
         SUM(p.stock) as totalStock,
-        SUM(p.stock * COALESCE(p.cost, 0)) as totalValue
+        SUM(
+          COALESCE(
+            (SELECT SUM(quantity_remaining * unit_cost) FROM inventory_batches WHERE product_id = p.id AND quantity_remaining > 0),
+            (p.stock * COALESCE(p.cost, 0))
+          )
+        ) as totalValue
       ${baseSql}
     `;
     const [summaryResult] = await query(sumSql, params);

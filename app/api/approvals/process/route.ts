@@ -173,6 +173,14 @@ export async function POST(request: NextRequest) {
             );
             result = { success: rpResult.success, error: (rpResult as any).message || '' };
           }
+        } else if (item.transaction_type === 'SHELF_TRANSFER') {
+          const { updateProductShelfLocations } = await import('@/app/(app)/products/actions');
+          const stResult = await updateProductShelfLocations(
+            txData.updates,
+            item.created_by,
+            true // isInternalFinalization
+          );
+          result = { success: stResult.success, error: (stResult as any).message || '' };
         }
 
         if (!result.success) {

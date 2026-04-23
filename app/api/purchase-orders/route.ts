@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
         po.delivery_date,
         po.delivery_date,
         po.received_total,
-        po.reference_number
+        po.reference_number,
+        po.warehouse_id,
+        po.warehouse_name
       FROM purchase_orders po
       WHERE 1=1
     `;
@@ -87,7 +89,7 @@ export async function GET(request: NextRequest) {
             poi.vat_subject,
             p.barcode,
             p.stock as current_stock,
-            (poi.quantity * poi.cost) as subtotal
+            poi.subtotal
           FROM purchase_order_items poi
           LEFT JOIN products p ON poi.product_id = p.id
           WHERE poi.purchase_order_id = ?
@@ -111,12 +113,14 @@ export async function GET(request: NextRequest) {
           deliveryDate: row.delivery_date ? row.delivery_date : undefined,
           receivedTotal: toSafeNumber(row.received_total),
           referenceNumber: row.reference_number || '',
+          warehouseId: row.warehouse_id || undefined,
+          warehouseName: row.warehouse_name || undefined,
           items: items.map((item: any) => ({
             productId: item.product_id,
             productName: item.product_name,
             quantity: toSafeNumber(item.quantity),
             cost: toSafeNumber(item.cost),
-            sellingPrice: item.selling_price ? toSafeNumber(item.sellingPrice) : undefined,
+            sellingPrice: item.selling_price ? toSafeNumber(item.selling_price) : undefined,
             discount: item.discount ? toSafeNumber(item.discount) : 0,
             discountType: item.discount_type || 'amount',
             vatSubject: item.vat_subject === 1,

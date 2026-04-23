@@ -260,7 +260,7 @@ export default function PurchasesByProductPage() {
                 Purchases by Product Report
               </CardTitle>
               <CardDescription>
-                Detailed breakdown of item procurement and cost analysis
+                Detailed breakdown of item procurement and landed cost analysis (inclusive of shipping)
               </CardDescription>
             </div>
             <Badge variant="outline" className="text-sm border-green-600 text-green-600">

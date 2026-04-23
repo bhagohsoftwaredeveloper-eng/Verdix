@@ -66,15 +66,21 @@ export type CustomerFormValues = z.infer<typeof customerSchema>;
 interface EditCustomerDialogProps {
   customer: Customer;
   onSave: (values: CustomerFormValues) => Promise<void>;
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 import { AddSalesAreaDialog } from './add-sales-area-dialog';
 import { AddSalesGroupDialog } from './add-sales-group-dialog';
 import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms-dialog';
 
-export default function EditCustomerDialog({ customer, onSave, children }: EditCustomerDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function EditCustomerDialog({ customer, onSave, children, open: controlledOpen, onOpenChange: setControlledOpen }: EditCustomerDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const isOpen = isControlled ? controlledOpen : internalOpen;
+  const setIsOpen = isControlled ? setControlledOpen || (() => {}) : setInternalOpen;
+
   const [isSaving, setIsSaving] = useState(false);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
@@ -194,8 +200,8 @@ export default function EditCustomerDialog({ customer, onSave, children }: EditC
   return (
     <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-3xl h-[85vh] flex flex-col overflow-hidden !rounded-3xl !duration-500 ease-in-out data-[state=open]:!animate-in data-[state=closed]:!animate-out data-[state=closed]:!fade-out-0 data-[state=open]:!fade-in-0 data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-90 data-[state=closed]:!slide-out-to-top-[5%] data-[state=open]:!slide-in-from-top-[5%]">
+      {children && <DialogTrigger asChild>{children}</DialogTrigger>}
+      <DialogContent className="sm:max-w-3xl h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Edit Customer</DialogTitle>
           <DialogDescription>

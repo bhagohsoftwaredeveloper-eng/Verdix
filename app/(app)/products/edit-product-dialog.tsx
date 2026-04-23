@@ -1,4 +1,5 @@
-'use client';
+﻿'use client';
+import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purchase-utils';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -309,103 +310,48 @@ export function EditProductDialog({
         return;
     }
 
-    const category = categories.find(c => c.name === watchedCategoryName);
-    const subcategory = subcategories.find(s => s.name === watchedSubcategoryName);
-    const brand = brands.find(b => b.name === watchedBrandName);
-    const supplier = suppliers.find(s => s.id === selectedSupplierId);
-
-    let markup = 0;
-    let source = '';
-    const priority = systemSettings.markupPriority || ["subcategory", "category", "brand"];
-
-    for (const type of priority) {
-        if (type === 'subcategory' && subcategory && subcategory.markupPercentage && subcategory.markupPercentage > 0) {
-            markup = subcategory.markupPercentage;
-            source = 'Subcategory';
-            break;
-        } else if (type === 'category' && category && category.markupPercentage && category.markupPercentage > 0) {
-            markup = category.markupPercentage;
-            source = 'Category';
-            break;
-        } else if (type === 'brand' && brand && brand.markupPercentage && brand.markupPercentage > 0) {
-            markup = brand.markupPercentage;
-            source = 'Brand';
-            break;
-        }
-    }
-
-    // Fallback to global default if no specific markup found
-    if (!source && systemSettings.defaultMarkupPercentage && systemSettings.defaultMarkupPercentage > 0) {
-        markup = systemSettings.defaultMarkupPercentage;
-        source = 'Global Default';
-    }
+    const { markup, source } = calculateMarkupPercentage(
+        { 
+            category: watchedCategoryName, 
+            subcategory: watchedSubcategoryName, 
+            brand: watchedBrandName,
+            supplierId: selectedSupplierId
+        },
+        systemSettings,
+        categories,
+        subcategories,
+        brands,
+        suppliers
+    );
 
     if (source) {
       setMarkupSource(`Calculated from ${source} Markup (${markup}%)`);
       if (watchedCost && watchedCost > 0) {
-          const basePrice = watchedCost * (1 + markup / 100);
-          
-          // Find default price level
+          // Calculate base price and default level price
           const defaultLevel = priceLevels.find((l: any) => l.isDefault) || priceLevels[0];
+          const suggestedMainPrice = calculateSuggestedPrice(watchedCost, markup, 0, defaultLevel);
           
-          // Calculate main price using default level's markup on top of basePrice
-          // Exception: "Retail" level uses basePrice directly without additional markup
-          let mainPrice = basePrice;
-          if (defaultLevel && defaultLevel.percentageAdjustment) {
-             // Check if default level is "Retail" - if so, skip markup
-             if (defaultLevel.name?.toLowerCase() !== 'retail') {
-                mainPrice = basePrice * (1 + defaultLevel.percentageAdjustment / 100);
-             }
-          }
-          form.setValue('price', parseFloat(mainPrice.toFixed(2)));
+          form.setValue('price', parseFloat(suggestedMainPrice.toFixed(2)));
 
-          // Apply to all price levels: basePrice + level markup
-          // Exception: "Retail" level uses basePrice directly
+          // Apply to all price levels
           if (priceLevels.length > 0) {
               const currentFields = form.getValues('priceLevels') || [];
-              
-              // Helper to find existing field index
               const getFieldIndex = (levelId: string) => currentFields.findIndex((f: any) => f.levelId === levelId);
 
               priceLevels.forEach((level: any) => {
-                  let levelPrice;
-                  const levelMarkup = level.percentageAdjustment ?? 0;
-                  
-                  if (level.calculationBase === 'cost') {
-                      levelPrice = parseFloat((watchedCost * (1 + levelMarkup / 100)).toFixed(2));
-                  } else {
-                      // Retail base
-                      if (levelMarkup === 0 && level.name?.toLowerCase() === 'retail') {
-                          levelPrice = parseFloat(basePrice.toFixed(2));
-                      } else {
-                          levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
-                      }
-                  }
-                  
+                  const levelPrice = calculateSuggestedPrice(watchedCost, markup, 0, level);
                   const index = getFieldIndex(level.id);
                   if (index >= 0) {
-                      form.setValue(`priceLevels.${index}.price`, levelPrice);
+                      form.setValue(`priceLevels.${index}.price`, parseFloat(levelPrice.toFixed(2)));
                   }
               });
               
-              // AUTO-POPULATE: Update all fields that exist in the form
+              // Also update priceLevelFields for UI consistency
               priceLevelFields.forEach((field, index) => {
                   const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
                   if (levelDef) {
-                      let levelPrice;
-                      const levelMarkup = levelDef.percentageAdjustment ?? 0;
-                      
-                      if (levelDef.calculationBase === 'cost') {
-                          levelPrice = parseFloat((watchedCost * (1 + levelMarkup / 100)).toFixed(2));
-                      } else {
-                          // Retail base
-                          if (levelMarkup === 0 && levelDef.name?.toLowerCase() === 'retail') {
-                              levelPrice = parseFloat(basePrice.toFixed(2));
-                          } else {
-                              levelPrice = parseFloat((basePrice * (1 + levelMarkup / 100)).toFixed(2));
-                          }
-                      }
-                      form.setValue(`priceLevels.${index}.price`, levelPrice);
+                      const levelPrice = calculateSuggestedPrice(watchedCost, markup, 0, levelDef);
+                      form.setValue(`priceLevels.${index}.price`, parseFloat(levelPrice.toFixed(2)));
                   }
               });
           }
@@ -413,7 +359,6 @@ export function EditProductDialog({
     } else {
       setMarkupSource(null);
     }
-
   }, [watchedCost, watchedCategoryName, watchedSubcategoryName, watchedBrandName, selectedSupplierId, categories, subcategories, brands, suppliers, form, priceLevels, priceLevelFields, systemSettings, isInitialized]);
 
 
@@ -430,23 +375,36 @@ export function EditProductDialog({
           const brand = brands.find(b => b.name === form.getValues('brand'));
           
           let markup = 0;
-          const priority = systemSettings?.markupPriority || ["subcategory", "category", "brand"];
+          // Parse markupPriority if it's a string (from DB)
+          let priority: string[] = ["subcategory", "category", "brand", "supplier"];
+          if (systemSettings?.markupPriority) {
+            if (typeof systemSettings.markupPriority === 'string') {
+              try {
+                priority = JSON.parse(systemSettings.markupPriority);
+              } catch (e) {
+                console.error('Failed to parse markupPriority:', e);
+              }
+            } else if (Array.isArray(systemSettings.markupPriority)) {
+              priority = systemSettings.markupPriority;
+            }
+          }
           
           for (const type of priority) {
-            if (type === 'subcategory' && subcategory?.markupPercentage && subcategory.markupPercentage > 0) {
-              markup = subcategory.markupPercentage;
+            if (type === 'subcategory' && subcategory?.markupPercentage !== undefined && subcategory.markupPercentage !== null) {
+              markup = Number(subcategory.markupPercentage);
               break;
-            } else if (type === 'category' && category?.markupPercentage && category.markupPercentage > 0) {
-              markup = category.markupPercentage;
+            } else if (type === 'category' && category?.markupPercentage !== undefined && category.markupPercentage !== null) {
+              markup = Number(category.markupPercentage);
               break;
-            } else if (type === 'brand' && brand?.markupPercentage && brand.markupPercentage > 0) {
-              markup = brand.markupPercentage;
+            } else if (type === 'brand' && brand?.markupPercentage !== undefined && brand.markupPercentage !== null) {
+              markup = Number(brand.markupPercentage);
               break;
             }
           }
           
-          if (!markup && systemSettings?.defaultMarkupPercentage && systemSettings.defaultMarkupPercentage > 0) {
-            markup = systemSettings.defaultMarkupPercentage;
+          const globalDefault = systemSettings?.defaultMarkupPercentage !== undefined ? Number(systemSettings.defaultMarkupPercentage) : undefined;
+          if (!markup && globalDefault !== undefined) {
+            markup = globalDefault;
           }
           
           const basePrice = cost * (1 + markup / 100);
@@ -494,6 +452,7 @@ export function EditProductDialog({
       }
     }
   }, [selectedPriceLevelId, priceLevels, priceLevelFields, form, categories, subcategories, brands, systemSettings]);
+
 
   const generateBarcode = () => {
     const randomNumber = Math.floor(100000000000 + Math.random() * 900000000000).toString();
@@ -1294,7 +1253,7 @@ export function EditProductDialog({
                             render={({ field }) => (
                               <FormItem>
                                 <div className="flex items-center justify-between h-6">
-                                  <FormLabel>Cost (₱)</FormLabel>
+                                  <FormLabel>Cost (â‚±)</FormLabel>
                                 </div>
                                 <FormControl>
                                   <Input type="number" step="0.01" placeholder="e.g., 50.00" value={field.value || ''} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
@@ -1542,7 +1501,7 @@ export function EditProductDialog({
                                       name={`priceLevels.${index}.price`}
                                       render={({ field }) => (
                                         <FormItem>
-                                          <FormLabel className="text-xs">Price (₱)</FormLabel>
+                                          <FormLabel className="text-xs">Price (â‚±)</FormLabel>
                                           <div className="flex gap-2 items-center">
                                             <FormControl>
                                               <Input

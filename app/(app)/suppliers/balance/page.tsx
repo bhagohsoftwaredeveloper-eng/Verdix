@@ -35,6 +35,11 @@ export default function SupplierBalancePage() {
   const [filters, setFilters] = useState<SupplierFilters>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  
+  // Dialog states
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierWithBalance | null>(null);
+  const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
   const loadSuppliers = async () => {
     setLoading(true);
@@ -172,7 +177,7 @@ export default function SupplierBalancePage() {
                  </TableRow>
               ) : suppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                   <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
                     No suppliers found.
                   </TableCell>
                 </TableRow>
@@ -205,26 +210,20 @@ export default function SupplierBalancePage() {
                          <DropdownMenuContent align="end" className="w-[200px]">
                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
                            <DropdownMenuSeparator />
-                           <SupplierTransactionDialog 
-                              supplierId={supplier.id} 
-                              supplierName={supplier.name}
-                              trigger={
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  View Transactions
-                                </DropdownMenuItem>
-                              }
-                           />
-                           <MakePaymentDialog 
-                               supplier={supplier} 
-                               onPaymentComplete={loadSuppliers}
-                               trigger={
-                                 <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                   <CreditCard className="mr-2 h-4 w-4" />
-                                   Make Payment
-                                 </DropdownMenuItem>
-                               }
-                             />
+                           <DropdownMenuItem onClick={() => {
+                               setSelectedSupplier(supplier);
+                               setIsTransactionDialogOpen(true);
+                           }}>
+                             <Eye className="mr-2 h-4 w-4" />
+                             View Transactions
+                           </DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => {
+                               setSelectedSupplier(supplier);
+                               setIsPaymentDialogOpen(true);
+                           }}>
+                             <CreditCard className="mr-2 h-4 w-4" />
+                             Make Payment
+                           </DropdownMenuItem>
                          </DropdownMenuContent>
                        </DropdownMenu>
                     </TableCell>
@@ -248,6 +247,23 @@ export default function SupplierBalancePage() {
           )}
         </CardContent>
       </Card>
+      {/* Dialogs */}
+      {selectedSupplier && (
+        <>
+          <SupplierTransactionDialog
+            supplierId={selectedSupplier.id}
+            supplierName={selectedSupplier.name}
+            open={isTransactionDialogOpen}
+            onOpenChange={setIsTransactionDialogOpen}
+          />
+          <MakePaymentDialog
+            supplier={selectedSupplier}
+            open={isPaymentDialogOpen}
+            onOpenChange={setIsPaymentDialogOpen}
+            onPaymentComplete={loadSuppliers}
+          />
+        </>
+      )}
     </div>
   );
 }

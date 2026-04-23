@@ -18,10 +18,11 @@ export async function GET(request: NextRequest) {
         p.brand,
         p.unit_of_measure as uom,
         SUM(poi.quantity) as totalQuantity,
-        SUM(poi.quantity * poi.cost) as totalCost,
-        AVG(poi.cost) as avgCost
+        SUM(poi.quantity * COALESCE(ib.unit_cost, poi.cost)) as totalCost,
+        AVG(COALESCE(ib.unit_cost, poi.cost)) as avgCost
       FROM purchase_order_items poi
       JOIN purchase_orders po ON poi.purchase_order_id = po.id
+      LEFT JOIN inventory_batches ib ON poi.purchase_order_id = ib.purchase_order_id AND poi.product_id = ib.product_id
       LEFT JOIN products p ON poi.product_id = p.id
       WHERE 1=1
     `;

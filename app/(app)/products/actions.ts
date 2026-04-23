@@ -1,6 +1,7 @@
 'use server';
 
 import { query, withTransaction } from '@/lib/mysql';
+import { generateBatchId } from '@/lib/batch-utils';
 import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
 import { PriceLevel, Category, Brand, Supplier, Warehouse, Department, UnitOfMeasure, ShelfLocation, Account, TaxRate } from '@/lib/types';
 
@@ -937,7 +938,7 @@ export async function breakPack(
         const [childPriceRow]: any = await connection.query('SELECT price FROM products WHERE id = ?', [resolvedChildId]);
         const childSellingPrice = parseFloat(childPriceRow?.[0]?.price || 0);
 
-        const childBatchId = Math.floor(100000 + Math.random() * 900000).toString();
+        const childBatchId = generateBatchId();
         await connection.query(
           `INSERT INTO inventory_batches
              (id, product_id, purchase_order_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type, notes)
@@ -1233,12 +1234,62 @@ export async function consolidatePack(
 
 export async function updateProductShelfLocations(updates: { 
   productId: string; 
-  shelfLocationId?: string | null; // Legacy/Bulk target
+  shelfLocationId?: string | null; 
   sourceShelfId?: string | null;
   targetShelfId?: string | null;
   quantity?: number;
-}[]) {
+}[], userId: string = 'system', isInternalFinalization: boolean = false) {
   try {
+    if (!isInternalFinalization) {
+      const isApprovalRequired = await checkApprovalRequired('SHELF_TRANSFER');
+      if (isApprovalRequired) {
+          // Enrich data for approval
+          const enrichedUpdates = await Promise.all(updates.map(async u => {
+              const [pInfo]: any = await query('SELECT name, sku, barcode, stock FROM products WHERE id = ?', [u.productId]);
+              const p = pInfo[0];
+              
+              let sourceName = 'Unassigned';
+              if (u.sourceShelfId && u.sourceShelfId !== 'unassigned') {
+                  const [sInfo]: any = await query('SELECT name FROM shelf_locations WHERE id = ?', [u.sourceShelfId]);
+                  sourceName = sInfo[0]?.name || u.sourceShelfId;
+              }
+              
+              let targetName = 'Unassigned';
+              if (u.targetShelfId && u.targetShelfId !== 'unassigned') {
+                  const [tInfo]: any = await query('SELECT name FROM shelf_locations WHERE id = ?', [u.targetShelfId]);
+                  targetName = tInfo[0]?.name || u.targetShelfId;
+              }
+
+              return {
+                  ...u,
+                  productName: p?.name || 'Unknown',
+                  productSku: p?.sku || '',
+                  productBarcode: p?.barcode || '',
+                  sourceShelfName: sourceName,
+                  targetShelfName: targetName,
+              };
+          }));
+
+          const { queueId, pendingApproval } = await submitToApprovalQueue('SHELF_TRANSFER', {
+              updates: enrichedUpdates,
+              items: enrichedUpdates.map(u => ({
+                  productId: u.productId,
+                  productName: u.productName,
+                  sku: u.productSku,
+                  barcode: u.productBarcode,
+                  quantity: u.quantity,
+                  sourceShelfName: u.sourceShelfName,
+                  targetShelfName: u.targetShelfName,
+                  notes: `Transfer from ${u.sourceShelfName} to ${u.targetShelfName}`
+              }))
+          }, userId);
+
+          if (pendingApproval) {
+              return { success: true, pendingApproval: true, queueId, message: 'Shelf transfer submitted for approval.' };
+          }
+      }
+    }
+
     await withTransaction(async (connection) => {
       for (const update of updates) {
         // Handle Legacy/Bulk move (entire stock to a new shelf or unassigned)
