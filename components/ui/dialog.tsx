@@ -37,14 +37,8 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
-      style={{
-        position: 'fixed',
-        left: '50%',
-        top: '50%',
-        translate: '-50% -50%', // Use translate property to avoid conflict with transform animations
-      }}
       className={cn(
-        "z-[100] grid w-full max-h-[90vh] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out rounded-3xl overflow-y-auto",
+        "fixed inset-0 z-[100] grid w-[calc(100vw-2rem)] sm:max-w-lg h-fit max-h-[90vh] m-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out rounded-3xl overflow-y-auto",
         className
       )}
       {...props}

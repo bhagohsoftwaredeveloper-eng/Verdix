@@ -2,6 +2,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
+import { useLiveRefresh, dispatchStockUpdate } from '@/hooks/use-live-refresh';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -269,14 +270,8 @@ export default function POSPage() {
     }
   }, [fetchedProducts, productsLoading]);
 
-  // Handle auto-refresh when stock is updated (e.g., after a sale)
-  useEffect(() => {
-    const handleStockUpdate = () => {
-      refreshProducts();
-    };
-    window.addEventListener('stock-updated', handleStockUpdate);
-    return () => window.removeEventListener('stock-updated', handleStockUpdate);
-  }, [refreshProducts]);
+  const stableRefresh = useCallback(() => { refreshProducts(); }, [refreshProducts]);
+  useLiveRefresh(stableRefresh);
 
 
   const [isTenderDialogOpen, setIsTenderDialogOpen] = useState(false);
@@ -936,7 +931,7 @@ export default function POSPage() {
     setItems([]);
     setSelectedCustomer(WALK_IN_CUSTOMER);
     // Trigger notification update
-    window.dispatchEvent(new Event('stock-updated'));
+    dispatchStockUpdate();
   };
 
   const handleOpenTender = (method: string) => {

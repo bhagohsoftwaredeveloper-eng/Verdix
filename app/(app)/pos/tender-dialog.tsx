@@ -480,12 +480,25 @@ export function TenderDialog({
             }
 
         } catch (error: any) {
-            console.error('Error saving payment:', error);
-            toast({
-                title: "Transaction Error",
-                description: error.message || "Failed to save the transaction to the database.",
-                variant: "destructive",
-            });
+            const isBatchError = error.message?.includes('Batch stock exhausted');
+            
+            if (isBatchError) {
+                // For batch errors, we show a cleaner message and skip the console.error
+                // which can trigger Next.js development overlays.
+                toast({
+                    title: "Stock Alert",
+                    description: error.message,
+                    variant: "destructive",
+                    duration: 5000,
+                });
+            } else {
+                console.error('Error saving payment:', error);
+                toast({
+                    title: "Transaction Error",
+                    description: error.message || "Failed to save the transaction to the database.",
+                    variant: "destructive",
+                });
+            }
         } finally {
             setIsProcessing(false);
         }

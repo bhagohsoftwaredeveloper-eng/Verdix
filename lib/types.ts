@@ -373,7 +373,7 @@ export interface SystemSettings {
   paperSize?: '58mm' | '80mm';
   requireAdjustmentConfirmation?: boolean;
   requireTransferConfirmation?: boolean;
-  requirePOConfirmation?: boolean;
+  requirePurchaseOrderConfirmation?: boolean;
   requireReceiveConfirmation?: boolean;
   requireBadOrderConfirmation?: boolean;
   requireStockCountApproval?: boolean;

@@ -2,6 +2,7 @@
 import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purchase-utils';
 
 import { useState, useEffect } from 'react';
+import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -508,7 +509,7 @@ export function AddProductDialog({
         });
         form.reset();
         onProductAdded?.();
-        window.dispatchEvent(new Event('stock-updated'));
+        dispatchStockUpdate();
         setIsOpen(false);
       } else {
         toast({

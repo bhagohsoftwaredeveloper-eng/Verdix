@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { WindowControls } from '@/components/window-controls';
@@ -68,6 +68,7 @@ import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
 import { Logo } from '@/components/logo';
 import { ApprovalsDrawer } from '@/components/approvals/approvals-drawer';
 import { WorkflowSettingsDrawer } from '@/components/approvals/workflow-settings-drawer';
+import { useLiveRefresh } from '@/hooks/use-live-refresh';
 
 
 const navItems = [
@@ -132,8 +133,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<{ email: string, permissions?: string[], userType?: string } | null>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);
-  const [isApprovalsDrawerOpen, setIsApprovalsDrawerOpen] = useState(false);
-  const [isWorkflowSettingsDrawerOpen, setIsWorkflowSettingsDrawerOpen] = useState(false);
 
   const isPOSPage = pathname === '/pos';
 
@@ -413,38 +412,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <SidebarMenu>
                 {filteredOtherNavItems.map((item) => (
                   <SidebarMenuItem key={item.href}>
-                    {item.href === '/approvals' ? (
+                    <Link href={item.href}>
                       <SidebarMenuButton
-                        onClick={() => setIsApprovalsDrawerOpen(true)}
-                        isActive={isApprovalsDrawerOpen}
+                        isActive={pathname === item.href}
                         tooltip={{ children: item.label }}
                         className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
                       >
                         <item.icon />
                         <span className="text-[14px]">{item.label}</span>
                       </SidebarMenuButton>
-                    ) : item.href === '/approvals/settings' ? (
-                      <SidebarMenuButton
-                        onClick={() => setIsWorkflowSettingsDrawerOpen(true)}
-                        isActive={isWorkflowSettingsDrawerOpen}
-                        tooltip={{ children: item.label }}
-                        className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
-                      >
-                        <item.icon />
-                        <span className="text-[14px]">{item.label}</span>
-                      </SidebarMenuButton>
-                    ) : (
-                      <Link href={item.href}>
-                        <SidebarMenuButton
-                          isActive={pathname === item.href}
-                          tooltip={{ children: item.label }}
-                          className="gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm"
-                        >
-                          <item.icon />
-                          <span className="text-[14px]">{item.label}</span>
-                        </SidebarMenuButton>
-                      </Link>
-                    )}
+                    </Link>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -505,21 +482,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <WindowControls />
           </div>
         </header>
-        <main className="flex-1 p-4 overflow-auto sm:p-6">
+        <main className="flex-1 flex flex-col overflow-auto p-4 sm:p-6 min-h-0">
           {children}
         </main>
-        <ApprovalsDrawer 
-          open={isApprovalsDrawerOpen} 
-          onOpenChange={setIsApprovalsDrawerOpen} 
-        />
-        <WorkflowSettingsDrawer
-          open={isWorkflowSettingsDrawerOpen}
-          onOpenChange={setIsWorkflowSettingsDrawerOpen}
-          onBack={() => {
-            setIsWorkflowSettingsDrawerOpen(false);
-            setIsApprovalsDrawerOpen(true);
-          }}
-        />
       </SidebarInset>
     </SidebarProvider>
   );
@@ -530,55 +495,47 @@ function NotificationsBell() {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
 
-  // Poll for low stock notifications
+  const checkStock = useCallback(async () => {
+    try {
+      // First check if notifications are enabled
+      const settingsResponse = await fetch('/api/pos-settings');
+      const settingsResult = await settingsResponse.json();
+      
+      if (!settingsResult.success || !settingsResult.data.enablePushNotifications) {
+          setNotifications([]);
+          return;
+      }
+
+      const lowStock = await getLowStockAlerts();
+      
+      const newNotifications = lowStock.map((p: any) => ({
+          id: `low-stock-${p.id}`,
+          title: 'Low Stock Alert',
+          message: `${p.name} is below reorder point (${p.stock}/${p.reorderPoint})`,
+          type: 'warning' as const,
+          link: `/products?filter=low-stock`
+      }));
+      
+      setNotifications(newNotifications);
+    } catch (e) {
+        console.error("Failed to fetch notifications", e);
+    }
+  }, []);
+
   // Poll for low stock notifications and listen for updates
   useEffect(() => {
     let interval: NodeJS.Timeout;
-
-    const checkStock = async () => {
-        try {
-            // First check if notifications are enabled
-            const settingsResponse = await fetch('/api/pos-settings');
-            const settingsResult = await settingsResponse.json();
-            
-            if (!settingsResult.success || !settingsResult.data.enablePushNotifications) {
-                setNotifications([]);
-                return;
-            }
-
-            const lowStock = await getLowStockAlerts();
-            
-            const newNotifications = lowStock.map((p: any) => ({
-                id: `low-stock-${p.id}`,
-                title: 'Low Stock Alert',
-                message: `${p.name} is below reorder point (${p.stock}/${p.reorderPoint})`,
-                type: 'warning' as const,
-                link: `/products?filter=low-stock`
-            }));
-            
-            setNotifications(newNotifications);
-        } catch (e) {
-            console.error("Failed to fetch notifications", e);
-        }
-    };
     
     checkStock();
     
-    // Listen for stock updates
-    const handleStockUpdate = () => {
-      checkStock();
-    };
-    
-    window.addEventListener('stock-updated', handleStockUpdate);
-    
-    // Poll every 30 seconds as a fallback
     interval = setInterval(checkStock, 30000);
     
     return () => {
       if (interval) clearInterval(interval);
-      window.removeEventListener('stock-updated', handleStockUpdate);
     };
-  }, []);
+  }, [checkStock]);
+
+  useLiveRefresh(checkStock);
 
   const unreadCount = notifications.length;
 

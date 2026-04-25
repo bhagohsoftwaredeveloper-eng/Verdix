@@ -52,6 +52,17 @@ export async function PATCH(
       }
     }
 
+    // 0.1 Check for PURCHASE_ORDER approval if status explicitly moving to Approved (Bypassing queue)
+    if (status === 'Approved' && !isInternalFinalization) {
+        const isApprovalRequired = await checkApprovalRequired('PURCHASE_ORDER');
+        if (isApprovalRequired) {
+          return NextResponse.json({
+            success: false,
+            error: 'Direct approval restricted. This order must go through the multi-level approval process.'
+          }, { status: 403 });
+        }
+    }
+
     // Recalculate if items or shipping updated
     let finalTotal = toSafeNumber(total);
     let finalVatAmount = toSafeNumber(vatAmount);
@@ -65,8 +76,8 @@ export async function PATCH(
     return await withTransaction(async (connection) => {
       // 1. Build and execute dynamic update query for the purchase order
       let sql = 'UPDATE purchase_orders SET ';
-      const paramsUpdate = [];
-      const updates = [];
+      const paramsUpdate: any[] = [];
+      const updates: string[] = [];
 
       if (status) {
         updates.push('status = ?');

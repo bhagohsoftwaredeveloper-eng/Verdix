@@ -6,6 +6,7 @@ import { findUltimateRoot, addFamilyStock } from './family-sync';
 
 export async function processPurchaseOrderCreation(body: any, userId: string = 'system') {
   const {
+    id,
     supplierId,
     supplierName,
     date,
@@ -26,16 +27,21 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
   const calculations = calculatePurchaseCosts(items, shipping || 0);
   const finalTotal = calculations.grandTotal;
   const finalVatAmount = calculations.vatAmount;
-  const orderId = `po_${Date.now()}`;
+  const orderId = id || `po_${Date.now()}`;
   const formattedDate = new Date(date || new Date()).toISOString().slice(0, 19).replace('T', ' ');
 
   return await withTransaction(async (connection) => {
-    // 1. Insert order
+    // 1. Insert or Update order
+    // Using ON DUPLICATE KEY UPDATE to allow the same process to be used for initial (Pending) 
+    // and final (Approved) states without duplicate entries.
     const insertOrderQuery = `
       INSERT INTO purchase_orders (
         id, supplier_id, supplier_name, date, total, payment_method, status, 
         reference_number, shipping_fee, ordered_by, vat_amount, warehouse_id, warehouse_name
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        status = VALUES(status),
+        updated_at = NOW()
     `;
 
     await connection.query(insertOrderQuery, [
@@ -55,6 +61,11 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
     ]);
 
     // 2. Insert items
+    // First clear existing items if we are updating (id provided)
+    if (id) {
+        await connection.query('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [orderId]);
+    }
+
     const insertItemQuery = `
       INSERT INTO purchase_order_items (
         id, purchase_order_id, product_id, product_name, quantity, cost,
@@ -145,10 +156,21 @@ export async function processPurchaseOrderReceipt(orderId: string, receiptData: 
       const landedCost = toSafeNumber(calculatedItem.landedCostPerUnit);
       const sellingPrice = toSafeNumber(receivedItem.sellingPrice || itemRows.find((i: any) => i.productId === receivedItem.productId)?.sellingPrice);
 
+      // "Highest cost wins" rule:
+      // Fetch the product's current cost from the DB. If the new landed cost is lower
+      // than the previously recorded cost (e.g. supplier gave a cheaper price this time),
+      // keep the higher cost so the product cost never drops unexpectedly.
+      const [existingProductRows]: any = await connection.query(
+        'SELECT cost FROM products WHERE id = ?',
+        [receivedItem.productId]
+      );
+      const existingCost = toSafeNumber(existingProductRows?.[0]?.cost ?? 0);
+      const finalCost = Math.max(existingCost, landedCost);
+
       // Update cost and price for the specific product received
       await connection.query(
         'UPDATE products SET cost = ?, price = ?, expiration_date = ?, updated_at = NOW() WHERE id = ?',
-        [landedCost, sellingPrice, receivedItem.expirationDate ? new Date(receivedItem.expirationDate).toISOString().slice(0, 10) : null, receivedItem.productId]
+        [finalCost, sellingPrice, receivedItem.expirationDate ? new Date(receivedItem.expirationDate).toISOString().slice(0, 10) : null, receivedItem.productId]
       );
 
       // --- BATCH COSTING: Record this delivery as a new inventory batch ---

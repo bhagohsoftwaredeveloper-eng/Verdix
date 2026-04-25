@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -183,6 +184,10 @@ export function QuickAddChildDialog({
           description: `Successfully added ${childName} to ${selectedParent.name}.`,
         });
         onChildAdded();
+        
+        // Dispatch event to refresh other modules
+        dispatchStockUpdate();
+        
         setIsOpen(false);
         // Reset form
         setChildName('');

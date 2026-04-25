@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { breakPack, searchProducts, getUnitsOfMeasure } from '../../products/actions';
+import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Package, ArrowRight, CheckCircle2, Info, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -104,7 +105,7 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
     const timer = setTimeout(async () => {
       try {
         const results = await searchProducts(query);
-        const filteredResults = results.filter(r => r.id !== selectedSource?.id);
+        const filteredResults = results.filter((r: SearchResult) => r.id !== selectedSource?.id);
         if (step === 'source') setSourceResults(filteredResults);
         else setTargetResults(filteredResults);
       } catch (err) {
@@ -156,6 +157,7 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
           toast({ title: '⏳ Submitted for Approval', description: result.message });
         } else {
           toast({ title: '✅ Repackaging Complete', description: result.message });
+          dispatchStockUpdate();
           onSuccess?.();
         }
         setStep('source');
@@ -469,7 +471,7 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
                 Go Back
               </Button>
               <Button
-                size="xl"
+                size="lg"
                 disabled={!packsProduced || parseFloat(packsProduced) <= 0 || isLoading}
                 onClick={handleProcess}
                 className="rounded-full px-12 h-14 text-xl font-black bg-emerald-600 hover:bg-emerald-700"

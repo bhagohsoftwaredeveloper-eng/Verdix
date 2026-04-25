@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { PurchaseOrder, Product, SystemSettings } from '../../../lib/types';
 import { mockProducts } from '../../../lib/data';
 import { usePurchaseOrders, useProducts, useBusinessProfile, useSuppliers } from '../../../hooks/use-api';
+import { useLiveRefresh, dispatchStockUpdate } from '../../../hooks/use-live-refresh';
 import { format as formatFns } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddPurchaseOrderDialog } from './add-purchase-order-dialog';
@@ -90,7 +91,8 @@ function PurchaseOrderActions({
   onPrint, 
   onViewDetails,
   onReorder,
-  onEdit 
+  onEdit,
+  settings
 }: { 
   order: PurchaseOrder, 
   onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, 
@@ -98,14 +100,19 @@ function PurchaseOrderActions({
   onPrint: () => void,
   onViewDetails: () => void,
   onReorder: (order: PurchaseOrder) => void,
-  onEdit: (order: PurchaseOrder) => void
+  onEdit: (order: PurchaseOrder) => void,
+  settings?: SystemSettings | null
 }) {
   const { toast } = useToast();
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
 
   const handleApprove = () => {
-    onUpdateOrder(order.id, { status: 'Approved' });
-    toast({ title: 'Order Approved', description: `Order ${order.id.substring(0, 7)} has been approved.` });
+    const nextStatus = (order.status === 'Draft' && settings?.requirePurchaseOrderConfirmation) ? 'Pending' : 'Approved';
+    onUpdateOrder(order.id, { status: nextStatus });
+    toast({ 
+      title: nextStatus === 'Pending' ? 'Order Submitted' : 'Order Approved', 
+      description: nextStatus === 'Pending' ? `Order ${order.id.substring(0, 7)} has been submitted for approval.` : `Order ${order.id.substring(0, 7)} has been approved.` 
+    });
   };
 
   const handleVoid = () => {
@@ -144,7 +151,13 @@ function PurchaseOrderActions({
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           
           {/* Status Actions */}
-          {(order.status === 'Draft' || order.status === 'Pending') && (
+          {order.status === 'Draft' && (
+            <DropdownMenuItem onClick={handleApprove}>
+              <Check className="mr-2 h-4 w-4" /> {settings?.requirePurchaseOrderConfirmation ? 'Submit for Approval' : 'Approve'}
+            </DropdownMenuItem>
+          )}
+
+          {(order.status === 'Pending' && !settings?.requirePurchaseOrderConfirmation) && (
             <DropdownMenuItem onClick={handleApprove}>
               <Check className="mr-2 h-4 w-4" /> Approve
             </DropdownMenuItem>
@@ -203,7 +216,8 @@ function PurchaseOrderRow({
   onPrint, 
   onReorder,
   onEdit,
-  onViewDetails
+  onViewDetails,
+  settings
 }: { 
   order: PurchaseOrder, 
   onUpdateOrder: (id: string, updates: Partial<PurchaseOrder>) => void, 
@@ -211,7 +225,8 @@ function PurchaseOrderRow({
   onPrint: (order: PurchaseOrder) => void, 
   onReorder: (order: PurchaseOrder) => void, 
   onEdit: (order: PurchaseOrder) => void, 
-  onViewDetails: (order: PurchaseOrder) => void 
+  onViewDetails: (order: PurchaseOrder) => void,
+  settings?: SystemSettings | null
 }) {
   
   const statusVariant = (status: string) => {
@@ -257,6 +272,7 @@ function PurchaseOrderRow({
           onViewDetails={() => onViewDetails(order)}
           onReorder={onReorder}
           onEdit={onEdit}
+          settings={settings}
         />
       </TableCell>
     </TableRow>
@@ -334,6 +350,8 @@ export default function PurchasesPage() {
     supplierFilter
   );
 
+
+
   const updatePurchaseOrder = async (id: string, updates: any) => {
     try {
       const response = await fetch(getApiUrl(`/purchase-orders/${id}`), {
@@ -344,19 +362,24 @@ export default function PurchasesPage() {
         body: JSON.stringify(updates),
       });
 
+      const result = await response.json();
+      
       if (!response.ok) {
-        throw new Error('Failed to update status');
+        throw new Error(result.error || result.message || 'Failed to update status');
       }
 
-      const result = await response.json();
       if (result.success) {
-        refetch();
+        dispatchStockUpdate();
       } else {
          throw new Error(result.error || 'Failed to update');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update purchase order:', error);
-      // Optional: Toast error here or let child handle logic
+      toast({
+          variant: 'destructive',
+          title: 'Update Failed',
+          description: error.message || 'An unexpected error occurred.'
+      });
     }
   };
 
@@ -463,7 +486,7 @@ export default function PurchasesPage() {
       setIsReceiveDialogOpen(false);
       setOrderToReceive(null);
       refetch();
-      window.dispatchEvent(new Event('stock-updated'));
+      dispatchStockUpdate();
     } catch (error) {
       console.error('Failed to receive items:', error);
       toast({ 
@@ -727,6 +750,7 @@ export default function PurchasesPage() {
                   onReorder={handleReorder}
                   onEdit={handleEdit}
                   onViewDetails={handleViewDetails}
+                  settings={settings}
                 />
               ))}
             </TableBody>

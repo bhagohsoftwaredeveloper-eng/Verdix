@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import {
   Dialog,
   DialogContent,
@@ -161,7 +162,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
         setIsOpen(false);
         onSuccess?.();
         // Custom event for immediate updates if needed
-        window.dispatchEvent(new Event('stock-updated'));
+        dispatchStockUpdate();
       } else {
         throw new Error(result.error || 'Transfer failed');
       }

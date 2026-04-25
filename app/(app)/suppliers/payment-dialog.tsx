@@ -34,6 +34,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { useEffect } from 'react';
 import { printSupplierVoucher } from '@/lib/print-supplier-voucher';
+import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -203,6 +204,7 @@ export function MakePaymentDialog({
         form.reset();
         setSelectedPOs({});
         setShowPrintResult(true);
+        dispatchStockUpdate();
         if (onPaymentComplete) {
           onPaymentComplete();
         }

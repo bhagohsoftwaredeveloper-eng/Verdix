@@ -32,16 +32,27 @@ export async function GET(request: NextRequest) {
 
     const queueItems: any[] = await query(sql, params);
 
-    // Fetch history for these items
-    const history: any = await query('SELECT * FROM approval_history ORDER BY created_at ASC');
+    if (queueItems.length === 0) {
+      return NextResponse.json({ success: true, data: [] });
+    }
 
-    // Fetch workflows to know the role names for each step
+    const itemIds = queueItems.map(i => i.id);
+
+    // Fetch history ONLY for these items
+    const history: any = await query(
+      `SELECT * FROM approval_history WHERE approval_queue_id IN (?) ORDER BY created_at ASC`,
+      [itemIds]
+    );
+
+    // Fetch workflows for the specific transaction types in the queue
+    const txTypes = Array.from(new Set(queueItems.map(i => i.transaction_type)));
     const workflows: any = await query(`
       SELECT aw.*, ut.name as role_name 
       FROM approval_workflows aw 
       JOIN user_types ut ON aw.user_type_id = ut.id
+      WHERE aw.transaction_type IN (?)
       ORDER BY aw.step_order ASC
-    `);
+    `, [txTypes]);
 
     // Group history and add workflow info
     const enrichedItems = queueItems.map(item => {
@@ -50,9 +61,16 @@ export async function GET(request: NextRequest) {
       
       const currentStepInfo = itemWorkflow.find((w: any) => w.step_order === item.current_step);
 
+      let parsedData = {};
+      try {
+        parsedData = typeof item.transaction_data === 'string' ? JSON.parse(item.transaction_data) : item.transaction_data;
+      } catch (e) {
+        console.error(`Failed to parse transaction_data for item ${item.id}:`, e);
+      }
+
       return {
         ...item,
-        transaction_data: typeof item.transaction_data === 'string' ? JSON.parse(item.transaction_data) : item.transaction_data,
+        transaction_data: parsedData,
         history: itemHistory,
         workflow: itemWorkflow,
         currentStepRole: currentStepInfo?.role_name || 'Unknown',

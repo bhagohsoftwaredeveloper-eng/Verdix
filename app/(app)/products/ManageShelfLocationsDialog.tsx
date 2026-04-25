@@ -136,8 +136,8 @@ export function ManageShelfLocationsDialog({ open, onOpenChange, onLocationAdded
           <DialogDescription>Add, edit, or remove shelf locations for inventory organization.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex gap-4 items-end mb-4 bg-muted/30 p-4 rounded-lg border">
-          <div className="flex-1 space-y-2">
+        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-end items-start mb-4 bg-muted/30 p-3 sm:p-4 rounded-lg border">
+          <div className="flex-1 w-full space-y-2">
             <Label htmlFor="shelf-name">Name</Label>
             <Input
               id="shelf-name"
@@ -147,7 +147,7 @@ export function ManageShelfLocationsDialog({ open, onOpenChange, onLocationAdded
               required
             />
           </div>
-          <div className="flex-1 space-y-2">
+          <div className="flex-1 w-full space-y-2">
             <Label htmlFor="shelf-desc">Description</Label>
             <Input
               id="shelf-desc"
@@ -156,13 +156,15 @@ export function ManageShelfLocationsDialog({ open, onOpenChange, onLocationAdded
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-          <Button type="submit" disabled={isSaving}>
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {editingId ? "Update" : "Add"}
-          </Button>
-          {editingId && (
-            <Button type="button" variant="ghost" onClick={resetForm}>Cancel</Button>
-          )}
+          <div className="flex gap-2 w-full sm:w-auto pt-2 sm:pt-0">
+            <Button type="submit" disabled={isSaving} className="flex-1 sm:flex-none">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {editingId ? "Update" : "Add"}
+            </Button>
+            {editingId && (
+              <Button type="button" variant="ghost" onClick={resetForm} className="flex-1 sm:flex-none">Cancel</Button>
+            )}
+          </div>
         </form>
 
         <div className="border rounded-md overflow-hidden bg-background">

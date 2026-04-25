@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, DollarSign, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { SystemSettings } from '@/lib/types';
 import { getApiUrl } from '@/lib/api-config';
@@ -147,7 +147,7 @@ export default function PricingSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
+              <span className="h-5 w-5 flex items-center justify-center font-bold text-base">₱</span>
               Markup Automation
             </CardTitle>
             <CardDescription>Configure automatic price calculation logic</CardDescription>

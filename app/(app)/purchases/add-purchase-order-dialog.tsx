@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -97,10 +98,11 @@ const purchaseOrderSchema = z.object({
 type PurchaseOrderFormValues = z.infer<typeof purchaseOrderSchema>;
 
 function ProductSelector({ onSelectProduct, supplierId }: { onSelectProduct: (product: Product) => void, supplierId?: string }) {
-  const { products, loading, error } = useProducts(undefined, undefined, supplierId);
   const [inputValue, setInputValue] = useState('');
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [commandSearch, setCommandSearch] = useState('');
+  // Pre-load all supplier products; Command does instant client-side filtering
+  const { products, loading, error } = useProducts(undefined, undefined, supplierId);
 
   const handleScanOrPunch = () => {
     const term = inputValue.trim();
@@ -165,9 +167,12 @@ function ProductSelector({ onSelectProduct, supplierId }: { onSelectProduct: (pr
               </DialogDescription>
             </DialogHeader>
           </div>
-          {loading ? (
+          {loading && !products.length ? (
             <div className="flex justify-center py-4">
-              <div className="text-sm text-muted-foreground">Loading products...</div>
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading products...
+              </div>
             </div>
           ) : error ? (
             <div className="text-sm text-destructive py-4">
@@ -532,7 +537,7 @@ export function AddPurchaseOrderDialog({
                       productName: item.productName,
                       quantity: item.quantity,
                       cost: item.cost,
-                      sellingPrice: 0,
+                      sellingPrice: (item as any).sellingPrice ?? currentProduct?.price ?? 0,
                       discount: item.discount || 0,
                       discountType: 'amount',
                       vatSubject: false,
@@ -634,7 +639,7 @@ export function AddPurchaseOrderDialog({
   };
 
   async function onSubmit(values: PurchaseOrderFormValues) {
-    if (systemSettings?.requirePOConfirmation) {
+    if (systemSettings?.requirePurchaseOrderConfirmation) {
       setConfirmValues(values);
       setIsConfirmOpen(true);
     } else {
@@ -719,6 +724,10 @@ export function AddPurchaseOrderDialog({
       });
 
       if (!editOrder) form.reset();
+      
+      // Dispatch event to refresh other modules (Inventory, Products)
+      dispatchStockUpdate();
+      
       setOpen(false);
       setIsConfirmOpen(false);
     } catch (error) {

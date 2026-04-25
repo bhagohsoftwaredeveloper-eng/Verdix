@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Product, Sale, Customer, PaymentMethod, PurchaseOrder, Supplier } from '@/lib/types';
 import { getApiUrl } from '@/lib/api-config';
+import { useLiveRefresh } from '@/hooks/use-live-refresh';
+
 
 export interface UseProductsResult {
   products: Product[];
@@ -41,7 +43,9 @@ export function useProducts(search?: string, availability?: string, supplierId?:
       }
       params.append('limit', '100'); // Get more products for search
 
-      const response = await fetch(getApiUrl(`/products?${params.toString()}`));
+      const response = await fetch(getApiUrl(`/products?${params.toString()}`), {
+        cache: 'no-store'
+      });
       const result = await response.json();
 
       if (!result.success) {
@@ -90,9 +94,8 @@ export function useProducts(search?: string, availability?: string, supplierId?:
     fetchProducts();
   }, [search, availability, supplierId, warehouseId]);
 
-  const refetch = () => {
-    fetchProducts();
-  };
+  const refetch = useCallback(() => { fetchProducts(); }, [search, availability, supplierId, warehouseId]);
+  useLiveRefresh(refetch);
 
   return { products, loading, error, refetch };
 }
@@ -114,7 +117,9 @@ export function useSalesInvoices(): UseSalesInvoicesResult {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(getApiUrl('/sales'));
+      const response = await fetch(getApiUrl('/sales'), {
+        cache: 'no-store'
+      });
       const result = await response.json();
 
       if (!result.success) {
@@ -135,9 +140,8 @@ export function useSalesInvoices(): UseSalesInvoicesResult {
     fetchSalesInvoices();
   }, []);
 
-  const refetch = () => {
-    fetchSalesInvoices();
-  };
+  const refetch = useCallback(() => { fetchSalesInvoices(); }, []);
+  useLiveRefresh(refetch);
 
   return { salesInvoices, loading, error, refetch };
 }
@@ -158,7 +162,9 @@ export function useCustomers(search?: string): UseCustomersResult {
       }
       params.append('limit', '100'); // Get more customers for search
 
-      const response = await fetch(getApiUrl(`/customers?${params.toString()}`));
+      const response = await fetch(getApiUrl(`/customers?${params.toString()}`), {
+        cache: 'no-store'
+      });
       const result = await response.json();
 
       if (!result.success) {
@@ -196,9 +202,8 @@ export function useCustomers(search?: string): UseCustomersResult {
     fetchCustomers();
   }, [search]);
 
-  const refetch = () => {
-    fetchCustomers();
-  };
+  const refetch = useCallback(() => { fetchCustomers(); }, [search]);
+  useLiveRefresh(refetch);
 
   return { customers, loading, error, refetch };
 }
@@ -227,7 +232,9 @@ export function usePaymentMethods(search?: string): UsePaymentMethodsResult {
       params.append('activeOnly', 'true'); // Only fetch active payment methods
       params.append('limit', '100');
 
-      const response = await fetch(getApiUrl(`/payment-methods?${params.toString()}`));
+      const response = await fetch(getApiUrl(`/payment-methods?${params.toString()}`), {
+        cache: 'no-store'
+      });
       const result = await response.json();
 
       if (!result.success) {
@@ -254,9 +261,8 @@ export function usePaymentMethods(search?: string): UsePaymentMethodsResult {
     fetchPaymentMethods();
   }, [search]);
 
-  const refetch = () => {
-    fetchPaymentMethods();
-  };
+  const refetch = useCallback(() => { fetchPaymentMethods(); }, [search]);
+  useLiveRefresh(refetch);
 
   return { paymentMethods, loading, error, refetch };
 }
@@ -330,9 +336,8 @@ export function usePurchaseOrders(search?: string, status?: string, page: number
     fetchPurchaseOrders();
   }, [search, status, page, limit, startDate, endDate, supplierId]);
 
-  const refetch = () => {
-    fetchPurchaseOrders();
-  };
+  const refetch = useCallback(() => { fetchPurchaseOrders(); }, [search, status, page, limit, startDate, endDate, supplierId]);
+  useLiveRefresh(refetch);
 
   return { purchaseOrders, loading, error, refetch, pagination };
 }
@@ -364,7 +369,9 @@ export function useBusinessProfile(): UseBusinessProfileResult {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(getApiUrl('/pos-settings'));
+      const response = await fetch(getApiUrl('/pos-settings'), {
+        cache: 'no-store'
+      });
       const result = await response.json();
 
       if (!result.success) {
@@ -384,9 +391,8 @@ export function useBusinessProfile(): UseBusinessProfileResult {
     fetchProfile();
   }, []);
 
-  const refetch = () => {
-    fetchProfile();
-  };
+  const refetch = useCallback(() => { fetchProfile(); }, []);
+  useLiveRefresh(refetch);
 
   return { profile, loading, error, refetch };
 }
@@ -451,9 +457,8 @@ export function useBadOrders(search?: string, status?: string, page: number = 1,
     fetchBadOrders();
   }, [search, status, page, limit]);
 
-  const refetch = () => {
-    fetchBadOrders();
-  };
+  const refetch = useCallback(() => { fetchBadOrders(); }, [search, status, page, limit]);
+  useLiveRefresh(refetch);
 
   return { badOrders, loading, error, refetch, pagination };
 }
@@ -477,7 +482,9 @@ export function useBadOrderStats() {
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const response = await fetch(getApiUrl('/bad-orders/stats'));
+      const response = await fetch(getApiUrl('/bad-orders/stats'), {
+        cache: 'no-store'
+      });
       const result = await response.json();
       if (result.success) {
         setStats(result.data);
@@ -564,9 +571,8 @@ export function useSuppliers(search?: string, page: number = 1, limit: number = 
     fetchSuppliers();
   }, [search, page, limit]);
 
-  const refetch = () => {
-    fetchSuppliers();
-  };
+  const refetch = useCallback(() => { fetchSuppliers(); }, [search, page, limit]);
+  useLiveRefresh(refetch);
 
   return { suppliers, loading, error, refetch, pagination };
 }

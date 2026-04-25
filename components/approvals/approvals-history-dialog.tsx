@@ -39,10 +39,16 @@ interface ApprovalItem {
   transaction_type: string;
   transaction_data: any;
   status: 'Pending' | 'Approved' | 'Rejected';
+  current_step: number;
   created_by: string;
   requester_name: string;
+  requester_email: string;
   created_at: string;
+  updated_at: string;
   currentStepRole: string;
+  currentStepRoleId: string | null;
+  history: any[];
+  workflow: any[];
 }
 
 interface ApprovalsHistoryDialogProps {

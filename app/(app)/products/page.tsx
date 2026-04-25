@@ -46,6 +46,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { addChildProduct } from './actions';
+import { useLiveRefresh, dispatchStockUpdate } from '@/hooks/use-live-refresh';
 
 function ProductRow({ product, onProductDeleted, onProductUpdated, products, productOptions, onOptionsRefresh, depth = 0 }: { 
   product: ProductWithChildren; 
@@ -329,7 +330,7 @@ function ProductsContent() {
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -346,11 +347,11 @@ function ProductsContent() {
   const [isShelfLocationsOpen, setIsShelfLocationsOpen] = useState(false);
   const [isDepartmentsOpen, setIsDepartmentsOpen] = useState(false);
 
+  // Load products WITHOUT search — search is done client-side for instant results
   const loadProducts = useCallback(async (page = currentPage, size = pageSize) => {
     setIsLoadingProducts(true);
     try {
       const filters = {
-        search: searchTerm,
         brand: selectedBrand !== 'all' ? selectedBrand : undefined,
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
         supplier: selectedSupplier !== 'all' ? selectedSupplier : undefined,
@@ -364,20 +365,23 @@ function ProductsContent() {
         getProducts(size, (page - 1) * size, filters),
         getProductsCount(filters)
       ]);
-      setProducts(productsData);
+      setAllProducts(productsData);
       setTotalProducts(totalCount);
     } catch (error) {
       console.error('Failed to load products:', error);
-      setProducts([]);
+      setAllProducts([]);
       setTotalProducts(0);
     } finally {
       setIsLoadingProducts(false);
     }
-  }, [currentPage, pageSize, searchTerm, selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus]);
+  }, [currentPage, pageSize, selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus]);
 
   useEffect(() => {
     loadProducts(currentPage, pageSize);
   }, [currentPage, pageSize, loadProducts]);
+
+  const refetch = useCallback(() => { loadProducts(); }, [loadProducts]);
+  useLiveRefresh(refetch);
 
   const loadProductOptions = useCallback(async () => {
     setIsLoadingOptions(true);
@@ -410,14 +414,25 @@ function ProductsContent() {
     loadProductOptions();
   }, [loadProductOptions]);
 
-  // Reset to page 1 when search term changes
+  // Reset to page 1 when structural filters change, NOT on searchTerm change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, selectedDepartment]);
 
   const filtersActive = useMemo(() => {
     return selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedShelfLocation !== 'all' || selectedStatus !== 'all' || selectedDepartment !== 'all' || searchTerm !== '';
   }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, selectedDepartment, searchTerm]);
+
+  // Instant client-side search filter — no server round-trip
+  const products = useMemo(() => {
+    if (!searchTerm.trim()) return allProducts;
+    const lower = searchTerm.toLowerCase();
+    return allProducts.filter(p =>
+      p.name.toLowerCase().includes(lower) ||
+      p.sku.toLowerCase().includes(lower) ||
+      (p.barcode && p.barcode.toLowerCase().includes(lower))
+    );
+  }, [allProducts, searchTerm]);
 
   const productTree = useMemo(() => {
     if (!products) return [];

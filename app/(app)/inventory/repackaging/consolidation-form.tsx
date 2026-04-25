@@ -91,7 +91,7 @@ export function ConsolidationForm({ onSuccess }: { onSuccess?: () => void }) {
     const timer = setTimeout(async () => {
       try {
         const results = await searchProducts(query);
-        const filtered = results.filter(r => r.id !== selectedSource?.id);
+        const filtered = results.filter((r: SearchResult) => r.id !== selectedSource?.id);
         if (step === 'source') setSourceResults(filtered);
         else setTargetResults(filtered);
       } catch (err) {

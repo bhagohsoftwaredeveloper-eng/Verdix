@@ -27,11 +27,9 @@ import { Product } from '@/lib/types';
 import { getProducts } from '../products/actions';
 import { adjustStock } from './history/actions';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useState, useEffect, useMemo } from 'react';
-import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban, History, MoreHorizontal, Layers, Rows3 } from 'lucide-react';
-import { TransferBoardDrawer } from './TransferBoardDrawer';
-import { ShelfBoardDrawer } from './ShelfBoardDrawer';
-import { BulkAdjustmentDrawer } from './BulkAdjustmentDrawer';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban, History, MoreHorizontal, Layers, Rows3, PackageOpen } from 'lucide-react';
+import { BatchInventoryDrawer } from './BatchInventoryDrawer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +41,7 @@ import {
 import { StockTransferDialog } from './StockTransferDialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useLiveRefresh, dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import {
   Tabs,
   TabsList,
@@ -234,7 +233,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
       setIsOpen(false);
       setIsConfirmOpen(false);
       onSuccess?.(); 
-      window.dispatchEvent(new Event('stock-updated'));
+      dispatchStockUpdate();
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -950,27 +949,15 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
 
 export default function InventoryPage() {
   const { toast } = useToast();
-  const [products, setProducts] = useState<ProductWithChildren[]>([]);
+  const [allLoadedProducts, setAllLoadedProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'stock' | 'sku'>('name');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
-  const [totalProducts, setTotalProducts] = useState(0);
   const [posSettings, setPosSettings] = useState<any>(null);
-  const [isTransferBoardOpen, setIsTransferBoardOpen] = useState(false);
-  const [isShelfBoardOpen, setIsShelfBoardOpen] = useState(false);
-  const [isBulkAdjustmentOpen, setIsBulkAdjustmentOpen] = useState(false);
-
-  useEffect(() => {
-    loadProducts();
-    loadPosSettings();
-
-    const handleUpdate = () => loadProducts();
-    window.addEventListener('stock-updated', handleUpdate);
-    return () => window.removeEventListener('stock-updated', handleUpdate);
-  }, [currentPage, sortBy, searchTerm]);
+  const [isBatchDrawerOpen, setIsBatchDrawerOpen] = useState(false);
 
   const loadPosSettings = async () => {
     try {
@@ -984,47 +971,75 @@ export default function InventoryPage() {
     }
   };
 
-  const loadProducts = async () => {
+  // Load ALL products once — search is done client-side for instant results
+  const loadProducts = useCallback(async () => {
     setIsLoading(true);
     try {
-      const allProducts = await getProducts();
-      
-      let filtered = allProducts.filter((p: Product) => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.barcode && p.barcode.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-
-      // Group children under parents
-      const parents = filtered.filter((p: Product) => !p.parentId);
-      const withChildren = parents.map((parent: Product) => ({
-        ...parent,
-        children: filtered.filter((child: Product) => child.parentId === parent.id)
-      }));
-
-      setTotalProducts(withChildren.length);
-
-      // Sort
-      const sorted = [...withChildren].sort((a, b) => {
-        if (sortBy === 'name') return a.name.localeCompare(b.name);
-        if (sortBy === 'stock') return b.stock - a.stock;
-        if (sortBy === 'sku') return a.sku.localeCompare(b.sku);
-        return 0;
-      });
-
-      // Paginate
-      const paginated = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-      setProducts(paginated);
+      const productsData = await getProducts();
+      setAllLoadedProducts(productsData);
     } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to load products.',
-      });
+      console.error('Failed to load products:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const refetch = useCallback(() => { loadProducts(); }, [loadProducts]);
+  useLiveRefresh(refetch);
+
+  useEffect(() => {
+    loadProducts();
+    loadPosSettings();
+  }, [loadProducts]);
+
+  // Instant client-side search + group + sort — no server call, no loading state
+  const products = useMemo(() => {
+    const lower = searchTerm.toLowerCase().trim();
+    const filtered = lower
+      ? allLoadedProducts.filter((p: Product) =>
+          p.name.toLowerCase().includes(lower) ||
+          p.sku.toLowerCase().includes(lower) ||
+          (p.barcode && p.barcode.toLowerCase().includes(lower))
+        )
+      : allLoadedProducts;
+
+    const grouped: ProductWithChildren[] = [];
+    const parentMap = new Map<string, ProductWithChildren>();
+
+    filtered.forEach((p: Product) => {
+      if (!p.parentId) {
+        const parentItem = { ...p, children: [] };
+        grouped.push(parentItem);
+        parentMap.set(p.id, parentItem);
+      }
+    });
+
+    filtered.forEach((p: Product) => {
+      if (p.parentId && parentMap.has(p.parentId)) {
+        const parent = parentMap.get(p.parentId);
+        if (parent && parent.children) {
+           parent.children.push(p);
+        }
+      } else if (p.parentId) {
+        grouped.push({ ...p, children: [] });
+      }
+    });
+
+    grouped.sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'stock') return b.stock - a.stock;
+      if (sortBy === 'sku') return a.sku.localeCompare(b.sku);
+      return 0;
+    });
+
+    return grouped;
+  }, [allLoadedProducts, searchTerm, sortBy]);
+
+  const totalProducts = products.length;
+  const pagedProducts = useMemo(() =>
+    products.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [products, currentPage, pageSize]
+  );
 
   return (
     <div className="space-y-6">
@@ -1045,48 +1060,63 @@ export default function InventoryPage() {
             
             <div className="h-8 w-px bg-muted mx-1" />
 
-            <div className="flex items-center gap-1 p-1.5 bg-muted/30 rounded-xl border border-border/50 shadow-sm ml-2">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setIsTransferBoardOpen(true)} 
-                  className="h-8 gap-2 hover:bg-muted font-medium px-3"
-                >
-                    <Kanban className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xs">Transfer Board</span>
-                </Button>
-                
-                <div className="h-4 w-px bg-border/60 mx-1" />
-
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setIsShelfBoardOpen(true)} 
-                  className="h-8 gap-2 hover:bg-muted font-medium px-3"
-                >
-                    <Rows3 className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xs">Shelf Board</span>
-                </Button>
-
-                <div className="h-4 w-px bg-border/60 mx-1" />
-
-                <Button 
+            <div className="flex items-center gap-1 p-1.5 bg-muted/30 rounded-xl border border-border/50 shadow-sm ml-2 overflow-x-auto whitespace-nowrap scrollbar-none w-full md:w-auto">
+                <Link href="/inventory/transfer-board">
+                  <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => setIsBulkAdjustmentOpen(true)} 
-                    className="h-8 gap-2 font-bold text-primary hover:text-primary hover:bg-primary/10 px-3 transition-colors"
+                    className="h-8 gap-2 hover:bg-muted font-medium px-3 flex-shrink-0"
+                  >
+                      <Kanban className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs">Transfer Board</span>
+                  </Button>
+                </Link>
+                
+                <div className="h-4 w-px bg-border/60 mx-1 flex-shrink-0" />
+
+                <Link href="/inventory/shelf-board">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 gap-2 hover:bg-muted font-medium px-3 flex-shrink-0"
+                  >
+                      <Rows3 className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs">Shelf Board</span>
+                  </Button>
+                </Link>
+
+                <div className="h-4 w-px bg-border/60 mx-1 flex-shrink-0" />
+
+                <Link href="/inventory/bulk-adjustment">
+                  <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 gap-2 font-bold text-primary hover:text-primary hover:bg-primary/10 px-3 transition-colors flex-shrink-0"
+                  >
+                      <Layers className="h-4 w-4" />
+                      <span className="text-xs">Bulk Adjustment</span>
+                  </Button>
+                </Link>
+
+                <div className="h-4 w-px bg-border/60 mx-1 flex-shrink-0" />
+
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setIsBatchDrawerOpen(true)} 
+                  className="h-8 gap-2 hover:bg-muted font-medium px-3 text-muted-foreground hover:text-foreground flex-shrink-0"
                 >
-                    <Layers className="h-4 w-4" />
-                    <span className="text-xs">Bulk Adjustment</span>
+                    <PackageOpen className="h-4 w-4" />
+                    <span className="text-xs">Stock Batches</span>
                 </Button>
 
-                <div className="h-4 w-px bg-border/60 mx-1" />
+                <div className="h-4 w-px bg-border/60 mx-1 flex-shrink-0" />
 
                 <Link href="/inventory/history">
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-8 gap-2 hover:bg-muted font-medium px-3 text-muted-foreground hover:text-foreground"
+                      className="h-8 gap-2 hover:bg-muted font-medium px-3 text-muted-foreground hover:text-foreground flex-shrink-0"
                     >
                         <History className="h-4 w-4" />
                         <span className="text-xs">History</span>
@@ -1097,18 +1127,9 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <TransferBoardDrawer 
-        open={isTransferBoardOpen} 
-        onOpenChange={setIsTransferBoardOpen} 
-      />
-      <ShelfBoardDrawer 
-        open={isShelfBoardOpen} 
-        onOpenChange={setIsShelfBoardOpen} 
-      />
-      <BulkAdjustmentDrawer 
-        open={isBulkAdjustmentOpen} 
-        onOpenChange={setIsBulkAdjustmentOpen}
-        onSuccess={loadProducts}
+      <BatchInventoryDrawer
+        open={isBatchDrawerOpen}
+        onOpenChange={setIsBatchDrawerOpen}
       />
 
       <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -1164,7 +1185,7 @@ export default function InventoryPage() {
         </Card>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {products.map((product) => (
+          {pagedProducts.map((product) => (
             <ProductGroup 
               key={product.id} 
               productGroup={product} 
@@ -1189,7 +1210,7 @@ export default function InventoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
+              {pagedProducts.map((product) => (
                 <ProductTableRowGroup 
                   key={product.id} 
                   productGroup={product} 

@@ -1,7 +1,8 @@
-﻿'use client';
+'use client';
 import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purchase-utils';
 
 import { useState, useEffect, useCallback } from 'react';
+import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -480,7 +481,7 @@ export function EditProductDialog({
           description: result.message,
         });
         onProductUpdated?.();
-        window.dispatchEvent(new Event('stock-updated'));
+        dispatchStockUpdate();
         setIsOpen(false);
       } else {
         toast({

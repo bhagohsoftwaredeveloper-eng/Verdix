@@ -215,26 +215,35 @@ export async function POST(request: NextRequest) {
     const finalVatAmount = calculations.vatAmount;
 
     // 1. Check for multi-level approval
+    const orderId = `po_${Date.now()}`;
+    const txData = { ...body, id: orderId };
     const approvalType = purchaseType === 'Receive' ? 'RECEIVE_PO' : 'PURCHASE_ORDER';
     const isApprovalRequired = !isInternalFinalization && await checkApprovalRequired(approvalType);
+    
     if (isApprovalRequired) {
       const userId = body.userId || 'system';
-      const { queueId, pendingApproval } = await submitToApprovalQueue(approvalType, body, userId);
+      
+      // Create the record in DB immediately with 'Pending' status so it shows in the table
+      await processPurchaseOrderCreation({ ...txData, status: 'Pending' }, userId);
+      
+      const { queueId, pendingApproval } = await submitToApprovalQueue(approvalType, txData, userId);
       
       if (pendingApproval) {
         return NextResponse.json({
           success: true,
           pendingApproval: true,
-          data: { queueId },
-          message: `${approvalType === 'RECEIVE_PO' ? 'Purchase receipt' : 'Purchase order'} submitted for approval`
+          data: { queueId, orderId },
+          message: `${approvalType === 'RECEIVE_PO' ? 'Purchase receipt' : 'Purchase order'} submitted for approval and added as Pending.`
         });
       }
-      // If not pending (all steps auto-skipped), fall through to execution
+      
+      // If not pending (all steps auto-skipped), mark as finalized
+      txData.isInternalFinalization = true;
     }
 
-    // Use helper for creation
-    const result = await processPurchaseOrderCreation(body);
-    const orderId = (result as any).orderId;
+    // Use helper for creation (or finalization if approval was skipped or not required)
+    const result = await processPurchaseOrderCreation(txData);
+    const finalOrderId = (result as any).orderId;
 
     // Sync to external accounting API (non-blocking)
     try {

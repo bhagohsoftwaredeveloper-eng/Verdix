@@ -296,6 +296,53 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
               </>
             )}
 
+            {item.transaction_type.toUpperCase() === 'PURCHASE_ORDER' && (
+              <>
+                <table className="meta-table w-full border-collapse mb-4 p-3 bg-zinc-50 border border-zinc-200 rounded">
+                  <tbody>
+                    <tr>
+                      <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Supplier</td>
+                      <td className="value font-bold py-1">{item.transaction_data.supplierName || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                      <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">PO Reference</td>
+                      <td className="value font-mono font-bold py-1">
+                        {item.transaction_data.reference || item.transaction_data.referenceNumber || 'N/A'}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <table className="data-table w-full border-collapse mb-5">
+                  <thead>
+                    <tr className="border-b border-black text-left">
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[35%]">Product Name</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Qty</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Unit Cost</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Extended</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(item.transaction_data.items || []).map((it: any, idx: number) => (
+                      <tr key={idx} className="border-b border-zinc-100">
+                        <td className="p-2 text-[10pt] font-medium">{it.productName || it.name || it.productId}</td>
+                        <td className="p-2 text-[10pt]">
+                          <div className="font-mono font-bold text-slate-600 text-[8pt]">{it.productSku || it.sku || '-'}</div>
+                          <div className="barcode-value font-mono font-bold text-black text-[11pt] mt-0.5">{it.productBarcode || it.barcode || '-'}</div>
+                        </td>
+                        <td className="p-2 text-[10pt] font-mono text-right font-bold text-blue-700">{it.quantity}</td>
+                        <td className="p-2 text-[10pt] font-mono text-right">₱{(it.cost || 0).toLocaleString()}</td>
+                        <td className="p-2 text-[10pt] font-mono text-right font-bold">₱{(it.subtotal || (it.cost * it.quantity) || 0).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex justify-end font-bold text-[11pt] mt-3 uppercase tracking-tight">
+                  <span>Grand Total: ₱{(Number(item.transaction_data.total || item.transaction_data.grandTotal) || 0).toLocaleString()}</span>
+                </div>
+              </>
+            )}
+
             {item.transaction_type.toUpperCase() === 'RECEIVE_PO' && (
               <>
                 <table className="meta-table w-full border-collapse mb-4 p-3 bg-zinc-50 border border-zinc-200 rounded">
@@ -343,7 +390,7 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
               </>
             )}
 
-            {item.transaction_data.items && !['STOCK_COUNT', 'STOCK_TRANSFER', 'STOCK_ADJUSTMENT', 'RECEIVE_PO'].includes(item.transaction_type.toUpperCase()) && (
+            {item.transaction_data.items && !['STOCK_COUNT', 'STOCK_TRANSFER', 'STOCK_ADJUSTMENT', 'RECEIVE_PO', 'PURCHASE_ORDER'].includes(item.transaction_type.toUpperCase()) && (
               <>
                 <table className="data-table w-full border-collapse mb-2 text-left">
                   <thead>

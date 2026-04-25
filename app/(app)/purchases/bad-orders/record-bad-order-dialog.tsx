@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -450,6 +451,7 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
       form.reset();
       setOpen(false);
       onSuccess();
+      dispatchStockUpdate();
     } catch (error) {
       console.error('Failed to create bad order:', error);
       toast({

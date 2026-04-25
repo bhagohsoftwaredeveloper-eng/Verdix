@@ -21,13 +21,22 @@ import {
   Search,
   Box,
   Warehouse as WarehouseIcon,
-  ArrowRight,
   Loader2,
   RefreshCw,
   SlidersHorizontal,
+  MoreVertical,
+  MoveHorizontal
 } from 'lucide-react';
 import { Product, Warehouse } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -143,6 +152,23 @@ export function TransferBoard() {
     const initialQtys: Record<string, number> = {};
     selectedProducts.forEach(p => initialQtys[p.id] = 1);
     setTransferQtys(initialQtys);
+  };
+
+  const handleMobileMoveClick = (product: Product, sourceWarehouseId: string, targetWarehouseId: string) => {
+    if (targetWarehouseId === 'unassigned') {
+        toast({
+            variant: 'destructive',
+            title: 'Invalid Transfer',
+            description: 'You cannot transfer products to the "Unassigned" list.',
+        });
+        return;
+    }
+    setPendingTransfer({
+      products: [product],
+      sourceWhId: sourceWarehouseId,
+      targetWhId: targetWarehouseId,
+    });
+    setTransferQtys({ [product.id]: 1 });
   };
 
   const handleTransferConfirm = async () => {
@@ -352,12 +378,12 @@ export function TransferBoard() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-6 overflow-x-auto pb-4 flex-1 min-h-0 items-start">
+        <div className="flex flex-col md:flex-row gap-6 overflow-auto pb-4 flex-1 min-h-0 items-start">
           {displayWarehouses.map((warehouse) => (
             <div
               key={warehouse.id}
               className={cn(
-                "flex flex-col w-72 min-w-[280px] max-w-[280px] bg-muted/40 rounded-xl border-t-4 shadow-sm h-full max-h-full",
+                "flex flex-col w-full md:w-72 md:min-w-[280px] md:max-w-[280px] bg-muted/40 rounded-xl border-t-4 shadow-sm h-[400px] md:h-full md:max-h-full",
                 warehouse.id === 'unassigned' ? "border-t-orange-400" : "border-t-primary"
               )}
             >
@@ -420,12 +446,42 @@ export function TransferBoard() {
                                 <h4 className="font-bold text-sm line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                                   {product.name}
                                 </h4>
-                                <Badge 
-                                    variant={product.stock > 0 ? (product.stock < (product.reorderPoint || 10) ? "secondary" : "default") : "destructive"} 
-                                    className="h-5 px-1.5 text-[10px] shrink-0"
-                                >
-                                  {product.stock}
-                                </Badge>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Badge 
+                                      variant={product.stock > 0 ? (product.stock < (product.reorderPoint || 10) ? "secondary" : "default") : "destructive"} 
+                                      className="h-5 px-1.5 text-[10px]"
+                                  >
+                                    {product.stock}
+                                  </Badge>
+
+                                  {/* Mobile Action Dropdown */}
+                                  <div className="md:hidden ml-1">
+                                    <DropdownMenu modal={false}>
+                                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:bg-muted">
+                                          <MoreVertical className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+                                        <DropdownMenuLabel className="text-xs">Move To...</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        {displayWarehouses.filter(w => w.id !== warehouse.id && w.id !== 'unassigned').map(w => (
+                                          <DropdownMenuItem 
+                                            key={w.id} 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleMobileMoveClick(product, warehouse.id, w.id);
+                                            }}
+                                            className="text-xs gap-2"
+                                          >
+                                            <MoveHorizontal className="h-3 w-3" />
+                                            {w.name}
+                                          </DropdownMenuItem>
+                                        ))}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </div>
                               </div>
                               
                               <div className="space-y-2">

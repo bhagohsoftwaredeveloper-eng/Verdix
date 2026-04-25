@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import type { Product } from '@/lib/types';
 import { useProducts } from '@/hooks/use-api';
+import { useLiveRefresh } from '@/hooks/use-live-refresh';
 import { ArrowLeft } from 'lucide-react';
 import { calculateEffectivePrice } from '@/lib/pricing';
 
@@ -44,13 +45,8 @@ export function PriceInquiryDialog({
   const { products, loading, error, refetch: refetchPriceProducts } = useProducts(searchTerm);
 
   // Handle auto-refresh when stock is updated (e.g., after a sale)
-  useEffect(() => {
-    const handleStockUpdate = () => {
-      refetchPriceProducts();
-    };
-    window.addEventListener('stock-updated', handleStockUpdate);
-    return () => window.removeEventListener('stock-updated', handleStockUpdate);
-  }, [refetchPriceProducts]);
+  const stableRefresh = useCallback(() => { refetchPriceProducts(); }, [refetchPriceProducts]);
+  useLiveRefresh(stableRefresh);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
