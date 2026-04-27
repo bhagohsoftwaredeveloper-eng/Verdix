@@ -545,7 +545,7 @@ export function AddProductDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="shadow-lg shadow-black/30">
+        <Button size="sm">
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Product
         </Button>

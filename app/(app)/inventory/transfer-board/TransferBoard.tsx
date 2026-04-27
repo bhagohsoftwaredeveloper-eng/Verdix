@@ -1,53 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import {
-  DragDropContext,
-  Droppable,
-  Draggable,
-  DropResult,
-} from '@hello-pangea/dnd';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { useState, useEffect, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Search,
   Box,
-  Warehouse as WarehouseIcon,
+  Rows3,
   Loader2,
   RefreshCw,
-  SlidersHorizontal,
-  MoreVertical,
-  MoveHorizontal
+  PackageOpen,
+  ArrowRight,
+  Trash2,
+  AlertCircle,
+  ArrowRightLeft,
+  CheckCircle2,
+  Warehouse as WarehouseIcon
 } from 'lucide-react';
 import { Product, Warehouse } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -59,11 +33,25 @@ import { getApiUrl } from '@/lib/api-config';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ManageWarehousesDialog } from '../../sales/ManageWarehousesDialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { v4 as uuidv4 } from 'uuid';
 
-interface TransferPayload {
-  sourceProductId: string;
-  targetWarehouseId: string;
+interface WarehouseStockItem {
+  uniqueId: string;
+  product: Product;
+  warehouseId: string;
+  warehouseName: string;
   quantity: number;
+}
+
+interface StagedTransferItem {
+  stagedId: string;
+  sourceUniqueId: string;
+  product: Product;
+  sourceWarehouseId: string;
+  sourceWarehouseName: string;
+  maxQuantity: number;
+  transferQuantity: number;
 }
 
 export function TransferBoard() {
@@ -71,25 +59,21 @@ export function TransferBoard() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [filterBrand, setFilterBrand] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'name' | 'stock' | 'sku'>('name');
-  const [isTransferring, setIsTransferring] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  // Multi-select state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [mounted, setMounted] = useState(false);
   
-  // Transfer selection state
-  const [pendingTransfer, setPendingTransfer] = useState<{
-    products: Product[];
-    sourceWhId: string;
-    targetWhId: string;
-  } | null>(null);
-  const [transferQtys, setTransferQtys] = useState<Record<string, number>>({});
+  const [sourceSearch, setSourceSearch] = useState('');
+  const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set());
+  const [targetWarehouseId, setTargetWarehouseId] = useState<string>('');
+  const [stagedItems, setStagedItems] = useState<StagedTransferItem[]>([]);
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [user, setUser] = useState<{ uid: string; [key: string]: any } | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('source');
 
   useEffect(() => {
+    setMounted(true);
     fetchData();
+    const userSession = localStorage.getItem('mock-user-session');
+    if (userSession) setUser(JSON.parse(userSession));
   }, []);
 
   const fetchData = async () => {
@@ -99,93 +83,88 @@ export function TransferBoard() {
         fetch(getApiUrl('/warehouses?activeOnly=true')),
         fetch(getApiUrl('/products?limit=1000')),
       ]);
-
       const whData = await whRes.json();
       const prodData = await prodRes.json();
-
       if (whData.success) setWarehouses(whData.data);
       if (prodData.success) setProducts(prodData.data);
     } catch (error) {
-      console.error('Failed to fetch data:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to load board data.',
-      });
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load board data.' });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const onDragEnd = (result: DropResult) => {
-    const { source, destination, draggableId } = result;
-
-    if (!destination) return;
-    if (source.droppableId === destination.droppableId) return;
-    if (destination.droppableId === 'unassigned') {
-        toast({
-            variant: 'destructive',
-            title: 'Invalid Transfer',
-            description: 'You cannot transfer products back to the "Unassigned" list. Please move them to a warehouse.',
-        });
-        return;
-    }
-
-    // Use selection if the dragged item is part of it
-    let selectedProducts: Product[] = [];
-    if (selectedIds.has(draggableId)) {
-        selectedProducts = products.filter(p => selectedIds.has(p.id));
-    } else {
-        const p = products.find(p => p.id === draggableId);
-        if (p) selectedProducts = [p];
-    }
-
-    if (selectedProducts.length === 0) return;
-
-    // Trigger transfer dialog
-    setPendingTransfer({
-      products: selectedProducts,
-      sourceWhId: source.droppableId,
-      targetWhId: destination.droppableId,
+  const allStockItems = useMemo<WarehouseStockItem[]>(() => {
+    return products.map(p => {
+      const whId = p.warehouseId || (p as any).warehouse || 'unassigned';
+      const whName = warehouses.find(w => w.id === whId)?.name || (whId === 'unassigned' ? 'Unassigned' : 'Unknown');
+      
+      return {
+        uniqueId: `${whId}|${p.id}`,
+        product: p,
+        warehouseId: whId,
+        warehouseName: whName,
+        quantity: p.stock || 0
+      };
     });
-    
-    const initialQtys: Record<string, number> = {};
-    selectedProducts.forEach(p => initialQtys[p.id] = 1);
-    setTransferQtys(initialQtys);
+  }, [products, warehouses]);
+
+  const filteredSourceItems = useMemo(() => {
+    return allStockItems.filter(i => {
+      const term = sourceSearch.toLowerCase();
+      // Only show items with stock
+      return (i.product.name?.toLowerCase().includes(term) || i.product.sku?.toLowerCase().includes(term)) && i.quantity > 0;
+    }).sort((a, b) => a.product.name.localeCompare(b.product.name));
+  }, [allStockItems, sourceSearch]);
+
+  const stageItems = (ids: Set<string> | string) => {
+    const list = typeof ids === 'string' ? [ids] : Array.from(ids);
+    const newStaged = [...stagedItems];
+    let addedCount = 0;
+
+    list.forEach(id => {
+      const item = allStockItems.find(i => i.uniqueId === id);
+      if (!item || newStaged.some(s => s.sourceUniqueId === item.uniqueId)) return;
+      newStaged.push({
+        stagedId: uuidv4(),
+        sourceUniqueId: item.uniqueId,
+        product: item.product,
+        sourceWarehouseId: item.warehouseId,
+        sourceWarehouseName: item.warehouseName,
+        maxQuantity: item.quantity,
+        transferQuantity: item.quantity
+      });
+      addedCount++;
+    });
+
+    if (addedCount > 0) {
+      setStagedItems(newStaged);
+      if (typeof ids !== 'string') setSelectedSourceIds(new Set());
+      toast({ title: "Items Staged", description: `Added ${addedCount} item(s) to transfer list.` });
+      setActiveTab('staging');
+    }
   };
 
-  const handleMobileMoveClick = (product: Product, sourceWarehouseId: string, targetWarehouseId: string) => {
-    if (targetWarehouseId === 'unassigned') {
-        toast({
-            variant: 'destructive',
-            title: 'Invalid Transfer',
-            description: 'You cannot transfer products to the "Unassigned" list.',
-        });
+  const executeTransfer = async () => {
+    if (!targetWarehouseId || stagedItems.length === 0) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Please select a destination warehouse.' });
+      return;
+    }
+
+    // Validation: cannot transfer to same warehouse
+    if (stagedItems.some(i => i.sourceWarehouseId === targetWarehouseId)) {
+        toast({ variant: 'destructive', title: 'Invalid Transfer', description: 'Some items are already in the target warehouse.' });
         return;
     }
-    setPendingTransfer({
-      products: [product],
-      sourceWhId: sourceWarehouseId,
-      targetWhId: targetWarehouseId,
-    });
-    setTransferQtys({ [product.id]: 1 });
-  };
-
-  const handleTransferConfirm = async () => {
-    if (!pendingTransfer || Object.keys(transferQtys).length === 0) return;
 
     setIsTransferring(true);
     try {
-      const transfers = pendingTransfer.products.map(p => ({
-          sourceProductId: p.id,
-          targetWarehouseId: pendingTransfer.targetWhId,
-          quantity: transferQtys[p.id] || 0,
-          notes: 'Transfer via Kanban Board'
-      })).filter(t => t.quantity > 0);
-
-      if (transfers.length === 0) {
-          throw new Error('Please enter quantities for at least one item');
-      }
+      const transfers = stagedItems.map(i => ({
+        sourceProductId: i.product.id,
+        targetWarehouseId: targetWarehouseId === 'unassigned' ? null : targetWarehouseId,
+        quantity: i.transferQuantity,
+        notes: 'Warehouse Board Transfer'
+      }));
 
       const response = await fetch(getApiUrl('/inventory/transfer/bulk'), {
         method: 'POST',
@@ -196,395 +175,118 @@ export function TransferBoard() {
       const result = await response.json();
 
       if (result.success) {
-        toast({
-          title: 'Transfers Completed',
-          description: `Successfully moved ${transfers.length} item(s).`,
-        });
-        setPendingTransfer(null);
-        setSelectedIds(new Set());
-        fetchData(); // Refresh board
+        toast({ title: "Success", description: "Warehouse transfer completed successfully." });
+        setTargetWarehouseId('');
+        setActiveTab('source');
+        setStagedItems([]);
+        fetchData();
       } else {
         throw new Error(result.error || 'Transfer failed');
       }
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Transfer Failed',
-        description: error.message,
-      });
+      toast({ variant: 'destructive', title: 'Error', description: error.message || "Failed to execute transfer." });
     } finally {
       setIsTransferring(false);
     }
   };
 
-  const toggleSelect = (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-        newSelected.delete(id);
-    } else {
-        newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-  };
+  if (!mounted || isLoading) return <div className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div>;
 
-  const filteredProducts = products.filter((p) => {
-    const nameMatch = (p.name || '').toLowerCase().includes(search.toLowerCase());
-    const skuMatch = (p.sku || '').toLowerCase().includes(search.toLowerCase());
-    const matchesSearch = nameMatch || skuMatch;
-    const matchesCategory = filterCategory === 'all' || p.category === filterCategory;
-    const matchesBrand = filterBrand === 'all' || p.brand === filterBrand;
-    return matchesSearch && matchesCategory && matchesBrand;
-  }).sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'sku') return (a.sku || '').localeCompare(b.sku || '');
-      if (sortBy === 'stock') return b.stock - a.stock;
-      return 0;
-  });
+  const SourcePane = (
+      <div className="flex flex-col h-full w-full bg-background min-h-0">
+          <div className="p-3 border-b space-y-2 shrink-0">
+              <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-bold text-sm flex items-center gap-1.5 truncate"><Box className="h-4 w-4" /> Stock Pool</h2>
+                  <div className="flex gap-1">
+                      <Button size="sm" className="h-7 text-[11px] font-bold" onClick={() => stageItems(selectedSourceIds)} disabled={selectedSourceIds.size === 0}>Stage Selected</Button>
+                      <ManageWarehousesDialog onChange={fetchData} trigger={<Button variant="outline" size="sm" className="h-7 px-1.5"><Rows3 className="h-4 w-4" /></Button>} />
+                  </div>
+              </div>
+              <Input placeholder="Search name or SKU..." value={sourceSearch} onChange={e => setSourceSearch(e.target.value)} className="h-8 text-sm" />
+          </div>
+          <div className="grid grid-cols-[36px,1fr,56px] px-3 py-1 bg-muted/30 border-b text-[10px] font-bold text-muted-foreground uppercase">
+              <div className="flex justify-center"><Checkbox checked={filteredSourceItems.length > 0 && selectedSourceIds.size === filteredSourceItems.length} onCheckedChange={() => setSelectedSourceIds(selectedSourceIds.size === filteredSourceItems.length ? new Set() : new Set(filteredSourceItems.map(i => i.uniqueId)))} /></div>
+              <span>Product</span>
+              <span className="text-right">Stock</span>
+          </div>
+          <ScrollArea className="flex-1">
+              <div className="p-1.5 space-y-1">
+                  {filteredSourceItems.map(item => (
+                      <div key={item.uniqueId} className={cn("grid grid-cols-[36px,1fr,60px] items-center gap-2 p-2 rounded-lg border", selectedSourceIds.has(item.uniqueId) ? "bg-primary/5 border-primary" : "bg-card")}>
+                          <div className="flex justify-center"><Checkbox checked={selectedSourceIds.has(item.uniqueId)} onCheckedChange={() => { const s = new Set(selectedSourceIds); if (s.has(item.uniqueId)) s.delete(item.uniqueId); else s.add(item.uniqueId); setSelectedSourceIds(s); }} /></div>
+                          <div className="min-w-0" onClick={() => stageItems(item.uniqueId)}>
+                              <p className="text-xs font-bold truncate leading-tight">{item.product.name}</p>
+                              <div className="flex items-center gap-1.5 opacity-70"><Badge variant="outline" className="text-[9px] px-1 h-3.5 truncate max-w-[80px]">{item.warehouseName}</Badge><span className="text-[9px] truncate font-mono">{item.product.sku}</span></div>
+                          </div>
+                          <div className="flex justify-end"><Button variant="ghost" size="sm" className="h-8 px-1.5 text-xs font-black" onClick={(e) => { e.stopPropagation(); stageItems(item.uniqueId); }}>{item.quantity}</Button></div>
+                      </div>
+                  ))}
+                  {filteredSourceItems.length === 0 && <div className="py-20 text-center text-xs text-muted-foreground opacity-50">No products found</div>}
+              </div>
+          </ScrollArea>
+      </div>
+  );
 
-  const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
-  const brands = Array.from(new Set(products.map(p => p.brand).filter(Boolean)));
-
-  // Add a virtual "Unassigned" warehouse if there are products with no warehouse
-  const displayWarehouses = [
-    ...(products.some(p => !(p.warehouseId || p.warehouse)) ? [{ id: 'unassigned', name: 'Unassigned Products' }] : []),
-    ...warehouses
-  ];
-
-  if (isLoading) {
-    return (
-        <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-    );
-  }
+  const TargetPane = (
+      <div className="flex flex-col h-full w-full bg-background min-h-0 relative">
+          <div className="p-3 border-b space-y-2 shrink-0">
+              <div className="flex items-center justify-between">
+                  <h2 className="font-bold text-sm flex items-center gap-1.5 text-primary"><ArrowRightLeft className="h-4 w-4" /> Transfer Destination</h2>
+                  <Button variant="ghost" size="sm" className="h-7 text-[10px] text-destructive uppercase font-bold" onClick={() => setStagedItems([])}>Clear All</Button>
+              </div>
+              <Select value={targetWarehouseId} onValueChange={setTargetWarehouseId}>
+                  <SelectTrigger className={cn("h-9 text-xs font-bold transition-all", !targetWarehouseId ? "border-primary/50 bg-primary/5" : "bg-card")}>
+                      <SelectValue placeholder="Select Destination Warehouse..." />
+                  </SelectTrigger>
+                  <SelectContent><SelectItem value="unassigned" className="text-orange-600 font-bold">Unassigned/Returns</SelectItem>{warehouses.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+              </Select>
+          </div>
+          <div className="flex justify-between px-3 py-1 bg-muted/30 border-b text-[10px] font-bold text-muted-foreground uppercase"><span>Staged ({stagedItems.length})</span><span>Move Qty</span></div>
+          <ScrollArea className="flex-1">
+              <div className="p-1.5 space-y-1 pb-4">
+                  {stagedItems.map(item => (
+                      <div key={item.stagedId} className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-card">
+                          <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold truncate leading-tight">{item.product.name}</p>
+                              <p className="text-[9px] opacity-60 truncate">From: {item.sourceWarehouseName} | Max: {item.maxQuantity}</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                              <Input type="number" value={item.transferQuantity} onChange={e => { const v = parseInt(e.target.value) || 1; setStagedItems(prev => prev.map(i => i.stagedId === item.stagedId ? { ...i, transferQuantity: Math.min(i.maxQuantity, Math.max(1, v)) } : i)); }} className="h-7 w-12 text-center text-xs p-1" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setStagedItems(prev => prev.filter(i => i.stagedId !== item.stagedId))}><Trash2 className="h-3.5 w-3.5" /></Button>
+                          </div>
+                      </div>
+                  ))}
+                  {stagedItems.length === 0 && <div className="py-20 text-center text-xs opacity-40">Staging empty</div>}
+              </div>
+          </ScrollArea>
+          <div className="p-3 border-t bg-background/80 backdrop-blur shrink-0">
+               <Button 
+                className="w-full h-11 font-black shadow-lg shadow-primary/20" 
+                disabled={!targetWarehouseId || stagedItems.length === 0 || isTransferring} 
+                onClick={executeTransfer}
+               >
+                 {isTransferring ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                 Confirm Transfer
+               </Button>
+          </div>
+      </div>
+  );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-210px)] space-y-4">
-      <div className="flex flex-wrap items-center gap-4 bg-background p-3 rounded-lg border shadow-sm shrink-0">
-        <div className="flex items-center gap-2 w-full max-w-2xl min-w-[400px]">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, SKU or barcode..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchData()}
-              className="pl-8"
-            />
+      <div className="flex flex-col h-full w-full overflow-hidden">
+          <div className="hidden lg:grid grid-cols-2 gap-6 h-full p-4">
+              <div className="border rounded-2xl overflow-hidden shadow-sm">{SourcePane}</div>
+              <div className="border rounded-2xl overflow-hidden shadow-sm">{TargetPane}</div>
           </div>
-          <Button size="sm" onClick={fetchData} className="gap-2 shrink-0">
-            <Search className="h-4 w-4" />
-            Search
-          </Button>
-        </div>
-        
-        <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
-          <Button variant="outline" size="sm" className="gap-2" asChild onClick={() => setIsFilterOpen(true)}>
-            <button>
-              <SlidersHorizontal className="h-4 w-4" />
-              Filter
-              {(filterCategory !== 'all' || filterBrand !== 'all' || sortBy !== 'name') && (
-                <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
-                  {Number(filterCategory !== 'all') + Number(filterBrand !== 'all') + Number(sortBy !== 'name')}
-                </Badge>
-              )}
-            </button>
-          </Button>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Filter Products</DialogTitle>
-              <DialogDescription>
-                Adjust the filters below to refine the product list.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select value={filterCategory} onValueChange={setFilterCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {categories.map(c => <SelectItem key={c} value={c!}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Brand</Label>
-                <Select value={filterBrand} onValueChange={setFilterBrand}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Brands" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Brands</SelectItem>
-                    {brands.map(b => <SelectItem key={b} value={b!}>{b}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Sort By</Label>
-                <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Name" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name">Sort by Name</SelectItem>
-                    <SelectItem value="sku">Sort by SKU</SelectItem>
-                    <SelectItem value="stock">Sort by Stock</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter className="flex justify-between sm:justify-between items-center sm:items-center">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => {
-                  setFilterCategory('all');
-                  setFilterBrand('all');
-                  setSortBy('name');
-                }}
-                className="text-muted-foreground"
-              >
-                Clear All
-              </Button>
-              <DialogFooter>
-                <Button onClick={() => setIsFilterOpen(false)}>Apply Filters</Button>
-              </DialogFooter>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <div className="flex-1" />
-
-        <ManageWarehousesDialog 
-            onChange={fetchData}
-            trigger={
-                <Button variant="outline" size="sm" className="gap-2">
-                    <WarehouseIcon className="h-4 w-4" />
-                    Manage Warehouses
-                </Button>
-            }
-        />
-
-        <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
-           <RefreshCw className="h-4 w-4" />
-           Refresh
-        </Button>
+          <div className="flex lg:hidden flex-col h-full w-full overflow-hidden">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full w-full">
+                  <div className="px-3 pt-2 shrink-0"><TabsList className="grid grid-cols-2 w-full h-10 p-1 bg-muted/60 rounded-lg"><TabsTrigger value="source" className="text-xs font-bold">Stock Pool {stagedItems.length > 0 && `(${stagedItems.length})`}</TabsTrigger><TabsTrigger value="staging" className="text-xs font-bold">Staging Area</TabsTrigger></TabsList></div>
+                  <TabsContent value="source" className="flex-1 m-0 min-h-0 data-[state=active]:flex flex-col">{SourcePane}</TabsContent>
+                  <TabsContent value="staging" className="flex-1 m-0 min-h-0 data-[state=active]:flex flex-col relative">
+                      {TargetPane}
+                  </TabsContent>
+              </Tabs>
+          </div>
       </div>
-
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex flex-col md:flex-row gap-6 overflow-auto pb-4 flex-1 min-h-0 items-start">
-          {displayWarehouses.map((warehouse) => (
-            <div
-              key={warehouse.id}
-              className={cn(
-                "flex flex-col w-full md:w-72 md:min-w-[280px] md:max-w-[280px] bg-muted/40 rounded-xl border-t-4 shadow-sm h-[400px] md:h-full md:max-h-full",
-                warehouse.id === 'unassigned' ? "border-t-orange-400" : "border-t-primary"
-              )}
-            >
-              <div className="p-4 flex items-center justify-between border-b bg-background/50 rounded-t-xl">
-                <div className="flex items-center gap-2">
-                  <WarehouseIcon className={cn("h-5 w-5", warehouse.id === 'unassigned' ? "text-orange-400" : "text-primary")} />
-                  <h3 className="font-bold text-sm tracking-tight truncate">{warehouse.name}</h3>
-                </div>
-                <Badge variant="secondary" className="font-mono">
-                  {filteredProducts.filter(p => {
-                    const pWhId = p.warehouseId || p.warehouse;
-                    return warehouse.id === 'unassigned' ? !pWhId : pWhId === warehouse.id;
-                  }).length}
-                </Badge>
-              </div>
-
-              <Droppable droppableId={warehouse.id} isDropDisabled={warehouse.id === 'unassigned'}>
-                {(provided, snapshot) => (
-                  <div
-                    {...provided.droppableProps}
-                    ref={provided.innerRef}
-                    className={cn(
-                      "flex-1 p-3 space-y-3 overflow-y-auto transition-colors",
-                      snapshot.isDraggingOver && "bg-primary/5 ring-2 ring-primary/20 ring-inset"
-                    )}
-                  >
-                    {filteredProducts
-                      .filter((p) => {
-                        const pWhId = p.warehouseId || p.warehouse;
-                        return warehouse.id === 'unassigned' ? !pWhId : pWhId === warehouse.id;
-                      })
-                      .map((product, index) => (
-                        <Draggable
-                          key={product.id}
-                          draggableId={product.id}
-                          index={index}
-                        >
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              style={provided.draggableProps.style}
-                              className={cn(
-                                "group bg-background rounded-lg border p-3 shadow-sm hover:shadow-md hover:border-primary/50 transition-all relative",
-                                snapshot.isDragging && "ring-2 ring-primary shadow-lg scale-105 rotate-2 z-50",
-                                selectedIds.has(product.id) && "ring-2 ring-primary bg-primary/[0.02]",
-                                product.stock <= 0 && "opacity-60 grayscale-[0.5]"
-                              )}
-                              onClick={(e) => toggleSelect(product.id, e)}
-                            >
-                              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                <Checkbox 
-                                    checked={selectedIds.has(product.id)}
-                                    onCheckedChange={() => toggleSelect(product.id)} 
-                                />
-                              </div>
-
-                              <div className="flex justify-between items-start mb-2 pr-6">
-                                <h4 className="font-bold text-sm line-clamp-2 leading-tight group-hover:text-primary transition-colors">
-                                  {product.name}
-                                </h4>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Badge 
-                                      variant={product.stock > 0 ? (product.stock < (product.reorderPoint || 10) ? "secondary" : "default") : "destructive"} 
-                                      className="h-5 px-1.5 text-[10px]"
-                                  >
-                                    {product.stock}
-                                  </Badge>
-
-                                  {/* Mobile Action Dropdown */}
-                                  <div className="md:hidden ml-1">
-                                    <DropdownMenu modal={false}>
-                                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:bg-muted">
-                                          <MoreVertical className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
-                                        <DropdownMenuLabel className="text-xs">Move To...</DropdownMenuLabel>
-                                        <DropdownMenuSeparator />
-                                        {displayWarehouses.filter(w => w.id !== warehouse.id && w.id !== 'unassigned').map(w => (
-                                          <DropdownMenuItem 
-                                            key={w.id} 
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleMobileMoveClick(product, warehouse.id, w.id);
-                                            }}
-                                            className="text-xs gap-2"
-                                          >
-                                            <MoveHorizontal className="h-3 w-3" />
-                                            {w.name}
-                                          </DropdownMenuItem>
-                                        ))}
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="space-y-2">
-                                <div className="flex flex-wrap gap-1.5">
-                                    {product.sku && (
-                                    <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-mono">
-                                        {product.sku}
-                                    </span>
-                                    )}
-                                    {product.brand && (
-                                    <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-medium">
-                                        {product.brand}
-                                    </span>
-                                    )}
-                                    {product.category && (
-                                    <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-medium">
-                                        {product.category}
-                                    </span>
-                                    )}
-                                </div>
-                                
-                                <div className="pt-1">
-                                    <Progress 
-                                        value={Math.min(100, (product.stock / ((product.reorderPoint || 10) * 2)) * 100)} 
-                                        className="h-1" 
-                                    />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </div>
-          ))}
-
-          {/* Empty state if no warehouses */}
-          {warehouses.length === 0 && (
-            <div className="flex flex-col items-center justify-center w-full h-full border-2 border-dashed rounded-xl border-muted text-muted-foreground">
-              <Box className="h-12 w-12 mb-2 opacity-20" />
-              <p>No active warehouses found</p>
-            </div>
-          )}
-        </div>
-      </DragDropContext>
-
-      {/* Transfer Confirmation Dialog */}
-      <Dialog open={!!pendingTransfer} onOpenChange={(open) => !open && setPendingTransfer(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Confirm Batch Transfer</DialogTitle>
-            <DialogDescription>
-              Moving <strong>{pendingTransfer?.products.length}</strong> items to <strong>{pendingTransfer?.targetWhId === 'unassigned' ? 'Unassigned' : warehouses.find(w => w.id === pendingTransfer?.targetWhId)?.name}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <ScrollArea className="flex-1 pr-4 -mr-4 my-4">
-            <div className="space-y-4">
-                {pendingTransfer?.products.map(product => (
-                    <div key={product.id} className="p-4 bg-muted/30 rounded-lg border flex items-center gap-4">
-                        <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm truncate">{product.name}</p>
-                            <p className="text-xs text-muted-foreground">Available: {product.stock} {product.unitOfMeasure}</p>
-                        </div>
-                        <div className="flex items-center gap-2 w-48">
-                            <Input
-                                type="number"
-                                min="0"
-                                max={product.stock}
-                                value={transferQtys[product.id] || 0}
-                                onChange={(e) => setTransferQtys(prev => ({ 
-                                    ...prev, 
-                                    [product.id]: Math.min(product.stock, Number(e.target.value)) 
-                                }))}
-                                className="h-8 text-right"
-                            />
-                            <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-8 px-2 text-[10px] uppercase font-bold"
-                                onClick={() => setTransferQtys(prev => ({ ...prev, [product.id]: product.stock }))}
-                            >
-                                Max
-                            </Button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-          </ScrollArea>
-
-          <DialogFooter className="border-t pt-4">
-            <Button variant="outline" onClick={() => setPendingTransfer(null)}>Cancel</Button>
-            <Button onClick={handleTransferConfirm} disabled={isTransferring}>
-              {isTransferring && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Transfer {pendingTransfer?.products.length} Items
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
   );
 }
-

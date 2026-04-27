@@ -55,6 +55,9 @@ export default function DataManagementPage() {
   const [importing, setImporting] = useState(false);
   const [customerImportFile, setCustomerImportFile] = useState<File | null>(null);
   const [customerImporting, setCustomerImporting] = useState(false);
+  const [supplierExporting, setSupplierExporting] = useState(false);
+  const [supplierImportFile, setSupplierImportFile] = useState<File | null>(null);
+  const [supplierImporting, setSupplierImporting] = useState(false);
 
   // Backup states
   const [backups, setBackups] = useState<BackupFile[]>([]);
@@ -89,7 +92,7 @@ export default function DataManagementPage() {
 
   // Reset Data states
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
-  const [resetAction, setResetAction] = useState<'clear_sales' | 'reset_references' | 'clear_inventory' | null>(null);
+  const [resetAction, setResetAction] = useState<'clear_sales' | 'reset_references' | 'clear_inventory' | 'clear_master_data' | 'factory_reset' | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
@@ -251,6 +254,86 @@ export default function DataManagementPage() {
       });
     } finally {
       setCustomerImporting(false);
+    }
+  };
+
+  const handleSupplierExport = async () => {
+    setSupplierExporting(true);
+    try {
+      const res = await fetch(getApiUrl('/data-management/export/suppliers'));
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to export');
+      }
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'suppliers.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Export Successful",
+        description: "Your supplier list has been downloaded.",
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: "Export Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSupplierExporting(false);
+    }
+  };
+
+  const handleSupplierFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSupplierImportFile(e.target.files[0]);
+    }
+  };
+
+  const uploadSuppliers = async () => {
+    if (!supplierImportFile) return;
+
+    setSupplierImporting(true);
+    const formData = new FormData();
+    formData.append('file', supplierImportFile);
+
+    try {
+      const res = await fetch(getApiUrl('/data-management/import/suppliers'), {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast({
+          title: "Import Successful",
+          description: data.message,
+        });
+        setSupplierImportFile(null);
+      } else {
+        toast({
+          title: "Import Failed",
+          description: data.error || "Unknown error occurred",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+       toast({
+        title: "Error",
+        description: "Network error during upload",
+        variant: "destructive",
+      });
+    } finally {
+      setSupplierImporting(false);
     }
   };
 
@@ -546,7 +629,7 @@ export default function DataManagementPage() {
     }
   };
 
-  const openResetDialog = (action: 'clear_sales' | 'reset_references' | 'clear_inventory') => {
+  const openResetDialog = (action: 'clear_sales' | 'reset_references' | 'clear_inventory' | 'clear_master_data' | 'factory_reset') => {
     setResetAction(action);
     setResetConfirmText('');
     setResetDialogOpen(true);
@@ -924,48 +1007,91 @@ export default function DataManagementPage() {
                 </div>
               </div>
 
-               {/* Customers Section */}
-               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Customers</h3>
-                 <div className="grid gap-4 md:grid-cols-2">
-                   <div className="p-4 border rounded-lg space-y-3">
-                      <div className="font-medium flex items-center">
-                        <Download className="mr-2 h-4 w-4 text-blue-500" /> Export Customers
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Download your entire customer list as a CSV file.
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        className="w-full"
-                        onClick={handleCustomerExport}
-                        disabled={customerExporting}
-                      >
-                        {customerExporting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4 text-blue-500" />} 
-                        Export CSV
-                      </Button>
-                   </div>
-                   <div className="p-4 border rounded-lg space-y-3">
-                      <div className="font-medium flex items-center">
-                        <Upload className="mr-2 h-4 w-4 text-green-500" /> Import Customers
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Add/Update customers via CSV. Exact matches will be skipped.
-                      </div>
-                      <div className="flex gap-2">
-                         <Input 
-                            type="file" 
-                            accept=".csv" 
-                            onChange={handleCustomerFileUpload}
-                            disabled={customerImporting}
-                         />
-                         <Button onClick={uploadCustomers} disabled={!customerImportFile || customerImporting}>
-                            {customerImporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Import'}
-                         </Button>
-                      </div>
-                   </div>
-                 </div>
-               </div>
+                {/* Customers Section */}
+                <div className="space-y-4">
+                 <h3 className="text-lg font-medium border-b pb-2">Customers</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="p-4 border rounded-lg space-y-3">
+                       <div className="font-medium flex items-center text-blue-600">
+                         <Download className="mr-2 h-4 w-4" /> Export Customers
+                       </div>
+                       <div className="text-sm text-muted-foreground">
+                         Download your entire customer list as a CSV file.
+                       </div>
+                       <Button 
+                         variant="outline" 
+                         className="w-full"
+                         onClick={handleCustomerExport}
+                         disabled={customerExporting}
+                       >
+                         {customerExporting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} 
+                         Export CSV
+                       </Button>
+                    </div>
+                    <div className="p-4 border rounded-lg space-y-3">
+                       <div className="font-medium flex items-center text-green-600">
+                         <Upload className="mr-2 h-4 w-4" /> Import Customers
+                       </div>
+                       <div className="text-sm text-muted-foreground">
+                         Add/Update customers via CSV. Use `id` as unique identifier.
+                       </div>
+                       <div className="flex gap-2">
+                          <Input 
+                             type="file" 
+                             accept=".csv" 
+                             onChange={handleCustomerFileUpload}
+                             disabled={customerImporting}
+                          />
+                          <Button onClick={uploadCustomers} disabled={!customerImportFile || customerImporting} variant="secondary">
+                             {customerImporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Import'}
+                          </Button>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Suppliers Section */}
+                <div className="space-y-4">
+                 <h3 className="text-lg font-medium border-b pb-2">Suppliers</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="p-4 border rounded-lg space-y-3">
+                       <div className="font-medium flex items-center text-blue-600">
+                         <Download className="mr-2 h-4 w-4" /> Export Suppliers
+                       </div>
+                       <div className="text-sm text-muted-foreground">
+                         Download your entire supplier list as a CSV file.
+                       </div>
+                       <Button 
+                         variant="outline" 
+                         className="w-full"
+                         onClick={handleSupplierExport}
+                         disabled={supplierExporting}
+                       >
+                         {supplierExporting ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} 
+                         Export CSV
+                       </Button>
+                    </div>
+                    <div className="p-4 border rounded-lg space-y-3">
+                       <div className="font-medium flex items-center text-green-600">
+                         <Upload className="mr-2 h-4 w-4" /> Import Suppliers
+                       </div>
+                       <div className="text-sm text-muted-foreground">
+                         Add/Update suppliers via CSV. Use `name` as unique identifier.
+                       </div>
+                       <div className="flex gap-2">
+                          <Input 
+                             type="file" 
+                             accept=".csv" 
+                             onChange={handleSupplierFileUpload}
+                             disabled={supplierImporting}
+                          />
+                          <Button onClick={uploadSuppliers} disabled={!supplierImportFile || supplierImporting} variant="secondary">
+                             {supplierImporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Import'}
+                          </Button>
+                       </div>
+                    </div>
+                  </div>
+                </div>
 
             </CardContent>
           </Card>
@@ -1052,90 +1178,131 @@ export default function DataManagementPage() {
                  Destructive actions to reset system data. These actions cannot be undone.
                </CardDescription>
              </CardHeader>
-             <CardContent className="space-y-4">
-               
-               <div className="border border-red-200 rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
-                 <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Clear Sales Data</h3>
-                        <p className="text-sm text-red-700 dark:text-red-300">
-                           Deletes all sales transactions (POS, Orders, Invoices), payments, shifts, Z-readings, and customer point history.
+              <CardContent className="space-y-4">
+                
+                <div className="border border-red-200 rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
+                  <div className="flex items-center justify-between">
+                     <div>
+                         <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Clear Sales Data</h3>
+                         <p className="text-sm text-red-700 dark:text-red-300">
+                            Deletes all sales transactions (POS, Orders, Invoices), payments, shifts, readings, and related approval queue items.
+                         </p>
+                     </div>
+                     <Button variant="destructive" onClick={() => openResetDialog('clear_sales')}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Clear Sales
+                     </Button>
+                  </div>
+                </div>
+
+                <div className="border border-orange-200 rounded-lg p-4 bg-orange-50 dark:bg-orange-950/20">
+                  <div className="flex items-center justify-between">
+                     <div>
+                        <h3 className="text-lg font-medium text-orange-900 dark:text-orange-200">Reset Transaction References</h3>
+                        <p className="text-sm text-orange-700 dark:text-orange-300">
+                           Resets all transaction counters and terminal OR numbers to default values.
                         </p>
-                    </div>
-                    <Button variant="destructive" onClick={() => openResetDialog('clear_sales')}>
-                       <Trash2 className="mr-2 h-4 w-4" /> Clear Sales
-                    </Button>
-                 </div>
-               </div>
+                     </div>
+                     <Button variant="outline" className="border-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900 text-orange-700 dark:text-orange-300" onClick={() => openResetDialog('reset_references')}>
+                        <RotateCcw className="mr-2 h-4 w-4" /> Reset References
+                     </Button>
+                  </div>
+                </div>
 
-               <div className="border border-orange-200 rounded-lg p-4 bg-orange-50 dark:bg-orange-950/20">
-                 <div className="flex items-center justify-between">
-                    <div>
-                       <h3 className="text-lg font-medium text-orange-900 dark:text-orange-200">Reset Transaction References</h3>
-                       <p className="text-sm text-orange-700 dark:text-orange-300">
-                          Resets all transaction reference numbers (Invoices, POs, etc.) to their default starting values.
-                       </p>
-                    </div>
-                    <Button variant="outline" className="border-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900 text-orange-700 dark:text-orange-300" onClick={() => openResetDialog('reset_references')}>
-                       <RotateCcw className="mr-2 h-4 w-4" /> Reset References
-                    </Button>
-                 </div>
-               </div>
+                <div className="border border-red-200 rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
+                  <div className="flex items-center justify-between">
+                     <div>
+                         <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Delete Inventory</h3>
+                         <p className="text-sm text-red-700 dark:text-red-300">
+                            Deletes ALL products, stock history, adjustments, transfers, counts, and product shelves.
+                         </p>
+                     </div>
+                     <Button variant="destructive" onClick={() => openResetDialog('clear_inventory')}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete Inventory
+                     </Button>
+                  </div>
+                </div>
 
-               <div className="border border-red-200 rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
-                 <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-medium text-red-900 dark:text-red-200">Delete Inventory</h3>
-                        <p className="text-sm text-red-700 dark:text-red-300">
-                           Deletes ALL products, stock history, adjustments, and price levels.
+                <div className="border border-orange-200 rounded-lg p-4 bg-orange-50 dark:bg-orange-950/20">
+                  <div className="flex items-center justify-between">
+                     <div>
+                        <h3 className="text-lg font-medium text-orange-900 dark:text-orange-200">Clear Master Data</h3>
+                        <p className="text-sm text-orange-700 dark:text-orange-300">
+                           Deletes all Customers, Suppliers, Categories, Brands, Units, and Shelf Locations.
                         </p>
-                    </div>
-                    <Button variant="destructive" onClick={() => openResetDialog('clear_inventory')}>
-                       <Trash2 className="mr-2 h-4 w-4" /> Delete Inventory
-                    </Button>
-                 </div>
-               </div>
+                     </div>
+                     <Button variant="outline" className="border-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900 text-orange-700 dark:text-orange-300" onClick={() => openResetDialog('clear_master_data')}>
+                        <Database className="mr-2 h-4 w-4" /> Clear Master Data
+                     </Button>
+                  </div>
+                </div>
 
-             </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                <div className="border-2 border-destructive rounded-lg p-6 bg-destructive/5">
+                  <div className="flex items-center justify-between">
+                     <div className="flex-1 mr-4">
+                         <div className="flex items-center gap-2 mb-1">
+                            <AlertCircle className="h-5 w-5 text-destructive" />
+                            <h3 className="text-xl font-bold text-destructive">Full Factory Reset</h3>
+                         </div>
+                         <p className="text-sm font-medium text-muted-foreground">
+                            This will wipe ALL data from the system except for existing user accounts and basic system settings. 
+                            The system will be returned to its initial empty state.
+                         </p>
+                     </div>
+                     <Button variant="destructive" size="lg" className="px-8 shadow-lg shadow-destructive/20" onClick={() => openResetDialog('factory_reset')}>
+                        <HardDrive className="mr-2 h-5 w-5" /> FACTORY RESET
+                     </Button>
+                  </div>
+                </div>
 
-      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. 
-              {resetAction === 'clear_sales' && " This will permanently delete all sales history, shift records, and transaction logs."}
-              {resetAction === 'reset_references' && " This will reset all transaction counters to their default start values. This may cause collision if you have existing records."}
-              {resetAction === 'clear_inventory' && " This will permanently delete ALL products and their stock history."}
-            </AlertDialogDescription>
-            <div className="py-2">
-                <Label htmlFor="confirm-text" className="text-xs text-muted-foreground mb-1 block">
-                   Type <span className="font-bold text-destructive">CONFIRM</span> to proceed
-                </Label>
-                <Input 
-                   id="confirm-text"
-                   value={resetConfirmText}
-                   onChange={(e) => setResetConfirmText(e.target.value)}
-                   placeholder="Type CONFIRM"
-                   autoComplete="off"
-                />
-            </div>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-               onClick={handleResetData}
-               disabled={resetConfirmText !== 'CONFIRM' || resetLoading}
-            >
-              {resetLoading ? "Resetting..." : "Confirm Reset"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              </CardContent>
+           </Card>
+         </TabsContent>
+       </Tabs>
+ 
+       <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+         <AlertDialogContent className="max-w-md">
+           <AlertDialogHeader>
+             <AlertDialogTitle className="text-destructive flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                Confirm Destructive Action
+             </AlertDialogTitle>
+             <AlertDialogDescription className="text-base text-foreground font-medium pt-2">
+               {resetAction === 'clear_sales' && "This will permanently delete all sales history, shift records, and transaction logs including approval items related to sales."}
+               {resetAction === 'reset_references' && "This will reset all transaction counters and terminal OR numbers. This may cause collision if you have existing records."}
+               {resetAction === 'clear_inventory' && "This will permanently delete ALL products, stock movements, transfers, and warehouse management data."}
+               {resetAction === 'clear_master_data' && "This will permanently delete all customer and supplier records, product categories, and brand definitions."}
+               {resetAction === 'factory_reset' && "CRITICAL: This will wipe the ENTIRE database (Transactions, Products, Customers, Suppliers, etc.). This action is IRREVERSIBLE."}
+             </AlertDialogDescription>
+             <div className="py-4 space-y-2">
+                 <p className="text-sm text-muted-foreground">
+                    This action cannot be undone. To prevent accidental data loss, please type <span className="font-bold text-destructive underline">CONFIRM</span> below.
+                 </p>
+                 <Input 
+                    id="confirm-text"
+                    value={resetConfirmText}
+                    onChange={(e) => setResetConfirmText(e.target.value)}
+                    placeholder="Type CONFIRM here"
+                    className="border-destructive/50 focus-visible:ring-destructive"
+                    autoComplete="off"
+                 />
+             </div>
+           </AlertDialogHeader>
+           <AlertDialogFooter>
+             <AlertDialogCancel className="font-semibold">Cancel and Keep My Data</AlertDialogCancel>
+             <AlertDialogAction 
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold px-8"
+                onClick={handleResetData}
+                disabled={resetConfirmText !== 'CONFIRM' || resetLoading}
+             >
+               {resetLoading ? (
+                  <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
+               ) : (
+                  "Yes, Proceed with Reset"
+               )}
+             </AlertDialogAction>
+           </AlertDialogFooter>
+         </AlertDialogContent>
+       </AlertDialog>
 
       <AlertDialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
         <AlertDialogContent>

@@ -28,28 +28,67 @@ export async function POST(request: NextRequest) {
     // Process and insert data (Upsert logic could be better, but simple INSERT for now or checking duplicates)
     // Assuming structure matches: name, sku, barcode, category, unit, cost_price, selling_price, stock_quantity, reorder_point
     
-    const products: any[] = data;
+    const productsData: any[] = data;
     let successCount = 0;
-    let conflictCount = 0;
+    let updateCount = 0;
+    let errorCount = 0;
 
-    for (const p of products) {
-      // Basic validation
-      if (!p.name || !p.sku) continue; // Skip invalid rows
+    for (const p of productsData) {
+      if (!p.name || !p.sku) {
+        errorCount++;
+        continue;
+      }
 
       try {
-        // Check if exists
-        const [existing] = await query('SELECT id FROM products WHERE sku = ?', [p.sku]);
+        const [existing]: any = await query('SELECT id FROM products WHERE sku = ?', [p.sku]);
 
         if (existing) {
-          // Optional: Update existing? For now, let's just count conflict
-          conflictCount++;
+          // Update existing product
+          await query(
+            `UPDATE products SET 
+              name = ?, 
+              barcode = ?, 
+              description = ?, 
+              category = ?, 
+              brand = ?,
+              subcategory = ?,
+              unit_of_measure = ?,
+              cost = ?, 
+              price = ?, 
+              stock = ?, 
+              reorder_point = ?,
+              parent_id = ?,
+              image_url = ?,
+              conversion_factor = ?,
+              updated_at = NOW()
+            WHERE sku = ?`,
+            [
+              p.name,
+              p.barcode || null,
+              p.description || '',
+              p.category || 'General',
+              p.brand || null,
+              p.subcategory || null,
+              p.unit || 'pcs',
+              parseFloat(p.cost_price) || 0,
+              parseFloat(p.selling_price) || 0,
+              parseFloat(p.stock_quantity) || 0,
+              parseFloat(p.reorder_point) || 0,
+              p.parent_id || null,
+              p.image_url || null,
+              parseFloat(p.conversion_factor) || 1,
+              p.sku
+            ]
+          );
+          updateCount++;
         } else {
+          // Insert new product
           await query(
             `INSERT INTO products (
-              id, name, sku, barcode, description, category, unit_of_measure,
-              cost, price, stock, reorder_point, 
+              id, name, sku, barcode, description, category, brand, subcategory, unit_of_measure,
+              cost, price, stock, reorder_point, parent_id, image_url, conversion_factor,
               created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
             [
               uuidv4(),
               p.name,
@@ -57,23 +96,29 @@ export async function POST(request: NextRequest) {
               p.barcode || null,
               p.description || '',
               p.category || 'General',
+              p.brand || null,
+              p.subcategory || null,
               p.unit || 'pcs',
               parseFloat(p.cost_price) || 0,
               parseFloat(p.selling_price) || 0,
               parseFloat(p.stock_quantity) || 0,
-              parseFloat(p.reorder_point) || 0
+              parseFloat(p.reorder_point) || 0,
+              p.parent_id || null,
+              p.image_url || null,
+              parseFloat(p.conversion_factor) || 1
             ]
           );
           successCount++;
         }
       } catch (err) {
         console.error(`Failed to import product ${p.sku}:`, err);
+        errorCount++;
       }
     }
 
     return NextResponse.json({ 
       success: true, 
-      message: `Import processed. Added: ${successCount}, Skipped (Existing): ${conflictCount}` 
+      message: `Import processed. Added: ${successCount}, Updated: ${updateCount}, Errors: ${errorCount}` 
     });
 
   } catch (error: any) {

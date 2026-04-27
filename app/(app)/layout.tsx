@@ -208,7 +208,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const filteredOtherNavItems = otherNavItems.filter(item => hasPermission(item.permission));
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-screen overflow-hidden">
       <Sidebar className="non-printable border-r" collapsible="icon">
         <SidebarHeader className="h-20 border-b border-sidebar-border sticky top-0 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl z-10 px-6 group-data-[collapsible=icon]:px-0 justify-center shadow-sm">
           <div className="flex items-center gap-3 transition-all duration-300 group-data-[collapsible=icon]:justify-center">

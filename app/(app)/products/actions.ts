@@ -1245,19 +1245,19 @@ export async function updateProductShelfLocations(updates: {
       if (isApprovalRequired) {
           // Enrich data for approval
           const enrichedUpdates = await Promise.all(updates.map(async u => {
-              const [pInfo]: any = await query('SELECT name, sku, barcode, stock FROM products WHERE id = ?', [u.productId]);
-              const p = pInfo[0];
+              const pRows: any = await query('SELECT name, sku, barcode, stock FROM products WHERE id = ?', [u.productId]);
+              const p = pRows[0];
               
               let sourceName = 'Unassigned';
               if (u.sourceShelfId && u.sourceShelfId !== 'unassigned') {
-                  const [sInfo]: any = await query('SELECT name FROM shelf_locations WHERE id = ?', [u.sourceShelfId]);
-                  sourceName = sInfo[0]?.name || u.sourceShelfId;
+                  const sRows: any = await query('SELECT name FROM shelf_locations WHERE id = ?', [u.sourceShelfId]);
+                  sourceName = sRows[0]?.name || u.sourceShelfId;
               }
               
               let targetName = 'Unassigned';
               if (u.targetShelfId && u.targetShelfId !== 'unassigned') {
-                  const [tInfo]: any = await query('SELECT name FROM shelf_locations WHERE id = ?', [u.targetShelfId]);
-                  targetName = tInfo[0]?.name || u.targetShelfId;
+                  const tRows: any = await query('SELECT name FROM shelf_locations WHERE id = ?', [u.targetShelfId]);
+                  targetName = tRows[0]?.name || u.targetShelfId;
               }
 
               return {

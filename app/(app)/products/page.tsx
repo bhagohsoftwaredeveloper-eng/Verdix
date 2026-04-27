@@ -31,6 +31,7 @@ import { ManageShelfLocationsDialog } from './ManageShelfLocationsDialog';
 
 import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart, MoreVertical, Edit, Eye, Copy, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, Fragment, useEffect, useCallback, Suspense } from 'react';
+import { useDebounce } from '@/hooks/use-debounce';
 import { useSearchParams } from 'next/navigation';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -307,6 +308,7 @@ export default function ProductsPage() {
 
 function ProductsContent() {
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const searchParams = useSearchParams();
   const filter = searchParams.get('filter');
   
@@ -347,11 +349,12 @@ function ProductsContent() {
   const [isShelfLocationsOpen, setIsShelfLocationsOpen] = useState(false);
   const [isDepartmentsOpen, setIsDepartmentsOpen] = useState(false);
 
-  // Load products WITHOUT search — search is done client-side for instant results
+  // Load products WITH search — now server-side to search entire database
   const loadProducts = useCallback(async (page = currentPage, size = pageSize) => {
     setIsLoadingProducts(true);
     try {
       const filters = {
+        search: debouncedSearchTerm || undefined,
         brand: selectedBrand !== 'all' ? selectedBrand : undefined,
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
         supplier: selectedSupplier !== 'all' ? selectedSupplier : undefined,
@@ -374,7 +377,7 @@ function ProductsContent() {
     } finally {
       setIsLoadingProducts(false);
     }
-  }, [currentPage, pageSize, selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus]);
+  }, [currentPage, pageSize, selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, selectedDepartment, debouncedSearchTerm]);
 
   useEffect(() => {
     loadProducts(currentPage, pageSize);
@@ -414,25 +417,19 @@ function ProductsContent() {
     loadProductOptions();
   }, [loadProductOptions]);
 
-  // Reset to page 1 when structural filters change, NOT on searchTerm change
+  // Reset to page 1 when structural filters or search term change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, selectedDepartment]);
+  }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, selectedDepartment, debouncedSearchTerm]);
 
   const filtersActive = useMemo(() => {
-    return selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedShelfLocation !== 'all' || selectedStatus !== 'all' || selectedDepartment !== 'all' || searchTerm !== '';
-  }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, selectedDepartment, searchTerm]);
+    return selectedBrand !== 'all' || selectedCategory !== 'all' || selectedSupplier !== 'all' || selectedWarehouse !== 'all' || selectedShelfLocation !== 'all' || selectedStatus !== 'all' || selectedDepartment !== 'all' || !!debouncedSearchTerm;
+  }, [selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, selectedDepartment, debouncedSearchTerm]);
 
-  // Instant client-side search filter — no server round-trip
+  // Server-side results are already filtered
   const products = useMemo(() => {
-    if (!searchTerm.trim()) return allProducts;
-    const lower = searchTerm.toLowerCase();
-    return allProducts.filter(p =>
-      p.name.toLowerCase().includes(lower) ||
-      p.sku.toLowerCase().includes(lower) ||
-      (p.barcode && p.barcode.toLowerCase().includes(lower))
-    );
-  }, [allProducts, searchTerm]);
+    return allProducts;
+  }, [allProducts]);
 
   const productTree = useMemo(() => {
     if (!products) return [];
@@ -465,8 +462,8 @@ function ProductsContent() {
   }, [productTree]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+    <div className="flex flex-col h-full gap-6 pt-2 overflow-hidden">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4 flex-shrink-0">
         <div>
            <h1 className="text-3xl font-bold tracking-tight text-foreground">Products</h1>
              <div className="text-muted-foreground mt-1">
@@ -735,7 +732,7 @@ function ProductsContent() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 flex-shrink-0">
 
         
         {/* Active Filters Badges */}
@@ -816,6 +813,7 @@ function ProductsContent() {
                         setSelectedShelfLocation('all');
                         setSelectedStatus('all');
                         setSelectedDepartment('all');
+                        setSearchTerm('');
                     }}
                     className="h-8 text-xs text-muted-foreground"
                 >
@@ -825,12 +823,12 @@ function ProductsContent() {
         )}
       </div>
 
-      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden flex flex-col h-full">
-        <CardContent className="p-0 overflow-hidden flex flex-col flex-1 relative">
+      <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm overflow-hidden flex flex-col flex-1 min-h-0">
+        <CardContent className="p-0 overflow-hidden flex flex-col flex-1 min-h-0 relative">
         <TooltipProvider>
           <Table 
             className="text-xs" 
-            wrapperClassName="overflow-auto max-h-[calc(100vh-250px)]"
+            wrapperClassName="flex-1"
           >
             <TableHeader className="z-20">
               <TableRow className="hover:bg-transparent border-b">

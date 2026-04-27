@@ -1,41 +1,23 @@
-'use client';
+import { Metadata } from 'next';
+import { TransferBoard } from './TransferBoard';
 
-import { Suspense } from 'react';
-import { TransferBoard } from "./TransferBoard";
-import { Skeleton } from '@/components/ui/skeleton';
-import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
+export const metadata: Metadata = {
+  title: 'Warehouse Transfer Board | StockPilot',
+  description: 'Manage and transfer products between warehouses.',
+};
 
-export default function TransferBoardPage() {
+export default function WarehouseTransferBoardPage() {
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Stock Transfer Board</h2>
-          <p className="text-muted-foreground">
-            Drag and drop products between warehouses to transfer stock.
-          </p>
+    <div className="flex flex-col h-[calc(100dvh-3.5rem)] p-3 sm:p-6 lg:p-8 space-y-3 sm:space-y-4 max-w-full overflow-hidden bg-background">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-2 md:space-y-0 shrink-0 w-full min-w-0">
+        <div className="w-full min-w-0">
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight truncate leading-none">Warehouse Transfer Board</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Quickly transfer product stock between different warehouse locations.</p>
         </div>
       </div>
-      <Suspense fallback={<TransferBoardSkeleton />}>
+      <div className="flex-1 w-full overflow-hidden relative z-0 min-h-0">
         <TransferBoard />
-      </Suspense>
-    </div>
-  );
-}
-
-function TransferBoardSkeleton() {
-  return (
-    <div className="flex h-[calc(100vh-210px)] gap-6 overflow-x-auto pb-4">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="flex h-full w-72 min-w-[280px] max-w-[280px] flex-shrink-0 flex-col gap-4 rounded-lg bg-muted/30 p-4">
-          <Skeleton className="h-8 w-1/2" />
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, j) => (
-              <Skeleton key={j} className="h-32 w-full rounded-md" />
-            ))}
-          </div>
-        </div>
-      ))}
+      </div>
     </div>
   );
 }

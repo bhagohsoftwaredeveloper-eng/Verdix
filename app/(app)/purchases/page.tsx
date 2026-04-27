@@ -617,7 +617,7 @@ export default function PurchasesPage() {
             <AddPurchaseOrderDialog 
               onAddOrder={addPurchaseOrder} 
               trigger={
-                <Button size="sm" className="shadow-lg shadow-black/30">
+                <Button size="sm">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Add New Purchase Order
                 </Button>

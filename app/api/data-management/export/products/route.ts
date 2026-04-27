@@ -13,15 +13,19 @@ export async function GET(request: NextRequest) {
         barcode, 
         description, 
         category, 
+        brand,
+        subcategory,
         stock as stock_quantity, 
         reorder_point,
         cost as cost_price,
         price as selling_price,
-        unit_of_measure as unit
+        unit_of_measure as unit,
+        parent_id,
+        image_url,
+        conversion_factor
       FROM products
     `);
 
-    // Convert to plain objects to ensure PapaParse handles them correctly
     const plainProducts = JSON.parse(JSON.stringify(products));
     const csv = Papa.unparse(plainProducts);
     

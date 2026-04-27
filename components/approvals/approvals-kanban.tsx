@@ -87,7 +87,13 @@ function cardTitle(item: ApprovalItem): string {
     case 'BAD_ORDER':        return `Bad Order: ${d.productName || '—'}`;
     case 'STOCK_COUNT':      return `Stock Count: ${d.warehouseName || '—'}`;
     case 'REPACKAGING':      return `Repackaging: ${d.productName || '—'}`;
-    case 'SHELF_TRANSFER':   return `Shelf Transfer: ${d.productName || '—'}`;
+    case 'SHELF_TRANSFER':   
+      if (d.productName && d.productName !== 'Unknown') return `Shelf Transfer: ${d.productName}`;
+      if (d.items && d.items.length > 0) {
+        const first = d.items[0].productName || 'Unknown';
+        return `Shelf Transfer: ${first}${d.items.length > 1 ? ` (+${d.items.length - 1} more)` : ''}`;
+      }
+      return 'Shelf Transfer: Batch';
     default:                 return item.transaction_type.replace(/_/g, ' ');
   }
 }
@@ -341,30 +347,44 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
         </div>
       )}
 
-      {/* SHELF TRANSFER */}
+      {/* SHELF_TRANSFER */}
       {type === 'SHELF_TRANSFER' && (
         <>
-          {d.items || d.updates ? (
-             <ItemsTable
-               items={d.items || d.updates.map((u: any) => ({ ...u, sourceShelfName: u.sourceShelfName || u.sourceShelf, targetShelfName: u.targetShelfName || u.targetShelf }))} 
-               cols={[
-                 { key: 'productName', label: 'Product' },
-                 { key: 'sourceShelfName', label: 'From' },
-                 { key: 'targetShelfName', label: 'To' },
-                 { key: 'quantity', label: 'Qty', right: true },
-               ]}
-             />
+          {(d.items || d.updates) ? (
+            <>
+              {/* Header summarized block for batch transfers if applicable */}
+              <div className="bg-secondary/10 rounded-2xl p-4 space-y-0 mb-4">
+                 <Row label="Transfer Type" value="Batch Shelf Transfer" />
+                 <Row label="Items Count" value={(d.items || d.updates).length} />
+                 {/* If single product in batch */}
+                 {d.items?.[0]?.productName && d.items.length === 1 && <Row label="Product" value={d.items[0].productName} />}
+              </div>
+              <ItemsTable
+                items={d.items || d.updates.map((u: any) => ({ 
+                  ...u, 
+                  sourceShelfName: u.sourceShelfName || u.sourceShelf || 'Unassigned', 
+                  targetShelfName: u.targetShelfName || u.targetShelf || 'Unassigned' 
+                }))} 
+                cols={[
+                  { key: 'productName', label: 'Product' },
+                  { key: 'barcode', label: 'Barcode' },
+                  { key: 'sourceShelfName', label: 'From' },
+                  { key: 'targetShelfName', label: 'To' },
+                  { key: 'quantity', label: 'Qty', right: true },
+                ]}
+              />
+            </>
           ) : (
             <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
               <Row label="Product" value={d.productName || d.name} />
-              <Row label="From Shelf" value={d.fromShelf || d.sourceShelf} />
-              <Row label="To Shelf" value={d.toShelf || d.targetShelf} />
+              <Row label="Barcode" value={d.barcode || d.productBarcode} />
+              <Row label="From Shelf" value={d.fromShelfName || d.fromShelf || d.sourceShelf || 'Unassigned'} />
+              <Row label="To Shelf" value={d.toShelfName || d.toShelf || d.targetShelf || 'Unassigned'} />
               <Row label="Quantity" value={d.quantity} />
             </div>
           )}
         </>
       )}
-
       {/* Generic fallback for anything else that has .items */}
       {!['PURCHASE_ORDER','RECEIVE_PO','STOCK_ADJUSTMENT','STOCK_TRANSFER','STOCK_COUNT','BAD_ORDER','REPACKAGING','SHELF_TRANSFER'].includes(type) && d.items && (
         <ItemsTable
