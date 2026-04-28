@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
       // 3. Verify user has the required role
       const [users]: any = await connection.query(`
-        SELECT ut.id as roleId 
+        SELECT u.username, ut.id as roleId, ut.name as roleName
         FROM users u 
         LEFT JOIN user_types ut ON u.user_type = ut.id OR u.user_type = ut.name
         WHERE u.uid = ?
@@ -56,8 +56,9 @@ export async function POST(request: NextRequest) {
       }
       
       const currentUserRole = users[0].roleId;
+      const isAdmin = users[0].username === 'admin' || users[0].roleName === 'Admin' || users[0].roleName === 'Super Admin';
 
-      if (currentUserRole !== workflowStep.user_type_id) {
+      if (!isAdmin && currentUserRole !== workflowStep.user_type_id) {
         // Find role names for better error message
         const [requiredRoles]: any = await connection.query('SELECT name FROM user_types WHERE id = ?', [workflowStep.user_type_id]);
         const requiredRoleName = requiredRoles[0]?.name || 'Unknown';

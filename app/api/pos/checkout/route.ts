@@ -20,6 +20,9 @@ export async function POST(request: NextRequest) {
       amountTendered,
       change
     } = body;
+    
+    console.log('[POS Checkout] Processing sale:', { itemsCount: items.length, totalDue, paymentMethod });
+    items.forEach((it: any) => console.log(`  - Item: ${it.name}, Qty: ${it.quantity}, ID: ${it.id}`));
 
     if (!items || items.length === 0) {
       return NextResponse.json({ success: false, error: 'No items in transaction' }, { status: 400 });

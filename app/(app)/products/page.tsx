@@ -28,6 +28,8 @@ import { EditProductDialog } from './edit-product-dialog';
 import { ManagePriceLevelsDialog } from './ManagePriceLevelsDialog';
 import { ManageSuppliersDialog } from './ManageSuppliersDialog';
 import { ManageShelfLocationsDialog } from './ManageShelfLocationsDialog';
+import { ManageUnitOfMeasureDialog } from './ManageUnitOfMeasureDialog';
+import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
 
 import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart, MoreVertical, Edit, Eye, Copy, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, Fragment, useEffect, useCallback, Suspense } from 'react';
@@ -348,6 +350,8 @@ function ProductsContent() {
   const [isSuppliersOpen, setIsSuppliersOpen] = useState(false);
   const [isShelfLocationsOpen, setIsShelfLocationsOpen] = useState(false);
   const [isDepartmentsOpen, setIsDepartmentsOpen] = useState(false);
+  const [isUnitOfMeasureOpen, setIsUnitOfMeasureOpen] = useState(false);
+  const [isWarehousesOpen, setIsWarehousesOpen] = useState(false);
 
   // Load products WITH search — now server-side to search entire database
   const loadProducts = useCallback(async (page = currentPage, size = pageSize) => {
@@ -510,6 +514,12 @@ function ProductsContent() {
                 <DropdownMenuItem onSelect={() => setTimeout(() => setIsDepartmentsOpen(true), 0)}>
                   Manage Departments
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTimeout(() => setIsWarehousesOpen(true), 0)}>
+                  Manage Warehouse
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTimeout(() => setIsUnitOfMeasureOpen(true), 0)}>
+                  Manage Unit of Measure
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             
@@ -552,6 +562,24 @@ function ProductsContent() {
                     loadProducts(currentPage, pageSize);
                 }}
                 trigger={<span className="sr-only">Open Departments</span>}
+            />
+            <ManageUnitOfMeasureDialog 
+                open={isUnitOfMeasureOpen}
+                onOpenChange={setIsUnitOfMeasureOpen}
+                onUnitAdded={() => {
+                    loadProductOptions();
+                    loadProducts(currentPage, pageSize);
+                }}
+                trigger={<span className="sr-only">Open Units</span>}
+            />
+            <ManageWarehousesDialog 
+                open={isWarehousesOpen}
+                onOpenChange={setIsWarehousesOpen}
+                onChange={() => {
+                    loadProductOptions();
+                    loadProducts(currentPage, pageSize);
+                }}
+                trigger={<span className="sr-only">Open Warehouses</span>}
             />
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>

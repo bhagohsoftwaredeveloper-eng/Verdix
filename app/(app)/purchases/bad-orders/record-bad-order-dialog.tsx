@@ -475,7 +475,7 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
           Record Bad Order
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-[100vw] w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none">
+      <DialogContent className="sm:max-w-none max-w-full w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none m-0 shadow-none">
         <DialogHeader className="px-6 py-4 border-b bg-background">
           <DialogTitle>Record Bad Order</DialogTitle>
           <DialogDescription>
@@ -495,7 +495,9 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
                           name="reportedBy"
                           render={({ field }) => (
                           <FormItem className="space-y-1">
-                              <FormLabel className="text-xs font-semibold text-muted-foreground">Reported By</FormLabel>
+                              <div className="h-5 flex items-center">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Reported By</FormLabel>
+                              </div>
                               <FormControl>
                                 <Input className="h-8 bg-white text-xs" placeholder="Jane Doe" {...field} />
                               </FormControl>
@@ -510,7 +512,9 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
                           name="supplierId"
                           render={({ field }) => (
                           <FormItem className="space-y-1">
-                              <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier (Optional)</FormLabel>
+                              <div className="h-5 flex items-center">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier (Optional)</FormLabel>
+                              </div>
                               <Select 
                                 onValueChange={(val) => {
                                   field.onChange(val);

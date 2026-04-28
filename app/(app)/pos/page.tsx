@@ -45,6 +45,7 @@ import {
   Search,
   ShoppingCart,
   RefreshCw,
+  Files,
 } from 'lucide-react';
 import type { Product, Customer, ZReadingData } from '@/lib/types';
 import Link from 'next/link';
@@ -68,6 +69,7 @@ import { ReturnSalesDialog } from './return-sales-dialog';
 import { PriceInquiryDialog } from './price-inquiry-dialog';
 import { ZReadingDialog } from './z-reading-dialog';
 import { XReadingDialog } from './x-reading-dialog';
+import { OverallReadingDialog } from './overall-reading-dialog';
 
 import { CancelSaleDialog } from './cancel-sale-dialog';
 import { DiscountDialog } from './discount-dialog';
@@ -224,6 +226,8 @@ export default function POSPage() {
   // Show X-Reading report after shift end
   const [showEndShiftReport, setShowEndShiftReport] = useState(false);
   const [pendingZReading, setPendingZReading] = useState(false);
+  const [pendingOverallReading, setPendingOverallReading] = useState(false);
+  const [isOverallReadingOpen, setIsOverallReadingOpen] = useState(false);
   const [lastEndedShiftId, setLastEndedShiftId] = useState<string | null>(null);
   const [isPriceInquiryOpen, setIsPriceInquiryOpen] = useState(false);
 
@@ -308,6 +312,8 @@ export default function POSPage() {
   const [isLineVoidAuthOpen, setIsLineVoidAuthOpen] = useState(false);
   const [priceEditAuthCredentials, setPriceEditAuthCredentials] = useState<{username?: string | null, password?: string | null} | null>(null);
   const [isPriceEditAuthOpen, setIsPriceEditAuthOpen] = useState(false);
+  const [isOverallReadingAuthOpen, setIsOverallReadingAuthOpen] = useState(false);
+  const [overallReadingAuthCredentials, setOverallReadingAuthCredentials] = useState<{username?: string | null, password?: string | null} | null>(null);
   const [isTrainingMode, setIsTrainingMode] = useState(false);
 
   const [isInsufficientStockOpen, setIsInsufficientStockOpen] = useState(false);
@@ -441,6 +447,10 @@ export default function POSPage() {
               setPriceEditAuthCredentials({
                   username: result.data.priceEditAuthUsername,
                   password: result.data.priceEditAuthPassword
+              });
+              setOverallReadingAuthCredentials({
+                  username: result.data.overallReadingAuthUsername,
+                  password: result.data.overallReadingAuthPassword
               });
               setIsTrainingMode(result.data.isTrainingMode || false);
               setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
@@ -1153,6 +1163,7 @@ export default function POSPage() {
 
               // Show the report dialog which has the print button
               setShowEndShiftReport(true); 
+              setPendingOverallReading(true);
               setPendingZReading(true);
               
               // 2. Generate and Save X-Reading
@@ -1474,12 +1485,27 @@ export default function POSPage() {
     }
   };
 
-  // Effect to trigger Z-Reading after X-Reading closes if pending
+  const handleOpenOverallReading = () => {
+      if (businessSettings?.enableOverallReadingAuth) {
+          setIsOverallReadingAuthOpen(true);
+      } else {
+          setIsOverallReadingOpen(true);
+      }
+  };
+
+  // Effect to trigger Overall Reading after X-Reading closes if pending
   useEffect(() => {
-    if (!showEndShiftReport && pendingZReading) {
+    if (!showEndShiftReport && pendingOverallReading) {
+      setIsOverallReadingOpen(true);
+    }
+  }, [showEndShiftReport, pendingOverallReading]);
+
+  // Effect to trigger Z-Reading after Overall Reading closes if pending
+  useEffect(() => {
+    if (!isOverallReadingOpen && !showEndShiftReport && pendingZReading) {
       setIsZReadingOpen(true);
     }
-  }, [showEndShiftReport, pendingZReading]);
+  }, [isOverallReadingOpen, showEndShiftReport, pendingZReading]);
 
 
 
@@ -1517,6 +1543,7 @@ export default function POSPage() {
     { icon: Clock, label: 'Recent Sales', shortcut: 'Ctrl+5', action: () => setIsRecentSalesOpen(true) },
     { icon: Ban, label: 'Post Void', shortcut: 'Ctrl+6', action: () => setIsVoidSalesOpen(true) },
     { icon: Undo, label: 'Merch Credit', shortcut: 'Ctrl+7', action: () => setIsReturnSalesOpen(true) },
+    { icon: Files, label: 'OVERALL', shortcut: 'Ctrl+8', action: handleOpenOverallReading },
     { icon: BookOpen, label: 'Z-READING', shortcut: 'Ctrl+0', action: () => setIsZReadingOpen(true) },
     { icon: Search, label: 'Price Inquiry', shortcut: 'Ctrl+P', action: () => setIsPriceInquiryOpen(true) },
   ];
@@ -2009,6 +2036,17 @@ export default function POSPage() {
              setIsCancelDialogOpen(true);
         }}
       />
+      <AdminAuthDialog
+        isOpen={isOverallReadingAuthOpen}
+        onOpenChange={setIsOverallReadingAuthOpen}
+        title="Overall Reading Authorization"
+        description="Please provide credentials to view Overall Terminal Reading"
+        requiredCredentials={overallReadingAuthCredentials}
+        onSuccess={() => {
+            setIsOverallReadingAuthOpen(false);
+            setIsOverallReadingOpen(true);
+        }}
+      />
       <EndShiftDialog
         isOpen={isEndShiftOpen}
         onOpenChange={setIsEndShiftOpen}
@@ -2073,6 +2111,19 @@ export default function POSPage() {
         terminalName={currentTerminalName}
         autoShow={pendingZReading} 
         initialData={lastSavedZReading}
+      />
+      
+      <OverallReadingDialog
+        isOpen={isOverallReadingOpen}
+        onOpenChange={(open) => {
+            setIsOverallReadingOpen(open);
+            if (!open) {
+                setPendingOverallReading(false);
+            }
+        }}
+        terminalId="all"
+        terminalName="All Terminals"
+        printMode={businessSettings?.printMode || 'browser'}
       />
       
       <XReadingDialog 

@@ -101,7 +101,7 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-white text-black">
+      <DialogContent className="w-fit min-w-[300px] max-w-[95vw] md:max-w-[950px] max-h-[90vh] flex flex-col p-0 overflow-hidden bg-white text-black">
         <DialogHeader className="p-4 border-b flex flex-row items-center justify-between space-y-0 bg-secondary/10">
           <DialogTitle className="flex items-center gap-2">
             <Printer className="h-5 w-5 text-primary" />
@@ -118,7 +118,7 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
         <div className="flex-1 overflow-auto p-4 md:p-8 bg-zinc-100/50">
           <div 
             ref={printRef}
-            className="bg-white shadow-2xl mx-auto p-[15mm] min-h-[297mm] w-[210mm] document-container text-black scale-[0.9] origin-top md:scale-100"
+            className="bg-white shadow-2xl mx-auto p-[15mm] min-h-[297mm] w-[210mm] document-container text-black scale-[0.9] origin-top lg:scale-100 shrink-0"
             style={{ 
               fontFamily: '"Inter", "Segoe UI", Helvetica, Arial, sans-serif',
               lineHeight: '1.4'

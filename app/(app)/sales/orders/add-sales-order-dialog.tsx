@@ -408,7 +408,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
             </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-[100vw] w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none">
+      <DialogContent className="sm:max-w-none max-w-full w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none m-0 shadow-none">
         <DialogHeader className="px-6 py-4 border-b bg-background">
           <DialogTitle>New Sales Order</DialogTitle>
           <DialogDescription>

@@ -40,7 +40,8 @@ const migration: Migration = {
         permissions: [
           'access_pos', 'view_dashboard', 'manage_products', 'manage_inventory', 
           'view_sales', 'manage_purchases', 'manage_customers', 'manage_suppliers', 
-          'view_reports', 'manage_users', 'manage_settings'
+          'view_reports', 'manage_users', 'manage_settings', 'view_approvals', 
+          'manage_approval_settings'
         ]
       },
       {
@@ -48,7 +49,7 @@ const migration: Migration = {
         permissions: [
           'access_pos', 'view_dashboard', 'manage_products', 'manage_inventory', 
           'view_sales', 'manage_purchases', 'manage_customers', 'manage_suppliers', 
-          'view_reports', 'manage_users'
+          'view_reports', 'manage_users', 'view_approvals'
         ]
       },
       {

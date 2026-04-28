@@ -756,7 +756,7 @@ export function AddPurchaseOrderDialog({
           {trigger}
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-[100vw] w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none">
+      <DialogContent className="sm:max-w-none max-w-full w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none m-0 shadow-none">
         <DialogHeader className="px-6 py-4 border-b bg-background">
           <DialogTitle>{editOrder ? 'Edit' : 'New'} Purchase Order</DialogTitle>
           <DialogDescription>
@@ -768,231 +768,222 @@ export function AddPurchaseOrderDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 flex flex-col overflow-hidden bg-muted/10">
               
-              {/* TOP HEADER - Form Fields (Compact Grid) */}
-              <div className="bg-background border-b p-4 grid grid-cols-4 gap-4 shrink-0">
+              {/* TOP HEADER - Form Fields (Flat Grid for Alignment) */}
+              <div className="bg-background border-b p-4 grid grid-cols-5 gap-x-4 gap-y-3 shrink-0">
                   
-                  {/* Column 1: Supplier & Type */}
-                  <div className="space-y-3">
-                      <FormField
-                        control={form.control}
-                        name="supplierId"
-                        render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier</FormLabel>
-                                    <SupplierFormDialog 
-                                        onSave={async (data) => {
-                                            const result = await addSupplier(data);
-                                            if (result.success) {
-                                                const newSuppliers = await import('../products/actions').then(mod => mod.getSuppliers());
-                                                setSuppliers(newSuppliers);
-                                            } else {
-                                                throw new Error(result.message);
-                                            }
-                                        }}
-                                    >
-                                        <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
-                                    </SupplierFormDialog>
-                                </div>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                    <SelectTrigger className="h-8 bg-white text-xs">
-                                    <SelectValue placeholder="Select supplier" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {suppliers.map(sup => <SelectItem key={sup.id} value={sup.id} className="text-xs">{sup.name}</SelectItem>)}
-                                </SelectContent>
-
-                                </Select>
-                                <FormMessage className="text-xs" />
-                            </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <FormField
-                            control={form.control}
-                            name="purchaseType"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Type</FormLabel>
-                                </div>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                    <SelectTrigger className="h-8 bg-white text-xs">
-                                    <SelectValue placeholder="Type" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    <SelectItem value="Order" className="text-xs">Order</SelectItem>
-                                    <SelectItem value="Receive" className="text-xs">Receive</SelectItem>
-                                </SelectContent>
-                                </Select>
-                                <FormMessage className="text-xs" />
-                            </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="reference"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Ref #</FormLabel>
-                                </div>
-                                <FormControl>
-                                <Input className="h-8 bg-white text-xs" {...field} />
-                                </FormControl>
-                            </FormItem>
-                            )}
-                        />
-                      </div>
-                  </div>
-
-                  {/* Column 2: Dates & Warehouse */}
-                  <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <FormField
-                            control={form.control}
-                            name="issueDate"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Issue Date</FormLabel>
-                                </div>
-                                <FormControl>
-                                <Input type="date" className="h-8 bg-white text-xs" {...field} />
-                                </FormControl>
-                                <FormMessage className="text-xs" />
-                            </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="deliveryDate"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
-                                </div>
-                                <FormControl>
-                                <Input type="date" className="h-8 bg-white text-xs" {...field} />
-                                </FormControl>
-                            </FormItem>
-                            )}
-                        />
-                      </div>
-                       <FormField
-                            control={form.control}
-                            name="receiveToWarehouse"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Receive To</FormLabel>
-                                    <ManageWarehousesDialog
-                                        trigger={
-                                            <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
+                  {/* ROW 1 */}
+                  <FormField
+                    control={form.control}
+                    name="supplierId"
+                    render={({ field }) => (
+                        <FormItem className="space-y-1">
+                            <div className="flex items-center justify-between h-5">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier</FormLabel>
+                                <SupplierFormDialog 
+                                    onSave={async (data) => {
+                                        const result = await addSupplier(data);
+                                        if (result.success) {
+                                            const newSuppliers = await import('../products/actions').then(mod => mod.getSuppliers());
+                                            setSuppliers(newSuppliers);
+                                        } else {
+                                            throw new Error(result.message);
                                         }
-                                        onChange={fetchWarehouses}
-                                    />
-                                </div>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                    <SelectTrigger className="h-8 bg-white text-xs">
-                                    <SelectValue placeholder="Select warehouse" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {warehouses?.map(warehouse => (
-                                    <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
-                                        {warehouse.name}
-                                    </SelectItem>
-                                    ))}
-                                </SelectContent>
-                                </Select>
-                                <FormMessage className="text-xs" />
-                            </FormItem>
-                            )}
-                        />
-                  </div>
-                  
-                  {/* Column 3: Payment & Shipping */}
-                  <div className="space-y-3">
-                       <FormField
-                            control={form.control}
-                            name="paymentMethod"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
-                                    <ManagePaymentMethodsDialog 
-                                        trigger={
-                                            <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
-                                        } 
-                                    />
-                                </div>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                    <SelectTrigger className="h-8 bg-white text-xs">
-                                    <SelectValue placeholder="Select method" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
-                                </SelectContent>
-                                </Select>
-                                <FormMessage className="text-xs" />
-                            </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="shipping"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping Cost</FormLabel>
-                                </div>
-                                <FormControl>
-                                <Input type="number" step="0.01" className="h-8 bg-white text-xs" placeholder="0.00" {...field} value={field.value ?? ''} />
-                                </FormControl>
-                            </FormItem>
-                            )}
-                        />
-                  </div>
+                                    }}
+                                >
+                                    <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
+                                </SupplierFormDialog>
+                            </div>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                                <SelectTrigger className="h-8 bg-white text-xs">
+                                <SelectValue placeholder="Select..." />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {suppliers.map(sup => <SelectItem key={sup.id} value={sup.id} className="text-xs">{sup.name}</SelectItem>)}
+                            </SelectContent>
+                            </Select>
+                            <FormMessage className="text-xs" />
+                        </FormItem>
+                    )}
+                  />
 
-                  {/* Column 4: Address / Notes */}
-                  <div className="space-y-3">
-                      <FormField
-                            control={form.control}
-                            name="deliveryAddress"
-                            render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
-                                </div>
-                                <FormControl>
-                                <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
-                                </FormControl>
-                            </FormItem>
-                            )}
-                       />
-                       <FormField
-                          control={form.control}
-                          name="note"
-                          render={({ field }) => (
-                            <FormItem className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Notes/Payment Reference</FormLabel>
-                                </div>
-                              <FormControl>
-                                <Input className="h-8 bg-white text-xs" placeholder="Notes/Payment Reference..." {...field} value={field.value || ''} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                  </div>
+                  <FormField
+                      control={form.control}
+                      name="issueDate"
+                      render={({ field }) => (
+                      <FormItem className="space-y-1">
+                          <div className="h-5 flex items-center">
+                            <FormLabel className="text-xs font-semibold text-muted-foreground">Issue Date</FormLabel>
+                          </div>
+                          <FormControl>
+                          <Input type="date" className="h-8 bg-white text-xs" {...field} />
+                          </FormControl>
+                          <FormMessage className="text-xs" />
+                      </FormItem>
+                      )}
+                  />
+
+                  <FormField
+                      control={form.control}
+                      name="deliveryDate"
+                      render={({ field }) => (
+                      <FormItem className="space-y-1">
+                          <div className="h-5 flex items-center">
+                            <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
+                          </div>
+                          <FormControl>
+                          <Input type="date" className="h-8 bg-white text-xs" {...field} />
+                          </FormControl>
+                      </FormItem>
+                      )}
+                  />
+
+                   <FormField
+                        control={form.control}
+                        name="paymentMethod"
+                        render={({ field }) => (
+                        <FormItem className="space-y-1">
+                            <div className="flex items-center justify-between h-5">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
+                                <ManagePaymentMethodsDialog 
+                                    trigger={
+                                        <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
+                                    } 
+                                />
+                            </div>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                                <SelectTrigger className="h-8 bg-white text-xs">
+                                <SelectValue placeholder="Select..." />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {paymentMethods?.map(method => <SelectItem key={method.id} value={method.name} className="text-xs">{method.name}</SelectItem>)}
+                            </SelectContent>
+                            </Select>
+                            <FormMessage className="text-xs" />
+                        </FormItem>
+                        )}
+                    />
+
+                  <FormField
+                        control={form.control}
+                        name="deliveryAddress"
+                        render={({ field }) => (
+                        <FormItem className="space-y-1">
+                            <div className="h-5 flex items-center">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
+                            </div>
+                            <FormControl>
+                            <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
+                            </FormControl>
+                        </FormItem>
+                        )}
+                   />
+
+                  {/* ROW 2 */}
+                  <FormField
+                      control={form.control}
+                      name="purchaseType"
+                      render={({ field }) => (
+                      <FormItem className="space-y-1">
+                          <div className="h-5 flex items-center">
+                            <FormLabel className="text-xs font-semibold text-muted-foreground">Type</FormLabel>
+                          </div>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                                <SelectTrigger className="h-8 bg-white text-xs">
+                                <SelectValue placeholder="Type" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                <SelectItem value="Order" className="text-xs">Order</SelectItem>
+                                <SelectItem value="Receive" className="text-xs">Receive</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage className="text-xs" />
+                      </FormItem>
+                      )}
+                  />
+
+                  <FormField
+                      control={form.control}
+                      name="reference"
+                      render={({ field }) => (
+                      <FormItem className="space-y-1">
+                          <div className="h-5 flex items-center">
+                            <FormLabel className="text-xs font-semibold text-muted-foreground">Ref #</FormLabel>
+                          </div>
+                          <FormControl>
+                          <Input className="h-8 bg-white text-xs" {...field} />
+                          </FormControl>
+                      </FormItem>
+                      )}
+                  />
+
+                  <FormField
+                      control={form.control}
+                      name="receiveToWarehouse"
+                      render={({ field }) => (
+                      <FormItem className="space-y-1">
+                          <div className="flex items-center justify-between h-5">
+                              <FormLabel className="text-xs font-semibold text-muted-foreground">Receive To</FormLabel>
+                              <ManageWarehousesDialog
+                                  trigger={
+                                      <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
+                                  }
+                                  onChange={fetchWarehouses}
+                              />
+                          </div>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                              <SelectTrigger className="h-8 bg-white text-xs">
+                              <SelectValue placeholder="Select..." />
+                              </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                              {warehouses?.map(warehouse => (
+                              <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
+                                  {warehouse.name}
+                              </SelectItem>
+                              ))}
+                          </SelectContent>
+                          </Select>
+                          <FormMessage className="text-xs" />
+                      </FormItem>
+                      )}
+                  />
+
+                   <FormField
+                      control={form.control}
+                      name="shipping"
+                      render={({ field }) => (
+                      <FormItem className="space-y-1">
+                          <div className="h-5 flex items-center">
+                            <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping Cost</FormLabel>
+                          </div>
+                          <FormControl>
+                          <Input type="number" step="0.01" className="h-8 bg-white text-xs" placeholder="0.00" {...field} value={field.value ?? ''} />
+                          </FormControl>
+                      </FormItem>
+                      )}
+                  />
+
+                   <FormField
+                      control={form.control}
+                      name="note"
+                      render={({ field }) => (
+                        <FormItem className="space-y-1">
+                          <div className="h-5 flex items-center">
+                            <FormLabel className="text-xs font-semibold text-muted-foreground">Notes/Payment Reference</FormLabel>
+                          </div>
+                          <FormControl>
+                            <Input className="h-8 bg-white text-xs" placeholder="Notes/Payment..." {...field} value={field.value || ''} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
 
               </div>
 

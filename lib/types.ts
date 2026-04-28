@@ -377,6 +377,9 @@ export interface SystemSettings {
   requireReceiveConfirmation?: boolean;
   requireBadOrderConfirmation?: boolean;
   requireStockCountApproval?: boolean;
+  enableOverallReadingAuth?: boolean;
+  overallReadingAuthUsername?: string | null;
+  overallReadingAuthPassword?: string | null;
 }
 
 export interface User {

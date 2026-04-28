@@ -1,7 +1,9 @@
-import { query } from './mysql';
+import { query, withTransaction } from './mysql';
 import { StockMovement } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import mysql from 'mysql2/promise';
+import { generateBatchId } from './batch-utils';
+import { deductFromBatches } from './batch-deduction';
 
 /**
  * Records a stock movement in the database
@@ -140,7 +142,7 @@ export async function recordAdjustmentMovement(
   const previousStock = currentStock - quantityChange; // Reverse to get previous stock
   const newStock = currentStock;
 
-  return await recordStockMovement({
+  const movement = await recordStockMovement({
     productId,
     productName,
     movementType: 'adjustment',
@@ -151,6 +153,66 @@ export async function recordAdjustmentMovement(
     referenceType: 'adjustment',
     notes: reason,
   });
+
+  // --- SHELF SYNC: Auto-allocate stock to shelves to prevent "Unassigned" status ---
+  try {
+    if (quantityChange > 0) {
+      // Find the first assigned shelf for this product
+      const shelfSql = 'SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1';
+      const shelfResult = await query(shelfSql, [productId]);
+      const shelfId = shelfResult?.[0]?.shelf_id;
+      
+      if (shelfId) {
+        await query('UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?', [quantityChange, productId, shelfId]);
+      }
+    } else if (quantityChange < 0) {
+      // Deduct from shelves
+      let remainingToDeduct = Math.abs(quantityChange);
+      const shelfSql = 'SELECT shelf_id, quantity FROM product_shelves WHERE product_id = ? AND quantity > 0 ORDER BY quantity DESC';
+      const shelfRows = await query(shelfSql, [productId]);
+      
+      for (const shelf of (shelfRows || [])) {
+        if (remainingToDeduct <= 0) break;
+        const take = Math.min(shelf.quantity, remainingToDeduct);
+        if (take > 0) {
+          await query('UPDATE product_shelves SET quantity = quantity - ? WHERE product_id = ? AND shelf_id = ?', [take, productId, shelf.shelf_id]);
+          remainingToDeduct -= take;
+        }
+      }
+    }
+  } catch (shelfErr) {
+    console.warn('[ShelfSync] Failed to sync shelf quantities in adjustment:', shelfErr);
+  }
+
+  // --- BATCH COSTING: Sync Batch quantities with adjustments ---
+  try {
+    if (quantityChange > 0) {
+      // INCREASE: Create a new batch
+      const batchId = generateBatchId();
+      const costInfo = await query('SELECT cost, price FROM products WHERE id = ?', [productId]);
+      const unitCost = costInfo?.[0]?.cost ? parseFloat(costInfo[0].cost) : 0;
+      const sellingPrice = costInfo?.[0]?.price ? parseFloat(costInfo[0].price) : 0;
+
+      await query(`
+        INSERT INTO inventory_batches
+          (id, product_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type, notes)
+        VALUES (?, ?, CURDATE(), ?, ?, ?, ?, 'adjustment', ?)
+      `, [
+        batchId, productId, quantityChange, quantityChange, unitCost, sellingPrice, `Auto-generated from adjustment: ${reason}`
+      ]);
+    } else if (quantityChange < 0) {
+      // DECREASE: Deduct from existing batches using FIFO
+      // This is critical for Physical Counts that reduce stock to prevent "exhausted" batch errors
+      const qtyToDeduct = Math.abs(quantityChange);
+      await withTransaction(async (conn) => {
+          await deductFromBatches(productId, qtyToDeduct, false, conn as any);
+      });
+    }
+  } catch (batchErr) {
+    console.warn('[BatchCosting] Could not sync batches for adjustment:', batchErr);
+  }
+
+  return movement;
 }
 
 /**
@@ -269,29 +331,136 @@ export async function updateStockAndRecordMovement(
   }
 
   const product = productResult[0];
-  const previousStock = product.stock;
-  const newStock = previousStock + quantityChange;
+  const previousStock = Number(product.stock || 0);
+  const numericChange = Number(quantityChange || 0);
+  const newStock = previousStock + numericChange;
+
+  console.log(`[StockMove] Updating Product: ${productId} (${product.name})`);
+  console.log(`           Change: ${numericChange}, Prev: ${previousStock}, New: ${newStock}`);
 
   // Update product stock
   const updateSql = 'UPDATE products SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
   if (connection) {
-    await connection.query(updateSql, [newStock, productId]);
+    await (connection as mysql.PoolConnection).query(updateSql, [newStock, productId]);
   } else {
     await query(updateSql, [newStock, productId]);
   }
 
   // Record the movement
-  return await recordStockMovement({
+  const movement = await recordStockMovement({
     productId,
     productName: product.name,
     movementType,
-    quantityChange,
+    quantityChange: numericChange,
     previousStock,
     newStock,
     referenceId,
     referenceType,
     notes,
   }, connection);
+
+  // --- SHELF SYNC: Auto-allocate stock to shelves to prevent "Unassigned" status ---
+  try {
+    if (numericChange > 0) {
+      // Find the first assigned shelf for this product
+      const shelfSql = 'SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1';
+      const shelfResult = connection 
+        ? (await (connection as mysql.PoolConnection).query(shelfSql, [productId]))[0] as any[]
+        : await query(shelfSql, [productId]);
+      
+      const shelfId = shelfResult?.[0]?.shelf_id;
+      
+      if (shelfId) {
+        const updateShelfSql = 'UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?';
+        if (connection) {
+          await (connection as mysql.PoolConnection).query(updateShelfSql, [numericChange, productId, shelfId]);
+        } else {
+          await query(updateShelfSql, [numericChange, productId, shelfId]);
+        }
+      }
+    } else if (numericChange < 0) {
+      // Deduct from shelves (FIFO-ish: take from the shelf with the most stock first)
+      let remainingToDeduct = Math.abs(numericChange);
+      const shelfSql = 'SELECT shelf_id, quantity FROM product_shelves WHERE product_id = ? AND quantity > 0 ORDER BY quantity DESC';
+      const shelfRows = connection 
+        ? (await (connection as mysql.PoolConnection).query(shelfSql, [productId]))[0] as any[]
+        : await query(shelfSql, [productId]);
+      
+      for (const shelf of (shelfRows || [])) {
+        if (remainingToDeduct <= 0) break;
+        const take = Math.min(shelf.quantity, remainingToDeduct);
+        if (take > 0) {
+          const updateShelfSql = 'UPDATE product_shelves SET quantity = quantity - ? WHERE product_id = ? AND shelf_id = ?';
+          if (connection) {
+            await (connection as mysql.PoolConnection).query(updateShelfSql, [take, productId, shelf.shelf_id]);
+          } else {
+            await query(updateShelfSql, [take, productId, shelf.shelf_id]);
+          }
+          remainingToDeduct -= take;
+        }
+      }
+    }
+  } catch (shelfErr) {
+    console.warn('[ShelfSync] Failed to sync shelf quantities:', shelfErr);
+  }
+
+  // --- BATCH COSTING: Sync Batch quantities with stock movements ---
+  if (['adjustment', 'transfer', 'return'].includes(movementType)) {
+    try {
+      if (numericChange > 0) {
+        // INCREASE: Create a new batch
+        const batchId = generateBatchId();
+        
+        const costInfo = connection 
+          ? (await connection.query('SELECT cost, price FROM products WHERE id = ?', [productId]))[0] as any[]
+          : await query('SELECT cost, price FROM products WHERE id = ?', [productId]);
+          
+        const unitCost = costInfo?.[0]?.cost ? parseFloat(costInfo[0].cost) : 0;
+        const sellingPrice = costInfo?.[0]?.price ? parseFloat(costInfo[0].price) : 0;
+
+        const batchSql = `
+          INSERT INTO inventory_batches
+            (id, product_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type, notes)
+          VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?)
+        `;
+        const batchParams = [
+          batchId, 
+          productId, 
+          numericChange, 
+          numericChange, 
+          unitCost, 
+          sellingPrice, 
+          movementType, 
+          notes ? `Auto-batch for ${movementType}: ${notes}` : `Auto-batch for ${movementType}`
+        ];
+
+        if (connection) {
+          await connection.query(batchSql, batchParams);
+        } else {
+          await query(batchSql, batchParams);
+        }
+      } else if (numericChange < 0) {
+        // DECREASE: Deduct from batches (FIFO)
+        // This is critical for Physical Counts that reduce stock to prevent "exhausted" batch errors
+        const qtyToDeduct = Math.abs(numericChange);
+        
+        if (connection) {
+          // Use our FIFO deduction utility
+          // oversellBlock = false because we are just syncing reality, not blocking a sale
+          await deductFromBatches(productId, qtyToDeduct, false, connection as any);
+        } else {
+          // If no connection, we need one to ensure atomicity
+          await withTransaction(async (conn) => {
+            await deductFromBatches(productId, qtyToDeduct, false, conn as any);
+          });
+        }
+      }
+    } catch (batchErr) {
+      console.warn('[BatchCosting] Could not sync batches for movement:', batchErr);
+    }
+  }
+
+  return movement;
 }
 
 /**

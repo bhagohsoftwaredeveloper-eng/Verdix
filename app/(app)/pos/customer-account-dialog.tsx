@@ -43,6 +43,7 @@ import { getApiUrl } from '@/lib/api-config';
 import { format, differenceInDays } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 import { usePrinter } from '@/lib/use-printer';
+import { AddCustomerDialog } from './add-customer-dialog';
 
 interface CustomerAccountDialogProps {
   isOpen: boolean;
@@ -88,24 +89,26 @@ export function CustomerAccountDialog({
   const [activeInvoiceNo, setActiveInvoiceNo] = useState<string>('');
   const [lastPaymentData, setLastPaymentData] = useState<any>(null);
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
+  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+
+  const fetchCustomers = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(getApiUrl('/customers?limit=100'));
+      const result = await response.json();
+      if (result.success) {
+        setCustomers(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch customers:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Fetch all customers for selection
   useEffect(() => {
     if (isOpen) {
-      const fetchCustomers = async () => {
-        setIsLoading(true);
-        try {
-          const response = await fetch(getApiUrl('/customers?limit=100'));
-          const result = await response.json();
-          if (result.success) {
-            setCustomers(result.data);
-          }
-        } catch (error) {
-          console.error('Failed to fetch customers:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
       fetchCustomers();
     }
   }, [isOpen]);
@@ -385,19 +388,30 @@ export function CustomerAccountDialog({
                 <div className="flex items-center gap-4">
                   <div className="flex-grow">
                     <p className="text-sm font-medium mb-1">Customer</p>
-                    <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                      <SelectTrigger className="w-full sm:w-[300px]">
-                        <SelectValue placeholder="Select Customer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="walk-in">Walk-in Customer</SelectItem>
-                        {customers.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2">
+                       <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                        <SelectTrigger className="w-full sm:w-[300px]">
+                          <SelectValue placeholder="Select Customer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+                          {customers.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="h-10 w-10 shrink-0" 
+                        onClick={() => setIsAddCustomerOpen(true)}
+                        title="Add New Customer"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   {selectedCustomerId !== 'walk-in' && (
                     <Avatar className="h-24 w-24">
@@ -695,6 +709,16 @@ export function CustomerAccountDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AddCustomerDialog
+        isOpen={isAddCustomerOpen}
+        onOpenChange={setIsAddCustomerOpen}
+        onCustomerAdded={(customer) => {
+          fetchCustomers(); // Refresh list
+          setSelectedCustomerId(customer.id);
+          setIsAddCustomerOpen(false);
+        }}
+      />
 
       {/* Payment Sub-Dialog — opens after main dialog closes to avoid Radix focus trap conflict */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => {

@@ -116,10 +116,12 @@ export async function deductFamilyStock(
 ): Promise<void> {
   if (depth > 10 || qty <= 0) return;
 
+  const numericQty = Number(qty || 0);
+
   // 1. Deduct this node's own stock
   await updateStockAndRecordMovement(
     nodeId,
-    -qty,
+    -numericQty,
     refType,
     refId,
     refType,
@@ -146,7 +148,8 @@ export async function deductFamilyStock(
     const cf = convFactors.find((c: any) => c.unit === child.unit_of_measure);
     if (!cf) continue; // No conversion factor defined for this child's unit → skip
 
-    const childDeduction = qty * parseFloat(cf.factor);
+    const factorNum = Number(cf.factor || 0);
+    const childDeduction = numericQty * factorNum;
     await deductFamilyStock(
       child.id,
       childDeduction,
@@ -174,9 +177,11 @@ export async function addFamilyStock(
 ): Promise<void> {
   if (depth > 10 || qty <= 0) return;
 
+  const numericQty = Number(qty || 0);
+
   await updateStockAndRecordMovement(
     nodeId,
-    qty,
+    numericQty,
     refType,
     refId,
     refType,
@@ -200,7 +205,8 @@ export async function addFamilyStock(
     const cf = convFactors.find((c: any) => c.unit === child.unit_of_measure);
     if (!cf) continue;
 
-    const childAddition = qty * parseFloat(cf.factor);
+    const factorNum = Number(cf.factor || 0);
+    const childAddition = numericQty * factorNum;
     await addFamilyStock(
       child.id,
       childAddition,

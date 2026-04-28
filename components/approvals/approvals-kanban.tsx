@@ -63,7 +63,9 @@ const TYPE_FILTERS = [
   { val: 'SHELF_TRANSFER',   lab: 'Shelf' },
 ];
 
-function typeStyle(type: string) {
+function typeStyle(type: string, reason?: string) {
+  if (type === 'STOCK_ADJUSTMENT' && reason === 'Physical Count') return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+  
   switch (type) {
     case 'STOCK_ADJUSTMENT': return 'bg-amber-100 text-amber-800 border-amber-200';
     case 'STOCK_TRANSFER':   return 'bg-blue-100 text-blue-800 border-blue-200';
@@ -83,7 +85,9 @@ function cardTitle(item: ApprovalItem): string {
     case 'STOCK_TRANSFER':   return `Transfer → ${d.toWarehouseName || 'Target'}`;
     case 'PURCHASE_ORDER':   return `PO: ${d.supplierName || 'Supplier'}`;
     case 'RECEIVE_PO':       return `Receive PO #${d.reference_number || d.id || '—'}`;
-    case 'STOCK_ADJUSTMENT': return `Adjustment: ${d.productName || '—'}`;
+    case 'STOCK_ADJUSTMENT': 
+      if (d.reason === 'Physical Count') return `Physical Count: ${d.productName || '—'}`;
+      return `Adjustment: ${d.productName || '—'}`;
     case 'BAD_ORDER':        return `Bad Order: ${d.productName || '—'}`;
     case 'STOCK_COUNT':      return `Stock Count: ${d.warehouseName || '—'}`;
     case 'REPACKAGING':      return `Repackaging: ${d.productName || '—'}`;
@@ -129,10 +133,12 @@ function ApprovalCard({
           variant="outline"
           className={cn(
             'text-[9px] uppercase font-black px-2 h-5 tracking-tighter border-transparent',
-            typeStyle(item.transaction_type),
+            typeStyle(item.transaction_type, item.transaction_data?.reason),
           )}
         >
-          {item.transaction_type.replace(/_/g, ' ')}
+          {item.transaction_type === 'STOCK_ADJUSTMENT' && item.transaction_data?.reason === 'Physical Count' 
+            ? 'PHYSICAL COUNT' 
+            : item.transaction_type.replace(/_/g, ' ')}
         </Badge>
         <span className="text-[10px] font-mono text-muted-foreground/50">
           #{item.id.slice(-8)}
@@ -278,8 +284,9 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
       {type === 'STOCK_ADJUSTMENT' && (
         <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
           <Row label="Product" value={d.productName || d.name} />
-          <Row label="SKU" value={d.productSku || d.sku} />
-          <Row label="Warehouse" value={d.warehouseName} />
+          <Row label="Barcode" value={d.productBarcode || d.barcode || '—'} />
+          <Row label="Warehouse" value={d.warehouseName || d.warehouse || '—'} />
+          <Row label="Shelf" value={d.shelfName || d.shelf || '—'} />
           <Row label="Change (Qty)" value={`${Number(d.quantity) > 0 ? '+' : ''}${d.quantity}`} />
           <Row label="Previous Stock" value={d.currentStock} />
           <Row label="New Stock" value={d.currentStock != null ? Number(d.currentStock) + Number(d.quantity || 0) : '—'} />
@@ -419,6 +426,8 @@ function DetailView({
 
   const canAct = useMemo(() => {
     if (!item || !user || item.status !== 'Pending') return false;
+    const isAdmin = user.userType === 'Admin' || user.userType === 'Super Admin' || user.username === 'admin';
+    if (isAdmin) return true;
     const byId   = user.roleId   && String(user.roleId)   === String(item.currentStepRoleId);
     const byName = user.userType && String(user.userType) === String(item.currentStepRole);
     return !!(byId || byName);
@@ -435,7 +444,9 @@ function DetailView({
         )}
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-black tracking-tight truncate">
-            {item.transaction_type.replace(/_/g, ' ')}
+            {item.transaction_type === 'STOCK_ADJUSTMENT' && item.transaction_data?.reason === 'Physical Count' 
+              ? 'PHYSICAL COUNT' 
+              : item.transaction_type.replace(/_/g, ' ')}
           </h2>
           <p className="text-[10px] text-muted-foreground font-mono">ID: {item.id}</p>
         </div>
@@ -627,6 +638,8 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
 
   const canAction = (item: ApprovalItem) => {
     if (!user || item.status !== 'Pending') return false;
+    const isAdmin = user.userType === 'Admin' || user.userType === 'Super Admin' || user.username === 'admin';
+    if (isAdmin) return true;
     const byId   = user.roleId   && String(user.roleId)   === String(item.currentStepRoleId);
     const byName = user.userType && String(user.userType) === String(item.currentStepRole);
     return !!(byId || byName);
@@ -634,8 +647,20 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
 
   const filtered = useMemo(() => {
     let res = items;
-    if (selectedType !== 'ALL')
-      res = res.filter((i) => i.transaction_type === selectedType);
+    if (selectedType !== 'ALL') {
+      if (selectedType === 'STOCK_COUNT') {
+        res = res.filter((i) => 
+          i.transaction_type === 'STOCK_COUNT' || 
+          (i.transaction_type === 'STOCK_ADJUSTMENT' && i.transaction_data?.reason === 'Physical Count')
+        );
+      } else if (selectedType === 'STOCK_ADJUSTMENT') {
+        res = res.filter((i) => 
+          i.transaction_type === 'STOCK_ADJUSTMENT' && i.transaction_data?.reason !== 'Physical Count'
+        );
+      } else {
+        res = res.filter((i) => i.transaction_type === selectedType);
+      }
+    }
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       res = res.filter(

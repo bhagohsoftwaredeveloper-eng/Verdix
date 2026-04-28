@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,14 +15,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { getPriceLevels } from '../products/actions';
 import { getApiUrl } from '@/lib/api-config';
 
 interface AddCustomerDialogProps {
@@ -34,41 +26,16 @@ interface AddCustomerDialogProps {
 export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: AddCustomerDialogProps) {
   const [name, setName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
-  const [address, setAddress] = useState('');
-  const [priceLevelId, setPriceLevelId] = useState<string>('');
-  const [priceLevels, setPriceLevels] = useState<any[]>([]);
-  const [isLoadingLevels, setIsLoadingLevels] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (isOpen) {
-      const fetchLevels = async () => {
-        setIsLoadingLevels(true);
-        try {
-          const levels = await getPriceLevels();
-          setPriceLevels(levels);
-          // Auto-select default level if none selected
-          const defaultLevel = levels.find((l: any) => l.isDefault);
-          if (defaultLevel && !priceLevelId) {
-            setPriceLevelId(defaultLevel.id);
-          }
-        } catch (error) {
-          console.error('Error fetching price levels:', error);
-        } finally {
-          setIsLoadingLevels(false);
-        }
-      };
-      fetchLevels();
-    }
-  }, [isOpen]);
 
   const handleSave = async () => {
-    if (!name.trim() || !contactNumber.trim()) {
+    if (!name.trim()) {
       toast({
         variant: 'destructive',
         title: 'Validation Error',
-        description: 'Customer name and contact number are required.',
+        description: 'Customer name is required.',
       });
       return;
     }
@@ -79,10 +46,9 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
         customerId: 'CUST-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
         name,
         contactNumber,
-        address,
+        address: '', 
         active: true,
         paymentTerms: 'Due on receipt', // Default
-        priceLevelId: priceLevelId || null,
       };
 
       const response = await fetch(getApiUrl('/customers'), {
@@ -104,10 +70,7 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
         description: 'Customer added successfully.',
       });
 
-      onCustomerAdded(result.data); // data contains { id, name } usually, but we might want full object. 
-      // The API returns { id: customerId, name }. We should probably pass back the constructed object combined with ID if we want to select it immediately without re-fetching.
-      // Ideally onCustomerAdded triggers a refresh or selects the customer.
-      // Let's pass back the full object we sent + id.
+      // Pass back full object for immediate selection in POS
       onCustomerAdded({ ...newCustomer, id: newCustomer.customerId }); 
       
       onOpenChange(false);
@@ -127,8 +90,6 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
   const resetForm = () => {
     setName('');
     setContactNumber('');
-    setAddress('');
-    setPriceLevelId('');
   };
 
   return (
@@ -154,41 +115,13 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="contact">Contact Number</Label>
+            <Label htmlFor="contactNumber">Contact Number</Label>
             <Input
-              id="contact"
+              id="contactNumber"
               value={contactNumber}
               onChange={(e) => setContactNumber(e.target.value)}
               placeholder="e.g. 09123456789"
             />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="address">Address</Label>
-            <Textarea
-              id="address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Complete address"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="price-level">Default Price Level</Label>
-            <Select onValueChange={setPriceLevelId} value={priceLevelId}>
-              <SelectTrigger id="price-level">
-                <SelectValue placeholder="Select Price Level" />
-              </SelectTrigger>
-              <SelectContent>
-                {isLoadingLevels ? (
-                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                ) : (
-                  priceLevels.map((level) => (
-                    <SelectItem key={level.id} value={level.id}>
-                      {level.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
           </div>
         </div>
         <DialogFooter>

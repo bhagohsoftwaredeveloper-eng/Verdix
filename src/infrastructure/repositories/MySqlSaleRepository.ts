@@ -21,10 +21,14 @@ export class MySqlSaleRepository implements SaleRepository {
         si.notes,
         si.created_at as createdAt,
         si.updated_at as updatedAt,
-        pt.order_number as orderNumber
+        (
+          SELECT pt.order_number 
+          FROM sales_transactions st
+          JOIN pos_transactions pt ON st.id = pt.sale_id
+          WHERE st.reference = si.reference AND si.reference IS NOT NULL AND si.reference != ''
+          LIMIT 1
+        ) as orderNumber
       FROM sales_invoices si
-      LEFT JOIN sales_transactions st ON si.reference = st.reference AND si.reference IS NOT NULL AND si.reference != ''
-      LEFT JOIN pos_transactions pt ON st.id = pt.sale_id
       ORDER BY si.created_at DESC
     `;
 

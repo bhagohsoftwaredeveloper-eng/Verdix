@@ -27,6 +27,8 @@ import { format, subMinutes } from 'date-fns';
 import { AdminAuthDialog } from './admin-auth-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getApiUrl } from '@/lib/api-config';
+import { usePrinter } from '@/lib/use-printer';
+import { VoidSlipGenerator } from '@/lib/void-slip-generator';
 
 interface VoidSalesDialogProps {
   isOpen: boolean;
@@ -204,13 +206,26 @@ export function VoidSalesDialog({
   
   const [isVoiding, setIsVoiding] = useState(false);
   const [voidError, setVoidError] = useState('');
+  const { print } = usePrinter(posSettings?.printMode || 'browser', posSettings?.nativePrinterName);
+
+  const handlePrintVoid = async (saleData: any) => {
+      try {
+          if (!posSettings || posSettings.printMode === 'none') return;
+
+          const generator = new VoidSlipGenerator();
+          const buffer = generator.generateVoidSlip(saleData, posSettings);
+          
+          await print(buffer);
+      } catch (error) {
+          console.error('Error printing void slip:', error);
+      }
+  };
   
   const handleVoidTransaction = async () => {
       if (!selectedSale) return;
       
       setIsVoiding(true);
       setVoidError('');
-      console.log(`Voiding entire transaction ${selectedSale.id}, SO: ${selectedSale.orderNumber}...`);
       
       try {
           const response = await fetch(getApiUrl('/pos/void-transaction'), {
@@ -221,8 +236,13 @@ export function VoidSalesDialog({
           const result = await response.json();
           
           if (result.success) {
-              console.log('VoidSalesDialog: Transaction voided successfully');
-              onOpenChange(false);
+              // Print the void slip before closing
+              await handlePrintVoid(selectedSale);
+              
+              // Small delay to ensure print job is sent
+              setTimeout(() => {
+                  onOpenChange(false);
+              }, 1000);
           } else {
               setVoidError(result.error || 'Failed to void transaction');
           }

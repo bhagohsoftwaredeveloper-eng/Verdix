@@ -465,6 +465,27 @@ export async function addProduct(formData: ProductFormData) {
 
       await connection.query(sql, values_array);
 
+      // --- BATCH COSTING: Auto-create batch for initial stock ---
+      if (formData.stock && formData.stock > 0) {
+        try {
+          const batchId = generateBatchId();
+          await connection.query(`
+            INSERT INTO inventory_batches
+              (id, product_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type, notes)
+            VALUES (?, ?, CURDATE(), ?, ?, ?, ?, 'adjustment', 'Initial Stock')
+          `, [
+            batchId, 
+            productId, 
+            formData.stock, 
+            formData.stock, 
+            formData.cost || 0, 
+            formData.price || 0
+          ]);
+        } catch (batchErr) {
+          console.warn('[BatchCosting] Could not create batch for initial product stock:', batchErr);
+        }
+      }
+
       if (formData.shelfLocationIds && formData.shelfLocationIds.length > 0) {
         for (let i = 0; i < formData.shelfLocationIds.length; i++) {
           const shelfId = formData.shelfLocationIds[i];

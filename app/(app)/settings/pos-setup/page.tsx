@@ -67,6 +67,9 @@ interface PosSettings {
   requireShelfTransferApproval?: boolean;
   batchCostingRepackInherit?: boolean;
   batchCostingOversellBlock?: boolean;
+  enableOverallReadingAuth?: boolean;
+  overallReadingAuthUsername?: string | null;
+  overallReadingAuthPassword?: string | null;
 }
 
 export default function PosSetupPage() {
@@ -119,6 +122,9 @@ export default function PosSetupPage() {
     requireShelfTransferApproval: false,
     batchCostingRepackInherit: true,
     batchCostingOversellBlock: false,
+    enableOverallReadingAuth: false,
+    overallReadingAuthUsername: '',
+    overallReadingAuthPassword: '',
   });
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [isScanningPrinters, setIsScanningPrinters] = useState(false);
@@ -127,8 +133,6 @@ export default function PosSetupPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const { toast } = useToast();
-  const isFirstLoad = useRef(true);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isRefreshingRef = useRef(false);
 
   // Fetch POS settings on mount
@@ -245,23 +249,8 @@ export default function PosSetupPage() {
     }
   }, [settings]);
 
-  // Auto-save with 1.5s debounce whenever settings change
-  useEffect(() => {
-    // Skip on first load or when settings are being refreshed from server
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      return;
-    }
-    if (isRefreshingRef.current) return;
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    const snapshot = { ...settings };
-    debounceTimer.current = setTimeout(() => {
-      handleSaveSettings(snapshot);
-    }, 1500);
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [settings]);
+  // Removed: Auto-save with 1.5s debounce whenever settings change
+  // The user prefers manual saving to avoid unexpected behavior.
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1107,6 +1096,45 @@ export default function PosSetupPage() {
                       type="password"
                       value={settings.taxRatesAuthPassword || ''}
                       onChange={(e) => setSettings(prev => ({ ...prev, taxRatesAuthPassword: e.target.value }))}
+                      placeholder="e.g. 1234"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableOverallReadingAuth">Overall Reading Authentication</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Require credentials to view overall terminal reading
+                  </p>
+                </div>
+                <Switch
+                  id="enableOverallReadingAuth"
+                  checked={!!settings.enableOverallReadingAuth}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableOverallReadingAuth: checked }))}
+                />
+              </div>
+              {settings.enableOverallReadingAuth && (
+                <div className="grid grid-cols-2 gap-4 pl-4 border-l-2 border-muted">
+                  <div className="space-y-2">
+                    <Label htmlFor="overallReadingAuthUsername">Username</Label>
+                    <Input
+                      id="overallReadingAuthUsername"
+                      value={settings.overallReadingAuthUsername || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, overallReadingAuthUsername: e.target.value }))}
+                      placeholder="e.g. manager"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="overallReadingAuthPassword">Password</Label>
+                    <Input
+                      id="overallReadingAuthPassword"
+                      type="password"
+                      value={settings.overallReadingAuthPassword || ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, overallReadingAuthPassword: e.target.value }))}
                       placeholder="e.g. 1234"
                     />
                   </div>

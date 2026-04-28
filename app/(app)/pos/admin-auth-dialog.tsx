@@ -94,7 +94,14 @@ export function AdminAuthDialog({
         const user = result;
         const userType = user.userType || '';
         const permissions = user.permissions || [];
-        const hasPermission = userType === 'Admin' || permissions.includes('edit_price') || permissions.includes('super_admin');
+        const userTypeUpper = (userType || '').toUpperCase();
+        const hasPermission = userTypeUpper === 'ADMIN' || 
+                             userTypeUpper === 'SUPER_ADMIN' ||
+                             userTypeUpper === 'MANAGER' ||
+                             permissions.includes('manage_settings') || 
+                             permissions.includes('manage_users') ||
+                             permissions.includes('edit_price') || 
+                             permissions.includes('super_admin');
 
         if (hasPermission) {
           onSuccess();

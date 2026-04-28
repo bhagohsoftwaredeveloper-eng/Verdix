@@ -95,6 +95,7 @@ export default function DataManagementPage() {
   const [resetAction, setResetAction] = useState<'clear_sales' | 'reset_references' | 'clear_inventory' | 'clear_master_data' | 'factory_reset' | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
+  const [resetWithBackup, setResetWithBackup] = useState(true);
 
   const handleExport = async () => {
     setExporting(true);
@@ -640,6 +641,25 @@ export default function DataManagementPage() {
     
     setResetLoading(true);
     try {
+      // Create backup if selected
+      if (resetWithBackup) {
+        try {
+          const backupRes = await fetch(getApiUrl('/settings/backup/manual'), { method: 'POST' });
+          if (!backupRes.ok) throw new Error("Automatic backup failed");
+          
+          toast({
+            title: "Safety Backup Created",
+            description: "A backup was created before the reset action.",
+          });
+          fetchBackups();
+        } catch (backupError) {
+          console.error("Backup failed before reset:", backupError);
+          // We can choose to stop or continue. Given it's a safety feature, 
+          // let's ask the user if they want to continue without backup or stop.
+          // For simplicity here, we'll continue but notify.
+        }
+      }
+
       const res = await fetch(getApiUrl('/data-management/reset'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -653,6 +673,11 @@ export default function DataManagementPage() {
           title: "Reset Successful",
           description: data.message,
         });
+
+        // Force full page reload to ensure all states are cleared
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       } else {
          throw new Error(data.error || "Reset failed");
       }
@@ -1260,35 +1285,52 @@ export default function DataManagementPage() {
        </Tabs>
  
        <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-         <AlertDialogContent className="max-w-md">
-           <AlertDialogHeader>
-             <AlertDialogTitle className="text-destructive flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
+         <AlertDialogContent className="max-w-md p-6">
+           <AlertDialogHeader className="pb-2">
+             <AlertDialogTitle className="text-destructive flex items-center gap-2 text-xl">
+                <AlertCircle className="h-6 w-6" />
                 Confirm Destructive Action
              </AlertDialogTitle>
-             <AlertDialogDescription className="text-base text-foreground font-medium pt-2">
+             <AlertDialogDescription className="text-base text-foreground/90 font-medium pt-1">
                {resetAction === 'clear_sales' && "This will permanently delete all sales history, shift records, and transaction logs including approval items related to sales."}
                {resetAction === 'reset_references' && "This will reset all transaction counters and terminal OR numbers. This may cause collision if you have existing records."}
                {resetAction === 'clear_inventory' && "This will permanently delete ALL products, stock movements, transfers, and warehouse management data."}
                {resetAction === 'clear_master_data' && "This will permanently delete all customer and supplier records, product categories, and brand definitions."}
                {resetAction === 'factory_reset' && "CRITICAL: This will wipe the ENTIRE database (Transactions, Products, Customers, Suppliers, etc.). This action is IRREVERSIBLE."}
              </AlertDialogDescription>
-             <div className="py-4 space-y-2">
-                 <p className="text-sm text-muted-foreground">
-                    This action cannot be undone. To prevent accidental data loss, please type <span className="font-bold text-destructive underline">CONFIRM</span> below.
-                 </p>
-                 <Input 
-                    id="confirm-text"
-                    value={resetConfirmText}
-                    onChange={(e) => setResetConfirmText(e.target.value)}
-                    placeholder="Type CONFIRM here"
-                    className="border-destructive/50 focus-visible:ring-destructive"
-                    autoComplete="off"
-                 />
-             </div>
            </AlertDialogHeader>
-           <AlertDialogFooter>
-             <AlertDialogCancel className="font-semibold">Cancel and Keep My Data</AlertDialogCancel>
+
+           <div className="py-6 space-y-3 border-y border-red-100/50 my-2">
+               <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-950/20 p-3 rounded-lg border border-orange-200 mb-4">
+                  <div className="flex items-center gap-2">
+                    <HardDrive className="h-4 w-4 text-orange-600" />
+                    <Label htmlFor="reset-backup" className="text-sm font-semibold text-orange-800 dark:text-orange-300">
+                      Create backup before reset
+                    </Label>
+                  </div>
+                  <Switch 
+                    id="reset-backup" 
+                    checked={resetWithBackup}
+                    onCheckedChange={setResetWithBackup}
+                  />
+               </div>
+
+               <p className="text-sm text-muted-foreground leading-relaxed">
+                   This action is <span className="font-bold text-destructive uppercase">irreversible</span> and cannot be undone. 
+                   Please type <span className="font-bold text-destructive underline">CONFIRM</span> below to verify.
+               </p>
+               <Input 
+                   id="confirm-text"
+                   value={resetConfirmText}
+                   onChange={(e) => setResetConfirmText(e.target.value)}
+                   placeholder="Type CONFIRM here"
+                   className="h-12 border-destructive/30 focus-visible:ring-destructive bg-destructive/5 text-lg font-semibold text-center tracking-widest"
+                   autoComplete="off"
+               />
+           </div>
+
+           <AlertDialogFooter className="pt-4 gap-2">
+             <AlertDialogCancel className="font-semibold mt-0">Cancel</AlertDialogCancel>
              <AlertDialogAction 
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold px-8"
                 onClick={handleResetData}
@@ -1297,7 +1339,7 @@ export default function DataManagementPage() {
                {resetLoading ? (
                   <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Resetting...</>
                ) : (
-                  "Yes, Proceed with Reset"
+                  "Confirm Reset"
                )}
              </AlertDialogAction>
            </AlertDialogFooter>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/mysql';
+import { addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 
 export async function POST(request: NextRequest) {
   try {
@@ -86,25 +87,32 @@ export async function POST(request: NextRequest) {
           -(item.quantity * item.price)
         ]);
 
-        // Stock Increment Logic
-        // Fetch current stock
-        const [prodResult]: any = await connection.query('SELECT stock, name FROM products WHERE id = ?', [item.productId]);
-        if (prodResult && prodResult.length > 0) {
-            const currentStock = prodResult[0].stock;
-            const newStock = currentStock + item.quantity; // Increment stock on return
-            
-            // Record movement
-            const movementId = `MOV-${Date.now()}-${i}-RTN`;
-            await connection.query(`
-                INSERT INTO stock_movements (
-                    id, product_id, product_name, movement_type, 
-                    quantity_change, previous_stock, new_stock, 
-                    reference_id, reference_type, notes, created_at, updated_at
-                ) VALUES (?, ?, ?, 'return', ?, ?, ?, ?, 'return', ?, NOW(), NOW())
-            `, [movementId, item.productId, prodResult[0].name, item.quantity, currentStock, newStock, posTransId, `Return for Sale: ${saleId}`]);
+        // --- Recursive Inventory Addition (Full Ancestor + Descendant Hierarchy) ---
+        const [soldProdResult]: any = await connection.query(
+          'SELECT id, parent_id, unit_of_measure, name, stock FROM products WHERE id = ?',
+          [item.productId]
+        );
+        
+        if (soldProdResult && soldProdResult.length > 0) {
+          const soldProd = soldProdResult[0];
 
-            // Update product
-            await connection.query('UPDATE products SET stock = ? WHERE id = ?', [newStock, item.productId]);
+          // Walk ALL the way up the ancestor chain
+          const { rootId, factorToRoot } = await findUltimateRoot(soldProd.id, connection);
+
+          if (factorToRoot > 1 || rootId !== soldProd.id) {
+            // Returned a child - convert to root units and add from root downward
+            const rootQty = Number(item.quantity) / factorToRoot;
+            await addFamilyStock(
+              rootId, rootQty, posTransId, 'return',
+              `Return for Sale: ${saleId} (returned: ${soldProd.name})`, connection
+            );
+          } else {
+            // Returned a root - add and propagate
+            await addFamilyStock(
+              soldProd.id, Number(item.quantity), posTransId, 'return',
+              `Return for Sale: ${saleId}`, connection
+            );
+          }
         }
       }
 

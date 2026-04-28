@@ -132,8 +132,8 @@ export class ReceiptGenerator {
 
         // ─── ITEMS ────────────────────────────────────────────────────────
         items.forEach(item => {
-            const uom     = (item as any).unitOfMeasure ? ` ${(item as any).unitOfMeasure}` : '';
-            const qtyText = `${item.quantity}${uom}`;
+            const uomAbbr = this.abbreviateUOM((item as any).unitOfMeasure);
+            const qtyText = `${item.quantity}${uomAbbr ? ' ' + uomAbbr : ''}`;
             
             const qty     = qtyText.length > QTY_W ? qtyText.substring(0, QTY_W) : qtyText.padEnd(QTY_W, pad);
 
@@ -491,6 +491,39 @@ export class ReceiptGenerator {
         enc.cut();
 
         return enc.encode();
+    }
+
+    private abbreviateUOM(uom?: string): string {
+        if (!uom) return '';
+        const map: Record<string, string> = {
+            'Pieces': 'pcs',
+            'Piece': 'pc',
+            'Kilograms': 'kg',
+            'Kilogram': 'kg',
+            'Kilos': 'kg',
+            'Kilo': 'kg',
+            'Grams': 'g',
+            'Gram': 'g',
+            'Meters': 'm',
+            'Meter': 'm',
+            'Liters': 'L',
+            'Liter': 'L',
+            'Boxes': 'bx',
+            'Box': 'bx',
+            'Case': 'cs',
+            'Cases': 'cs',
+            'Pack': 'pk',
+            'Packs': 'pk',
+            'Bottle': 'btl',
+            'Bottles': 'btl',
+            'Can': 'cn',
+            'Cans': 'cn',
+            'Milliliters': 'ml',
+            'Milliliter': 'ml'
+        };
+        const trimmed = uom.trim();
+        const upper = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+        return map[upper] || trimmed.toLowerCase();
     }
 
     /** Format number as currency string */
