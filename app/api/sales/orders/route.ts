@@ -252,6 +252,31 @@ export async function POST(request: NextRequest) {
       note,
       items
     } = body;
+    
+    // Basic validation
+    if (!customer || !customer.id) {
+        return NextResponse.json(
+            { success: false, error: 'Customer is required' },
+            { status: 400 }
+        );
+    }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return NextResponse.json(
+            { success: false, error: 'At least one item is required' },
+            { status: 400 }
+        );
+    }
+
+    // Validate items have products
+    for (const item of items) {
+        if (!item.product || !item.product.id) {
+            return NextResponse.json(
+                { success: false, error: `Product information missing for one or more items` },
+                { status: 400 }
+            );
+        }
+    }
 
     // Generate order ID
     const orderId = `SO-${Date.now()}`;
@@ -365,7 +390,7 @@ export async function POST(request: NextRequest) {
         );
     }
     return NextResponse.json(
-      { success: false, error: 'Failed to create sales order' },
+      { success: false, error: error.message || 'Failed to create sales order' },
       { status: 500 }
     );
   }

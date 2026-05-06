@@ -123,7 +123,7 @@ export function TenderDialog({
     const pointsInputRef = useRef<HTMLInputElement>(null);
 
     const pointsMethod = useMemo(() => {
-        return paymentMethods.find(pm => pm.name.toUpperCase() === 'POINTS');
+        return paymentMethods.find(pm => pm.name.toLowerCase().includes('points'));
     }, [paymentMethods]);
 
     const pointsRate = useMemo(() => {
@@ -153,31 +153,18 @@ export function TenderDialog({
     const isCashPayment = selectedMethod?.toUpperCase() === 'CASH';
     const isChargePayment = selectedMethod?.toUpperCase() === 'CHARGE';
 
-    // UX: Reset points when opening or switching methods
+    // UX: Reset points when opening
     // Modified: Use a ref to track what triggered the reset to avoid resetting when totalDue changes while open
     const lastOpenRef = useRef(false);
-    const lastMethodRef = useRef(selectedMethod);
     useEffect(() => {
         const justOpened = isOpen && !lastOpenRef.current;
-        const methodChanged = selectedMethod !== lastMethodRef.current;
 
-        if (justOpened || methodChanged) {
-            if (selectedMethod?.toUpperCase() === 'POINTS') {
-                setPointsToRedeemInput('');
-                setAmountTendered(totalDue.toFixed(2));
-                
-                // Auto-focus points input after a short delay
-                setTimeout(() => {
-                    pointsInputRef.current?.focus();
-                }, 100);
-            } else {
-                setAmountTendered(totalDue.toFixed(2));
-                setPointsToRedeemInput('');
-            }
+        if (justOpened) {
+            setAmountTendered(totalDue.toFixed(2));
+            setPointsToRedeemInput('');
         }
         lastOpenRef.current = isOpen;
-        lastMethodRef.current = selectedMethod;
-    }, [isOpen, totalDue, selectedMethod]);
+    }, [isOpen, totalDue]);
 
     const customerPoints = Number((customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0);
     const pointsToRedeemValueRaw = useMemo(() => parseFloat(pointsToRedeemInput) || 0, [pointsToRedeemInput]);
@@ -198,14 +185,12 @@ export function TenderDialog({
     // Modified: Only auto-sync if amountTendered is empty or was previously exactly equal to the old balance
     const lastBalanceRef = useRef(balanceRemaining);
     useEffect(() => {
-        if (selectedMethod?.toUpperCase() === 'POINTS') {
-            const isDefaultAmount = amountTendered === '' || parseFloat(amountTendered) === lastBalanceRef.current;
-            if (isDefaultAmount) {
-                setAmountTendered(balanceRemaining.toFixed(2));
-            }
+        const isDefaultAmount = amountTendered === '' || parseFloat(amountTendered) === lastBalanceRef.current;
+        if (isDefaultAmount) {
+            setAmountTendered(balanceRemaining.toFixed(2));
         }
         lastBalanceRef.current = balanceRemaining;
-    }, [balanceRemaining, selectedMethod, amountTendered]);
+    }, [balanceRemaining, amountTendered]);
 
     const change = useMemo(() => {
         return Math.max(0, amountTenderedNum - balanceRemaining);
@@ -321,10 +306,10 @@ export function TenderDialog({
 
         const finalAmountTendered = isCashPayment ? amountTenderedNum : balanceRemaining;
 
-        if (isCashPayment && finalAmountTendered < totalDue) {
+        if (isCashPayment && finalAmountTendered < balanceRemaining) {
              toast({
                 title: "Insufficient Amount",
-                description: "Amount tendered must be greater than or equal to total due.",
+                description: "Amount tendered must be greater than or equal to balance due.",
                 variant: 'destructive'
             });
             return;
@@ -340,7 +325,6 @@ export function TenderDialog({
         }
 
         setIsProcessing(true);
-        // toast({ title: "Processing...", description: "Sending transaction to server." }); 
 
         try {
             const response = await fetch(getApiUrl('/pos/checkout'), {
@@ -362,9 +346,9 @@ export function TenderDialog({
                         }
                         return acc;
                     }, 0),
-                    amountTendered: selectedMethod === 'POINTS' ? (pointsToRedeemValue + amountTenderedNum) : finalAmountTendered,
-                    change: selectedMethod === 'POINTS' ? (amountTenderedNum - balanceRemaining) : (finalAmountTendered - totalDue),
-                    paymentMethod: selectedMethod === 'POINTS' && balanceRemaining > 0 ? 'POINTS + CASH' : selectedMethod, 
+                    amountTendered: pointsToRedeemValue > 0 ? (pointsToRedeemValue + finalAmountTendered) : finalAmountTendered,
+                    change: isCashPayment ? (amountTenderedNum - balanceRemaining) : 0,
+                    paymentMethod: pointsToRedeemValue > 0 && balanceRemaining > 0 ? `POINTS + ${selectedMethod}` : (pointsToRedeemValue > 0 && balanceRemaining === 0 ? 'POINTS' : selectedMethod), 
                     items: items.map(item => ({
                         id: item.id,
                         name: item.name,
@@ -653,7 +637,7 @@ export function TenderDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg overflow-hidden flex flex-col p-0" onInteractOutside={(e) => e.preventDefault()} onKeyDown={handleKeyDown}>
+            <DialogContent className={`${(view === 'print_prompt' || view === 'receipt') ? 'sm:max-w-3xl' : 'sm:max-w-lg'} overflow-hidden flex flex-col p-0 transition-all duration-300`} onInteractOutside={(e) => e.preventDefault()} onKeyDown={handleKeyDown}>
                 {view === 'receipt' && completedSale ? (
                     <ReceiptActionView saleDetails={completedSale} onNewSale={handleNewSale} onPrint={handleSmartPrint} settings={settings} />
                 ) : view === 'change' && completedSale ? (
@@ -672,32 +656,53 @@ export function TenderDialog({
                         </div>
                     </div>
                 ) : view === 'print_prompt' && completedSale ? (
-                    <div className="flex flex-col items-center justify-center p-6 space-y-8 animate-in zoom-in-95 duration-200">
-                        <div className="text-center space-y-2">
-                            <h2 className="text-2xl font-bold uppercase tracking-widest text-muted-foreground">Print Receipt?</h2>
-                            <p className="text-muted-foreground">Would you like to print a receipt for this transaction?</p>
+                    <div className="flex flex-col md:flex-row h-[70vh] md:h-[500px] animate-in zoom-in-95 duration-200">
+                        {/* Receipt Preview Area */}
+                        <div className="flex-1 bg-gray-100/50 p-4 overflow-y-auto border-b md:border-b-0 md:border-r border-dashed border-gray-300">
+                            <div className="flex justify-center">
+                                <div className="bg-white shadow-md transform scale-90 origin-top">
+                                    <ReceiptView saleDetails={completedSale} settings={settings} />
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 w-full">
-                            <Button 
-                                variant="outline" 
-                                size="lg" 
-                                className="h-16 text-xl font-bold" 
-                                onClick={() => handleConfirmPrint(false)}
-                                ref={noButtonRef}
-                            >
-                                No
-                            </Button>
-                            <Button 
-                                size="lg" 
-                                className="h-16 text-xl font-bold" 
-                                onClick={() => handleConfirmPrint(true)}
-                                ref={yesButtonRef}
-                                autoFocus
-                            >
-                                <Printer className="mr-2 h-6 w-6" />
-                                Yes
-                            </Button>
+
+                        {/* Prompt & Actions Area */}
+                        <div className="w-full md:w-72 p-6 flex flex-col justify-center items-center text-center space-y-8 bg-white">
+                            <div className="space-y-3">
+                                <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-2">
+                                    <Printer className="h-8 w-8 text-primary" />
+                                </div>
+                                <h2 className="text-2xl font-bold uppercase tracking-widest text-foreground">Print Receipt?</h2>
+                                <p className="text-muted-foreground text-sm leading-relaxed px-4">
+                                    Would you like to print a receipt for this transaction?
+                                </p>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-1 gap-4 w-full px-2">
+                                <Button 
+                                    variant="outline" 
+                                    size="lg" 
+                                    className="h-16 text-xl font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors" 
+                                    onClick={() => handleConfirmPrint(false)}
+                                    ref={noButtonRef}
+                                >
+                                    No
+                                </Button>
+                                <Button 
+                                    size="lg" 
+                                    className="h-16 text-xl font-bold shadow-lg shadow-primary/20 transition-all active:scale-95" 
+                                    onClick={() => handleConfirmPrint(true)}
+                                    ref={yesButtonRef}
+                                    autoFocus
+                                >
+                                    <Printer className="mr-2 h-6 w-6" />
+                                    Yes
+                                </Button>
+                            </div>
+
+                            <div className="text-[10px] text-muted-foreground uppercase tracking-tighter">
+                                Use Arrow Keys to navigate • Press Y for Yes • Press N for No
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -738,79 +743,53 @@ export function TenderDialog({
                             </div>
                             <div className="h-4" /> {/* Spacer */}
 
-                            {/* Manual Points Input field when method is POINTS */}
-                            {selectedMethod === 'POINTS' && (
+                            {/* Loyalty Points Redemption (Always available for valid customers with points) */}
+                            {customer && (customer as any).id !== 'walk-in' && !(customer as any)?.isExpired && customerPoints > 0 && (
                                 <div className="space-y-4">
-                                    {(!customer || (customer as any).id === 'walk-in') ? (
-                                        <div className="bg-purple-50 p-6 rounded-xl border-2 border-dashed border-purple-200 flex flex-col items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <div className="p-3 bg-white rounded-full shadow-sm text-purple-600">
-                                                <User className="h-6 w-6" />
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="font-bold text-purple-900">Points Redemption requires a Customer</p>
-                                                <p className="text-sm text-purple-600/70">Please select a customer to see available points.</p>
+                                    <div className="space-y-3 bg-purple-50 p-4 rounded-xl border border-purple-200 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="flex justify-between items-center px-1">
+                                            <Label htmlFor="manualPoints" className="text-purple-900 font-bold text-base flex items-center gap-2">
+                                                <Star className="h-4 w-4 text-purple-600 fill-purple-600" />
+                                                Redeem Points
+                                            </Label>
+                                            <span className="text-[10px] font-bold text-purple-600 bg-white px-2 py-0.5 rounded-full border border-purple-100 shadow-sm">
+                                                Available: {customerPoints.toLocaleString()} (₱{customerPoints.toFixed(2)})
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <Input
+                                                    id="manualPoints"
+                                                    ref={pointsInputRef}
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={pointsToRedeemInput}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                            setPointsToRedeemInput(val);
+                                                        }
+                                                    }}
+                                                    placeholder="0"
+                                                    className="h-12 text-xl font-bold border-purple-300 focus-visible:ring-purple-500 bg-white pl-4"
+                                                />
                                             </div>
                                             <Button 
-                                                onClick={onTriggerCustomerSelection}
-                                                className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-8 shadow-lg shadow-purple-200"
+                                                variant="secondary"
+                                                className="bg-purple-600 text-white hover:bg-purple-700 h-12 px-6 font-bold shadow-md shadow-purple-100 transition-all active:scale-95"
+                                                onClick={() => {
+                                                    const maxPossibleValue = Math.min(totalDue, customerPoints);
+                                                    setPointsToRedeemInput(maxPossibleValue.toFixed(2));
+                                                }}
                                             >
-                                                Select Customer
+                                                Redeem All
                                             </Button>
                                         </div>
-                                    ) : (customer as any)?.isExpired ? (
-                                        <Alert className="bg-red-50 border-red-200 text-red-900 border-2">
-                                            <AlertCircle className="h-5 w-5 text-red-600" />
-                                            <AlertTitle className="font-bold">Loyalty Card Expired</AlertTitle>
-                                            <AlertDescription className="font-medium text-red-700">
-                                                Points cannot be redeemed because this customer's loyalty card is expired.
-                                            </AlertDescription>
-                                        </Alert>
-                                    ) : (
-                                        <div className="space-y-3 bg-purple-50 p-4 rounded-xl border border-purple-200 animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <div className="flex justify-between items-center px-1">
-                                                <Label htmlFor="manualPoints" className="text-purple-900 font-bold text-base flex items-center gap-2">
-                                                    <Star className="h-4 w-4 text-purple-600 fill-purple-600" />
-                                                    Points Value to Redeem
-                                                </Label>
-                                                <span className="text-[10px] font-bold text-purple-600 bg-white px-2 py-0.5 rounded-full border border-purple-100 shadow-sm">
-                                                    Available: {customerPoints.toLocaleString()} (₱{customerPoints.toFixed(2)})
-                                                </span>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <div className="relative flex-1">
-                                                    <Input
-                                                        id="manualPoints"
-                                                        ref={pointsInputRef}
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        value={pointsToRedeemInput}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                                setPointsToRedeemInput(val);
-                                                            }
-                                                        }}
-                                                        placeholder="0"
-                                                        className="h-12 text-xl font-bold border-purple-300 focus-visible:ring-purple-500 bg-white pl-4"
-                                                    />
-                                                </div>
-                                                <Button 
-                                                    variant="secondary"
-                                                    className="bg-purple-600 text-white hover:bg-purple-700 h-12 px-6 font-bold shadow-md shadow-purple-100 transition-all active:scale-95"
-                                                    onClick={() => {
-                                                        const maxPossibleValue = Math.min(totalDue, customerPoints);
-                                                        setPointsToRedeemInput(maxPossibleValue.toFixed(2));
-                                                    }}
-                                                >
-                                                    Redeem All
-                                                </Button>
-                                            </div>
-                                            <p className="text-[10px] text-purple-600 font-bold px-1 flex items-center gap-1">
-                                                <Info className="h-3 w-3" />
-                                                1 Point = ₱1.00 (Strict 1:1)
-                                            </p>
-                                        </div>
-                                    )}
+                                        <p className="text-[10px] text-purple-600 font-bold px-1 flex items-center gap-1">
+                                            <Info className="h-3 w-3" />
+                                            1 Point = ₱1.00 (Strict 1:1)
+                                        </p>
+                                    </div>
                                 </div>
                             )}
 

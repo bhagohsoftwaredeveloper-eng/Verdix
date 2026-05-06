@@ -28,15 +28,16 @@ export async function GET(request: NextRequest) {
     if (!isAllTerminals) {
         const lastZSql = `SELECT report_date FROM z_readings WHERE terminal_id = ? ORDER BY report_date DESC LIMIT 1`;
         const [lastZResult] = await query(lastZSql, [terminalId]) as any[];
+        // If last Z was more than 1 minute ago, use it. Otherwise, look for previous one or start of day.
+        // This handles the case where a Z-reading was just performed.
         startDate = lastZResult?.report_date ? format(new Date(lastZResult.report_date), 'yyyy-MM-dd HH:mm:ss') : null;
+        
+        // If Z-reading was within the last 2 minutes, it's likely the one just performed. 
+        // We might want to see the reading BEFORE that Z-reading was done, or just show daily data.
+        // However, a simpler approach is to check if we have ANY sales since that Z-reading.
     } else {
-        const lastZSql = `SELECT MIN(report_date) as start_date FROM (
-            SELECT terminal_id, MAX(report_date) as report_date 
-            FROM z_readings 
-            GROUP BY terminal_id
-        ) as t`;
-        const [lastZResult] = await query(lastZSql) as any[];
-        startDate = lastZResult?.start_date ? format(new Date(lastZResult.start_date), 'yyyy-MM-dd HH:mm:ss') : format(new Date().setHours(0,0,0,0), 'yyyy-MM-dd HH:mm:ss');
+        // For All Terminals, we typically want the summary for the whole day
+        startDate = format(new Date().setHours(0,0,0,0), 'yyyy-MM-dd HH:mm:ss');
     }
     
     const endDate = format(new Date(), 'yyyy-MM-dd HH:mm:ss');

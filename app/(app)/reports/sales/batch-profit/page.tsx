@@ -43,6 +43,8 @@ interface BatchAnalysisRecord {
   productId: string;
   productName: string;
   sku: string;
+  barcode: string;
+  category: string;
   batchId: string;
   batchReceivedDate: string | null;
   poReference: string | null;
@@ -120,7 +122,8 @@ export default function BatchProfitPage() {
     return (
       record.productName?.toLowerCase().includes(search) ||
       record.sku?.toLowerCase().includes(search) ||
-      record.batchId?.toLowerCase().includes(search) ||
+      record.barcode?.toLowerCase().includes(search) ||
+      record.category?.toLowerCase().includes(search) ||
       record.saleReference?.toLowerCase().includes(search)
     );
   });
@@ -356,7 +359,7 @@ export default function BatchProfitPage() {
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead className="py-3 text-xs">Date & Ref</TableHead>
-                  <TableHead className="py-3 text-xs">Product / SKU</TableHead>
+                  <TableHead className="py-3 text-xs">Product / Barcode</TableHead>
                   <TableHead className="py-3 text-xs">Source Batch</TableHead>
                   <TableHead className="py-3 text-right text-xs">Qty</TableHead>
                   <TableHead className="py-3 text-right text-xs">Unit Cost (B)</TableHead>
@@ -376,7 +379,7 @@ export default function BatchProfitPage() {
                       </TableCell>
                       <TableCell className="py-2">
                         <div className="font-medium text-amber-900">{r.productName}</div>
-                        <div className="text-[10px] font-mono text-muted-foreground">{r.sku}</div>
+                        <div className="text-[10px] font-mono text-muted-foreground">{r.barcode || '-'}</div>
                       </TableCell>
                       <TableCell className="py-2">
                         {r.batchId === 'fallback' ? (

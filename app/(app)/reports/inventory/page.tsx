@@ -33,6 +33,7 @@ interface Product {
   id: string;
   name: string;
   sku: string;
+  barcode: string;
   category: string;
   brand: string;
   stock: number;
@@ -216,7 +217,7 @@ export default function InventoryReportPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[300px]">Product Name</TableHead>
-                    <TableHead>SKU</TableHead>
+                    <TableHead>Barcode</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Price</TableHead>
@@ -246,7 +247,7 @@ export default function InventoryReportPage() {
                                 <Badge variant="destructive" className="ml-2 print:hidden">Low Stock</Badge>
                             )}
                         </TableCell>
-                        <TableCell>{product.sku}</TableCell>
+                        <TableCell>{product.barcode || '-'}</TableCell>
                         <TableCell>{product.category}</TableCell>
                         <TableCell className="text-right">{formatCurrency(product.cost)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>

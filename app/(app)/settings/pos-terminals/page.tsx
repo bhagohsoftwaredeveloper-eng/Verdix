@@ -56,10 +56,12 @@ export default function PosTerminalsPage() {
   const [terminalToDelete, setTerminalToDelete] = useState<{ id: string; description: string } | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [localIp, setLocalIp] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchTerminals();
+    fetchWarehouses();
     const termId = localStorage.getItem('pos_terminal_id');
     setCurrentTerminalId(termId);
 
@@ -96,6 +98,18 @@ export default function PosTerminalsPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchWarehouses = async () => {
+    try {
+      const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
+      const result = await response.json();
+      if (result.success) {
+        setWarehouses(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching warehouses:', error);
     }
   };
 
@@ -299,7 +313,9 @@ export default function PosTerminalsPage() {
                          <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight mb-1 flex items-center gap-1">
                            <Plus className="h-2 w-2" /> Inventory Location
                          </span>
-                         <span className="text-sm font-medium">{terminal.inventoryLocation || 'Main Store'}</span>
+                         <span className="text-sm font-medium">
+                            {warehouses.find(w => w.id === terminal.inventoryLocation)?.name || terminal.inventoryLocation || 'Main Store'}
+                         </span>
                       </div>
                     </div>
                     

@@ -184,8 +184,8 @@ export function ReceivePurchaseOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+    <DialogContent className="sm:max-w-none max-w-full w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none m-0 shadow-none">
+      <DialogHeader className="px-6 py-4 border-b bg-background shrink-0">
           <DialogTitle>Receive Purchase Order #{order.referenceNumber || order.id.substring(0, 8).toUpperCase()}</DialogTitle>
           <DialogDescription asChild>
             <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -211,7 +211,8 @@ export function ReceivePurchaseOrderDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-2">
+        <div className="flex-1 overflow-auto p-6">
+          <div className="py-2">
           <TooltipProvider>
           <Table>
             <TableHeader>
@@ -330,18 +331,19 @@ export function ReceivePurchaseOrderDialog({
             </TableBody>
           </Table>
           </TooltipProvider>
+          </div>
+
+          {Object.values(badItems).some(item => item.quantity > 0) && (
+            <div className="my-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <p className="text-xs font-medium">
+                You have marked items as bad. A "Bad Order" record will be automatically created for these items.
+              </p>
+            </div>
+          )}
         </div>
 
-        {Object.values(badItems).some(item => item.quantity > 0) && (
-          <div className="mx-1 my-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <p className="text-xs font-medium">
-              You have marked items as bad. A "Bad Order" record will be automatically created for these items.
-            </p>
-          </div>
-        )}
-
-        <DialogFooter className="mt-4">
+        <DialogFooter className="px-6 py-4 border-t bg-muted/20 shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>

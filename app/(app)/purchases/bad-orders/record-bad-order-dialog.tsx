@@ -68,6 +68,8 @@ const badOrderSchema = z.object({
   reportedBy: z.string().min(1, 'Reported by is required'),
   supplierId: z.string().optional().nullable(),
   supplierName: z.string().optional().nullable(),
+  warehouseId: z.string().optional().nullable(),
+  shelfId: z.string().optional().nullable(),
   notes: z.string().optional(),
   items: z.array(badOrderItemSchema).min(1, 'At least one item is required'),
 });
@@ -313,6 +315,8 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
   const { toast } = useToast();
 
   const { suppliers } = useSuppliers();
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [shelfLocations, setShelfLocations] = useState<any[]>([]);
 
   const form = useForm<BadOrderFormValues>({
     resolver: zodResolver(badOrderSchema),
@@ -333,11 +337,25 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
   useEffect(() => {
     if (open) {
       loadPosSettings();
+      loadLocations();
       if (user?.email && !form.getValues('reportedBy')) {
         form.setValue('reportedBy', user.email);
       }
     }
   }, [open, user, form]);
+
+  const loadLocations = async () => {
+    try {
+      const [whRes, slRes] = await Promise.all([
+        fetch(getApiUrl('/warehouses')).then(res => res.json()),
+        fetch(getApiUrl('/shelf-locations')).then(res => res.json())
+      ]);
+      if (whRes.success) setWarehouses(whRes.data || []);
+      if (slRes.success) setShelfLocations(slRes.data || []);
+    } catch (error) {
+      console.error('Failed to load locations:', error);
+    }
+  };
 
   const loadPosSettings = async () => {
     try {
@@ -434,6 +452,11 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
           reportDate: new Date().toISOString(),
           items: formattedItems,
           notes: values.notes,
+          totalAffectedValue: total,
+          warehouseId: values.warehouseId,
+          warehouseName: warehouses.find(w => w.id === values.warehouseId)?.name,
+          shelfId: values.shelfId,
+          shelfName: shelfLocations.find(s => s.id === values.shelfId)?.name,
         }),
       });
 
@@ -542,7 +565,61 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
                           )}
                       />
                   </div>
-                  <div className="col-span-2 flex items-center justify-end pr-4 text-muted-foreground text-sm">
+                  <div className="col-span-1 space-y-3">
+                      <FormField
+                          control={form.control}
+                          name="warehouseId"
+                          render={({ field }) => (
+                          <FormItem className="space-y-1">
+                              <div className="h-5 flex items-center">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
+                              </div>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                        <SelectValue placeholder="Select warehouse" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      {warehouses.map((w) => (
+                                          <SelectItem key={w.id} value={w.id}>
+                                              {w.name}
+                                          </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                          </FormItem>
+                          )}
+                      />
+                  </div>
+                  <div className="col-span-1 space-y-3">
+                      <FormField
+                          control={form.control}
+                          name="shelfId"
+                          render={({ field }) => (
+                          <FormItem className="space-y-1">
+                              <div className="h-5 flex items-center">
+                                <FormLabel className="text-xs font-semibold text-muted-foreground">Shelf / Area</FormLabel>
+                              </div>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                        <SelectValue placeholder="Select shelf" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      {shelfLocations.map((s) => (
+                                          <SelectItem key={s.id} value={s.id}>
+                                              {s.name}
+                                          </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                          </FormItem>
+                          )}
+                      />
+                  </div>
+                  <div className="col-span-4 flex items-center justify-end pr-4 text-muted-foreground text-sm">
                       <div className="bg-amber-100 text-amber-800 px-3 py-1.5 rounded-md flex items-center gap-2 border border-amber-200">
                           <AlertTriangle className="h-4 w-4" />
                           Items recorded here will be deducted from active inventory.

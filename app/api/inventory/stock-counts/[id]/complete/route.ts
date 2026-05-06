@@ -22,8 +22,16 @@ export async function POST(
 
     if (isApprovalRequired) {
       // Fetch some details for enrichment
-      const countRes: any = await query('SELECT name FROM stock_counts WHERE id = ?', [id]);
+      const countRes: any = await query(`
+        SELECT sc.name, w.name as warehouseName, sl.name as shelfName
+        FROM stock_counts sc
+        LEFT JOIN warehouses w ON sc.warehouse_id = w.id
+        LEFT JOIN shelf_locations sl ON sc.shelf_location_id = sl.id
+        WHERE sc.id = ?
+      `, [id]);
       const countName = countRes[0]?.name || 'Unknown Count';
+      const warehouseName = countRes[0]?.warehouseName || 'All Warehouses';
+      const shelfName = countRes[0]?.shelfName || 'All Shelves';
 
       // Fetch items with variances for enrichment
       const itemsSql = `
@@ -37,6 +45,8 @@ export async function POST(
       const approvalData = {
         stockCountId: id,
         name: countName,
+        warehouseName,
+        shelfName,
         items: varianceItems,
         completedBy: completedBy || 'system'
       };

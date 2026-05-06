@@ -186,27 +186,55 @@
 }
 
 @media print {
-  body {
-    visibility: hidden;
+  /* Basic Print Setup */
+  @page {
+    margin: 1cm;
+    size: auto;
   }
-  .printable-area,
-  .printable-area * {
-    visibility: visible;
-  }
-  .printable-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    background-color: white !important;
-    color: black !important;
-  }
-  .non-printable {
+
+  /* Hide everything in the body by default */
+  body > * {
     display: none !important;
   }
+
+  /* Show ONLY the portal containing our printable content */
+  /* We use a universal selector for the portal to be safe */
+  body > [data-radix-portal] {
+    display: block !important;
+    position: static !important;
+  }
+
+  /* Inside the portal, hide all children and only show the document */
+  [data-radix-portal] * {
+    visibility: hidden;
+  }
+
+  .printable-area,
+  .printable-area * {
+    visibility: visible !important;
+  }
+
+  /* Position the document at the top of the page */
+  .printable-area {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    background: white !important;
+    display: block !important;
+  }
+
+  /* Hide all buttons and UI artifacts */
+  .non-printable,
+  button,
+  .DialogOverlay {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Remove scrollbars and force colors */
   * {
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }

@@ -246,7 +246,7 @@ export function TerminalSettingsDialog({ onTerminalChanged, currentTerminalId }:
                                 <SelectItem value="Store">Store (Default)</SelectItem>
                               ) : (
                                 warehouses.map((w) => (
-                                  <SelectItem key={w.id} value={w.name}>
+                                  <SelectItem key={w.id} value={w.id}>
                                     {w.name}
                                   </SelectItem>
                                 ))

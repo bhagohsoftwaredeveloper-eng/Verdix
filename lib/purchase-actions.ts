@@ -51,7 +51,7 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
       formattedDate,
       finalTotal,
       paymentMethod || '',
-      (purchaseType === 'Receive') ? 'Received' : (isInternalFinalization ? 'Approved' : (status || 'Pending')),
+      (purchaseType === 'Receive' && (isInternalFinalization || status !== 'Pending')) ? 'Received' : (isInternalFinalization ? 'Approved' : (status || 'Pending')),
       reference || null,
       toSafeNumber(shipping),
       orderedBy || userId,
@@ -103,7 +103,7 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
     }
 
     // 3. Auto-Receive Logic
-    if (purchaseType === 'Receive') {
+    if (purchaseType === 'Receive' && (isInternalFinalization || status !== 'Pending')) {
         const receiptData = {
             id: orderId,
             receivedItems: items,
@@ -119,7 +119,13 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
 
 export async function processPurchaseOrderReceipt(orderId: string, receiptData: any, userId: string = 'system', existingConnection?: any) {
   const executeLogic = async (connection: any) => {
-    const { receivedItems, receivedTotal, allocationStrategy } = receiptData;
+    const receivedItems = receiptData.receivedItems || receiptData.items;
+    const receivedTotal = receiptData.receivedTotal || receiptData.total;
+    const allocationStrategy = receiptData.allocationStrategy || 'equal';
+
+    if (!receivedItems || !Array.isArray(receivedItems)) {
+      throw new Error('No items provided for receipt');
+    }
 
     // 1. Get PO details and items for landed cost calculation if not provided
     const [poRows]: any = await connection.query('SELECT shipping_fee, supplier_id FROM purchase_orders WHERE id = ?', [orderId]);

@@ -45,6 +45,69 @@ interface RecentSalesDialogProps {
 // ... (existing formatCurrency, ReceiptPrintView helper functions preserved)
 const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+export function mapSaleToReceiptDetails(sale: Sale) {
+    const mappedItems = sale.items.map(item => {
+        const gross = item.price * item.quantity;
+        const discountPercent = gross > 0 ? ((item.discount || 0) / gross) * 100 : 0;
+        return {
+            ...item.product,
+            price: item.price,
+            quantity: item.quantity,
+            discount: discountPercent,
+            name: item.product.name
+        };
+    });
+
+    const vatableGross = mappedItems.reduce((acc, item) => {
+        const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+        const taxType = item.taxType;
+        return taxType === 'VAT' ? acc + netItemTotal : acc;
+    }, 0);
+
+    const vatableSales = vatableGross / 1.12;
+    const vatAmountResult = vatableGross - vatableSales;
+
+    const vatExemptSales = mappedItems.reduce((acc, item) => {
+        const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+        return item.taxType === 'VAT_EXEMPT' ? acc + netItemTotal : acc;
+    }, 0);
+
+    const zeroRatedSales = mappedItems.reduce((acc, item) => {
+        const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+        return item.taxType === 'ZERO_RATED' ? acc + netItemTotal : acc;
+    }, 0);
+
+    const nonVatSales = mappedItems.reduce((acc, item) => {
+        const netItemTotal = item.price * item.quantity * (1 - (item.discount || 0) / 100);
+        return item.taxType === 'NON_VAT' ? acc + netItemTotal : acc;
+    }, 0);
+
+    return {
+        items: mappedItems,
+        customer: sale.customer,
+        totalDue: sale.total,
+        change: sale.change || 0,
+        paymentMethod: sale.paymentMethod,
+        orderNumber: sale.orderNumber ? String(sale.orderNumber) : sale.id, // Ensure string
+        amountTendered: sale.amountTendered || sale.total,
+        transactionDate: sale.date ? new Date(sale.date) : new Date(),
+        cashierName: sale.cashierName || sale.salesPerson, // Or fetch from sale.salesPersonId
+        pointsEarned: sale.pointsEarned || 0,
+        terminalMin: sale.terminalMin,
+        terminalSerialNumber: sale.terminalSerialNumber,
+        pointsUsedCount: sale.pointsUsedCount || 0,
+        pointsBalance: sale.pointsBalance ?? 0,
+        paymentReference: sale.paymentReference,
+        taxBreakdown: {
+            vatableSales,
+            vatAmount: vatAmountResult,
+            vatExemptSales,
+            zeroRatedSales,
+            nonVatSales
+        }
+    };
+}
+
 function ReceiptPrintView({ 
     sale, 
     onBack,
@@ -57,24 +120,7 @@ function ReceiptPrintView({
     settings?: SystemSettings | null;
 }) {
     // Map Sale to ReceiptViewProps['saleDetails']
-    const saleDetails = {
-        items: sale.items.map(item => ({
-            ...item.product,
-            price: item.price,
-            quantity: item.quantity,
-            discount: 0,
-            name: item.product.name
-        })),
-        customer: sale.customer,
-        totalDue: sale.total,
-        change: sale.change || 0,
-        paymentMethod: sale.paymentMethod,
-        orderNumber: sale.orderNumber ? String(sale.orderNumber) : sale.id, // Ensure string
-        amountTendered: sale.amountTendered || sale.total,
-        transactionDate: sale.date ? new Date(sale.date) : new Date(),
-        cashierName: sale.cashierName || sale.salesPerson, // Or fetch from sale.salesPersonId
-        pointsEarned: sale.pointsEarned || 0
-    };
+    const saleDetails = mapSaleToReceiptDetails(sale);
 
     return (
         <div className="flex flex-col h-full">
@@ -220,19 +266,8 @@ export function RecentSalesDialog({
         const generator = new ReceiptGenerator();
         // Adapter to match expected items structure
         const receiptData = {
-            items: sale.items.map(item => ({
-                ...item.product,
-                price: item.price,
-                quantity: item.quantity,
-                discount: 0
-            })),
-            totalDue: sale.total,
-            change: sale.change || 0,
-            paymentMethod: sale.paymentMethod,
+            ...mapSaleToReceiptDetails(sale),
             orderNumber: String(sale.orderNumber || sale.id),
-            customer: sale.customer,
-            amountTendered: sale.amountTendered || sale.total,
-            cashierName: sale.cashierName || sale.salesPerson
         };
         const bytes = generator.generateReceipt(receiptData, posSettings);
         await print(bytes);

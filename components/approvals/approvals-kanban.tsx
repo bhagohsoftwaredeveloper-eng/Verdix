@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
+import { cn, toSafeNumber } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
@@ -88,7 +88,13 @@ function cardTitle(item: ApprovalItem): string {
     case 'STOCK_ADJUSTMENT': 
       if (d.reason === 'Physical Count') return `Physical Count: ${d.productName || '—'}`;
       return `Adjustment: ${d.productName || '—'}`;
-    case 'BAD_ORDER':        return `Bad Order: ${d.productName || '—'}`;
+    case 'BAD_ORDER':        
+      if (d.productName && d.productName !== 'Unknown') return `Bad Order: ${d.productName}`;
+      if (d.items && d.items.length > 0) {
+        const first = d.items[0].productName || 'Unknown';
+        return `Bad Order: ${first}${d.items.length > 1 ? ` (+${d.items.length - 1} more)` : ''}`;
+      }
+      return 'Bad Order: Batch';
     case 'STOCK_COUNT':      return `Stock Count: ${d.warehouseName || '—'}`;
     case 'REPACKAGING':      return `Repackaging: ${d.productName || '—'}`;
     case 'SHELF_TRANSFER':   
@@ -265,7 +271,7 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
         <>
           <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
             <Row label="Supplier" value={d.supplierName} />
-            <Row label="PO Reference" value={d.referenceNumber || d.id || d.purchaseOrderId} />
+            <Row label="PO Reference" value={d.reference || d.referenceNumber || d.id || d.purchaseOrderId} />
             <Row label="Warehouse" value={d.warehouseName} />
             <Row label="Total Received" value={d.receivedTotal || d.total ? `₱${Number(d.receivedTotal || d.total).toLocaleString()}` : '—'} />
           </div>
@@ -321,6 +327,7 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
           <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
             <Row label="Count Name" value={d.name} />
             <Row label="Warehouse" value={d.warehouseName} />
+            <Row label="Shelf" value={d.shelfName || 'All Shelves'} />
           </div>
           <ItemsTable
             items={d.items || []}
@@ -335,12 +342,25 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
 
       {/* BAD ORDER */}
       {type === 'BAD_ORDER' && (
-        <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
-          <Row label="Product" value={d.productName || d.name} />
-          <Row label="Warehouse" value={d.warehouseName} />
-          <Row label="Quantity" value={d.quantity} />
-          <Row label="Reason" value={d.reason} />
-        </div>
+        <>
+          <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
+            <Row label="Supplier" value={d.supplierName || 'N/A'} />
+            <Row label="Reported By" value={d.reportedBy} />
+            <Row label="Warehouse" value={d.warehouseName} />
+            <Row label="Shelf / Area" value={d.shelfName} />
+            <Row label="Total Lost Value" value={`₱${toSafeNumber(d.totalAffectedValue || d.total || (d.items?.reduce((acc: number, item: any) => acc + (toSafeNumber(item.cost) * toSafeNumber(item.quantity)), 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+            {d.notes && <Row label="Notes" value={d.notes} />}
+          </div>
+          <ItemsTable
+            items={d.items || []}
+            cols={[
+              { key: 'productName', label: 'Product' },
+              { key: 'quantity', label: 'Qty', right: true },
+              { key: 'reason', label: 'Reason' },
+              { key: 'cost', label: 'Cost', right: true },
+            ]}
+          />
+        </>
       )}
 
       {/* REPACKAGING */}

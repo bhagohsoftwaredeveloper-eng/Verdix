@@ -163,8 +163,8 @@ export default function PurchasesByProductPage() {
       doc.text(`Total Spend: ₱${totals.totalCost.toFixed(2)}`, margin + 120, yPos);
       yPos += 10;
 
-      const headers = ['Product Name', 'SKU', 'Category', 'Quantity', 'UOM', 'Avg Cost', 'Total Spend'];
-      const colWidths = [70, 40, 40, 30, 20, 35, 45];
+      const headers = ['Product Name', 'Barcode', 'Category', 'Quantity', 'UOM', 'Avg Cost', 'Total Spend'];
+      const colWidths = [50, 40, 40, 25, 20, 30, 40];
       
       doc.setFillColor(37, 99, 235);
       doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
@@ -213,7 +213,7 @@ export default function PurchasesByProductPage() {
         xPos = margin;
         const rowData = [
           record.productName || 'N/A',
-          record.sku || '-',
+          record.barcode || '-',
           record.category || '-',
           record.totalQuantity.toString(),
           record.uom || '-',
@@ -431,7 +431,7 @@ export default function PurchasesByProductPage() {
                     <TableCell className="py-2 px-4 font-medium">
                       <div className="flex flex-col">
                         <span>{record.productName}</span>
-                        <span className="text-xs text-muted-foreground">{record.sku || record.barcode || '-'}</span>
+                        <span className="text-xs text-muted-foreground">{record.barcode || record.sku || '-'}</span>
                       </div>
                     </TableCell>
                     <TableCell className="py-2 px-4 text-right font-mono font-semibold">{record.totalQuantity.toLocaleString()}</TableCell>

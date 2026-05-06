@@ -49,8 +49,8 @@ export function ViewPurchaseOrderDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Styles removed - printing handled via popup window */}
-      <DialogContent className="max-w-6xl p-0 overflow-hidden printable-dialog-content bg-zinc-50/50 flex flex-col max-h-[90vh]">
-        <DialogHeader className="p-6 pb-4 bg-white border-b non-printable flex-shrink-0">
+      <DialogContent className="sm:max-w-none max-w-full w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none m-0 shadow-none printable-dialog-content">
+        <DialogHeader className="px-6 py-4 border-b bg-white non-printable shrink-0">
           <div className="flex items-center justify-between pr-8">
              <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <Package2 className="size-6 text-primary" />
@@ -248,7 +248,7 @@ export function ViewPurchaseOrderDialog({
 
         {/* 2. Print Content is now handled via Popup Window (handlePrint) */}
 
-        <DialogFooter className="p-4 border-t bg-muted/20 non-printable flex justify-between sm:justify-between items-center">
+        <DialogFooter className="px-6 py-4 border-t bg-muted/20 non-printable flex-row justify-between items-center shrink-0">
           <div className="text-xs text-muted-foreground">
              Use <kbd className="border rounded px-1 bg-white">Ctrl+P</kbd> to print this view.
           </div>

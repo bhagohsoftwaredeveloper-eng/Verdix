@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
              p.id as product_id,
              p.name as product_name,
              p.sku,
+             p.barcode,
              p.category,
              p.brand,
              p.unit_of_measure,
@@ -72,8 +73,8 @@ export async function GET(request: NextRequest) {
              params.push(`%${reference}%`);
         }
         if (search) {
-          whereClause += ` AND (p.name LIKE ? OR p.sku LIKE ?)`;
-          params.push(`%${search}%`, `%${search}%`);
+          whereClause += ` AND (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)`;
+          params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
     } else {
         // unified query to aggregate sales from all sources
@@ -132,6 +133,7 @@ export async function GET(request: NextRequest) {
             p.id as product_id,
             p.name as product_name,
             p.sku,
+            p.barcode,
             p.category,
             p.brand,
             p.unit_of_measure,
@@ -172,14 +174,14 @@ export async function GET(request: NextRequest) {
             params.push(`%${reference}%`);
         }
         if (search) {
-            baseQueryStr += ` AND (p.name LIKE ? OR p.sku LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`);
+            baseQueryStr += ` AND (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
     }
 
     // Combine base query with where clause
     const fullQueryWithoutLimit = baseQueryStr + whereClause + `
-      GROUP BY p.id, p.name, p.sku, p.category, p.brand, p.unit_of_measure
+      GROUP BY p.id, p.name, p.sku, p.barcode, p.category, p.brand, p.unit_of_measure
     `;
 
     // 1. Get Total Count
@@ -210,6 +212,7 @@ export async function GET(request: NextRequest) {
         id: row.product_id,
         name: row.product_name,
         sku: row.sku,
+        barcode: row.barcode,
         category: row.category,
         brand: row.brand,
         unitOfMeasure: row.unit_of_measure,

@@ -27,6 +27,7 @@ interface Adjustment {
   reason: string;
   new_stock: number;
   created_at: string;
+  barcode: string;
   unit_of_measure: string;
 }
 
@@ -134,7 +135,7 @@ export default function AdjustmentReportPage() {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Product</TableHead>
-                <TableHead>SKU</TableHead>
+                <TableHead>Barcode</TableHead>
                 <TableHead>Reason</TableHead>
                 <TableHead className="text-right">Adjustment</TableHead>
                 <TableHead className="text-right">New Stock</TableHead>
@@ -160,7 +161,7 @@ export default function AdjustmentReportPage() {
                         {format(new Date(adj.created_at), 'MMM dd, yyyy HH:mm')}
                     </TableCell>
                     <TableCell className="font-medium">{adj.product_name}</TableCell>
-                    <TableCell>{adj.sku}</TableCell>
+                    <TableCell>{adj.barcode || '-'}</TableCell>
                     <TableCell className="capitalize">
                         {adj.reason === 'damaged' && <ClipboardX className="inline-block w-4 h-4 mr-1 text-red-500"/>}
                         {adj.reason}

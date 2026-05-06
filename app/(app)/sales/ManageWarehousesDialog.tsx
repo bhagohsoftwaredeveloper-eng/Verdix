@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PlusCircle, Pencil, Trash2, Loader2, WarehouseIcon, MoreHorizontal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
+import { v4 as uuidv4 } from 'uuid';
 
 export function WarehouseDialog({ warehouse, onSave, children, disabled, open, onOpenChange }: { warehouse?: Warehouse, onSave: (name: string, location?: string) => Promise<void>, children: React.ReactNode, disabled?: boolean | null, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -424,7 +425,11 @@ export function ManageWarehousesDialog({ trigger, onChange, open, onOpenChange }
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, location }),
+        body: JSON.stringify({ 
+          id: `wh_${uuidv4().substring(0, 8)}`,
+          name, 
+          location 
+        }),
       });
 
       const result = await response.json();

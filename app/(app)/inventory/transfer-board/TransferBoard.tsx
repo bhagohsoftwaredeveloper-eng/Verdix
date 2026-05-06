@@ -169,13 +169,23 @@ export function TransferBoard() {
       const response = await fetch(getApiUrl('/inventory/transfer/bulk'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transfers }),
+        body: JSON.stringify({ 
+          transfers,
+          userId: user?.uid || 'system'
+        }),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        toast({ title: "Success", description: "Warehouse transfer completed successfully." });
+        if (result.pendingApproval) {
+          toast({ 
+            title: "Approval Required", 
+            description: "The transaction is sent to the approvals." 
+          });
+        } else {
+          toast({ title: "Success", description: "Warehouse transfer completed successfully." });
+        }
         setTargetWarehouseId('');
         setActiveTab('source');
         setStagedItems([]);

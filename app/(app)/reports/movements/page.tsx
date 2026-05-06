@@ -37,6 +37,7 @@ interface StockMovement {
   notes: string | null;
   created_at: string;
   sku: string;
+  barcode: string;
   unit_of_measure: string;
 }
 
@@ -167,7 +168,7 @@ export default function StockMovementPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Product</TableHead>
-                <TableHead>SKU</TableHead>
+                <TableHead>Barcode</TableHead>
                 <TableHead className="text-right">Change</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
                 <TableHead>Reference</TableHead>
@@ -199,7 +200,7 @@ export default function StockMovementPage() {
                         </div>
                     </TableCell>
                     <TableCell className="font-medium">{movement.product_name}</TableCell>
-                    <TableCell>{movement.sku}</TableCell>
+                    <TableCell>{movement.barcode || '-'}</TableCell>
                     <TableCell className={`text-right font-bold ${movement.quantity_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {movement.quantity_change > 0 ? '+' : ''}{movement.quantity_change}
                     </TableCell>

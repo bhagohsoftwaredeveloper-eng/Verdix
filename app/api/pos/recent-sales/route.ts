@@ -28,15 +28,21 @@ export async function GET(request: NextRequest) {
         st.notes,
         st.created_at,
         pt.terminal_id,
+        t.min_number as terminal_min,
+        t.serial_number as terminal_sn,
         pt.order_number,
         u.display_name as cashier_name,
         pd.amount_tendered,
         pd.change_given,
-        (SELECT SUM(points) FROM point_history ph WHERE ph.transaction_reference = pt.id AND ph.transaction_type = 'purchase') as points_earned,
+        pd.points_used,
+        COALESCE(pd.points_remaining, cl.current_points) as points_remaining,
+        (SELECT SUM(points) FROM point_history ph WHERE ph.transaction_reference = st.id AND ph.transaction_type = 'purchase') as points_earned,
         pd.gateway_reference as payment_reference
       FROM sales_transactions st
       JOIN pos_transactions pt ON st.id = pt.sale_id
+      LEFT JOIN pos_terminals t ON pt.terminal_id = t.id
       LEFT JOIN customers c ON st.customer_id = c.id
+      LEFT JOIN customer_loyalty cl ON c.id = cl.customer_id
       LEFT JOIN users u ON pt.user_id = u.uid
       LEFT JOIN payment_details pd ON pt.payment_details_id = pd.id
       WHERE LOWER(st.status) NOT IN ('voided', 'returned')
@@ -88,14 +94,17 @@ export async function GET(request: NextRequest) {
             si.product_id,
             si.product_name,
             SUM(si.quantity) as quantity,
-            si.price,
+            COALESCE(MIN(pti.unit_price), si.price) as original_price,
             p.sku,
             p.barcode,
-            p.unit_of_measure
+            p.unit_of_measure,
+            p.vat_status,
+            COALESCE(SUM(pti.discount_amount), 0) as discount_amount
           FROM sale_items si
           LEFT JOIN products p ON si.product_id = p.id
+          LEFT JOIN pos_transaction_items pti ON si.id = pti.sale_item_id
           WHERE si.sale_id = ?
-          GROUP BY si.product_id, si.product_name, si.price, p.sku, p.barcode, p.unit_of_measure
+          GROUP BY si.product_id, si.product_name, si.price, p.sku, p.barcode, p.unit_of_measure, p.vat_status
           HAVING SUM(si.quantity) > 0
         `;
         const items = await query(itemsQuery, [sale.id]);
@@ -119,20 +128,32 @@ export async function GET(request: NextRequest) {
           reference: sale.reference,
           paymentReference: sale.payment_reference,
           pointsEarned: sale.points_earned ? parseFloat(sale.points_earned) : 0,
+          pointsUsedCount: sale.points_used ? parseFloat(sale.points_used) : 0,
+          pointsBalance: sale.points_remaining != null ? parseFloat(sale.points_remaining) : undefined,
           amountTendered: sale.amount_tendered ? parseFloat(sale.amount_tendered) : parseFloat(sale.total),
           change: sale.change_given ? parseFloat(sale.change_given) : 0,
           cashierName: sale.cashier_name || 'Admin',
+          terminalMin: sale.terminal_min,
+          terminalSerialNumber: sale.terminal_sn,
           items: items.map((item: any) => ({
             product: {
               id: item.product_id,
               name: item.product_name,
               sku: item.sku || '',
               barcode: item.barcode || '',
-              price: parseFloat(item.price),
-              unitOfMeasure: item.unit_of_measure || ''
+              price: parseFloat(item.original_price || item.price),
+              unitOfMeasure: item.unit_of_measure || '',
+              taxType: (() => {
+                const s = (item.vat_status || '').toUpperCase();
+                if (s.includes('EXEMPT')) return 'VAT_EXEMPT';
+                if (s.includes('ZERO')) return 'ZERO_RATED';
+                if (s.includes('NON-VAT') || s.includes('NON VAT')) return 'NON_VAT';
+                return 'VAT';
+              })()
             },
-            quantity: item.quantity,
-            price: parseFloat(item.price),
+            quantity: parseFloat(item.quantity),
+            price: parseFloat(item.original_price || item.price),
+            discount: parseFloat(item.discount_amount || 0)
           })),
         };
       })

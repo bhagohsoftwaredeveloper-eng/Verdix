@@ -292,11 +292,16 @@ export async function POST(request: NextRequest) {
         `, [invoiceItemId, invoiceId, item.id, item.name, item.quantity, item.price * (1 - (item.discount || 0) / 100)]);
 
         // Insert into pos_transaction_items (POS Details)
+        const originalPrice = item.price;
+        const discountPercent = item.discount || 0;
+        const discAmount = (originalPrice * item.quantity) * (discountPercent / 100);
+        const lTotal = (originalPrice * item.quantity) - discAmount;
+
         await connection.query(`
           INSERT INTO pos_transaction_items (
             id, pos_transaction_id, sale_item_id, product_id, product_name, 
-            quantity, unit_price, line_total, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            quantity, unit_price, discount_percentage, discount_amount, line_total, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         `, [
           posItemId, 
           posTransId, 
@@ -304,8 +309,10 @@ export async function POST(request: NextRequest) {
           item.id, 
           item.name, 
           item.quantity, 
-          item.price * (1 - (item.discount || 0) / 100), 
-          item.quantity * item.price * (1 - (item.discount || 0) / 100)
+          originalPrice,
+          discountPercent,
+          discAmount,
+          lTotal
         ]);
       }
 
@@ -368,15 +375,34 @@ export async function POST(request: NextRequest) {
              [customer.id]
           );
           
-          if (!custRows || custRows.length === 0) {
-              throw new Error("Customer loyalty record not found.");
-          }
+          let loyaltyId;
+          let currentPoints = 0;
 
-          const loyaltyId = custRows[0].id;
-          const currentPoints = parseFloat(custRows[0].current_points) || 0;
-          
-          if (currentPoints < pointsToDeduct) {
-             throw new Error(`Insufficient points. Available: ${currentPoints}, Required: ${pointsToDeduct}`);
+          if (!custRows || custRows.length === 0) {
+              loyaltyId = `LOY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+              
+              // Fetch legacy points if the loyalty record doesn't exist yet
+              const [legacyRows]: any = await connection.query(
+                  'SELECT loyalty_points FROM customers WHERE id = ?', [customer.id]
+              );
+              currentPoints = legacyRows && legacyRows.length > 0 ? parseFloat(legacyRows[0].loyalty_points) || 0 : 0;
+              
+              if (currentPoints < pointsToDeduct) {
+                 throw new Error(`Insufficient points. Available: ${currentPoints}, Required: ${pointsToDeduct}`);
+              }
+              
+              // Create the missing loyalty record initialized with their legacy points
+              await connection.query(
+                  'INSERT INTO customer_loyalty (id, customer_id, current_points, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+                  [loyaltyId, customer.id, currentPoints]
+              );
+          } else {
+              loyaltyId = custRows[0].id;
+              currentPoints = parseFloat(custRows[0].current_points) || 0;
+              
+              if (currentPoints < pointsToDeduct) {
+                 throw new Error(`Insufficient points. Available: ${currentPoints}, Required: ${pointsToDeduct}`);
+              }
           }
           
           // Deduct

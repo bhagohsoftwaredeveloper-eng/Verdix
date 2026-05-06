@@ -41,22 +41,29 @@ import {
 } from '@/components/ui/table';
 import { PlusCircle, Loader2, Trash2, Search, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Product, Customer, Sale, PaymentMethod, Warehouse } from '@/lib/types';
+import { Product, Customer, Sale, PaymentMethod, Warehouse, SalesPerson } from '@/lib/types';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ManagePaymentMethodsDialog } from '../ManagePaymentMethodsDialog';
 import { ManageWarehousesDialog } from '../ManageWarehousesDialog';
+import { ManageSalesPersonsDialog } from '@/app/(app)/settings/pos-setup/manage-sales-persons-dialog';
 import { CustomerSelectionField } from '../invoices/customer-selection-field';
 import { useProducts, useCustomers } from '@/hooks/use-api';
 import { getApiUrl } from '@/lib/api-config';
 
 const salesOrderItemSchema = z.object({
-  product: z.any(),
-  quantity: z.coerce.number().positive(),
-  price: z.coerce.number().nonnegative(),
+  product: z.object({
+    id: z.string().min(1, 'Product ID is required'),
+    name: z.string().min(1, 'Product name is required'),
+  }),
+  quantity: z.coerce.number().positive('Quantity must be greater than 0'),
+  price: z.coerce.number().nonnegative('Price cannot be negative'),
 });
 
 const salesOrderSchema = z.object({
-  customer: z.any(),
+  customer: z.object({
+    id: z.string().min(1, 'Customer is required'),
+    name: z.string().min(1, 'Customer name is required'),
+  }, { required_error: 'Please select a customer' }),
   orderDate: z.string().min(1, 'Order date is required'),
   deliveryDate: z.string().optional(),
   reference: z.string().optional(),
@@ -65,6 +72,7 @@ const salesOrderSchema = z.object({
   paymentReference: z.string().optional(),
   shipping: z.coerce.number().nonnegative().optional(),
   warehouse: z.string().optional(),
+  salesPersonId: z.string().optional(),
   note: z.string().optional(),
   items: z.array(salesOrderItemSchema).min(1, 'At least one item is required'),
 });
@@ -182,9 +190,14 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
 
+  // Sales Persons
+  const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
+  const [isLoadingSalesPersons, setIsLoadingSalesPersons] = useState(false);
+
   // Controlled manage dialog open states (same as invoice dialog)
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
   const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
+  const [showSalesPersonDialog, setShowSalesPersonDialog] = useState(false);
 
   const { toast } = useToast();
   const { customers, refetch: refetchCustomers } = useCustomers();
@@ -219,6 +232,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
       paymentReference: '',
       items: [],
       shipping: 0,
+      salesPersonId: '',
       note: ''
     },
   });
@@ -270,10 +284,28 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     }
   };
 
+  // Fetch sales persons from API
+  const fetchSalesPersons = async () => {
+    try {
+      setIsLoadingSalesPersons(true);
+      const response = await fetch(getApiUrl('/sales-persons?activeOnly=true'));
+      const result = await response.json();
+      if (result.success) {
+        setSalesPersons(result.data);
+      } else {
+        console.error('Failed to fetch sales persons:', result.error);
+      }
+    } catch (error) {
+      console.error('Error fetching sales persons:', error);
+    } finally {
+      setIsLoadingSalesPersons(false);
+    }
+  };
+
   // Populate form and fetch data when dialog opens (same as invoice dialog)
   useEffect(() => {
     const initializeForm = async () => {
-      await Promise.all([fetchPaymentMethods(), fetchWarehouses()]);
+      await Promise.all([fetchPaymentMethods(), fetchWarehouses(), fetchSalesPersons()]);
 
       if (initialData && isOpen) {
         form.reset({
@@ -286,6 +318,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
           paymentReference: (initialData as any).paymentReference || '',
           shipping: (initialData as any).shipping || 0,
           warehouse: (initialData as any).warehouse_id,
+          salesPersonId: initialData.salesPersonId || '',
           note: initialData.notes,
           items: initialData.items.map(item => ({
             product: item.product,
@@ -306,6 +339,21 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
 
 
   const [total, setTotal] = useState(0);
+
+  // Auto-populate Sales Person based on customer
+  const watchedCustomerId = form.watch('customer.id');
+  useEffect(() => {
+    if (watchedCustomerId && !initialData) {
+      const selectedCustomer = customers.find(c => c.id === watchedCustomerId);
+      if (selectedCustomer?.salesPerson) {
+        // Find matching sales person ID by name
+        const matchingSP = salesPersons.find(sp => sp.name === selectedCustomer.salesPerson);
+        if (matchingSP) {
+          form.setValue('salesPersonId', matchingSP.id);
+        }
+      }
+    }
+  }, [watchedCustomerId, customers, salesPersons, initialData, form]);
 
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
@@ -352,6 +400,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
 
       const payload = {
         ...values,
+        salesPerson: values.salesPersonId, // Map to backend field
         status: initialData ? initialData.status : 'To Deliver'
       };
 
@@ -520,9 +569,69 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                         />
                   </div>
                   
-                  {/* Column 3: Payment Method & Reference */}
+                  {/* Column 3: Sales Person & Notes */}
                   <div className="space-y-3">
-                       <FormField
+                        <FormField
+                            control={form.control}
+                            name="salesPersonId"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <div className="flex justify-between items-center w-full h-5">
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
+                                    <Button
+                                        variant="link"
+                                        className="h-auto p-0 text-xs text-primary"
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowSalesPersonDialog(true);
+                                        }}
+                                    >
+                                        Manage
+                                    </Button>
+                                </div>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                    <SelectValue placeholder="Select sales person" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {salesPersons?.map(person => (
+                                    <SelectItem key={person.id} value={person.id.toString()} className="text-xs">
+                                        {person.name}
+                                    </SelectItem>
+                                    ))}
+                                </SelectContent>
+                                </Select>
+                                <ManageSalesPersonsDialog
+                                    open={showSalesPersonDialog}
+                                    onOpenChange={setShowSalesPersonDialog}
+                                    onChange={fetchSalesPersons}
+                                />
+                                <FormMessage className="text-xs" />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="note"
+                          render={({ field }) => (
+                            <FormItem className="space-y-1">
+                              <div className="flex items-center justify-between h-5">
+                                  <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
+                              </div>
+                              <FormControl>
+                                <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                  </div>
+
+                  {/* Column 4: Payment & Reference & Shipping */}
+                  <div className="space-y-3">
+                      <FormField
                             control={form.control}
                             name="paymentMethod"
                             render={({ field }) => (
@@ -560,64 +669,48 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                             </FormItem>
                             )}
                         />
+                      <div className="grid grid-cols-2 gap-2">
                         <FormField
                             control={form.control}
-                            name="shipping"
+                            name="paymentReference"
                             render={({ field }) => (
                             <FormItem className="space-y-1">
                                 <div className="flex items-center justify-between h-5">
-                                    <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping Cost</FormLabel>
+                                    <FormLabel className="text-xs font-semibold text-muted-foreground">
+                                        {isReferenceRequired ? (
+                                            <>Ref <span className="text-destructive">*</span></>
+                                        ) : (
+                                            'Ref'
+                                        )}
+                                    </FormLabel>
                                 </div>
                                 <FormControl>
-                                <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
+                                    <Input 
+                                      className="h-8 bg-white text-xs" 
+                                      placeholder={isReferenceRequired ? "Req..." : "Opt..."} 
+                                      {...field} 
+                                      value={field.value || ''} 
+                                    />
                                 </FormControl>
+                                <FormMessage className="text-xs" />
                             </FormItem>
                             )}
                         />
-                  </div>
-
-                  {/* Column 4: Reference & Notes */}
-                  <div className="space-y-3">
-                      <FormField
-                          control={form.control}
-                          name="paymentReference"
-                          render={({ field }) => (
-                          <FormItem className="space-y-1">
-                              <div className="flex items-center justify-between h-5">
-                                  <FormLabel className="text-xs font-semibold text-muted-foreground">
-                                      {isReferenceRequired ? (
-                                          <>Reference <span className="text-destructive">*</span></>
-                                      ) : (
-                                          'Reference'
-                                      )}
-                                  </FormLabel>
-                              </div>
-                              <FormControl>
-                                  <Input 
-                                    className="h-8 bg-white text-xs" 
-                                    placeholder={isReferenceRequired ? "Reference required..." : "Optional reference..."} 
-                                    {...field} 
-                                    value={field.value || ''} 
-                                  />
-                              </FormControl>
-                              <FormMessage className="text-xs" />
-                          </FormItem>
-                          )}
-                      />
-                       <FormField
-                          control={form.control}
-                          name="note"
-                          render={({ field }) => (
-                            <FormItem className="space-y-1">
-                              <div className="flex items-center justify-between h-5">
-                                  <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
-                              </div>
-                              <FormControl>
-                                <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
+                        <FormField
+                              control={form.control}
+                              name="shipping"
+                              render={({ field }) => (
+                              <FormItem className="space-y-1">
+                                  <div className="flex items-center justify-between h-5">
+                                      <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
+                                  </div>
+                                  <FormControl>
+                                  <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
+                                  </FormControl>
+                              </FormItem>
+                              )}
+                          />
+                      </div>
                   </div>
 
               </div>

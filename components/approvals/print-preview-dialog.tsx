@@ -9,7 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, Download } from 'lucide-react';
+import { Printer, X, Download, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -177,6 +177,54 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
             <div className="section-title text-[10pt] font-bold uppercase border-b border-zinc-300 pb-1 mb-3 mt-6">Record Details</div>
             
             {/* Transaction Specific Tables */}
+            {item.transaction_type === 'BAD_ORDER' && (
+              <>
+                <div className="grid grid-cols-2 gap-4 mb-5">
+                   <div className="p-3 bg-red-50/30 border border-red-200 rounded-lg">
+                    <div className="text-[8pt] font-bold text-red-800 uppercase mb-1">Source Warehouse</div>
+                    <div className="text-[10pt] font-bold">{item.transaction_data.warehouse_name || item.transaction_data.warehouseName || 'Main Warehouse'}</div>
+                  </div>
+                  <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg">
+                    <div className="text-[8pt] font-bold text-zinc-500 uppercase mb-1">Shelf Location</div>
+                    <div className="text-[10pt] font-bold">{item.transaction_data.shelf_name || item.transaction_data.shelfName || 'General Shelf'}</div>
+                  </div>
+                </div>
+
+                <table className="data-table w-full border-collapse mb-5">
+                  <thead>
+                    <tr className="border-b-2 border-black text-left">
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[45%]">Product Information</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Quantity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-zinc-100">
+                      <td className="p-2">
+                        <div className="text-[10pt] font-bold">{item.transaction_data.productName || 'Unknown Product'}</div>
+                        <div className="text-[8pt] text-zinc-500 italic">{item.transaction_data.unitOfMeasure || ''}</div>
+                      </td>
+                      <td className="p-2">
+                        <div className="font-mono text-[8pt] text-zinc-600">{item.transaction_data.productSku || '-'}</div>
+                        <div className="font-mono font-bold text-[10pt]">{item.transaction_data.productBarcode || '-'}</div>
+                      </td>
+                      <td className="p-2 text-[11pt] font-black text-right text-red-600">{item.transaction_data.quantity}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="remarks p-3 bg-zinc-50 border border-zinc-200 rounded text-[9pt]">
+                    <div className="font-bold uppercase text-[7pt] text-zinc-500 mb-1">Reason / Notes</div>
+                    <div className="italic">{item.transaction_data.reason || item.transaction_data.notes || 'No notes provided.'}</div>
+                </div>
+                <div className="flex justify-end mt-4">
+                  <div className="text-right">
+                    <div className="text-[8pt] font-bold text-zinc-400 uppercase">Estimated Loss Value</div>
+                    <div className="text-lg font-black">₱{(item.transaction_data.totalAffectedValue || 0).toLocaleString()}</div>
+                  </div>
+                </div>
+              </>
+            )}
+
             {item.transaction_type === 'STOCK_ADJUSTMENT' && (
               <>
                 <table className="data-table w-full border-collapse mb-5">
@@ -219,49 +267,81 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
             )}
 
             {item.transaction_type === 'STOCK_TRANSFER' && (
-              <table className="data-table w-full border-collapse mb-5">
-                <thead>
-                  <tr className="border-b border-black text-left">
-                    <th className="p-2 text-[9pt] font-bold uppercase w-[35%]">Product Name</th>
-                    <th className="p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
-                    <th className="p-2 text-[9pt] font-bold uppercase">Source</th>
-                    <th className="p-2 text-[9pt] font-bold uppercase">Destination</th>
-                    <th className="p-2 text-[9pt] font-bold uppercase text-right">Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-zinc-100">
-                    <td className="p-2 text-[10pt] font-medium">{item.transaction_data.productName || 'Multiple Items'}</td>
-                    <td className="p-2 text-[10pt]">
-                      <div className="font-mono font-bold text-slate-600 text-[9pt]">
-                        {item.transaction_data.productSku || item.transaction_data.sku || '-'}
-                      </div>
-                      <div className="barcode-value font-mono font-bold text-black text-[12pt] mt-1">
-                        {item.transaction_data.productBarcode || item.transaction_data.barcode || '-'}
-                      </div>
-                    </td>
-                    <td className="p-2 text-[10pt]">
-                       <span className="inline-block px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 text-[8pt] font-bold border border-amber-100/50">
-                        {item.transaction_data.fromWarehouseName || item.transaction_data.sourceWarehouseId}
-                       </span>
-                    </td>
-                    <td className="p-2 text-[10pt]">
-                       <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[8pt] font-bold border border-emerald-100/50">
-                        {item.transaction_data.toWarehouseName || item.transaction_data.targetWarehouseId}
-                       </span>
-                    </td>
-                    <td className="p-2 text-[10pt] font-mono text-right font-bold text-blue-700">
-                      {item.transaction_data.quantity || item.transaction_data.items?.length || 0}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <>
+                <div className="flex gap-4 mb-6">
+                  <div className="flex-1 p-3 bg-amber-50/30 border border-amber-200 rounded-lg">
+                    <div className="text-[8pt] font-bold text-amber-800 uppercase mb-1">Source Warehouse</div>
+                    <div className="text-[11pt] font-black">{item.transaction_data.fromWarehouseName || item.transaction_data.sourceWarehouseId || 'N/A'}</div>
+                  </div>
+                  <div className="flex items-center">
+                    <ArrowRight className="h-5 w-5 text-zinc-400" />
+                  </div>
+                  <div className="flex-1 p-3 bg-emerald-50/30 border border-emerald-200 rounded-lg text-right">
+                    <div className="text-[8pt] font-bold text-emerald-800 uppercase mb-1">Destination Warehouse</div>
+                    <div className="text-[11pt] font-black">{item.transaction_data.toWarehouseName || item.transaction_data.targetWarehouseId || 'N/A'}</div>
+                  </div>
+                </div>
+
+                <table className="data-table w-full border-collapse mb-5">
+                  <thead>
+                    <tr className="border-b-2 border-black text-left">
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[45%]">Product Information</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Quantity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {item.transaction_data.items ? (
+                      item.transaction_data.items.map((it: any, idx: number) => (
+                        <tr key={idx} className="border-b border-zinc-100">
+                          <td className="p-2">
+                            <div className="text-[10pt] font-bold">{it.productName || it.name}</div>
+                            <div className="text-[8pt] text-zinc-500 italic">{it.unitOfMeasure || it.uom || ''}</div>
+                          </td>
+                          <td className="p-2">
+                            <div className="font-mono text-[8pt] text-zinc-600">{it.sku || it.productSku || '-'}</div>
+                            <div className="font-mono font-bold text-[10pt]">{it.barcode || it.productBarcode || '-'}</div>
+                          </td>
+                          <td className="p-2 text-[11pt] font-black text-right">{it.quantity}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr className="border-b border-zinc-100">
+                        <td className="p-2">
+                          <div className="text-[10pt] font-bold">{item.transaction_data.productName}</div>
+                          <div className="text-[8pt] text-zinc-500 italic">{item.transaction_data.unitOfMeasure || ''}</div>
+                        </td>
+                        <td className="p-2">
+                          <div className="font-mono text-[8pt] text-zinc-600">{item.transaction_data.productSku || item.transaction_data.sku || '-'}</div>
+                          <div className="font-mono font-bold text-[10pt]">{item.transaction_data.productBarcode || item.transaction_data.barcode || '-'}</div>
+                        </td>
+                        <td className="p-2 text-[11pt] font-black text-right">{item.transaction_data.quantity}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                {item.transaction_data.notes && (
+                  <div className="p-3 bg-zinc-50 border-l-4 border-zinc-300 italic text-zinc-700 text-[9pt]">
+                    <strong>Transfer Notes:</strong> {item.transaction_data.notes}
+                  </div>
+                )}
+              </>
             )}
 
             {item.transaction_type === 'STOCK_COUNT' && (
               <>
-                <div className="mb-4 p-3 bg-zinc-50 border border-zinc-200 rounded text-sm">
-                  <strong>Stock Count Reference:</strong> {item.transaction_data.name}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="p-3 bg-indigo-50/30 border border-indigo-200 rounded-lg">
+                    <div className="text-[8pt] font-bold text-indigo-800 uppercase mb-1">Stock Count Reference</div>
+                    <div className="text-[10pt] font-bold">{item.transaction_data.name}</div>
+                  </div>
+                  <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg">
+                    <div className="text-[8pt] font-bold text-zinc-500 uppercase mb-1">Warehouse / Shelf</div>
+                    <div className="text-[10pt] font-bold">
+                      {item.transaction_data.warehouseName || 'All Warehouses'} 
+                      {item.transaction_data.shelfName ? ` / ${item.transaction_data.shelfName}` : ' / All Shelves'}
+                    </div>
+                  </div>
                 </div>
                 <table className="data-table w-full border-collapse mb-5">
                   <thead>

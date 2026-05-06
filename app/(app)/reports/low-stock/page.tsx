@@ -39,6 +39,7 @@ interface Product {
   id: string;
   name: string;
   sku: string;
+  barcode: string;
   category: string;
   brand: string;
   stock: number;
@@ -166,7 +167,7 @@ export default function LowStockReportPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Product Name</TableHead>
-                <TableHead>SKU</TableHead>
+                <TableHead>Barcode</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead className="text-right">Current Stock</TableHead>
                 <TableHead className="text-right">Reorder Point</TableHead>
@@ -190,7 +191,7 @@ export default function LowStockReportPage() {
                 products.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell>{product.sku}</TableCell>
+                    <TableCell>{product.barcode || '-'}</TableCell>
                     <TableCell>{product.category}</TableCell>
                     <TableCell className="text-right font-bold text-red-600">
                         {product.stock} {product.unit_of_measure}

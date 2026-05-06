@@ -83,8 +83,8 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                  but react-to-print usually handles current styles well. 
                  We enforce black text and white background. */}
             <div className="text-center mb-4">
-                <div className="font-bold text-lg mb-1">{settings?.businessName || 'STOCK PILOT'}</div>
-                <div>{settings?.address || 'General Merchandise'}</div>
+                <div className="font-bold text-lg mb-1">{settings?.businessName?.trim() || 'STOCK PILOT'}</div>
+                <div>{settings?.address?.trim() || 'General Merchandise'}</div>
                 {settings?.contactNumber && <div>{settings.contactNumber}</div>}
                 {settings?.tin && <div>VAT REG TIN: {settings.tin}</div>}
                 <div>MIN: {saleDetails.terminalMin || settings?.minNumber || '1234567890'}</div>

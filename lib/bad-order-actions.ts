@@ -13,6 +13,10 @@ export async function processBadOrderCreation(body: any, userId: string) {
       status,
       items,
       notes,
+      warehouseId,
+      warehouseName,
+      shelfId,
+      shelfName,
       isInternalFinalization = false
     } = body;
 
@@ -39,8 +43,9 @@ export async function processBadOrderCreation(body: any, userId: string) {
         const insertOrderQuery = `
             INSERT INTO bad_orders (
                 id, purchase_order_id, supplier_id, supplier_name, reported_by,
-                report_date, status, total_affected_value, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                report_date, status, total_affected_value, notes,
+                warehouse_id, warehouse_name, shelf_id, shelf_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         await connection.query(insertOrderQuery, [
@@ -53,6 +58,10 @@ export async function processBadOrderCreation(body: any, userId: string) {
             status || 'Reported',
             totalAffectedValue,
             notes || null,
+            warehouseId || null,
+            warehouseName || null,
+            shelfId || null,
+            shelfName || null,
         ]);
 
         // Insert bad order items

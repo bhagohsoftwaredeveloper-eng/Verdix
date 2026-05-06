@@ -76,31 +76,34 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
     const printStyles = `
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-        .company { display: flex; flex-direction: column; gap: 8px; }
-        .company-logo { width: 64px; height: 64px; background: #000; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; }
-        .company-name { font-size: 18px; font-weight: bold; text-transform: uppercase; }
-        .doc-title { font-size: 24px; font-weight: bold; color: #666; margin-bottom: 16px; }
-        .info-table { margin-left: auto; font-size: 14px; }
-        .info-table td { padding: 4px 12px; }
-        .info-table td:first-child { background: #f0f0f0; font-weight: 500; }
-        .addresses { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin: 24px 0; }
-        .address-section h3 { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
-        .address-section p { font-size: 14px; color: #666; margin: 2px 0; }
-        .items-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 24px 0; }
-        .items-table th { border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; padding: 8px 4px; text-align: left; font-weight: 600; }
+        body { font-family: Arial, sans-serif; padding: 40px; color: #000; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+        .logo-section { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+        .logo-placeholder { width: 80px; height: 80px; border: 2px solid #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .logo-placeholder img { width: 100%; height: 100%; object-fit: cover; }
+        .business-name { font-size: 20px; font-weight: bold; text-transform: uppercase; }
+        .doc-title { font-size: 32px; font-weight: 900; font-style: italic; color: #333; margin-bottom: 20px; letter-spacing: -1px; }
+        .info-table { border-collapse: collapse; margin-left: auto; font-size: 12px; }
+        .info-table td { border: 1px solid #ddd; padding: 6px 12px; }
+        .info-table td:first-child { background: #f8f9fa; font-weight: bold; width: 140px; }
+        .info-table td:last-child { text-align: right; width: 160px; }
+        .addresses { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin: 30px 0; }
+        .address-section h3 { font-size: 13px; font-weight: bold; margin-bottom: 5px; }
+        .address-section p { font-size: 13px; color: #333; margin: 2px 0; }
+        .items-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 30px 0; }
+        .items-table th { border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 10px 4px; text-align: left; font-weight: bold; }
         .items-table th:nth-child(2) { text-align: center; }
         .items-table th:nth-child(n+3) { text-align: right; }
-        .items-table td { padding: 8px 4px; border-bottom: 1px solid #eee; }
+        .items-table td { padding: 12px 4px; border-bottom: 1px solid #eee; }
         .items-table td:nth-child(2) { text-align: center; }
         .items-table td:nth-child(n+3) { text-align: right; }
-        .footer { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 24px; }
-        .terms h3 { font-size: 14px; font-weight: bold; margin-bottom: 8px; }
-        .terms p { font-size: 12px; color: #666; }
-        .totals { font-size: 14px; }
-        .totals-row { display: flex; justify-content: space-between; padding: 4px 0; }
-        .totals-row.grand { font-size: 16px; font-weight: bold; border-top: 2px solid #333; padding-top: 8px; margin-top: 8px; }
+        .items-table td.amount { font-weight: bold; }
+        .footer { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 30px; }
+        .terms h3 { font-size: 13px; font-weight: bold; margin-bottom: 8px; }
+        .terms p { font-size: 11px; color: #666; }
+        .totals { font-size: 12px; }
+        .totals-row { display: flex; justify-content: space-between; padding: 4px 0; font-weight: bold; }
+        .totals-row.grand { font-size: 16px; font-weight: 900; border-top: 2px solid #000; padding-top: 8px; margin-top: 8px; }
         @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
       </style>
     `;
@@ -114,17 +117,20 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
         </head>
         <body>
           <div class="header">
-            <div class="company">
-              <div class="company-logo">📄</div>
-              <div class="company-name">${settings.businessName || 'StockPilot'}</div>
+            <div class="logo-section">
+              <div class="logo-placeholder">
+                ${settings.logoPath ? `<img src="${settings.logoPath}" alt="Logo">` : '<div style="width:100%;height:100%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:24px">📄</div>'}
+              </div>
+              <div class="business-name">${settings.businessName || 'StockPilot'}</div>
             </div>
             <div>
               <div class="doc-title">${documentTitle}</div>
               <table class="info-table">
-                <tr><td>Order Number</td><td>${order.reference || order.id}</td></tr>
-                <tr><td>Order Date</td><td>${displayDate ? format(new Date(displayDate), 'MMMM d, yyyy') : 'N/A'}</td></tr>
-                <tr><td>Payment Terms</td><td>${order.paymentMethod || '-'}</td></tr>
-                <tr><td>Delivery Date</td><td>${order.deliveryDate ? format(new Date(order.deliveryDate), 'MMMM d, yyyy') : '-'}</td></tr>
+                <tr><td>${mode === 'delivery-note' ? 'Reference Number' : (documentTitle === 'SALES ORDER' ? 'Order Number' : 'Invoice Number')}</td><td>${order.reference || order.id}</td></tr>
+                <tr><td>${mode === 'delivery-note' ? 'Date' : (documentTitle === 'SALES ORDER' ? 'Order Date' : 'Invoice Date')}</td><td>${displayDate ? format(new Date(displayDate), 'MMMM d, yyyy') : 'N/A'}</td></tr>
+                <tr><td>Payment Terms</td><td>${order.paymentMethod || 'CASH'}</td></tr>
+                <tr><td>Sales Person</td><td>${order.salesPerson || 'N/A'}</td></tr>
+                <tr><td>Due Date</td><td>${order.deliveryDate ? format(new Date(order.deliveryDate), 'MMMM d, yyyy') : (displayDate ? format(new Date(displayDate), 'MMMM d, yyyy') : '-')}</td></tr>
               </table>
             </div>
           </div>
@@ -147,26 +153,24 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
             <thead>
               <tr>
                 <th>DESCRIPTION</th>
-                <th>QUANTITY</th>
-                <th>PRICE</th>
-                <th>DISCOUNT</th>
-                <th>AMOUNT</th>
+                <th style="width: 100px">QUANTITY</th>
+                <th style="width: 100px">PRICE</th>
+                <th style="width: 100px">DISCOUNT</th>
+                <th style="width: 100px">AMOUNT</th>
               </tr>
             </thead>
             <tbody>
               ${order.items.map(item => `
                 <tr>
-                  <td>${item.product.name}</td>
-                  <td>${item.quantity}</td>
-                  <td>₱${item.price.toFixed(2)}</td>
+                  <td style="text-transform: uppercase; font-weight: 500;">${item.product.name}</td>
+                  <td>${item.quantity} ${(item.product as any).unit || 'pc'}</td>
+                  <td>${item.price.toFixed(2)}</td>
                   <td>0.00</td>
-                  <td>₱${(item.price * item.quantity).toFixed(2)}</td>
+                  <td class="amount">${(item.price * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
-
-          <hr style="border: none; border-top: 1px solid #ccc; margin: 16px 0;" />
 
           <div class="footer">
             <div class="terms">
@@ -174,10 +178,10 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
               <p>${(order as any).notes || (order as any).note || '-'}</p>
             </div>
             <div class="totals">
-              <div class="totals-row"><span>SUBTOTAL</span><span>₱${subtotal.toFixed(2)}</span></div>
-              <div class="totals-row"><span>SHIPPING</span><span>₱${shipping.toFixed(2)}</span></div>
-              <div class="totals-row"><span>VAT INCLUDED</span><span>₱0.00</span></div>
-              <div class="totals-row grand"><span>GRAND TOTAL</span><span>₱${grandTotal.toFixed(2)}</span></div>
+              <div class="totals-row"><span>SUBTOTAL</span><span>${subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+              <div class="totals-row"><span>SHIPPING</span><span>${shipping.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+              <div class="totals-row"><span>VAT INCLUDED</span><span>0.00</span></div>
+              <div class="totals-row grand"><span>GRAND TOTAL</span><span>${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
             </div>
           </div>
         </body>
@@ -250,6 +254,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
 
           <div class="info-row"><span>Order #:</span><span>${order.reference || order.id}</span></div>
           <div class="info-row"><span>Date:</span><span>${displayDate ? format(new Date(displayDate), 'MM/dd/yyyy') : 'N/A'}</span></div>
+          <div class="info-row"><span>Sales Person:</span><span>${order.salesPerson || 'N/A'}</span></div>
           <div class="info-row"><span>Customer:</span><span>${order.customer.name}</span></div>
 
           <div class="dashed"></div>
@@ -257,7 +262,10 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
           <div class="items">
             ${order.items.map(item => `
               <div class="item">
-                <div class="item-name">${item.product.name}</div>
+                <div class="item-name">
+                  ${item.product.name}
+                  ${item.product.barcode ? `<div style="font-size: 11px; color: #000; font-weight: bold; font-family: monospace;">BC: ${item.product.barcode}</div>` : ''}
+                </div>
                 <div class="item-details">
                   <span>${item.quantity} x ₱${item.price.toFixed(2)}</span>
                   <span>₱${(item.price * item.quantity).toFixed(2)}</span>
@@ -295,61 +303,72 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-none overflow-visible print:max-w-none print:shadow-none">
-        <DialogHeader className="flex flex-row items-center justify-between non-printable">
-          <DialogTitle>{mode === 'delivery-note' ? 'Delivery Note' : 'Order Detail'}</DialogTitle>
+      <DialogContent className="sm:max-w-none max-w-full w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none m-0 shadow-none">
+        <DialogHeader className="flex flex-row items-center justify-between non-printable px-6 py-4 border-b shrink-0">
+          <DialogTitle>{mode === 'delivery-note' ? 'Delivery Note' : 'Order Details'}</DialogTitle>
         </DialogHeader>
 
         {/* Printable Content */}
-        <div ref={printContentRef} className="printable-area space-y-6 p-2">
+        <div className="flex-1 overflow-y-auto p-12 bg-slate-100/50 non-printable flex justify-center">
+          <div ref={printContentRef} className="printable-area space-y-6 p-[20mm] bg-white shadow-xl border w-[210mm] min-h-[297mm] mx-auto print:shadow-none print:border-none print:p-0 print:w-full print:min-h-0">
           {/* Page indicator */}
           <div className="text-xs text-muted-foreground non-printable">1 of 1</div>
 
           {/* Header Section */}
           <div className="flex justify-between items-start">
-            {/* Company Logo & Name */}
-            <div className="flex flex-col items-start gap-2">
-              {settings.logoPath ? (
-                <img 
-                  src={settings.logoPath} 
-                  alt="Company Logo" 
-                  className="h-16 w-16 object-contain"
-                />
-              ) : (
-                <div className="h-16 w-16 bg-primary rounded-lg flex items-center justify-center">
-                  <FileText className="h-8 w-8 text-primary-foreground" />
-                </div>
-              )}
-              <h2 className="text-lg font-bold uppercase tracking-wide">
+            {/* Company Logo & Name (Left side) */}
+            <div className="flex flex-col items-start gap-1">
+              <div className="h-20 w-20 flex items-center justify-center border-2 border-foreground/10 rounded-full overflow-hidden mb-1">
+                {settings.logoPath ? (
+                  <img 
+                    src={settings.logoPath} 
+                    alt="Company Logo" 
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-primary flex items-center justify-center">
+                    <FileText className="h-10 w-10 text-primary-foreground" />
+                  </div>
+                )}
+              </div>
+              <h2 className="text-xl font-bold uppercase tracking-tight">
                 {settings.businessName || 'StockPilot'}
               </h2>
             </div>
 
-            {/* Document Title & Info */}
+            {/* Document Title & Info (Right side) */}
             <div className="text-right">
-              <h1 className="text-2xl font-bold text-muted-foreground mb-4">
+              <h1 className="text-3xl font-black text-foreground/80 mb-6 italic tracking-tighter">
                 {documentTitle}
               </h1>
-              <table className="text-sm ml-auto">
+              <table className="text-xs ml-auto border-collapse">
                 <tbody>
                   <tr>
-                    <td className="px-3 py-1 bg-muted font-medium text-left">Order Number</td>
-                    <td className="px-3 py-1 text-right">{order.reference || order.id}</td>
+                    <td className="px-3 py-1.5 bg-slate-100 border border-slate-200 font-semibold text-left w-32">
+                      {mode === 'delivery-note' ? 'Reference Number' : (documentTitle === 'SALES ORDER' ? 'Order Number' : 'Invoice Number')}
+                    </td>
+                    <td className="px-3 py-1.5 border border-slate-200 text-right min-w-[120px]">{order.reference || order.id}</td>
                   </tr>
                   <tr>
-                    <td className="px-3 py-1 bg-muted font-medium text-left">Order Date</td>
-                    <td className="px-3 py-1 text-right">
+                    <td className="px-3 py-1.5 bg-slate-100 border border-slate-200 font-semibold text-left">
+                      {mode === 'delivery-note' ? 'Date' : (documentTitle === 'SALES ORDER' ? 'Order Date' : 'Invoice Date')}
+                    </td>
+                    <td className="px-3 py-1.5 border border-slate-200 text-right">
                       {displayDate ? format(new Date(displayDate), 'MMMM d, yyyy') : 'N/A'}
                     </td>
                   </tr>
                   <tr>
-                    <td className="px-3 py-1 bg-muted font-medium text-left">Payment Terms</td>
-                    <td className="px-3 py-1 text-right">{order.paymentMethod || '-'}</td>
+                    <td className="px-3 py-1.5 bg-slate-100 border border-slate-200 font-semibold text-left">Payment Terms</td>
+                    <td className="px-3 py-1.5 border border-slate-200 text-right uppercase">{order.paymentMethod || 'CASH'}</td>
                   </tr>
                   <tr>
-                    <td className="px-3 py-1 bg-muted font-medium text-left">Delivery Date</td>
-                    <td className="px-3 py-1 text-right">
-                      {order.deliveryDate ? format(new Date(order.deliveryDate), 'MMMM d, yyyy') : '-'}
+                    <td className="px-3 py-1.5 bg-slate-100 border border-slate-200 font-semibold text-left">Sales Person</td>
+                    <td className="px-3 py-1.5 border border-slate-200 text-right uppercase">{order.salesPerson || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-1.5 bg-slate-100 border border-slate-200 font-semibold text-left">Due Date</td>
+                    <td className="px-3 py-1.5 border border-slate-200 text-right">
+                      {order.deliveryDate ? format(new Date(order.deliveryDate), 'MMMM d, yyyy') : (displayDate ? format(new Date(displayDate), 'MMMM d, yyyy') : '-')}
                     </td>
                   </tr>
                 </tbody>
@@ -373,27 +392,29 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
           </div>
 
           {/* Items Table */}
-          <div className="mt-6">
-            <table className="w-full text-sm">
+          <div className="mt-8">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="border-y border-foreground/20">
-                  <th className="py-2 text-left font-semibold">DESCRIPTION</th>
-                  <th className="py-2 text-center font-semibold">QUANTITY</th>
-                  <th className="py-2 text-right font-semibold">PRICE</th>
-                  <th className="py-2 text-right font-semibold">DISCOUNT</th>
-                  <th className="py-2 text-right font-semibold">AMOUNT</th>
+                <tr className="border-y border-foreground/30">
+                  <th className="py-2.5 text-left font-bold tracking-wider">DESCRIPTION</th>
+                  <th className="py-2.5 text-center font-bold tracking-wider w-32">QUANTITY</th>
+                  <th className="py-2.5 text-right font-bold tracking-wider w-32">PRICE</th>
+                  <th className="py-2.5 text-right font-bold tracking-wider w-32">DISCOUNT</th>
+                  <th className="py-2.5 text-right font-bold tracking-wider w-32">AMOUNT</th>
                 </tr>
               </thead>
               <tbody>
                 {order.items.map((item, index) => (
-                  <tr key={index} className="border-b border-foreground/10">
-                    <td className="py-2">{item.product.name}</td>
-                    <td className="py-2 text-center">
+                  <tr key={index} className="border-b border-foreground/5">
+                    <td className="py-3 uppercase font-medium">
+                      {item.product.name}
+                    </td>
+                    <td className="py-3 text-center">
                       {item.quantity} {(item.product as any).unit || 'pc'}
                     </td>
-                    <td className="py-2 text-right">₱{item.price.toFixed(2)}</td>
+                    <td className="py-2 text-right">{item.price.toFixed(2)}</td>
                     <td className="py-2 text-right">0.00</td>
-                    <td className="py-2 text-right">₱{(item.price * item.quantity).toFixed(2)}</td>
+                    <td className="py-2 text-right font-semibold">{(item.price * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -411,40 +432,40 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
             </div>
 
             {/* Totals */}
-            <div className="space-y-1 text-sm">
+            <div className="space-y-1 text-xs">
               <div className="flex justify-between">
-                <span className="font-medium">SUBTOTAL</span>
-                <span>₱{subtotal.toFixed(2)}</span>
+                <span className="font-bold">SUBTOTAL</span>
+                <span className="font-bold">{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-medium">SHIPPING</span>
-                <span>₱{shipping.toFixed(2)}</span>
+                <span className="font-bold">SHIPPING</span>
+                <span>{shipping.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-medium">VAT INCLUDED</span>
-                <span>₱0.00</span>
+                <span className="font-bold">VAT INCLUDED</span>
+                <span>0.00</span>
               </div>
-              <Separator className="my-2" />
-              <div className="flex justify-between font-bold text-base">
+              <div className="flex justify-between font-black text-sm border-t-2 border-foreground pt-2 mt-2">
                 <span>GRAND TOTAL</span>
-                <span>₱{grandTotal.toFixed(2)}</span>
+                <span>{grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Action Buttons */}
-        <div className="flex justify-center gap-2 mt-6 pt-4 border-t non-printable">
-          <Button variant="outline" onClick={handlePrint}>
+      {/* Action Buttons */}
+      <div className="flex justify-center gap-3 p-4 border-t non-printable bg-slate-50/50 shrink-0">
+          <Button variant="outline" onClick={handlePrint} className="h-10 px-6 font-bold text-xs uppercase tracking-tight shadow-sm bg-white">
             <Printer className="mr-2 h-4 w-4" /> Print
           </Button>
-          <Button variant="outline" onClick={handlePrintPOSInvoice}>
+          <Button variant="outline" onClick={handlePrintPOSInvoice} className="h-10 px-6 font-bold text-xs uppercase tracking-tight shadow-sm bg-white">
             <Printer className="mr-2 h-4 w-4" /> Print POS Invoice
           </Button>
-          <Button variant="outline" onClick={handlePrint}>
+          <Button variant="outline" onClick={handlePrint} className="h-10 px-6 font-bold text-xs uppercase tracking-tight shadow-sm bg-white">
             <Printer className="mr-2 h-4 w-4" /> Print to template
           </Button>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="h-10 px-6 font-bold text-xs uppercase tracking-tight bg-white">
             Close
           </Button>
         </div>

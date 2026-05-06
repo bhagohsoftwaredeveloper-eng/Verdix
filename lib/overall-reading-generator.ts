@@ -31,31 +31,22 @@ export class OverallReadingGenerator {
             terminalInfo
         } = data;
 
-        const center = (text: any) => {
-            const str = String(text || '').substring(0, W);
-            const pad = Math.max(0, Math.floor((W - str.length) / 2));
-            return ' '.repeat(pad) + str;
-        };
-
         const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         
         const enc = this.encoder
             .initialize()
             .codepage('cp437');
         
-        enc.bold(true).line(center(businessSettings.businessName.toUpperCase())).bold(false);
-        if (businessSettings.address) enc.line(center(businessSettings.address));
-        if (businessSettings.tin) enc.line(center(`VAT REG TIN: ${businessSettings.tin}`));
-        if (terminalInfo.min) enc.line(center(`MIN: ${terminalInfo.min}`));
-        if (terminalInfo.sn) enc.line(center(`S/N: ${terminalInfo.sn}`));
-        enc.line(center(`Terminal: ${terminalId}`));
-        
+        enc.raw([0x1b, 0x61, 0x31]); // Native Center
+        enc.line(businessSettings.businessName.toUpperCase());
+        if (businessSettings.address) enc.line(businessSettings.address);
+        if (businessSettings.tin) enc.line(`VAT REG TIN: ${businessSettings.tin}`);
+        if (terminalInfo.min) enc.line(`MIN: ${terminalInfo.min}`);
+        if (terminalInfo.sn) enc.line(`S/N: ${terminalInfo.sn}`);
+        enc.line(`Terminal: ${terminalId}`);
         enc.newline()
-           .bold(true)
-           .line(center('OVERALL TERMINAL READING'))
-           .bold(false)
-           .newline()
-           .align('left')
+           .line('OVERALL TERMINAL READING')
+           .raw([0x1b, 0x61, 0x30]) // Native Left
            .table(
                 [
                     { width: 12, align: 'left' },
@@ -68,7 +59,7 @@ export class OverallReadingGenerator {
                 ]
             )
             .line('--------------------------------')
-            .bold(true).line(center('TERMINAL PERFORMANCE')).bold(false)
+            .raw([0x1b, 0x61, 0x31]).line('TERMINAL PERFORMANCE').raw([0x1b, 0x61, 0x30])
             .table(
                 [
                     { width: 20, align: 'left' },
@@ -82,7 +73,7 @@ export class OverallReadingGenerator {
                 ]
             )
             .line('--------------------------------')
-            .bold(true).line(center('TERMINAL BREAKDOWN')).bold(false)
+            .raw([0x1b, 0x61, 0x31]).line('TERMINAL BREAKDOWN').raw([0x1b, 0x61, 0x30])
             .table(
                 [
                     { width: 12, align: 'left' },
@@ -112,7 +103,7 @@ export class OverallReadingGenerator {
 
         enc
             .line('--------------------------------')
-            .bold(true).line(center('CASHIER BREAKDOWN')).bold(false)
+            .raw([0x1b, 0x61, 0x31]).line('CASHIER BREAKDOWN').raw([0x1b, 0x61, 0x30])
             .table(
                 [
                     { width: 12, align: 'left' },

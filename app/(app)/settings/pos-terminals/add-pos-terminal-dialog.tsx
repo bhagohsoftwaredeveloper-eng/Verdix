@@ -271,7 +271,7 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
                             <SelectItem value="Store">Store</SelectItem>
                         ) : (
                             warehouses.map((w) => (
-                                <SelectItem key={w.id} value={w.name}>{w.name}</SelectItem>
+                                <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
                             ))
                         )}
                       </SelectContent>

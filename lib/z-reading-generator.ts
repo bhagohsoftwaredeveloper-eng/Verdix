@@ -30,12 +30,6 @@ export class ZReadingGenerator {
     public generate(data: ZReadingData, settings?: BusinessSettings | null): Uint8Array {
         const enc = this.encoder.initialize().codepage('cp437');
 
-        const center = (text: string) => {
-            const t = text.substring(0, W);
-            const pad = Math.max(0, Math.floor((W - t.length) / 2));
-            return ' '.repeat(pad) + t;
-        };
-
         const row = (left: string, right: string) => {
             const spaces = W - left.length - right.length;
             if (spaces <= 0) return (left + ' ' + right).substring(0, W);
@@ -55,16 +49,18 @@ export class ZReadingGenerator {
         const serialNumber = data.terminalSerialNumber || settings?.serialNumber || "0987654321-11";
 
         // ── HEADER ──────────────────────────────────────────────────────────
-        enc.bold(true).line(center(bizName)).bold(false);
-        if (operatedBy) enc.line(center(`Operated by: ${operatedBy}`));
-        enc.line(center(address));
-        enc.line(center(`VAT REG TIN: ${tin}`));
-        enc.line(center(`MIN: ${minNumber}`));
-        enc.line(center(`S/N: ${serialNumber}`));
-        if (data.terminalName) enc.line(center(`Terminal: ${data.terminalName}`));
-
+        enc.raw([0x1b, 0x61, 0x31]); // Native Center
+        enc.line(bizName);
+        if (operatedBy) enc.line(`Operated by: ${operatedBy}`);
+        enc.line(address);
+        enc.line(`VAT REG TIN: ${tin}`);
+        enc.line(`MIN: ${minNumber}`);
+        enc.line(`S/N: ${serialNumber}`);
+        if (data.terminalName) enc.line(`Terminal: ${data.terminalName}`);
+        
         // ── TITLE ────────────────────────────────────────────────────────────
-        enc.align('center').bold(true).line('Z-READING REPORT').bold(false).align('left');
+        enc.line('Z-READING REPORT');
+        enc.raw([0x1b, 0x61, 0x30]); // Native Left
 
         // ── DATE SECTION ─────────────────────────────────────────────────────
         const reportDate = data.reportDate ? new Date(data.reportDate) : new Date();

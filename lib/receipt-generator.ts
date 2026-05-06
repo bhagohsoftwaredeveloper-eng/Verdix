@@ -59,8 +59,48 @@ export class ReceiptGenerator {
         const { COLS, QTY_W, AMT_W, NAME_W } = this.getLayout(settings);
         const { items, customer, totalDue, change, paymentMethod, orderNumber, amountTendered, pointsEarned, pointsUsedCount } = sale;
         const subTotal      = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-        const totalDiscount = items.reduce((acc, item) => acc + (item.price * item.quantity * (item.discount || 0)) / 100, 0);
-        const vatAmount     = (totalDue / 1.12) * 0.12;
+        const totalDiscount = items.reduce((acc, item) => acc + (item.discount || 0), 0); // Recent-sales passes total amount
+        
+        // Calculate tax breakdown if not provided
+        let taxBreakdown = sale.taxBreakdown;
+        if (!taxBreakdown) {
+            let vatableSales = 0;
+            let vatAmount = 0;
+            let vatExemptSales = 0;
+            let zeroRatedSales = 0;
+            let nonVatSales = 0;
+
+            items.forEach(item => {
+                const lineTotal = (item.price * item.quantity) - (item.discount || 0);
+                const taxType = (item as any).taxType || item.taxType || (item.product as any)?.taxType || 'VAT';
+
+                if (taxType === 'VAT') {
+                    const vatable = lineTotal / 1.12;
+                    vatableSales += vatable;
+                    vatAmount += (lineTotal - vatable);
+                } else if (taxType === 'VAT_EXEMPT') {
+                    vatExemptSales += lineTotal;
+                } else if (taxType === 'ZERO_RATED') {
+                    zeroRatedSales += lineTotal;
+                } else if (taxType === 'NON_VAT') {
+                    nonVatSales += lineTotal;
+                } else {
+                    // Default to VAT if unknown
+                    const vatable = lineTotal / 1.12;
+                    vatableSales += vatable;
+                    vatAmount += (lineTotal - vatable);
+                }
+            });
+
+            taxBreakdown = {
+                vatableSales,
+                vatAmount,
+                vatExemptSales,
+                zeroRatedSales,
+                nonVatSales
+            };
+        }
+
         const currentDate   = sale.transactionDate ? new Date(sale.transactionDate) : new Date();
         const dateStr       = format(currentDate, 'PP p');
 
@@ -73,32 +113,28 @@ export class ReceiptGenerator {
         const enc = this.encoder.initialize().codepage('cp437');
 
         // ─── HEADER (centered) ───────────────────────────────────────────
-        // Use software centerRow to ensure perfect centering within columns
-        const centerRow = (text: string) => {
-            if (!text) return '';
-            const stripped = text.substring(0, COLS);
-            const padLen = Math.max(0, Math.floor((COLS - stripped.length) / 2));
-            return ' '.repeat(padLen) + stripped;
-        };
+
 
         const bizName = settings?.businessName?.trim() || 'STOCK PILOT';
         const address = settings?.address?.trim() || 'General Merchandise';
         const minNumber = sale.terminalMin || settings?.minNumber || '1234567890';
         const serialNumber = sale.terminalSerialNumber || settings?.serialNumber || '0987654321-11';
         
-        enc.bold(true).line(centerRow(bizName)).bold(false);
-        enc.line(centerRow(address));
+        enc.raw([0x1b, 0x61, 0x31]); // Native Center
+        enc.line(bizName);
+        enc.line(address);
         
-        if (settings?.contactNumber) enc.line(centerRow(settings.contactNumber));
-        if (settings?.tin)           enc.line(centerRow(`VAT REG TIN: ${settings.tin}`));
-        enc.line(centerRow(`MIN: ${minNumber}`));
-        enc.line(centerRow(`S/N: ${serialNumber}`));
-        enc.line(centerRow(dateStr));
+        if (settings?.contactNumber) enc.line(settings.contactNumber);
+        if (settings?.tin)           enc.line(`VAT REG TIN: ${settings.tin}`);
+        enc.line(`MIN: ${minNumber}`);
+        enc.line(`S/N: ${serialNumber}`);
+        enc.line(dateStr);
+        enc.raw([0x1b, 0x61, 0x30]); // Native Left
         enc.newline();
 
         // ─── SALE HEADER ───────────────────────────────────────────
         const title = paymentMethod?.toUpperCase() === 'CHARGE' ? 'CHARGE SLIP' : 'CASH SALE';
-        enc.align('center').bold(true).line(title).bold(false).align('left');
+        enc.raw([0x1b, 0x61, 0x31]).line(title).raw([0x1b, 0x61, 0x30]);
         const formattedOrderNo = (orderNumber || '000000').padStart(6, '0');
         enc.bold(true).line(`SI NO.: ${formattedOrderNo}`).bold(false);
         enc.line(`Cust: ${customer?.name || 'Walk-in'}`);
@@ -205,21 +241,19 @@ export class ReceiptGenerator {
         }
 
         // ─── TAX BREAKDOWN (dashed border above) ─────────────────────────
-        if (sale.taxBreakdown) {
+        if (taxBreakdown) {
             enc.line('-'.repeat(COLS));
-            enc.line(padRow('VAT SALES', this.fmt(sale.taxBreakdown.vatableSales)));
-            enc.line(padRow('12% VAT', this.fmt(sale.taxBreakdown.vatAmount)));
-            enc.line(padRow('VAT-EXEMPT SALES', this.fmt(sale.taxBreakdown.vatExemptSales)));
-            enc.line(padRow('ZERO-RATED SALES', this.fmt(sale.taxBreakdown.zeroRatedSales)));
-            enc.line(padRow('NON-VAT SALES', this.fmt(sale.taxBreakdown.nonVatSales)));
-        } else {
-            enc.line(padRow('VAT (12%):', this.fmt(vatAmount)));
+            enc.line(padRow('VAT SALES', this.fmt(taxBreakdown.vatableSales)));
+            enc.line(padRow('12% VAT', this.fmt(taxBreakdown.vatAmount)));
+            enc.line(padRow('VAT-EXEMPT SALES', this.fmt(taxBreakdown.vatExemptSales)));
+            enc.line(padRow('ZERO-RATED SALES', this.fmt(taxBreakdown.zeroRatedSales)));
+            enc.line(padRow('NON-VAT SALES', this.fmt(taxBreakdown.nonVatSales)));
         }
 
         // ─── POINTS (dashed border above, if any) ────────────────────────
         if ((pointsEarned && pointsEarned > 0) || (sale.pointsUsedCount && sale.pointsUsedCount > 0) || (sale.pointsBalance !== undefined)) {
             enc.line('-'.repeat(COLS));
-            enc.align('center').bold(true).line('LOYALTY STATEMENT').bold(false).align('left');
+            enc.raw([0x1b, 0x61, 0x31]).line('LOYALTY STATEMENT').raw([0x1b, 0x61, 0x30]);
             
             if (sale.pointsUsedCount && sale.pointsUsedCount > 0) {
                 enc.line(this.row('Points Used:', `${sale.pointsUsedCount.toLocaleString()} pts`, COLS));
@@ -290,17 +324,23 @@ export class ReceiptGenerator {
         const dateStr = format(paymentDate, 'PP p');
         const bizName = settings?.businessName?.trim() || 'STOCK PILOT';
         const address = settings?.address?.trim() || 'General Merchandise';
+        const minNumber = settings?.minNumber || '';
+        const serialNumber = settings?.serialNumber || '';
 
         // HEADER
-        enc.bold(true).line(center(bizName)).bold(false);
-        enc.line(center(address));
-        if (settings?.contactNumber) enc.line(center(settings.contactNumber));
-        if (settings?.tin) enc.line(center(`VAT REG TIN: ${settings.tin}`));
-        enc.line(center(dateStr));
+        enc.raw([0x1b, 0x61, 0x31]); // Native Center
+        enc.line(bizName);
+        enc.line(address);
+        if (settings?.contactNumber) enc.line(settings.contactNumber);
+        if (settings?.tin)           enc.line(`VAT REG TIN: ${settings.tin}`);
+        enc.line(`MIN: ${minNumber}`);
+        enc.line(`S/N: ${serialNumber}`);
+        enc.line(dateStr);
+        enc.raw([0x1b, 0x61, 0x30]); // Native Left
         enc.newline();
 
         // TITLE
-        enc.align('center').bold(true).line('PAYMENT RECEIPT').bold(false).align('left');
+        enc.raw([0x1b, 0x61, 0x31]).line('PAYMENT RECEIPT').raw([0x1b, 0x61, 0x30]);
         enc.line('-'.repeat(W));
 
         // DETAILS
@@ -312,9 +352,9 @@ export class ReceiptGenerator {
         enc.line('-'.repeat(W));
 
         // AMOUNT
-        enc.align('center').bold(true).line('AMOUNT PAID').bold(false);
-        enc.align('center').bold(true).line(`P${this.fmt(payment.amount)}`).bold(false);
-        enc.align('left');
+        enc.raw([0x1b, 0x61, 0x31]).line('AMOUNT PAID');
+        enc.raw([0x1b, 0x61, 0x31]).line(`P${this.fmt(payment.amount)}`);
+        enc.raw([0x1b, 0x61, 0x30]); // Native Left
 
         // FOOTER
         enc.newline();
@@ -370,17 +410,21 @@ export class ReceiptGenerator {
 
         // ── HEADER ──────────────────────────────────────────────────────────
         // Mirrors: headerDiv > headerTitle (center, bold)
-        enc.bold(true).line(center(bizName)).bold(false);
-        enc.line(center('Operated by: Facunla Enterprise Inc.'));
-        enc.line(center(address));
-        enc.line(center(`VAT REG TIN: ${tin}`));
-        enc.line(center(`MIN: ${minNumber}`));
-        enc.line(center(`S/N: ${serialNumber}`));
-        if (data.terminalName) enc.line(center(`Terminal: ${data.terminalName}`));
+        enc.raw([0x1b, 0x61, 0x31]); // Native Center
+        enc.line(bizName);
+        if (settings?.operatedBy) enc.line(`Operated by: ${settings.operatedBy}`);
+        enc.line(address);
+        enc.line(`VAT REG TIN: ${tin}`);
+        if (settings?.contactNumber) enc.line(`Contact: ${settings.contactNumber}`);
+        if (settings?.email) enc.line(settings.email);
+        enc.line(`MIN: ${minNumber}`)
+           .line(`S/N: ${serialNumber}`);
+        if (data.terminalName) enc.line(`Terminal: ${data.terminalName}`);
+        enc.raw([0x1b, 0x61, 0x30]); // Native Left
 
         // ── TITLE ────────────────────────────────────────────────────────────
         // Mirrors: sectionTitle (center, bold, marginTop:5px)
-        enc.align('center').bold(true).line('Z-READING REPORT').bold(false).align('left');
+        enc.raw([0x1b, 0x61, 0x31]).line('Z-READING REPORT').raw([0x1b, 0x61, 0x30]);
 
         // ── DATE SECTION ─────────────────────────────────────────────────────
         // Mirrors: section { marginBottom: 2px } with rows

@@ -22,6 +22,10 @@ export async function GET(request: NextRequest) {
         bo.total_affected_value,
         bo.notes,
         bo.resolution_notes,
+        bo.warehouse_id,
+        bo.warehouse_name,
+        bo.shelf_id,
+        bo.shelf_name,
         bo.created_at,
         bo.updated_at
       FROM bad_orders bo
@@ -81,6 +85,10 @@ export async function GET(request: NextRequest) {
           totalAffectedValue: parseFloat(row.total_affected_value),
           notes: row.notes || '',
           resolutionNotes: row.resolution_notes || '',
+          warehouseId: row.warehouse_id,
+          warehouseName: row.warehouse_name,
+          shelfId: row.shelf_id,
+          shelfName: row.shelf_name,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
           items: items.map((item: any) => ({

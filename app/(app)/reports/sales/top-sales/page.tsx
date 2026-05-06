@@ -40,6 +40,7 @@ interface ProductSale {
     id: string;
     name: string;
     sku: string;
+    barcode: string;
     category: string;
     brand: string;
     unitOfMeasure: string;
@@ -122,6 +123,7 @@ export default function TopItemsSalesPage() {
     return (
       record.product.name?.toLowerCase().includes(search) ||
       record.product.sku?.toLowerCase().includes(search) ||
+      record.product.barcode?.toLowerCase().includes(search) ||
       record.product.category?.toLowerCase().includes(search) ||
       record.product.brand?.toLowerCase().includes(search)
     );
@@ -175,8 +177,8 @@ export default function TopItemsSalesPage() {
       doc.text(`Avg Price/Unit: ₱${totals.avgPrice.toFixed(2)}`, margin + 60, yPos);
       yPos += 10;
 
-      const headers = ['Rank', 'Product', 'SKU', 'Category', 'Brand', 'Units Sold', 'UOM', 'Revenue', 'Cost', 'Profit', 'Margin %', '# Sales'];
-      const colWidths = [12, 30, 20, 23, 23, 18, 15, 22, 20, 20, 15, 15];
+      const headers = ['Rank', 'Product', 'Barcode', 'Category', 'Brand', 'Units Sold', 'UOM', 'Revenue', 'Cost', 'Profit', 'Margin %', '# Sales'];
+      const colWidths = [12, 30, 25, 23, 23, 18, 15, 22, 20, 20, 15, 15];
       
       doc.setFillColor(34, 197, 94);
       doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
@@ -226,8 +228,9 @@ export default function TopItemsSalesPage() {
 
         xPos = margin;
         const rowData = [
+          (rowIndex + 1).toString(),
           record.product.name || 'N/A',
-          record.product.sku || '-',
+          record.product.barcode || '-',
           record.product.category || '-',
           record.product.brand || '-',
           record.unitsSold.toString(),
@@ -452,7 +455,7 @@ export default function TopItemsSalesPage() {
               <TableRow className="bg-muted/50">
                 <TableHead className="py-2 px-3 w-12 text-center">Rank</TableHead>
                 <TableHead className="py-2 px-3">Product Name</TableHead>
-                <TableHead className="py-2 px-2">SKU</TableHead>
+                <TableHead className="py-2 px-2">Barcode</TableHead>
                 <TableHead className="py-2 px-2">Category</TableHead>
                 <TableHead className="py-2 px-2">Brand</TableHead>
                 <TableHead className="py-2 px-2 text-right">Units Sold</TableHead>
@@ -475,7 +478,7 @@ export default function TopItemsSalesPage() {
                     >
                       <TableCell className="py-2 px-3 text-center font-bold text-muted-foreground">{startIndex + index + 1}</TableCell>
                       <TableCell className="py-2 px-3 font-medium">{record.product.name}</TableCell>
-                      <TableCell className="py-2 px-2 text-muted-foreground">{record.product.sku || '-'}</TableCell>
+                      <TableCell className="py-2 px-2 text-muted-foreground">{record.product.barcode || '-'}</TableCell>
                       <TableCell className="py-2 px-2">{record.product.category || '-'}</TableCell>
                       <TableCell className="py-2 px-2">{record.product.brand || '-'}</TableCell>
                       <TableCell className="py-2 px-2 text-right font-mono font-semibold">

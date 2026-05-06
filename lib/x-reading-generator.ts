@@ -42,12 +42,6 @@ export class XReadingGenerator {
             email
         } = data;
 
-        const center = (text: any) => {
-            const str = String(text || '').substring(0, W);
-            const pad = Math.max(0, Math.floor((W - str.length) / 2));
-            return ' '.repeat(pad) + str;
-        };
-
         const dateStr = format(new Date(reportDate), 'MMMM d, yyyy');
         const timeStr = format(new Date(reportDate), 'h:mm a');
         const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -63,21 +57,21 @@ export class XReadingGenerator {
             .initialize()
             .codepage('cp437');
         
-        enc.bold(true).line(center(businessName?.toUpperCase() || 'POS SYSTEM')).bold(false);
-        if (operatedBy) enc.line(center(`Operated by: ${operatedBy}`));
-        if (address) enc.line(center(address));
-        if (tin) enc.line(center(`VAT REG TIN: ${tin}`));
-        if (contactNumber) enc.line(center(`Contact: ${contactNumber}`));
-        if (email) enc.line(center(`Email: ${email}`));
+        enc.raw([0x1b, 0x61, 0x31]); // Native Center
+        enc.line(businessName?.toUpperCase() || 'POS SYSTEM');
+        if (operatedBy) enc.line(`Operated by: ${operatedBy}`);
+        if (address) enc.line(address);
+        if (tin) enc.line(`VAT REG TIN: ${tin}`);
+        if (contactNumber) enc.line(contactNumber);
+        if (email) enc.line(email);
         
-        enc.line(center(`MIN: ${min || '0987654321'}`))
-           .line(center(`S/N: ${sn || '1234567890-01'}`));
-        if (data.terminalName) enc.line(center(`Terminal: ${data.terminalName}`));
+        enc.line(`MIN: ${min || '0987654321'}`)
+           .line(`S/N: ${sn || '1234567890-01'}`);
+        if (data.terminalName) enc.line(`Terminal: ${data.terminalName}`);
         enc.newline()
-           .bold(true)
-           .line(center('X-READING REPORT'))
-           .bold(false)
-           .newline()
+           .line('X-READING REPORT');
+        enc.raw([0x1b, 0x61, 0x30]); // Native Left
+        enc.newline()
            .align('left')
            .table(
                 [

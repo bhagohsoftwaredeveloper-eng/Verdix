@@ -620,7 +620,7 @@ export default function SalesOrdersPage() {
         <Table wrapperClassName="max-h-[500px] overflow-auto border rounded-md">
           <TableHeader className="sticky top-0 z-30 bg-background">
             <TableRow>
-              <TableHead>User</TableHead>
+              <TableHead>Sales Person</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Reference</TableHead>
               <TableHead className="">Order Date</TableHead>

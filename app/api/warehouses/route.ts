@@ -92,13 +92,18 @@ export async function POST(request: NextRequest) {
   try {
     await ensureWarehousesTable();
     const body = await request.json();
-    const { id, name, location, contactNumber, active = true, isMain = false } = body;
+    const { name, location, contactNumber, active = true, isMain = false } = body;
+    let { id } = body;
 
-    if (!id || !name) {
+    if (!name) {
       return NextResponse.json(
-        { success: false, error: 'ID and Name are required' },
+        { success: false, error: 'Name is required' },
         { status: 400 }
       );
+    }
+
+    if (!id) {
+      id = `wh_${uuidv4().substring(0, 8)}`;
     }
 
     const warehouseId = await warehouseRepository.create({

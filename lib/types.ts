@@ -113,6 +113,7 @@ export interface SaleItem {
   product: Product;
   quantity: number;
   price: number;
+  discount?: number;
 }
 
 export interface Sale {
@@ -143,6 +144,11 @@ export interface Sale {
   amountTendered?: number;
   change?: number;
   cashierName?: string;
+  terminalMin?: string;
+  terminalSerialNumber?: string;
+  pointsUsedCount?: number;
+  pointsBalance?: number;
+  paymentReference?: string;
 }
 
 export interface PurchaseOrder {

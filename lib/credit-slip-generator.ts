@@ -68,32 +68,27 @@ export class CreditSlipGenerator {
 
         const enc = this.encoder.initialize().codepage('cp437');
 
-        const centerRow = (text: string) => {
-            if (!text) return '';
-            const stripped = text.substring(0, COLS);
-            const padLen = Math.max(0, Math.floor((COLS - stripped.length) / 2));
-            return ' '.repeat(padLen) + stripped;
-        };
-
         const bizName = settings?.businessName?.trim() || 'STOCK PILOT';
         const address = settings?.address?.trim() || 'General Merchandise';
         const minNumber = settings?.minNumber || '1234567890';
         const serialNumber = settings?.serialNumber || '0987654321-11';
         
         // ─── HEADER (centered) ───────────────────────────────────────────
-        enc.bold(true).line(centerRow(bizName)).bold(false);
-        enc.line(centerRow(address));
-        if (settings?.contactNumber) enc.line(centerRow(settings.contactNumber));
-        if (settings?.tin)           enc.line(centerRow(`VAT REG TIN: ${settings.tin}`));
-        enc.line(centerRow(`MIN: ${minNumber}`));
-        enc.line(centerRow(`S/N: ${serialNumber}`));
-        enc.line(centerRow(dateStr));
+        enc.raw([0x1b, 0x61, 0x31]); // Native Center
+        enc.line(bizName);
+        enc.line(address);
+        if (settings?.contactNumber) enc.line(settings.contactNumber);
+        if (settings?.tin)           enc.line(`VAT REG TIN: ${settings.tin}`);
+        enc.line(`MIN: ${minNumber}`);
+        enc.line(`S/N: ${serialNumber}`);
+        enc.line(dateStr);
+        enc.raw([0x1b, 0x61, 0x30]); // Native Left
         enc.newline();
 
         // ─── SLIP HEADER ───────────────────────────────────────────
-        enc.align('center').bold(true).line('MERCHANDISE CREDIT SLIP').bold(false).align('left');
+        enc.raw([0x1b, 0x61, 0x31]).line('MERCHANDISE CREDIT SLIP').raw([0x1b, 0x61, 0x30]);
         const formattedId = String(creditSlipId || '000000').padStart(6, '0');
-        enc.bold(true).line(`SI NO.: ${formattedId}`).bold(false);
+        enc.line(`SI NO.: ${formattedId}`);
         enc.line(`Ref SO#: ${originalSoNumber}`);
         enc.line(`Cust: ${customerName}`);
         enc.line(`Cashier: ${cashierName}`);

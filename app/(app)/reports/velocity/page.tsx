@@ -31,6 +31,7 @@ interface VelocityProduct {
   id: string;
   name: string;
   sku: string;
+  barcode: string;
   category: string;
   stock: number;
   total_sold: number;
@@ -147,7 +148,7 @@ export default function FastSlowMovingReportPage() {
                     <Table>
                     <TableHeader>
                         <TableRow>
-                        <TableHead>Rank</TableHead>
+                        <TableHead>Barcode</TableHead>
                         <TableHead>Product Name</TableHead>
                         <TableHead>Category</TableHead>
                         <TableHead className="text-right">Units Sold (30d)</TableHead>
@@ -172,7 +173,7 @@ export default function FastSlowMovingReportPage() {
                         products.map((product, index) => (
                             <TableRow key={product.id}>
                             <TableCell className="font-medium text-muted-foreground">
-                                #{((page - 1) * pageSize) + index + 1}
+                                {product.barcode || '-'}
                             </TableCell>
                             <TableCell className="font-medium">{product.name}</TableCell>
                             <TableCell>{product.category}</TableCell>

@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
           p.id,
           p.name,
           p.sku,
+          p.barcode,
           p.category,
           p.stock,
           0 as total_sold,
@@ -69,6 +70,7 @@ export async function GET(request: NextRequest) {
           p.id,
           p.name,
           p.sku,
+          p.barcode,
           p.category,
           p.stock,
           COALESCE(SUM(si.quantity), 0) as total_sold,
@@ -84,7 +86,7 @@ export async function GET(request: NextRequest) {
     let sql = `
       ${sqlSelect}
       ${baseSql}
-      GROUP BY p.id, p.name, p.sku, p.category, p.stock
+      GROUP BY p.id, p.name, p.sku, p.barcode, p.category, p.stock
     `;
 
     // Sort based on type

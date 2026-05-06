@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
         sm.notes,
         sm.created_at,
         p.sku,
+        p.barcode,
         p.unit_of_measure
       ${baseSql}
       ORDER BY sm.created_at DESC 

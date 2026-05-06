@@ -263,8 +263,14 @@ export default function POSPage() {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   
+  const currentTerminal = useMemo(() => {
+    return terminals.find(t => t.id === selectedTerminalId) || null;
+  }, [terminals, selectedTerminalId]);
+
+  const inventoryLocation = currentTerminal?.inventoryLocation || '';
+
   // Use the hook to fetch real products
-  const { products: fetchedProducts, loading: productsLoading, refetch: refreshProducts } = useProducts('', 'Available');
+  const { products: fetchedProducts, loading: productsLoading, refetch: refreshProducts } = useProducts('', 'Available', undefined, inventoryLocation);
   const [products, setProducts] = useState<Product[]>([]);
   
   // Sync fetched products to local state
@@ -661,7 +667,14 @@ export default function POSPage() {
       // Disable all shortcuts while the login form is displayed
       if (!isPosLoggedInRef.current) return;
 
-      // Check if any dialog is open to prevent background interactions
+      // Check if any dialog is open or if we're typing in another input
+      const activeElement = document.activeElement;
+      const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA' || activeElement?.hasAttribute('cmdk-input');
+      const isMainInput = activeElement === inputRef.current;
+
+      // If we are typing in another input (like search), don't intercept keys
+      if (isInput && !isMainInput) return;
+
       const isDialogOpen = document.querySelector('[role="dialog"]') !== null;
 
       if (e.key && e.key.startsWith('F')) {
@@ -705,7 +718,7 @@ export default function POSPage() {
             if (selectedItemId && (!isInputFocused || isInputEmpty) && !isDialogOpen) {
                 e.preventDefault();
                 const item = items.find(i => i.id === selectedItemId);
-                if (item) updateQuantity(selectedItemId, item.quantity - 1);
+                if (item && item.quantity > 1) updateQuantity(selectedItemId, item.quantity - 1);
             }
           }
           break;
@@ -1493,19 +1506,19 @@ export default function POSPage() {
       }
   };
 
-  // Effect to trigger Overall Reading after X-Reading closes if pending
+  // Effect to trigger Z-Reading after X-Reading closes if pending
   useEffect(() => {
-    if (!showEndShiftReport && pendingOverallReading) {
-      setIsOverallReadingOpen(true);
-    }
-  }, [showEndShiftReport, pendingOverallReading]);
-
-  // Effect to trigger Z-Reading after Overall Reading closes if pending
-  useEffect(() => {
-    if (!isOverallReadingOpen && !showEndShiftReport && pendingZReading) {
+    if (!showEndShiftReport && pendingZReading) {
       setIsZReadingOpen(true);
     }
-  }, [isOverallReadingOpen, showEndShiftReport, pendingZReading]);
+  }, [showEndShiftReport, pendingZReading]);
+
+  // Effect to trigger Overall Reading after Z-Reading closes if pending
+  useEffect(() => {
+    if (!isZReadingOpen && !showEndShiftReport && pendingOverallReading) {
+      setIsOverallReadingOpen(true);
+    }
+  }, [isZReadingOpen, showEndShiftReport, pendingOverallReading]);
 
 
 
@@ -1799,20 +1812,9 @@ export default function POSPage() {
         <div className="w-96 bg-background border-l shadow-2xl z-20 flex flex-col h-full">
             {/* Cashier Profile */}
             <div className="border-b flex flex-col items-center bg-muted/10">
-                 {businessSettings?.logoPath ? (
-                     <div className="relative w-20 h-20 my-6">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img 
-                            src={businessSettings.logoPath} 
-                            alt="Business Logo" 
-                            className="w-full h-full object-contain"
-                        />
-                     </div>
-                 ) : (
-                     <div className="bg-primary text-white py-8 w-full flex items-center justify-center mb-6 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)]">
-                         <span className="text-4xl uppercase font-black leading-none tracking-widest text-center drop-shadow-lg">STOCK PILOT</span>
-                     </div>
-                  )}
+                 <div className="bg-primary text-white py-8 w-full flex items-center justify-center mb-6 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)]">
+                     <span className="text-4xl uppercase font-black leading-none tracking-widest text-center drop-shadow-lg">STOCK PILOT</span>
+                 </div>
                  <div className="text-center px-6 pb-6">
                     <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>
                     <p className="text-xs text-muted-foreground mt-1 font-mono">{currentTerminalName}</p>
@@ -1877,6 +1879,16 @@ export default function POSPage() {
                             </div>
                         </CardContent>
                     </Card>
+                    {businessSettings?.logoPath && (
+                        <div className="flex justify-center mt-4">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                                src={businessSettings.logoPath} 
+                                alt="Business Logo" 
+                                className="w-24 h-24 object-contain"
+                            />
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex-1 flex flex-col justify-center gap-3">
@@ -1983,6 +1995,7 @@ export default function POSPage() {
         activeLevelId={activeLevelId}
         defaultLevelId={defaultLevelId}
         activeLevelName={activeLevelName}
+        warehouseId={inventoryLocation}
       />
       <AdjustQuantityDialog
         isOpen={isQuantityDialogOpen}
