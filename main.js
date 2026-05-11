@@ -175,7 +175,9 @@ app.whenReady().then(async () => {
   
   const http = require('http');
   const fs = require('fs');
-  const logPath = 'D:\\BHAGOH PROJECT\\Stock_Pilot\\server.log';
+  const logPath = app.isPackaged 
+    ? path.join(app.getPath('userData'), 'server.log')
+    : path.join(__dirname, 'server.log');
   const logStream = fs.createWriteStream(logPath, { flags: 'a' });
   
   logStream.write(`\n\n--- App started at ${new Date().toISOString()} ---\n`);

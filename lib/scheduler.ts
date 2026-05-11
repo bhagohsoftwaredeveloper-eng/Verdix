@@ -164,6 +164,58 @@ export async function processSyncQueue(): Promise<void> {
   }
 }
 
+/**
+ * Pulls updates from the cloud server (Master Data)
+ */
+export async function processPullSync(): Promise<void> {
+  try {
+    const apiConfig = await getExternalApiConfig();
+    if (!apiConfig.enabled || !apiConfig.apiEndpoint) return;
+
+    console.log('--- Pull Sync: Checking for updates from cloud ---');
+
+    const lastSyncSetting = await query("SELECT setting_value FROM external_api_settings WHERE setting_key = 'last_pull_sync'", []);
+    const lastSync = lastSyncSetting[0]?.setting_value || '';
+
+    const url = `${apiConfig.apiEndpoint}/sync/pull?last_sync=${encodeURIComponent(lastSync)}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.log(`Pull sync failed with status: ${response.status}`);
+      return;
+    }
+
+    const result = await response.json();
+    if (result.success && result.data.length > 0) {
+      console.log(`Pull Sync: Received ${result.data.length} updated products.`);
+      
+      for (const product of result.data) {
+        await query(`
+          INSERT INTO products (id, name, barcode, price, cost, stock, category_id, brand_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+          name = VALUES(name),
+          barcode = VALUES(barcode),
+          price = VALUES(price),
+          cost = VALUES(cost),
+          stock = VALUES(stock),
+          category_id = VALUES(category_id),
+          brand_id = VALUES(brand_id),
+          updated_at = VALUES(updated_at)
+        `, [
+          product.id, product.name, product.barcode, product.price, product.cost, 
+          product.stock, product.category_id, product.brand_id, product.created_at, product.updated_at
+        ]);
+      }
+
+      await query("INSERT INTO external_api_settings (setting_key, setting_value) VALUES ('last_pull_sync', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", [result.timestamp]);
+      console.log(`✅ Success: Synced ${result.data.length} products down.`);
+    }
+  } catch (error) {
+    console.error('Failed to process pull sync:', error);
+  }
+}
+
 export function initScheduler(): void {
   // Singleton-ish check to avoid multiple initializations in dev environment reloads
   if ((global as any).__backupSchedulerInitialized) {
@@ -177,6 +229,7 @@ export function initScheduler(): void {
   console.log('Starting background sync queue worker (2m interval)');
   cron.schedule('*/2 * * * *', async () => {
     await processSyncQueue();
+    await processPullSync();
   });
   
   (global as any).__backupSchedulerInitialized = true;
