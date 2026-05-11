@@ -175,9 +175,7 @@ app.whenReady().then(async () => {
   
   const http = require('http');
   const fs = require('fs');
-  const logPath = app.isPackaged 
-    ? path.join(app.getPath('userData'), 'server.log')
-    : path.join(__dirname, 'server.log');
+  const logPath = path.join(app.getPath('userData'), 'server.log');
   const logStream = fs.createWriteStream(logPath, { flags: 'a' });
   
   logStream.write(`\n\n--- App started at ${new Date().toISOString()} ---\n`);
@@ -229,11 +227,28 @@ app.whenReady().then(async () => {
         dialog.showErrorBox('Server Error', 'Failed to start Next.js server. Please ensure Node.js/NPM is installed.\n\nError: ' + err.message);
       });
     }
+
+    // Wait for the server to actually respond before showing the window
+    logStream.write('Waiting for server to become responsive...\n');
+    let attempts = 0;
+    let ready = false;
+    while (attempts < 30) {
+      ready = await checkServerRunning();
+      if (ready) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+    }
+
+    if (ready) {
+      logStream.write('Server is ready. Creating window.\n');
+      createWindow();
+    } else {
+      logStream.write('Server failed to respond within timeout.\n');
+      dialog.showErrorBox('Server Error', 'Next.js server failed to respond within 30 seconds. Please check server.log.');
+    }
   } catch (serverErr) {
     dialog.showErrorBox('Server Error', 'Exception while checking/starting server: ' + serverErr.message);
   }
-  
-  createWindow();
 });
 
 app.on('window-all-closed', () => {

@@ -15,7 +15,7 @@ AppUpdatesURL={#AppURL}
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
 OutputBaseFilename=StockPilotSetup_{#AppVersion}
-Compression=none
+Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
@@ -37,7 +37,7 @@ Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Next.js Standalone Files
-Source: ".next\standalone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: ".next\standalone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "backups\*"
 Source: ".next\static\*"; DestDir: "{app}\.next\static"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs createallsubdirs
 
