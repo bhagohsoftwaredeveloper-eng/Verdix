@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import Link from 'next/link';
-import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart, Layers } from 'lucide-react';
+import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart, Layers, CreditCard } from 'lucide-react';
 
 export default function ReportsPage() {
   return (
@@ -184,6 +184,18 @@ export default function ReportsPage() {
                   Sales by Customer
                 </CardTitle>
                 <CardDescription>Customer purchase history with credit sales and outstanding balances.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/split-payments">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full border-blue-100 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-blue-500" />
+                  Split Payments Report
+                </CardTitle>
+                <CardDescription>Breakdown of sales transactions paid with multiple payment methods.</CardDescription>
               </CardHeader>
             </Card>
           </Link>

@@ -7,11 +7,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    let sql = 'SELECT * FROM shelf_locations';
+    let sql = `
+      SELECT sl.*,
+        COUNT(DISTINCT ps.product_id) AS product_count
+      FROM shelf_locations sl
+      LEFT JOIN product_shelves ps ON sl.id = ps.shelf_id
+    `;
     if (activeOnly) {
-      sql += ' WHERE is_active = TRUE';
+      sql += ' WHERE sl.is_active = TRUE';
     }
-    sql += ' ORDER BY name ASC';
+    sql += ' GROUP BY sl.id ORDER BY sl.name ASC';
 
     const locations = await query(sql);
 

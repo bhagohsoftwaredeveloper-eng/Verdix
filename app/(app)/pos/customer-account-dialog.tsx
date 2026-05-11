@@ -41,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import type { Customer, SystemSettings } from '@/lib/types';
 import { getApiUrl } from '@/lib/api-config';
 import { format, differenceInDays } from 'date-fns';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatQuantity } from '@/lib/utils';
 import { usePrinter } from '@/lib/use-printer';
 import { AddCustomerDialog } from './add-customer-dialog';
 
@@ -481,7 +481,7 @@ export function CustomerAccountDialog({
                           <TableRow key={idx}>
                             <TableCell className="font-medium">{item.product.name}</TableCell>
                             <TableCell>{formatCurrency(item.price)}</TableCell>
-                            <TableCell>{item.quantity}</TableCell>
+                            <TableCell>{formatQuantity(item.quantity)}</TableCell>
                             <TableCell>{formatCurrency(item.price * item.quantity)}</TableCell>
                             <TableCell>{formatCurrency(item.discountTotal || 0)}</TableCell>
                             <TableCell>{format(new Date(item.transactionDate), 'MMM dd, yyyy')}</TableCell>

@@ -24,6 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Ban, ArrowLeft, ChevronsRight, Search } from 'lucide-react';
 import type { Sale, SaleItem } from '@/lib/types';
 import { format, subMinutes } from 'date-fns';
+import { formatQuantity } from '@/lib/utils';
 import { AdminAuthDialog } from './admin-auth-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getApiUrl } from '@/lib/api-config';
@@ -80,7 +81,7 @@ function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError
                                 <TableRow key={index}>
                                     <TableCell>{item.product.name}</TableCell>
                                     <TableCell>{item.product.unitOfMeasure}</TableCell>
-                                    <TableCell className="text-right">{item.quantity}</TableCell>
+                                    <TableCell className="text-right">{formatQuantity(item.quantity)}</TableCell>
                                     <TableCell className="text-right">₱{item.price.toFixed(2)}</TableCell>
                                 </TableRow>
                             ))}

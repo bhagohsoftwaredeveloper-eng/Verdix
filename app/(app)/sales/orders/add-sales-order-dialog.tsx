@@ -49,11 +49,14 @@ import { ManageSalesPersonsDialog } from '@/app/(app)/settings/pos-setup/manage-
 import { CustomerSelectionField } from '../invoices/customer-selection-field';
 import { useProducts, useCustomers } from '@/hooks/use-api';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity, formatStockQuantity } from '@/lib/utils';
 
 const salesOrderItemSchema = z.object({
   product: z.object({
     id: z.string().min(1, 'Product ID is required'),
     name: z.string().min(1, 'Product name is required'),
+    sku: z.string().optional(),
+    stock: z.number().optional(),
   }),
   quantity: z.coerce.number().positive('Quantity must be greater than 0'),
   price: z.coerce.number().nonnegative('Price cannot be negative'),
@@ -151,7 +154,7 @@ function ProductSelector({ onSelectProduct, warehouseId }: { onSelectProduct: (p
                       <div className="flex flex-col">
                         <span className="font-medium">{product.name}</span>
                         <span className="text-sm text-muted-foreground">
-                          SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {product.stock}
+                          SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {formatStockQuantity(product.stock)}
                         </span>
                       </div>
                     </CommandItem>
@@ -752,7 +755,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                                                 <span>{field.product.sku || 'No SKU'}</span>
                                                 {field.product.stock !== undefined && (
                                                     <span className={field.product.stock <= 0 ? "text-destructive" : "text-emerald-600"}>
-                                                    Stock: {field.product.stock}
+                                                    Stock: {formatStockQuantity(field.product.stock)}
                                                     </span>
                                                 )}
                                             </div>

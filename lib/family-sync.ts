@@ -240,42 +240,29 @@ export async function syncFamilyStockDuringTransfer(
   const sourceProduct = sourceProducts[0];
   const rootId = sourceProduct.parent_id || sourceProduct.id;
 
-  // 2. Identify Product Family in source warehouse
-  let sourceFamilyQuery = 'SELECT * FROM products WHERE (id = ? OR parent_id = ?) AND warehouse_id = ?';
-  let sourceFamilyParams = [rootId, rootId, sourceProduct.warehouse_id];
+  // 2. Identify ALL Family Members in source warehouse (any depth)
+  const sourceFamily = await getAllDescendants(rootId, connection);
   
-  if (!sourceProduct.warehouse_id) {
-    sourceFamilyQuery = 'SELECT * FROM products WHERE (id = ? OR parent_id = ?) AND warehouse_id IS NULL';
-    sourceFamilyParams = [rootId, rootId];
+  // Also include the root itself
+  const [rootRows]: any = await connection.query('SELECT * FROM products WHERE id = ?', [rootId]);
+  if (rootRows && rootRows.length > 0) {
+    sourceFamily.push(rootRows[0]);
   }
 
-  const [sourceFamily]: any = await connection.query(sourceFamilyQuery, sourceFamilyParams);
-
-  // 3. Fetch Conversion Factors for the family
-  const [convFactors]: any = await connection.query(
-    'SELECT unit, factor FROM conversion_factors WHERE product_id = ?',
-    [rootId]
-  );
-
-  const getFactorToRoot = (unit: string) => {
-    // Find the root product to get its unit
-    const rootMember = sourceFamily.find((m: any) => m.id === rootId);
-    if (rootMember && rootMember.unit_of_measure === unit) return 1;
-    const factor = convFactors.find((cf: any) => cf.unit === unit);
-    return factor ? parseFloat(factor.factor) : undefined;
+  // 3. Fetch Conversion Factors for the family (recursive lookup helper)
+  const getFactorToRoot = async (productId: string): Promise<number> => {
+    const { factorToRoot } = await findUltimateRoot(productId, connection);
+    return factorToRoot;
   };
 
   // 4. Calculate quantity in Root Units
-  const soldItemFactor = getFactorToRoot(sourceProduct.unit_of_measure) || 1;
+  const soldItemFactor = await getFactorToRoot(sourceProductId);
   const quantityInRootUnits = quantity / soldItemFactor;
 
   // 5. Sync each family member
   for (const sourceMember of sourceFamily) {
-    const memberFactor = getFactorToRoot(sourceMember.unit_of_measure);
-    // If no direct sync path, only update if it is the primary product moved
-    if (!memberFactor && sourceMember.id !== sourceProductId) continue;
-    
-    const memberQtyChange = quantityInRootUnits * (memberFactor || 1);
+    const memberFactor = await getFactorToRoot(sourceMember.id);
+    const memberQtyChange = quantityInRootUnits * memberFactor;
     
     // --- SOURCE Warehouse Update ---
     await updateStockAndRecordMovement(

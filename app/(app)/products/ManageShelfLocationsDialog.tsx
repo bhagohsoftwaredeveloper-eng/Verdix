@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Pencil, Trash2, Plus, Loader2 } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Package2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ShelfLocation } from "@/lib/types";
 
@@ -174,27 +174,42 @@ export function ManageShelfLocationsDialog({ open, onOpenChange, onLocationAdded
                 <TableRow>
                   <TableHead>Location Name</TableHead>
                   <TableHead>Description</TableHead>
+                  <TableHead className="w-[110px] text-center">Products</TableHead>
                   <TableHead className="w-[100px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground bg-muted/10">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground bg-muted/10">
                       Loading shelf locations...
                     </TableCell>
                   </TableRow>
                 ) : locations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground bg-muted/10">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground bg-muted/10">
                       No shelf locations found. Add one above.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  locations.map((loc) => (
+                  locations.map((loc) => {
+                    const count = Number((loc as any).product_count ?? 0);
+                    return (
                     <TableRow key={loc.id}>
                       <TableCell className="font-medium">{loc.name}</TableCell>
                       <TableCell>{loc.description || <span className="text-muted-foreground text-xs italic">No description</span>}</TableCell>
+                      <TableCell className="text-center">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            count === 0
+                              ? "bg-muted text-muted-foreground"
+                              : "bg-primary/10 text-primary"
+                          }`}
+                        >
+                          <Package2 className="h-3 w-3" />
+                          {count} {count === 1 ? "product" : "products"}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(loc)}>
@@ -206,7 +221,8 @@ export function ManageShelfLocationsDialog({ open, onOpenChange, onLocationAdded
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity, formatStockQuantity } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -194,10 +195,10 @@ export default function LowStockReportPage() {
                     <TableCell>{product.barcode || '-'}</TableCell>
                     <TableCell>{product.category}</TableCell>
                     <TableCell className="text-right font-bold text-red-600">
-                        {product.stock} {product.unit_of_measure}
+                        {formatStockQuantity(product.stock)} {product.unit_of_measure}
                     </TableCell>
                     <TableCell className="text-right">
-                        {product.reorder_point}
+                        {formatStockQuantity(product.reorder_point)}
                     </TableCell>
                     <TableCell className="text-right">
                         <Badge variant="destructive">Restock Needed</Badge>

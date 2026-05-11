@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
 import { useReactToPrint } from 'react-to-print';
 import { CreditSlipView } from './credit-slip-view';
+import { formatQuantity } from '@/lib/utils';
 
 interface ReturnSalesDialogProps {
   isOpen: boolean;
@@ -92,8 +93,8 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
     };
 
     const handleQuantityChange = (item: SaleItem, value: string) => {
-        const qty = parseInt(value);
-        if (isNaN(qty) || qty < 1) return;
+        const qty = parseFloat(value);
+        if (isNaN(qty) || qty <= 0) return;
         
         // Cap at sold quantity
         const validQty = Math.min(qty, item.quantity);
@@ -149,7 +150,7 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
                                 </TableCell>
                                 <TableCell>{item.product.name}</TableCell>
                                 <TableCell>{item.product.unitOfMeasure}</TableCell>
-                                <TableCell className="text-right">{item.quantity}</TableCell>
+                                <TableCell className="text-right">{formatQuantity(item.quantity)}</TableCell>
                                 <TableCell className="text-right">
                                     {selectedItems.has(item.product.id) ? (
                                         <Input 

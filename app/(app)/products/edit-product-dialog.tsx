@@ -56,7 +56,7 @@ import { ManageShelfLocationsDialog } from './ManageShelfLocationsDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 import { ChevronsUpDown, Check } from 'lucide-react';
 
 function CurrencyIcon({ className }: { className?: string }) {
@@ -1231,7 +1231,7 @@ export function EditProductDialog({
                           <div className="space-y-2">
                             <Label>Initial Stock</Label>
                             <div>
-                              <Input type="number" value={product.stock || 0} disabled />
+                              <Input type="text" value={formatQuantity(product.stock || 0)} disabled />
                             </div>
                             <p className="text-sm text-muted-foreground">Stock is updated via transactions.</p>
                           </div>
@@ -1242,7 +1242,7 @@ export function EditProductDialog({
                               <FormItem>
                                 <FormLabel>Reorder Point</FormLabel>
                                 <FormControl>
-                                  <Input type="number" placeholder="0" value={field.value} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                                  <Input type="number" placeholder="0" value={formatQuantity(field.value)} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>

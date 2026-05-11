@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { SaleItem } from './page';
+import { formatQuantity } from '@/lib/utils';
 
 interface InsufficientStockDialogProps {
   open: boolean;
@@ -54,8 +55,8 @@ export function InsufficientStockDialog({
                     {items.map((item) => (
                         <TableRow key={item.id}>
                             <TableCell className="font-medium">{item.name}</TableCell>
-                            <TableCell className="text-right text-destructive font-bold">{item.stock}</TableCell>
-                            <TableCell className="text-right">{item.quantity}</TableCell>
+                            <TableCell className="text-right text-destructive font-bold">{formatQuantity(item.stock)}</TableCell>
+                            <TableCell className="text-right">{formatQuantity(item.quantity)}</TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

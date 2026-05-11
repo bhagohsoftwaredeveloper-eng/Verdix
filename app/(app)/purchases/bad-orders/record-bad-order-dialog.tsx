@@ -39,6 +39,7 @@ import { useProducts, useSuppliers } from '@/hooks/use-api';
 import { useUser } from '@/hooks/use-user';
 import { Product, Supplier } from '@/lib/types';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   Table,
@@ -249,7 +250,7 @@ function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Produ
                       <div className="flex flex-col">
                         <span className="font-medium">{product.name}</span>
                         <span className="text-sm text-muted-foreground">
-                          SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {product.stock}
+                          SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {formatQuantity(product.stock)}
                         </span>
                       </div>
                     </CommandItem>
@@ -672,7 +673,7 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
                                 </TableCell>
                                 <TableCell className="py-2 text-center border-r font-mono text-xs">
                                      <span className={(field.currentStock || 0) <= 0 ? 'text-destructive font-bold' : 'text-muted-foreground'}>
-                                        {field.currentStock || 0}
+                                        {formatQuantity(field.currentStock || 0)}
                                     </span>
                                 </TableCell>
                                 <TableCell className="py-2 border-r px-2 text-center">

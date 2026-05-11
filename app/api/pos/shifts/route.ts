@@ -91,10 +91,41 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Shift ID or Terminal parameters required' },
-      { status: 400 }
-    );
+    // List completed shifts
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    let sql = `
+      SELECT s.id, s.user_id, s.terminal_id, s.starting_cash, s.actual_cash, s.start_time, s.end_time, s.status, u.display_name as cashier_name
+      FROM shifts s
+      LEFT JOIN users u ON s.user_id = u.uid
+      WHERE s.status = 'completed'
+    `;
+    const params: any[] = [];
+
+    if (terminalId && terminalId !== 'all') {
+      sql += ' AND s.terminal_id = ?';
+      params.push(terminalId);
+    }
+
+    if (startDate) {
+      sql += ' AND s.start_time >= ?';
+      params.push(`${startDate} 00:00:00`);
+    }
+
+    if (endDate) {
+      sql += ' AND s.end_time <= ?';
+      params.push(`${endDate} 23:59:59`);
+    }
+
+    sql += ' ORDER BY s.end_time DESC';
+
+    const shifts = await query(sql, params);
+
+    return NextResponse.json({
+      success: true,
+      data: shifts
+    });
 
 
   } catch (error: any) {

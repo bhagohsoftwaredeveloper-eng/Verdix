@@ -27,6 +27,7 @@ import { useLiveRefresh } from '@/hooks/use-live-refresh';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Loader2 } from 'lucide-react';
 import { calculateEffectivePrice } from '@/lib/pricing';
+import { formatQuantity, formatStockQuantity } from '@/lib/utils';
 
 interface ProductSearchDialogProps {
   onSelectProduct: (product: Product) => void;
@@ -145,7 +146,7 @@ export function ProductSearchDialog({
                   <div className="flex flex-col items-end gap-1">
                       {!!showQuantityInSearch && (
                           <div className={`text-sm ${product.stock <= 0 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                              {product.stock} {product.unitOfMeasure}
+                              {formatStockQuantity(product.stock)} {product.unitOfMeasure}
                           </div>
                       )}
                       <div className="flex items-baseline gap-1">

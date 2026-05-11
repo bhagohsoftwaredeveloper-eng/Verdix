@@ -39,6 +39,7 @@ import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { formatQuantity } from '@/lib/utils';
 
 // Mock serial data
 const mockSerialNumbers: SerialNumber[] = [
@@ -455,8 +456,8 @@ export default function SerialNumbersPage() {
                 </div>
                 <CardDescription>
                 Add, view, and manage unique serial numbers for this product.
-                Current Stock: <Badge variant="outline">{product.stock}</Badge>.
-                In-Stock Serials: <Badge variant="outline">{inStockCount}</Badge>.
+                Current Stock: <Badge variant="outline">{formatQuantity(product.stock)}</Badge>.
+                In-Stock Serials: <Badge variant="outline">{formatQuantity(inStockCount)}</Badge>.
                 </CardDescription>
             </div>
             <AddSerialNumberDialog product={product} />
@@ -468,7 +469,7 @@ export default function SerialNumbersPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Stock Count Mismatch!</AlertTitle>
                 <AlertDescription>
-                    The total stock quantity ({product.stock}) does not match the number of "In Stock" serial numbers ({inStockCount}). Please review your serials or perform a stock adjustment.
+                    The total stock quantity ({formatQuantity(product.stock)}) does not match the number of "In Stock" serial numbers ({formatQuantity(inStockCount)}). Please review your serials or perform a stock adjustment.
                 </AlertDescription>
             </Alert>
         )}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../lib/mysql';
 import { v4 as uuidv4 } from 'uuid';
-import { recordAdjustmentMovement } from '../../../lib/stock-movements';
+import { withTransaction, query } from '@/lib/mysql';
+import { addFamilyStock, deductFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 
 // GET endpoint to fetch stock adjustments
 export async function GET(request: NextRequest) {
@@ -82,51 +82,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get current product stock
-    const productResult = await query('SELECT id, name, stock FROM products WHERE id = ?', [productId]);
-    if (!productResult || productResult.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Product not found' },
-        { status: 404 }
-      );
-    }
+    return await withTransaction(async (connection) => {
+      // Get current product stock
+      const [productResult]: any = await connection.query('SELECT id, name, stock FROM products WHERE id = ?', [productId]);
+      if (!productResult || productResult.length === 0) {
+        throw new Error('Product not found');
+      }
 
-    const product = productResult[0];
-    const currentStock = product.stock || 0;
-    const newStock = currentStock + quantity;
+      const product = productResult[0];
+      const currentStock = Number(product.stock || 0);
+      const newStock = currentStock + quantity;
 
-    // Update product stock
-    await query('UPDATE products SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newStock, productId]);
+      // --- Family Stock Sync ---
+      const { rootId, factorToRoot } = await findUltimateRoot(productId, connection as any);
+      const rootQuantity = Math.abs(quantity) / factorToRoot;
 
-    // Record the adjustment
-    const adjustmentId = uuidv4();
-    const adjustmentSql = `
-      INSERT INTO stock_adjustments (id, product_id, quantity, reason, new_stock)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    await query(adjustmentSql, [adjustmentId, productId, quantity, reason, newStock]);
+      const adjustmentId = uuidv4();
 
-    // Record to stock movements
-    try {
-      await recordAdjustmentMovement(adjustmentId, productId, product.name, quantity, reason);
-    } catch (movementError) {
-      console.error('Error recording stock movement:', movementError);
-      // Continue even if movement recording fails
-    }
+      if (quantity < 0) {
+        await deductFamilyStock(rootId, rootQuantity, adjustmentId, 'adjustment', reason, connection as any);
+      } else if (quantity > 0) {
+        await addFamilyStock(rootId, rootQuantity, adjustmentId, 'adjustment', reason, connection as any);
+      } else {
+        // If qty is 0, still update the product to refresh its timestamp
+        await connection.query('UPDATE products SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [productId]);
+      }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Stock adjustment created successfully',
-      data: {
-        id: adjustmentId,
-        productId,
-        productName: product.name,
-        quantity,
-        previousStock: currentStock,
-        newStock,
-        reason
-      },
-      timestamp: new Date().toISOString()
+      // Record the adjustment
+      const adjustmentSql = `
+        INSERT INTO stock_adjustments (id, product_id, quantity, reason, new_stock)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      // Fetch new stock after sync to be accurate
+      const [newProductResult]: any = await connection.query('SELECT stock FROM products WHERE id = ?', [productId]);
+      const actualNewStock = newProductResult[0]?.stock || newStock;
+
+      await connection.query(adjustmentSql, [adjustmentId, productId, quantity, reason, actualNewStock]);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Stock adjustment created successfully',
+        data: {
+          id: adjustmentId,
+          productId,
+          productName: product.name,
+          quantity,
+          previousStock: currentStock,
+          newStock: actualNewStock,
+          reason
+        },
+        timestamp: new Date().toISOString()
+      });
     });
   } catch (error) {
     console.error('Error creating stock adjustment:', error);

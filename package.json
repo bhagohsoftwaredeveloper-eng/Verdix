@@ -22,6 +22,7 @@
     "build:installer": "iscc setup.iss"
   },
   "dependencies": {
+    "mysql2": "^3.15.3",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^4.1.3",
     "@point-of-sale/receipt-printer-encoder": "^3.0.3",
@@ -105,6 +106,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "setup_portable_db.js",
       "printer-sdk.js",
       "epson-sdk.js",
       "package.json",

@@ -24,6 +24,7 @@ import { useProducts } from '@/hooks/use-api';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
 import { ArrowLeft } from 'lucide-react';
 import { calculateEffectivePrice } from '@/lib/pricing';
+import { formatQuantity, formatStockQuantity } from '@/lib/utils';
 
 interface PriceInquiryDialogProps {
   isOpen: boolean;
@@ -147,7 +148,7 @@ export function PriceInquiryDialog({
                        <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border">
                           <span>Available Stock:</span>
                           <span className={`font-bold ${selectedProduct.stock > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {selectedProduct.stock} {selectedProduct.unitOfMeasure}
+                            {formatStockQuantity(selectedProduct.stock)} {selectedProduct.unitOfMeasure}
                           </span>
                        </div>
                     )}

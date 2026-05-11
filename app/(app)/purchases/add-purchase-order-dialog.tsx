@@ -63,7 +63,7 @@ import { SupplierFormDialog } from '../products/ManageSuppliersDialog';
 import { addSupplier } from '../products/actions';
 import { useUser } from '@/hooks/use-user';
 import { getApiUrl } from '@/lib/api-config';
-import { toSafeNumber } from '@/lib/utils';
+import { toSafeNumber, formatQuantity } from '@/lib/utils';
 
 const purchaseOrderItemSchema = z.object({
   productId: z.string().min(1),
@@ -199,7 +199,7 @@ function ProductSelector({ onSelectProduct, supplierId }: { onSelectProduct: (pr
                       <div className="flex flex-col">
                         <span className="font-bold text-zinc-900">{product.name}</span>
                         <span className="text-sm text-zinc-700 font-medium">
-                          SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {product.stock}
+                          SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {formatQuantity(product.stock)}
                         </span>
                       </div>
                     </CommandItem>
@@ -1060,7 +1060,7 @@ export function AddPurchaseOrderDialog({
                                 </TableCell>
                                 <TableCell className="py-2 text-center border-r font-mono text-xs">
                                      <span className={(field.currentStock || 0) <= 0 ? 'text-destructive font-black' : 'text-zinc-700 font-bold'}>
-                                        {field.currentStock || 0}
+                                        {formatQuantity(field.currentStock || 0)}
                                     </span>
                                 </TableCell>
                                 <TableCell className="py-2 border-r">

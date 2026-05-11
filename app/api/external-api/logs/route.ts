@@ -33,7 +33,24 @@ export async function GET(request: NextRequest) {
     sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
-    const logs = await query(sql, params);
+    const rawLogs: any[] = await query(sql, params);
+    
+    // Map snake_case DB columns to camelCase for the frontend
+    const logs = rawLogs.map((log: any) => ({
+      id: log.id,
+      transactionType: log.transaction_type,
+      transactionId: log.transaction_id,
+      endpoint: log.endpoint,
+      payload: log.payload,
+      response: log.response,
+      status: log.status,
+      errorMessage: log.error_message,
+      retryCount: log.retry_count,
+      nextRetryAt: log.next_retry_at,
+      lastRetryAt: log.last_retry_at,
+      createdAt: log.created_at,
+      updatedAt: log.updated_at,
+    }));
 
     // Get total count
     let countSql = 'SELECT COUNT(*) as total FROM external_api_logs WHERE 1=1';

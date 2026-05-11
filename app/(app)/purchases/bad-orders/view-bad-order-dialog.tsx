@@ -30,6 +30,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity } from '@/lib/utils';
 import { printBadOrder } from '@/lib/print-bad-order';
 
 interface ViewBadOrderDialogProps {
@@ -244,7 +245,7 @@ export function ViewBadOrderDialog({
                     {badOrder.items.map((item: any) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">{item.productName}</TableCell>
-                        <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell className="text-right">{formatQuantity(item.quantity)}</TableCell>
                         <TableCell className="text-right">
                           ₱{item.cost.toFixed(2)}
                         </TableCell>

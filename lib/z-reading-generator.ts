@@ -108,27 +108,43 @@ export class ZReadingGenerator {
         // ── DISCOUNT SUMMARY ─────────────────────────────────────────────────
         enc.line(dash);
         enc.align('center').bold(true).line('DISCOUNT SUMMARY').bold(false).align('left');
-        enc.line(row('SC Disc. :',          '0.00'));
-        enc.line(row('PWD Disc. :',         '0.00'));
-        enc.line(row('NAAC Disc. :',        '0.00'));
-        enc.line(row('Solo Parent Disc. :', '0.00'));
-        enc.line(row('Other Disc. :',       fmt(data.discounts || 0)));
+        
+        const ds = data.discountSummary || [];
+        
+        let scAmt = 0;
+        let pwdAmt = 0;
+        let naacAmt = 0;
+        let soloAmt = 0;
+        let otherAmt = 0;
+
+        ds.forEach(d => {
+            const type = d.type?.toLowerCase();
+            if (type === 'senior') scAmt += d.amount;
+            else if (type === 'pwd') pwdAmt += d.amount;
+            else if (type === 'naac') naacAmt += d.amount;
+            else if (type === 'solo_parent') soloAmt += d.amount;
+            else otherAmt += d.amount;
+        });
+
+        enc.line(row('SC Disc. :', fmt(scAmt)));
+        enc.line(row('PWD Disc. :', fmt(pwdAmt)));
+        enc.line(row('NAAC Disc. :', fmt(naacAmt)));
+        enc.line(row('Solo Parent Disc. :', fmt(soloAmt)));
+        enc.line(row('Other Disc. :', fmt(otherAmt)));
 
         // ── SALES ADJUSTMENT ─────────────────────────────────────────────────
         enc.line(dash);
         enc.align('center').bold(true).line('SALES ADJUSTMENT').bold(false).align('left');
-        enc.line(row('VOID :',   '0.00'));
-        enc.line(row('RETURN :', fmt(data.returns || 0)));
+        enc.line(row('VOID :',   fmt(data.salesAdjustment?.void.amount || 0)));
+        enc.line(row('RETURN :', fmt(data.salesAdjustment?.return.amount || 0)));
 
         // ── VAT ADJUSTMENT ───────────────────────────────────────────────────
         enc.line(dash);
         enc.align('center').bold(true).line('VAT ADJUSTMENT').bold(false).align('left');
-        enc.line(row('SC TRANS. :',           '0.00'));
-        enc.line(row('PWD TRANS :',           '0.00'));
-        enc.line(row('REG.Disc. TRANS :',     '0.00'));
-        enc.line(row('ZERO-RATED TRANS.:',    '0.00'));
-        enc.line(row('VAT on Return:',        '0.00'));
-        enc.line(row('Other VAT Adjustments', '0.00'));
+        enc.line(row('VAT ADJ. ON SC/PWD :',  fmt(data.vatAdjustment || 0)));
+        enc.line(row('VAT ADJ. ON RETURN :',  '0.00')); // Placeholder for now
+        enc.bold(true).line(row('Total VAT Adj. :', fmt(data.vatAdjustment || 0))).bold(false);
+
 
         // ── TRANSACTION SUMMARY ──────────────────────────────────────────────
         enc.line(dash);

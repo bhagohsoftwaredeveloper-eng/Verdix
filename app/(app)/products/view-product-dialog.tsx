@@ -20,7 +20,7 @@ import { EditProductDialog } from './edit-product-dialog';
 import { QuickAddChildDialog } from './quick-add-child-dialog';
 import { BreakPackDialog } from './break-pack-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 
 function DetailItem({ label, value, icon: Icon, className }: { label: string, value: React.ReactNode, icon?: any, className?: string }) {
     return (
@@ -147,14 +147,14 @@ export function ViewProductDialog({
                                                     "text-2xl font-bold tracking-tight",
                                                     product.stock <= (product.reorderPoint || 0) ? "text-destructive" : "text-foreground"
                                                 )}>
-                                                    {product.stock}
+                                                    {formatQuantity(product.stock, product.unitOfMeasure)}
                                                 </span>
                                                 <span className="text-sm text-muted-foreground font-normal">{product.unitOfMeasure}</span>
                                             </div>
                                         } 
                                         icon={BarChart3} 
                                     />
-                                    <DetailItem label="Reorder Point" value={product.reorderPoint || 'Not set'} icon={History} />
+                                    <DetailItem label="Reorder Point" value={product.reorderPoint !== undefined && product.reorderPoint !== null ? formatQuantity(product.reorderPoint, product.unitOfMeasure) : 'Not set'} icon={History} />
                                     {product.warehouseName && <DetailItem label="Warehouse" value={product.warehouseName} icon={Warehouse} />}
                                     {(product.shelfLocationNames || product.shelfLocationName) && <DetailItem label="Shelf Location" value={product.shelfLocationNames || product.shelfLocationName} icon={Warehouse} />}
                                 </div>

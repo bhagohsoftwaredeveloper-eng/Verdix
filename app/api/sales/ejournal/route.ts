@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
         st.invoice_date,
         st.reference as si_number,
         st.receipt_number as or_number,
-        u.full_name as cashier,
+        u.display_name as cashier,
         si.product_name,
         si.quantity,
         si.price,
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       FROM sales_transactions st
       JOIN pos_transactions pt ON st.id = pt.sale_id
       JOIN sale_items si ON st.id = si.sale_id
-      JOIN users u ON pt.user_id = u.id
+      JOIN users u ON pt.user_id = u.uid
       LEFT JOIN customers c ON st.customer_id = c.id
       WHERE DATE(st.created_at) = ? AND st.is_training = 0
     `;

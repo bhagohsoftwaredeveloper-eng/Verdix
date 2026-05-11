@@ -116,6 +116,8 @@ export default function SalesByDatePage() {
   const [tempPaymentType, setTempPaymentType] = useState<string>('all');
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [transactionsByDate, setTransactionsByDate] = useState<Record<string, any[]>>({});
+  const [loadingTransactions, setLoadingTransactions] = useState<Record<string, boolean>>({});
 
   const fetchSalesByDate = async (page = 1) => {
     setIsLoading(true);
@@ -162,6 +164,23 @@ export default function SalesByDatePage() {
     }
   };
 
+  const fetchTransactionsForDate = async (dateStr: string) => {
+    if (transactionsByDate[dateStr]) return;
+    setLoadingTransactions(prev => ({ ...prev, [dateStr]: true }));
+    try {
+      const formattedDate = format(new Date(dateStr), 'yyyy-MM-dd');
+      const response = await fetch(`/api/sales/transactions?startDate=${formattedDate}&endDate=${formattedDate}`);
+      const result = await response.json();
+      if (result.success) {
+        setTransactionsByDate(prev => ({ ...prev, [dateStr]: result.data }));
+      }
+    } catch (error) {
+      console.error('Error fetching transactions for date:', error);
+    } finally {
+      setLoadingTransactions(prev => ({ ...prev, [dateStr]: false }));
+    }
+  };
+
   useEffect(() => {
     fetchSalesByDate(currentPage);
   }, [dateRange, terminal, interval, paymentType, currentPage, limit]);
@@ -184,6 +203,7 @@ export default function SalesByDatePage() {
         newSet.delete(date);
       } else {
         newSet.add(date);
+        fetchTransactionsForDate(date);
       }
       return newSet;
     });
@@ -438,7 +458,7 @@ export default function SalesByDatePage() {
           </div>
       </CardHeader>
       
-      <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden">
+      <CardContent className="flex-1 flex flex-col gap-4 overflow-auto">
          {/* 1. Summary Cards (Top) */}
          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-6">
             <div className="bg-muted/50 rounded-lg p-3 border">
@@ -595,7 +615,7 @@ export default function SalesByDatePage() {
           {/* 3. Data Table (Bottom) */}
           <Table 
             className="text-xs whitespace-nowrap w-full" 
-            wrapperClassName="max-h-[600px] overflow-auto border rounded-md"
+            wrapperClassName="min-h-[450px] max-h-[600px] overflow-auto border rounded-md"
           >
             <TableHeader className="sticky top-0 z-40">
               <TableRow className="bg-primary hover:bg-primary border-none">
@@ -660,9 +680,41 @@ export default function SalesByDatePage() {
                             {isExpanded && (
                                 <TableRow className="bg-muted/30 hover:bg-muted/30">
                                     <TableCell colSpan={13} className="p-4">
-                                        <div className="flex items-center justify-center h-20 text-muted-foreground bg-background/50 rounded border border-dashed">
-                                           <span>Detailed transactions for {formatDate(row.date)} will be displayed here.</span>
-                                        </div>
+                                        {loadingTransactions[row.date] ? (
+                                            <div className="flex justify-center items-center h-20">
+                                                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                                                Loading transactions...
+                                            </div>
+                                        ) : transactionsByDate[row.date]?.length > 0 ? (
+                                            <div className="border rounded-md bg-background">
+                                                <Table className="text-xs">
+                                                    <TableHeader>
+                                                        <TableRow className="bg-muted hover:bg-muted">
+                                                            <TableHead className="h-8 py-1">Order No</TableHead>
+                                                            <TableHead className="h-8 py-1">Receipt No</TableHead>
+                                                            <TableHead className="h-8 py-1">Cashier</TableHead>
+                                                            <TableHead className="h-8 py-1">Method</TableHead>
+                                                            <TableHead className="h-8 py-1 text-right">Total</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {transactionsByDate[row.date].map((tx: any) => (
+                                                            <TableRow key={tx.id} className="hover:bg-muted/50">
+                                                                <TableCell className="py-1">{tx.orderNumber}</TableCell>
+                                                                <TableCell className="py-1">{tx.receiptNo}</TableCell>
+                                                                <TableCell className="py-1">{tx.cashier}</TableCell>
+                                                                <TableCell className="py-1">{tx.paymentMethod}</TableCell>
+                                                                <TableCell className="py-1 text-right">{formatCurrency(tx.total)}</TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center h-20 text-muted-foreground bg-background/50 rounded border border-dashed">
+                                               <span>No detailed transactions found for {formatDate(row.date)}.</span>
+                                            </div>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             )}

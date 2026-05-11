@@ -139,6 +139,7 @@ export interface Sale {
   orderNumber?: number;
   notes?: string;
   shipping?: number;
+  payments?: { method: string; amount: number; reference?: string }[];
   pointsEarned?: number;
   receiptNo?: string;
   amountTendered?: number;
@@ -548,7 +549,14 @@ export interface ZReadingData {
   resetCounter?: number;
   terminalName?: string;
   intervalStartDate?: string | Date;
+  discountSummary?: Array<{ type: string; amount: number; count: number; itemCount?: number }>;
+  salesAdjustment?: {
+    void: { count: number; amount: number };
+    return: { count: number; amount: number };
+  };
+  vatAdjustmentDetails?: Array<{ type: string; amount: number; vatAmount: number }>;
 }
+
 
 
 export interface XReadingData {

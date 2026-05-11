@@ -1,8 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../lib/mysql';
 
+async function ensurePosTransactionItemsSchema() {
+  try {
+    const currentColumnsResult = await query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'pos_transaction_items' AND TABLE_SCHEMA = DATABASE()"
+    ) as any[];
+    const existingColumns = new Set(currentColumnsResult.map((c: any) => c.COLUMN_NAME));
+
+    if (!existingColumns.has('discount_type')) {
+      await query("ALTER TABLE pos_transaction_items ADD COLUMN discount_type VARCHAR(50) DEFAULT 'percent'");
+      console.log('✅ Added discount_type column to pos_transaction_items');
+    }
+    if (!existingColumns.has('tax_type')) {
+      await query("ALTER TABLE pos_transaction_items ADD COLUMN tax_type VARCHAR(50) DEFAULT 'VAT'");
+      console.log('✅ Added tax_type column to pos_transaction_items');
+    }
+  } catch (error) {
+    console.error('Error ensuring pos_transaction_items schema:', error);
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
+    await ensurePosTransactionItemsSchema();
+
     const { searchParams } = new URL(request.url);
     const saleId = searchParams.get('saleId');
 
@@ -30,9 +52,8 @@ export async function GET(request: NextRequest) {
 
         -- User information
         u.username,
-        u.full_name as user_full_name,
-        u.email as user_email,
-        u.role as user_role,
+        u.display_name as user_full_name,
+        u.user_type as user_role,
 
         -- Terminal information
         t.name as terminal_name,
@@ -90,7 +111,6 @@ export async function GET(request: NextRequest) {
         id: row.user_id,
         username: row.username,
         fullName: row.user_full_name,
-        email: row.user_email,
         role: row.user_role
       } : undefined,
       terminal: row.terminal_id ? {
@@ -131,6 +151,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await ensurePosTransactionItemsSchema();
+
     const body = await request.json();
     const {
       saleId,

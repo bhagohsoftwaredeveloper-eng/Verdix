@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { consolidatePack, searchProducts, getUnitsOfMeasure } from '../../products/actions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Package, ArrowLeft, CheckCircle2, Info, Wand2, PackagePlus } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
 type Step = 'source' | 'target' | 'calculate';
@@ -243,7 +243,7 @@ export function ConsolidationForm({ onSuccess }: { onSuccess?: () => void }) {
                     >
                       <div>
                         <p className="font-bold">{p.name}</p>
-                        <p className="text-sm text-muted-foreground">{p.sku} · Stock: {p.stock} {p.unitOfMeasure}</p>
+                        <p className="text-sm text-muted-foreground">{p.sku} · Stock: {formatQuantity(p.stock)} {p.unitOfMeasure}</p>
                       </div>
                       <Badge variant="outline">Select</Badge>
                     </button>
@@ -263,7 +263,7 @@ export function ConsolidationForm({ onSuccess }: { onSuccess?: () => void }) {
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-violet-500/10">
                     <div className="space-y-1">
                       <p className="text-xs uppercase text-muted-foreground font-bold italic">Available Stock</p>
-                      <p className="text-2xl font-black">{selectedSource.stock} <span className="text-sm font-normal text-muted-foreground">{selectedSource.unitOfMeasure}</span></p>
+                      <p className="text-2xl font-black">{formatQuantity(selectedSource.stock)} <span className="text-sm font-normal text-muted-foreground">{selectedSource.unitOfMeasure}</span></p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="packQtyUsed" className="text-xs uppercase text-violet-600 font-bold">Qty of Packs to Use</Label>
@@ -359,7 +359,7 @@ export function ConsolidationForm({ onSuccess }: { onSuccess?: () => void }) {
                       <div>
                         <h4 className="text-xl font-bold">{selectedTarget.name}</h4>
                         <p className="text-sm text-muted-foreground">{selectedTarget.sku} · {selectedTarget.unitOfMeasure}</p>
-                        <p className="text-xs text-muted-foreground mt-1">Current stock: {selectedTarget.stock} {selectedTarget.unitOfMeasure}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Current stock: {formatQuantity(selectedTarget.stock)} {selectedTarget.unitOfMeasure}</p>
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => { setSelectedTarget(null); setTargetSearch(''); }}>Change</Button>
                     </div>

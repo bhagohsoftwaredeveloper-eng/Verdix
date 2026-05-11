@@ -17,7 +17,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { Loader2, TrendingUp, TrendingDown, Printer, MinusCircle } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatQuantity } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
 import { useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
@@ -181,7 +181,7 @@ export default function FastSlowMovingReportPage() {
                                 {product.total_sold}
                             </TableCell>
                             <TableCell className="text-right">{formatCurrency(product.total_revenue)}</TableCell>
-                            <TableCell className="text-right">{product.stock}</TableCell>
+                            <TableCell className="text-right">{formatQuantity(product.stock)}</TableCell>
                             </TableRow>
                         ))
                         )}

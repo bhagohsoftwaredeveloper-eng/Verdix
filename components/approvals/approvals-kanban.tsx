@@ -96,7 +96,7 @@ function cardTitle(item: ApprovalItem): string {
       }
       return 'Bad Order: Batch';
     case 'STOCK_COUNT':      return `Stock Count: ${d.warehouseName || '—'}`;
-    case 'REPACKAGING':      return `Repackaging: ${d.productName || '—'}`;
+    case 'REPACKAGING':      return `Repackaging: ${d.sourceProductName || d.productName || '—'}`;
     case 'SHELF_TRANSFER':   
       if (d.productName && d.productName !== 'Unknown') return `Shelf Transfer: ${d.productName}`;
       if (d.items && d.items.length > 0) {
@@ -368,9 +368,9 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
         <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
           <Row label="Source Product" value={d.sourceProductName || d.productName} />
           <Row label="Target Product" value={d.targetProductName} />
-          <Row label="Quantity" value={d.quantity} />
-          <Row label="Warehouse" value={d.warehouseName} />
-          <Row label="Reason" value={d.reason} />
+          <Row label="Quantity" value={d.quantity || d.quantityToBreak || d.packQtyUsed || '—'} />
+          <Row label="Warehouse" value={d.warehouseName || '—'} />
+          <Row label="Reason" value={d.reason || (d.quantityToBreak ? 'Break Pack' : d.packQtyUsed ? 'Consolidate Pack' : 'Repackaging')} />
         </div>
       )}
 

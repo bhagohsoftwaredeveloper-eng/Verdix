@@ -38,7 +38,7 @@ import { useSearchParams } from 'next/navigation';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity, formatStockQuantity } from '@/lib/utils';
 import { ViewProductDialog } from './view-product-dialog';
 import { getProducts, getProductsCount, deleteProduct, getDepartments } from './actions';
 import { useToast } from '@/hooks/use-toast';
@@ -142,7 +142,7 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
           {product.unitOfMeasure}
         </TableCell>
         <TableCell className="text-center font-bold">
-          {product.stock}
+          {formatStockQuantity(product.stock)}
         </TableCell>
         <TableCell className="hidden md:table-cell text-right">
           {product.cost && typeof product.cost === 'number' ? `₱${product.cost.toFixed(2)}` : '—'}

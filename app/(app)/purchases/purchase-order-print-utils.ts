@@ -1,6 +1,7 @@
 import { PurchaseOrder, Product, BusinessProfile } from "@/lib/types";
 import { format } from "date-fns";
 import { calculatePurchaseCosts } from "@/lib/purchase-utils";
+import { formatQuantity } from "@/lib/utils";
 
 export function printPurchaseOrder(
   order: PurchaseOrder,
@@ -92,16 +93,16 @@ export function printPurchaseOrder(
                               ${item.barcode || '-'}
                           </div>
                       </td>
-                      <td class="text-right">${currentStock}</td>
+                       <td class="text-right">${formatQuantity(currentStock)}</td>
                       <td class="text-right">₱${(Number(item.cost) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                      <td class="text-right">${item.quantity}</td>
+                      <td class="text-right">${formatQuantity(item.quantity)}</td>
                       <td class="text-right" style="color: #666; font-style: italic;">₱${(() => {
                           const results = calculatePurchaseCosts(order.items as any, order.shippingFee || 0);
                           return (results.items[index]?.landedCostPerUnit || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                       })()}</td>
                       <td class="text-right">₱${((Number(item.cost) || 0) * (Number(item.quantity) || 0)).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                       <td class="text-right">${
-                          order.status === 'Received' || order.status === 'Paid' ? item.quantity : 
+                          order.status === 'Received' || order.status === 'Paid' ? formatQuantity(item.quantity) : 
                           (order.status === 'Approved' ? '0' : '-')
                       }</td>
                   </tr>

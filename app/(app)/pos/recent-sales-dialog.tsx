@@ -88,6 +88,7 @@ export function mapSaleToReceiptDetails(sale: Sale) {
         totalDue: sale.total,
         change: sale.change || 0,
         paymentMethod: sale.paymentMethod,
+        payments: sale.payments,
         orderNumber: sale.orderNumber ? String(sale.orderNumber) : sale.id, // Ensure string
         amountTendered: sale.amountTendered || sale.total,
         transactionDate: sale.date ? new Date(sale.date) : new Date(),

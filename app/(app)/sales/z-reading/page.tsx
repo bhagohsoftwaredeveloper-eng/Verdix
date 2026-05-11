@@ -45,9 +45,10 @@ type BusinessSettings = {
 
 export default function ZReadingPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: new Date(),
+    from: new Date(new Date().setDate(new Date().getDate() - 30)),
     to: new Date(),
   });
+
   const [terminal, setTerminal] = useState<string>('all');
   const [zReadings, setZReadings] = useState<ZReadingData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,7 +73,10 @@ export default function ZReadingPage() {
         }
     };
     fetchSettings();
+    // Auto-fetch Z-readings on mount
+    fetchZReadings();
   }, []);
+
 
   const fetchZReadings = async () => {
     if (!dateRange?.from) {
@@ -105,11 +109,13 @@ export default function ZReadingPage() {
 
       if (result.success) {
         setZReadings(result.data);
-        if (result.data.length > 0) {
+        // Only auto-open if searching for a single day and we find exactly one reading
+        if (result.data.length === 1 && dateRange?.from === dateRange?.to) {
             setSelectedReading(result.data[0]);
             setIsPreviewOpen(true);
         }
       } else {
+
         console.error('Failed to fetch Z-readings:', result.error);
         setZReadings([]);
       }

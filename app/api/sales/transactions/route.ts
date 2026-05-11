@@ -347,7 +347,7 @@ export async function POST(request: NextRequest) {
         // Fetch current stock
         const [prodResult]: any = await connection.query('SELECT stock FROM products WHERE id = ?', [item.id]);
         if (prodResult && prodResult.length > 0) {
-            const currentStock = prodResult[0].stock;
+            const currentStock = Number(prodResult[0].stock || 0);
             const newStock = currentStock - item.quantity;
             
             // Record movement

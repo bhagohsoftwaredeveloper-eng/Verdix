@@ -115,38 +115,70 @@ function ZReadingReportView({ onBack, printMode, terminalId, terminalName, initi
     const handlePrintAndFinalize = async () => {
         if (!data) return;
 
-        if (printMode === 'browser') {
-            if (handleReactToPrint) {
-                handleReactToPrint();
-            } else {
-                 console.error("Print handle not ready or failed to initialize");
-            }
-             return;
-        }
-
-        if (!isConnected) {
-             const success = await connect();
-             if (!success) return;
-        }
-
         try {
-            const generator = new ZReadingGenerator();
-            const bytes = generator.generate({ ...data, terminalName } as any, businessSettings);
-            await print(bytes);
-            
+            // 1. Print the report
+            if (printMode === 'browser') {
+                if (handleReactToPrint) {
+                    handleReactToPrint();
+                } else {
+                    console.error("Print handle not ready or failed to initialize");
+                    throw new Error("Print engine not ready");
+                }
+            } else {
+                if (!isConnected) {
+                    const success = await connect();
+                    if (!success) throw new Error("Could not connect to printer");
+                }
+                const generator = new ZReadingGenerator();
+                const bytes = generator.generate({ ...data, terminalName } as any, businessSettings);
+                await print(bytes);
+            }
+
+            // 2. SAVE to database (The actual Finalization)
+            // We only save if it's a NEW Z-reading (PREVIEW mode)
+            if (data.id === 'PREVIEW') {
+                setIsLoading(true);
+                const saveResponse = await fetch(getApiUrl('/sales/z-reading'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...data,
+                        terminalId: terminalId || 'all',
+                        cashierName: data.cashierName || 'Admin'
+                    })
+                });
+
+                const saveResult = await saveResponse.json();
+                if (!saveResult.success) {
+                    throw new Error(saveResult.error || "Failed to save Z-Reading to database");
+                }
+
+                toast({
+                    title: "Z-Reading Finalized",
+                    description: `Report ${saveResult.data[0].id} has been saved successfully.`,
+                });
+                
+                // Close dialog after successful finalization
+                setTimeout(() => onBack(), 1500);
+            } else {
+                toast({
+                    title: "Report Printed",
+                    description: "Historical Z-Reading report printed.",
+                });
+            }
+
+        } catch (error: any) {
+            console.error("Z-Reading Error:", error);
             toast({
-                title: "Z-Reading Printed",
-                description: "Report sent to printer.",
-            });
-        } catch (error) {
-            console.error("Print error:", error);
-            toast({
-                title: "Print Failed",
-                description: "Could not generate or send report.",
+                title: "Error",
+                description: error.message || "Failed to finalize Z-Reading.",
                 variant: 'destructive'
             });
+        } finally {
+            setIsLoading(false);
         }
     };
+
 
     if (isLoading) {
         return (

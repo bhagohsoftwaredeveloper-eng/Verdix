@@ -76,6 +76,7 @@ export default function SalesPage() {
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
   const [salesStatusFilter, setSalesStatusFilter] = useState<string>('all');
   const [customerFilter, setCustomerFilter] = useState<string>('');
+  const [cashierFilter, setCashierFilter] = useState<string>('all');
   const [salesGroupFilter, setSalesGroupFilter] = useState<string>('all');
   const [referenceNumberFilter, setReferenceNumberFilter] = useState<string>('');
   const [transactionFromFilter, setTransactionFromFilter] = useState<string>('all');
@@ -86,6 +87,7 @@ export default function SalesPage() {
   const [dateRangeDialogOpen, setDateRangeDialogOpen] = useState(false);
   const [salesStatusDialogOpen, setSalesStatusDialogOpen] = useState(false);
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
+  const [cashierDialogOpen, setCashierDialogOpen] = useState(false);
   const [salesGroupDialogOpen, setSalesGroupDialogOpen] = useState(false);
   const [referenceNumberDialogOpen, setReferenceNumberDialogOpen] = useState(false);
   const [transactionFromDialogOpen, setTransactionFromDialogOpen] = useState(false);
@@ -96,9 +98,13 @@ export default function SalesPage() {
   const [tempDateRange, setTempDateRange] = useState<DateRange | undefined>(undefined);
   const [tempSalesStatus, setTempSalesStatus] = useState<string>('all');
   const [tempCustomer, setTempCustomer] = useState<string>('');
+  const [tempCashier, setTempCashier] = useState<string>('');
   const [tempSalesGroup, setTempSalesGroup] = useState<string>('all');
   const [tempReferenceNumber, setTempReferenceNumber] = useState<string>('');
   const [tempTransactionFrom, setTempTransactionFrom] = useState<string>('all');
+
+  const [users, setUsers] = useState<any[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   const toggleRowExpansion = (id: string) => {
     setExpandedRows(prev => {
@@ -148,6 +154,25 @@ export default function SalesPage() {
         setIsLoading(false);
     }
   };
+
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const response = await fetch('/api/users');
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     fetchSales(currentPage);
@@ -207,6 +232,11 @@ export default function SalesPage() {
         return false;
       }
       
+      // Cashier filter
+      if (cashierFilter && cashierFilter !== 'all' && !sale.cashier?.toLowerCase().includes(cashierFilter.toLowerCase())) {
+        return false;
+      }
+      
       // Reference number filter
       if (referenceNumberFilter && !String(sale.orderNumber || '').includes(referenceNumberFilter)) {
         return false;
@@ -222,6 +252,7 @@ export default function SalesPage() {
     setPaymentTypeFilter('all');
     setSalesStatusFilter('all');
     setCustomerFilter('');
+    setCashierFilter('all');
     setSalesGroupFilter('all');
     setReferenceNumberFilter('');
     setTransactionFromFilter('all');
@@ -229,7 +260,7 @@ export default function SalesPage() {
   };
 
   const hasActiveFilters = searchTerm || dateRange || terminalId !== 'all' || 
-    paymentTypeFilter !== 'all' || salesStatusFilter !== 'all' || customerFilter || 
+    paymentTypeFilter !== 'all' || salesStatusFilter !== 'all' || customerFilter || (cashierFilter && cashierFilter !== 'all') ||
     salesGroupFilter !== 'all' || referenceNumberFilter || transactionFromFilter !== 'all';
 
   // Calculate summary totals from all sales (not just filtered for display)
@@ -298,6 +329,10 @@ export default function SalesPage() {
             
             if (customerFilter) {
                 data = data.filter((sale: any) => sale.customer?.name?.toLowerCase().includes(customerFilter.toLowerCase()));
+            }
+            
+            if (cashierFilter && cashierFilter !== 'all') {
+                data = data.filter((sale: any) => sale.cashier?.toLowerCase().includes(cashierFilter.toLowerCase()));
             }
             
             if (referenceNumberFilter) {
@@ -785,9 +820,9 @@ export default function SalesPage() {
                     <Button variant="outline" size="sm">
                       <SlidersHorizontal className="h-4 w-4 mr-2" />
                       Filters
-                      {(paymentTypeFilter !== 'all' || terminalId !== 'all' || dateRange || salesStatusFilter !== 'all' || customerFilter || salesGroupFilter !== 'all' || referenceNumberFilter || transactionFromFilter !== 'all') && (
+                      {(paymentTypeFilter !== 'all' || terminalId !== 'all' || dateRange || salesStatusFilter !== 'all' || customerFilter || (cashierFilter && cashierFilter !== 'all') || salesGroupFilter !== 'all' || referenceNumberFilter || transactionFromFilter !== 'all') && (
                         <Badge variant="secondary" className="ml-2 h-5 px-1.5">
-                          {[paymentTypeFilter !== 'all', terminalId !== 'all', !!dateRange, salesStatusFilter !== 'all', !!customerFilter, salesGroupFilter !== 'all', !!referenceNumberFilter, transactionFromFilter !== 'all'].filter(Boolean).length}
+                          {[paymentTypeFilter !== 'all', terminalId !== 'all', !!dateRange, salesStatusFilter !== 'all', !!customerFilter, (cashierFilter && cashierFilter !== 'all'), salesGroupFilter !== 'all', !!referenceNumberFilter, transactionFromFilter !== 'all'].filter(Boolean).length}
                         </Badge>
                       )}
                     </Button>
@@ -813,6 +848,10 @@ export default function SalesPage() {
                       Customer
                       {customerFilter && <Badge variant="secondary" className="ml-auto text-xs">Set</Badge>}
                     </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => { setTempCashier(cashierFilter); setCashierDialogOpen(true); }}>
+                      Cashier
+                      {cashierFilter && <Badge variant="secondary" className="ml-auto text-xs">Set</Badge>}
+                    </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => { setTempSalesGroup(salesGroupFilter); setSalesGroupDialogOpen(true); }}>
                       Sales Group
                       {salesGroupFilter !== 'all' && <Badge variant="secondary" className="ml-auto text-xs">{salesGroupFilter}</Badge>}
@@ -833,6 +872,7 @@ export default function SalesPage() {
                         setDateRange(undefined);
                         setSalesStatusFilter('all');
                         setCustomerFilter('');
+                        setCashierFilter('all');
                         setSalesGroupFilter('all');
                         setReferenceNumberFilter('');
                         setTransactionFromFilter('all');
@@ -1198,6 +1238,36 @@ export default function SalesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCustomerDialogOpen(false)}>Cancel</Button>
             <Button onClick={() => { setCustomerFilter(tempCustomer); setCustomerDialogOpen(false); }}>Apply Filter</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cashier Filter Dialog */}
+      <Dialog open={cashierDialogOpen} onOpenChange={setCashierDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Filter by Cashier</DialogTitle>
+            <DialogDescription>Enter cashier name to filter transactions.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="cashier">Cashier Name</Label>
+            <Select value={tempCashier} onValueChange={setTempCashier}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Select cashier" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Cashiers</SelectItem>
+                {users.map((user: any) => (
+                  <SelectItem key={user.uid} value={user.displayName || user.username}>
+                    {user.displayName || user.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCashierDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => { setCashierFilter(tempCashier); setCashierDialogOpen(false); }}>Apply Filter</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

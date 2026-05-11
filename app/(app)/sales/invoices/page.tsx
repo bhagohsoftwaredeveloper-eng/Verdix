@@ -26,6 +26,7 @@ import { AddSalesInvoiceDialog } from './add-sales-invoice-dialog';
 import { Logo } from '@/components/logo';
 import { useSalesInvoices } from '@/hooks/use-api';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -157,7 +158,7 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
                     ${item.product?.name || (item as any).productName || 'Unknown'}
                     </div>
                     <div class="item-details">
-                    <span>${item.quantity} x ${Number(item.price || 0).toFixed(2)}</span>
+                    <span>\${formatQuantity(item.quantity)} x \${Number(item.price || 0).toFixed(2)}</span>
                     <span>${(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}</span>
                     </div>
                 </div>
@@ -336,7 +337,7 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
                                 <td className="py-2.5 font-medium uppercase">
                                     {item.product?.name || (item as any).productName || 'Unknown Product'}
                                 </td>
-                                <td className="py-2.5 text-center">{item.quantity}</td>
+                                <td className="py-2.5 text-center">{formatQuantity(item.quantity)}</td>
                                 <td className="py-2.5 text-right">{Number(item.price || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                 <td className="py-2.5 text-right font-bold">{(Number(item.price || 0) * Number(item.quantity || 0)).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             </tr>
@@ -969,7 +970,7 @@ export default function SalesInvoicesPage() {
                                                             <Fragment key={item.product?.id || (item as any).productId || idxx}>
                                                                 <TableRow>
                                                                     <TableCell className="py-1 text-xs">{item.product?.name || (item as any).productName || 'Unknown Product'}</TableCell>
-                                                                    <TableCell className="text-right py-1 text-xs">{item.quantity}</TableCell>
+                                                                    <TableCell className="text-right py-1 text-xs">{formatQuantity(item.quantity)}</TableCell>
                                                                     <TableCell className="text-right py-1 text-xs">₱{formatAmount(item.price)}</TableCell>
                                                                     <TableCell className="text-right py-1 text-xs">₱{formatAmount(itemRevenue)}</TableCell>
                                                                 </TableRow>

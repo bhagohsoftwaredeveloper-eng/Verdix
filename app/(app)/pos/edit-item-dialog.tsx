@@ -17,6 +17,7 @@ import type { SaleItem } from './page';
 import { useToast } from '@/hooks/use-toast';
 import { calculateEffectivePrice } from '@/lib/pricing';
 import type { Product } from '@/lib/types';
+import { Tag, Pencil } from 'lucide-react';
 
 interface EditItemDialogProps {
   isOpen: boolean;
@@ -89,95 +90,118 @@ export function EditItemDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {mode === 'price-only' ? 'Authorize Price Change' : 'Edit Item Details'}
-          </DialogTitle>
-          <DialogDescription>
-            {mode === 'price-only' 
-              ? `Adjusting price for ${item.name}`
-              : 'Temporary changes for this transaction only.'}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className={`p-0 overflow-hidden border-none shadow-2xl ${mode === 'price-only' ? 'sm:max-w-[400px]' : 'sm:max-w-md'}`}>
+        <div className="bg-white p-6 space-y-6">
+          <DialogHeader className="space-y-3">
+            <div className="flex justify-center">
+              <div className={`${mode === 'price-only' ? 'bg-purple-50' : 'bg-blue-50'} p-3 rounded-2xl`}>
+                {mode === 'price-only' ? (
+                  <Tag className="w-8 h-8 text-purple-600" />
+                ) : (
+                  <Pencil className="w-8 h-8 text-blue-600" />
+                )}
+              </div>
+            </div>
+            <DialogTitle className="text-2xl font-extrabold text-center text-slate-800">
+              {mode === 'price-only' ? 'Edit Unit Price' : 'Edit Item Details'}
+            </DialogTitle>
+            <p className="text-sm text-slate-500 text-center px-4">
+              {mode === 'price-only' 
+                ? `Enter a temporary price for ${item.name}`
+                : 'Temporary changes for this transaction only.'}
+            </p>
+          </DialogHeader>
 
-        <div className="py-4 space-y-6">
-          <div className="grid grid-cols-1 gap-4">
+          <div className="space-y-4">
             {mode === 'price-only' ? (
-              <div className="space-y-2">
-                <Label htmlFor="price" className="text-base font-semibold">Price (₱)</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  value={price}
-                  onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      save();
-                    }
-                  }}
-                  className="font-medium focus-visible:ring-primary text-[30px] md:text-[30px] h-20 py-4 text-center leading-none"
-                  autoFocus
-                />
+              <div className="space-y-3">
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-purple-300">₱</span>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    value={price}
+                    onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        save();
+                      }
+                    }}
+                    className="font-black focus-visible:ring-purple-500 text-[32px] h-20 pl-10 pr-4 text-right leading-none bg-slate-50 border-slate-200 rounded-2xl focus:bg-white transition-colors"
+                    autoFocus
+                  />
+                </div>
+                
+                <div className="flex justify-between items-center text-xs px-2">
+                  <span className="font-bold text-slate-500 uppercase tracking-tight">Original Price</span>
+                  <span className="font-mono font-bold text-slate-700">₱{item.price.toFixed(2)}</span>
+                </div>
               </div>
             ) : (
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-base font-semibold">Item Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      save();
-                    }
-                  }}
-                  className="font-medium focus-visible:ring-primary h-12"
-                  placeholder="Enter new item name"
-                  autoFocus
-                />
-                <p className="text-xs text-muted-foreground italic">
-                  Original: {item.name}
-                </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-xs font-bold text-slate-600 uppercase tracking-tight ml-1">Item Name</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        save();
+                      }
+                    }}
+                    className="font-medium focus-visible:ring-blue-500 h-12 bg-slate-50 border-slate-200 rounded-xl px-4"
+                    placeholder="Enter new item name"
+                    autoFocus
+                  />
+                  <p className="text-xs text-slate-400 italic ml-1">
+                    Original: {item.name}
+                  </p>
+                </div>
+                
+                <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-100">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-bold text-slate-500">Unit Price:</span>
+                    <span className="font-mono font-bold text-slate-700">₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="font-bold text-slate-500">Quantity:</span>
+                    <span className="font-mono font-bold text-slate-700">{quantity}</span>
+                  </div>
+                  {item.discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="font-bold text-slate-500">Discount:</span>
+                      <span className="font-mono font-bold text-green-600">{item.discount}%</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-            
-            <div className="bg-muted/30 p-3 rounded-lg space-y-1">
-              {mode !== 'price-only' && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Unit Price:</span>
-                  <span className="font-medium">₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Quantity:</span>
-                <span className="font-medium">{quantity}</span>
-              </div>
-              {mode === 'full' && item.discount > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Discount:</span>
-                  <span className="font-medium text-green-600">{item.discount}%</span>
-                </div>
-              )}
-            </div>
           </div>
 
+          <div className="flex gap-3 pt-2">
+            <Button 
+              variant="outline" 
+              className="flex-1 h-12 rounded-xl font-bold text-slate-600 border-slate-200 hover:bg-slate-50 transition-colors"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className={`flex-1 h-12 rounded-xl font-bold text-white shadow-lg transition-all active:scale-[0.98] ${
+                mode === 'price-only' 
+                  ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200/50' 
+                  : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200/50'
+              }`}
+              onClick={save}
+            >
+              {mode === 'price-only' ? 'Update Price' : 'Save Changes'}
+            </Button>
+          </div>
         </div>
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={save}
-            className="bg-primary"
-          >
-            {mode === 'price-only' ? 'Update Price' : 'Save Changes'}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

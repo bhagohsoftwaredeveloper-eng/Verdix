@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { SaleItem } from './page';
+import { formatQuantity } from '@/lib/utils';
 
 interface AdjustQuantityDialogProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ export function AdjustQuantityDialog({
 
   const handleConfirm = () => {
     if (item) {
-      const adj = parseInt(adjustment, 10) || 0;
+      const adj = parseFloat(adjustment) || 0;
       const newQuantity = item.quantity + adj;
       onUpdate(item.id, newQuantity);
       onOpenChange(false);
@@ -53,7 +54,7 @@ export function AdjustQuantityDialog({
   
   if (!item) return null;
 
-  const adj = parseInt(adjustment, 10) || 0;
+  const adj = parseFloat(adjustment) || 0;
   const resultingQty = Math.max(0, item.quantity + adj);
 
   return (
@@ -91,16 +92,16 @@ export function AdjustQuantityDialog({
                     <Label htmlFor="resulting-qty">Resulting Quantity</Label>
                     <Input
                         id="resulting-qty"
-                        value={resultingQty}
+                        value={formatQuantity(resultingQty, item.unitOfMeasure)}
                         readOnly
                         className="bg-muted font-bold"
                     />
                 </div>
             </div>
             <div className="text-sm text-muted-foreground text-center">
-              Current: <span className="font-medium text-foreground">{item.quantity}</span> 
+              Current: <span className="font-medium text-foreground">{formatQuantity(item.quantity, item.unitOfMeasure)}</span> 
               &nbsp;→&nbsp; 
-              New: <span className="font-medium text-foreground">{resultingQty}</span>
+              New: <span className="font-medium text-foreground">{formatQuantity(resultingQty, item.unitOfMeasure)}</span>
             </div>
         </div>
         <DialogFooter>

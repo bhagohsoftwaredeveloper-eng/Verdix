@@ -162,8 +162,8 @@ export class TransferStockService {
     connection: PoolConnection
   ) {
     const [status]: any = await connection.query('SELECT stock FROM products WHERE id = ?', [productId]);
-    const previousStock = status[0]?.stock || 0;
-    const newStock = previousStock + quantityChange;
+    const previousStock = Number(status[0]?.stock || 0);
+    const newStock = previousStock + Number(quantityChange);
 
     await connection.query('UPDATE products SET stock = ? WHERE id = ?', [newStock, productId]);
 

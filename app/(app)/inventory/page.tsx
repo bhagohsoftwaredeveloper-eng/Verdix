@@ -39,7 +39,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StockTransferDialog } from './StockTransferDialog';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity, formatStockQuantity } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useLiveRefresh, dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import {
@@ -134,14 +134,14 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
       setCustomReason('');
       setQuantity(0);
       setAdjustmentType('add');
-      setPhysicalCount(product.stock);
+      setPhysicalCount(Number(product.stock));
       setChildProducts([]);
     }
   }, [isOpen, defaultReason, product.stock]);
 
 
   const handleQuantityChange = (value: string) => {
-    const num = parseInt(value, 10);
+    const num = parseFloat(value);
     setQuantity(isNaN(num) || num < 0 ? 0 : num);
   };
 
@@ -150,7 +150,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
         setPhysicalCount(null);
         return;
     }
-    const num = parseInt(value, 10);
+    const num = parseFloat(value);
     setPhysicalCount(isNaN(num) || num < 0 ? 0 : num);
   };
 
@@ -260,7 +260,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
      <div className="space-y-6 py-4">
         <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-dashed border-muted-foreground/20">
             <span className="text-sm text-muted-foreground mb-1">Current Balance</span>
-            <span className="text-4xl font-bold">{product.stock}</span>
+            <span className="text-4xl font-bold">{formatQuantity(product.stock, product.unitOfMeasure)}</span>
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">{product.unitOfMeasure}</span>
         </div>
 
@@ -273,6 +273,13 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
                         type="number"
                         value={physicalCount === null ? '' : physicalCount}
                         onChange={(e) => handlePhysicalCountChange(e.target.value)}
+                        onBlur={() => {
+                          const isDecimal = product.unitOfMeasure && (product.unitOfMeasure.toLowerCase() === 'kilogram' || product.unitOfMeasure.toLowerCase() === 'kg');
+                          if (!isDecimal && physicalCount !== null) {
+                            setPhysicalCount(Math.round(physicalCount));
+                          }
+                        }}
+                        step={(product.unitOfMeasure && (product.unitOfMeasure.toLowerCase() === 'kilogram' || product.unitOfMeasure.toLowerCase() === 'kg')) ? "0.001" : "1"}
                         className="text-lg h-12 pl-4 pr-12 font-semibold"
                         placeholder="0"
                     />
@@ -304,7 +311,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
                                 variance === 0 ? "text-muted-foreground" : 
                                 variance > 0 ? "text-emerald-600" : "text-destructive"
                             )}>
-                                {variance > 0 ? '+' : ''}{variance} {product.unitOfMeasure}
+                                {variance > 0 ? '+' : ''}{formatQuantity(variance, product.unitOfMeasure)} {product.unitOfMeasure}
                             </p>
                         </div>
                     </div>
@@ -397,7 +404,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
               <div className="flex items-center justify-between">
                   <div className="text-center">
                       <p className="text-[10px] text-muted-foreground uppercase font-bold">Current</p>
-                      <p className="text-lg font-semibold">{product.stock}</p>
+                       <p className="text-lg font-semibold">{formatQuantity(product.stock, product.unitOfMeasure)}</p>
                   </div>
                   <div className="flex items-center text-muted-foreground/40">
                       <div className="w-8 h-px bg-current mx-2" />
@@ -414,14 +421,14 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
                       <p className={cn(
                           "text-lg font-semibold",
                           adjustmentType === 'add' ? "text-primary" : "text-destructive"
-                      )}>{quantity}</p>
+                      )}>{formatQuantity(quantity, product.unitOfMeasure)}</p>
                   </div>
                   <div className="flex items-center text-muted-foreground/40 px-2">
                       <span className="text-xl font-light">=</span>
                   </div>
                   <div className="text-center">
                       <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">New Total</p>
-                      <p className="text-xl font-bold">{projectedStock}</p>
+                       <p className="text-xl font-bold">{formatQuantity(projectedStock, product.unitOfMeasure)}</p>
                   </div>
               </div>
           </div>
@@ -454,7 +461,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>
-              Current stock: {product.stock}. {isPhysicalCountMode ? 'Enter the new physically counted quantity.' : 'Select whether to add or remove stock and provide a reason.'}
+              Current stock: {formatQuantity(product.stock, product.unitOfMeasure)}. {isPhysicalCountMode ? 'Enter the new physically counted quantity.' : 'Select whether to add or remove stock and provide a reason.'}
             </DialogDescription>
           </DialogHeader>
           {isPhysicalCountMode ? renderPhysicalCountMode() : renderStandardMode()}
@@ -580,7 +587,7 @@ function ProductCard({ product, hasChildren = false, onSuccess, requireAdjustmen
 
         <div className="mt-auto pt-4 flex flex-wrap items-center gap-4 border-t border-muted/30 text-xs sm:text-sm">
           <span className="text-sm">
-            <span className="font-medium">{displayStock}</span> {product.unitOfMeasure}
+            <span className="font-medium">{formatStockQuantity(displayStock, product.unitOfMeasure)}</span> {product.unitOfMeasure}
           </span>
           <Badge variant={badgeVariant} className="text-xs">{badgeText}</Badge>
           {product.hasPendingApproval && (
@@ -589,7 +596,7 @@ function ProductCard({ product, hasChildren = false, onSuccess, requireAdjustmen
             </Badge>
           )}
           <span className="text-sm text-muted-foreground">
-            Reorder at: {product.reorderPoint}
+            Reorder at: {formatStockQuantity(product.reorderPoint, product.unitOfMeasure)}
           </span>
           {product.conversionFactors && product.conversionFactors.length > 0 && (
             <>
@@ -665,7 +672,7 @@ function CondensedProductRow({ product, isLast = false, onSuccess, requireAdjust
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <div className="text-right">
-          <div className="text-xs font-bold leading-none">{displayStock} <span className="text-[9px] font-normal text-muted-foreground">{product.unitOfMeasure}</span></div>
+          <div className="text-xs font-bold leading-none">{formatStockQuantity(displayStock, product.unitOfMeasure)} <span className="text-[9px] font-normal text-muted-foreground">{product.unitOfMeasure}</span></div>
           <Badge variant={badgeVariant} className="text-[8px] px-1 py-0 h-3.5 mt-0.5 uppercase tracking-tighter">{badgeText}</Badge>
         </div>
         
@@ -873,12 +880,12 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
         <TableCell>{productGroup.sku}</TableCell>
         <TableCell className="font-mono text-xs">{productGroup.barcode || '-'}</TableCell>
         <TableCell>
-          <span className="font-medium">{displayStock}</span> <span className="text-muted-foreground text-xs">{productGroup.unitOfMeasure}</span>
+          <span className="font-medium">{formatStockQuantity(displayStock, productGroup.unitOfMeasure)}</span> <span className="text-muted-foreground text-xs">{productGroup.unitOfMeasure}</span>
         </TableCell>
         <TableCell>
           <Badge variant={badgeVariant} className="text-xs">{badgeText}</Badge>
         </TableCell>
-        <TableCell className="text-muted-foreground">{productGroup.reorderPoint}</TableCell>
+        <TableCell className="text-muted-foreground">{formatStockQuantity(productGroup.reorderPoint, productGroup.unitOfMeasure)}</TableCell>
         <TableCell className="text-right whitespace-nowrap">
           <ProductRowActions 
             product={productGroup} 
@@ -925,12 +932,12 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
               <TableCell className="text-sm">{child.sku}</TableCell>
               <TableCell className="text-sm font-mono text-xs">{child.barcode || '-'}</TableCell>
               <TableCell className="text-sm">
-                 <span className="font-medium">{child.stock}</span> <span className="text-muted-foreground text-xs">{child.unitOfMeasure}</span>
+                 <span className="font-medium">{formatStockQuantity(child.stock, child.unitOfMeasure)}</span> <span className="text-muted-foreground text-xs">{child.unitOfMeasure}</span>
               </TableCell>
               <TableCell>
                  <Badge variant={childBadgeVariant} className="text-xs">{childBadgeText}</Badge>
               </TableCell>
-              <TableCell className="text-muted-foreground text-sm">{child.reorderPoint}</TableCell>
+              <TableCell className="text-muted-foreground text-sm">{formatStockQuantity(child.reorderPoint, child.unitOfMeasure)}</TableCell>
               <TableCell className="text-right">
                   <ProductRowActions 
                     product={child} 

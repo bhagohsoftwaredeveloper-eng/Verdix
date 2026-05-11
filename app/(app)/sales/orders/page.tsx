@@ -75,7 +75,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 import { CustomerSelectionField } from '../invoices/customer-selection-field';
 import { useForm } from 'react-hook-form';
 import { OrderDetailsDialog, OrderDialogMode } from './order-details-dialog';
@@ -258,7 +258,7 @@ function SalesOrderPrintView({ order, onBack }: { order: Sale, onBack: () => voi
               <TableRow key={item.product.id}>
                 <TableCell>{item.product.name}</TableCell>
                 <TableCell>{item.product.sku}</TableCell>
-                <TableCell className="text-right">{item.quantity}</TableCell>
+                <TableCell className="text-right">{formatQuantity(item.quantity)}</TableCell>
                 <TableCell className="text-right">₱{item.price.toFixed(2)}</TableCell>
                 <TableCell className="text-right">₱{(item.price * item.quantity).toFixed(2)}</TableCell>
               </TableRow>

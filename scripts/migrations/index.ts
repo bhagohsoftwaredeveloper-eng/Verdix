@@ -75,6 +75,7 @@ import './074_create_inventory_transfers_table';
 import './075_add_warehouse_id_to_stock_movements';
 import './076_add_warehouse_to_purchase_orders';
 import './077_add_subtotal_to_purchase_order_items';
+import './078_alter_stock_precision';
 
 
 // Import runner functions

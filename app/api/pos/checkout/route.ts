@@ -2,10 +2,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
 import { deductFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 import { deductFromBatches, getBatchCostingSettings } from '@/lib/batch-deduction';
+import { query } from '@/lib/mysql';
+
+async function ensurePosTransactionItemsSchema() {
+  try {
+    const currentColumnsResult = await query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'pos_transaction_items' AND TABLE_SCHEMA = DATABASE()"
+    ) as any[];
+    const existingColumns = new Set(currentColumnsResult.map((c: any) => c.COLUMN_NAME));
+
+    if (!existingColumns.has('discount_type')) {
+      await query("ALTER TABLE pos_transaction_items ADD COLUMN discount_type VARCHAR(50) DEFAULT 'percent'");
+      console.log('✅ Added discount_type column to pos_transaction_items');
+    }
+    if (!existingColumns.has('tax_type')) {
+      await query("ALTER TABLE pos_transaction_items ADD COLUMN tax_type VARCHAR(50) DEFAULT 'VAT'");
+      console.log('✅ Added tax_type column to pos_transaction_items');
+    }
+  } catch (error) {
+    console.error('Error ensuring pos_transaction_items schema:', error);
+  }
+}
+
 
 export async function POST(request: NextRequest) {
   try {
+    await ensurePosTransactionItemsSchema();
     const body = await request.json();
+
     const {
       items,
       customer,
@@ -300,8 +324,9 @@ export async function POST(request: NextRequest) {
         await connection.query(`
           INSERT INTO pos_transaction_items (
             id, pos_transaction_id, sale_item_id, product_id, product_name, 
-            quantity, unit_price, discount_percentage, discount_amount, line_total, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            quantity, unit_price, discount_percentage, discount_amount, 
+            discount_type, tax_type, line_total, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         `, [
           posItemId, 
           posTransId, 
@@ -312,60 +337,92 @@ export async function POST(request: NextRequest) {
           originalPrice,
           discountPercent,
           discAmount,
+          item.discountType || 'percent',
+          item.taxType || 'VAT',
           lTotal
         ]);
+
       }
 
       // 6. Insert payment details
-      await connection.query(`
-        INSERT INTO payment_details (
-          id, transaction_id, payment_method,
-          card_type, card_last_four, auth_code, gateway_reference,
-          wallet_provider, wallet_reference,
-          gift_check_number, gift_check_balance_before, gift_check_balance_after,
-          points_used, points_remaining, points_conversion_rate,
-          amount_tendered, change_given, notes, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-      `, [
-        paymentDetailsId,
-        posTransId,
-        paymentMethod,
-        paymentDetails?.cardType || null,
-        paymentDetails?.cardLastFour || null,
-        paymentDetails?.authCode || null,
-        paymentDetails?.gatewayReference || null,
-        paymentDetails?.walletProvider || null,
-        paymentDetails?.walletReference || null,
-        paymentDetails?.giftCheckNumber || null,
-        paymentDetails?.giftCheckBalanceBefore || null,
-        paymentDetails?.giftCheckBalanceAfter || null,
-        paymentDetails?.pointsUsed || null,
-        paymentDetails?.pointsRemaining || null,
-        paymentDetails?.pointsConversionRate || null,
-        amountTendered || totalDue,
-        change || 0,
-        paymentDetails?.notes || null
-      ]);
+      const pointsUsedValue = paymentDetails?.pointsUsed ? parseFloat(paymentDetails.pointsUsed) : 0;
+      const allPayments = body.payments ? [...body.payments] : [];
+
+      if (allPayments.length === 0) {
+          // Fallback if no payments array (e.g. 100% points or legacy)
+          await connection.query(`
+            INSERT INTO payment_details (
+              id, transaction_id, payment_method,
+              card_type, card_last_four, auth_code, gateway_reference,
+              wallet_provider, wallet_reference,
+              gift_check_number, gift_check_balance_before, gift_check_balance_after,
+              points_used, points_remaining, points_conversion_rate,
+              amount_tendered, change_given, notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          `, [
+            paymentDetailsId,
+            posTransId,
+            paymentMethod,
+            paymentDetails?.cardType || null,
+            paymentDetails?.cardLastFour || null,
+            paymentDetails?.authCode || null,
+            paymentDetails?.gatewayReference || null,
+            paymentDetails?.walletProvider || null,
+            paymentDetails?.walletReference || null,
+            paymentDetails?.giftCheckNumber || null,
+            paymentDetails?.giftCheckBalanceBefore || null,
+            paymentDetails?.giftCheckBalanceAfter || null,
+            paymentDetails?.pointsUsed || null,
+            paymentDetails?.pointsRemaining || null,
+            paymentDetails?.pointsConversionRate || null,
+            amountTendered || totalDue,
+            change || 0,
+            paymentDetails?.notes || null
+          ]);
+      } else {
+          for (let i = 0; i < allPayments.length; i++) {
+              const p = allPayments[i];
+              const detailId = i === 0 ? paymentDetailsId : `PD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+              
+              // Attach points info to the first row only
+              const pUsed = i === 0 ? paymentDetails?.pointsUsed || null : null;
+              const pRem = i === 0 ? paymentDetails?.pointsRemaining || null : null;
+              const pRate = i === 0 ? paymentDetails?.pointsConversionRate || null : null;
+              const cGiven = i === allPayments.length - 1 ? (change || 0) : 0; // change on last row
+
+              await connection.query(`
+                INSERT INTO payment_details (
+                  id, transaction_id, payment_method, gateway_reference, points_used, points_remaining, points_conversion_rate, amount_tendered, change_given, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+              `, [
+                detailId, posTransId, p.method, p.reference || null,
+                pUsed, pRem, pRate, p.amount, cGiven
+              ]);
+          }
+      }
 
       // 6.5 Record in customer_payments if customer exists
       if (customer && customer.id !== 'walk-in') {
-        const cPaymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        await connection.query(`
-          INSERT INTO customer_payments (
-            id, customer_id, payment_type, payment_date, amount, reference, note, created_at, updated_at
-          ) VALUES (?, ?, ?, CURDATE(), ?, ?, ?, NOW(), NOW())
-        `, [
-          cPaymentId,
-          customer.id,
-          paymentMethod,
-          totalDue,
-          sequentialRef,
-          `POS Sale - ${isCharge ? 'Charged to Account' : 'Paid at POS'}`
-        ]);
+          const insertCustomerPayment = async (method: string, amt: number, ref: string, note: string) => {
+              const cPaymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              await connection.query(`
+                INSERT INTO customer_payments (
+                  id, customer_id, payment_type, payment_date, amount, reference, note, created_at, updated_at
+                ) VALUES (?, ?, ?, CURDATE(), ?, ?, ?, NOW(), NOW())
+              `, [cPaymentId, customer.id, method, amt, ref, note]);
+          };
+
+          if (allPayments.length > 0) {
+               for (const p of allPayments) {
+                   const isChg = typeof p.method === 'string' && p.method.toUpperCase() === 'CHARGE';
+                   await insertCustomerPayment(p.method, p.amount, sequentialRef, `POS Sale - ${isChg ? 'Charged to Account' : 'Paid at POS'}`);
+               }
+          } else {
+               await insertCustomerPayment(paymentMethod, totalDue, sequentialRef, `POS Sale - ${isCharge ? 'Charged to Account' : 'Paid at POS'}`);
+          }
       }
 
       // 7. Loyalty Points Redemption
-      const pointsUsedValue = paymentDetails?.pointsUsed ? parseFloat(paymentDetails.pointsUsed) : 0;
       if (customer && customer.id !== 'walk-in' && pointsUsedValue > 0) {
           const pointsToDeduct = pointsUsedValue;
           

@@ -33,7 +33,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Product, Warehouse, Supplier } from '@/lib/types';
 import { getProducts } from '../../products/actions';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 
 interface AdjustmentItem {
@@ -225,7 +225,7 @@ export default function BulkAdjustmentClient() {
               </div>
               <div className="shrink-0 flex items-center gap-2">
                 <Badge variant="outline" className="text-[10px] font-bold h-5">
-                  {p.stock} {p.unitOfMeasure}
+                  {formatQuantity(p.stock)} {p.unitOfMeasure}
                 </Badge>
                 <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <Plus className="h-3.5 w-3.5 text-primary" />
@@ -408,10 +408,10 @@ export default function BulkAdjustmentClient() {
         </TableCell>
         <TableCell className="py-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-mono text-slate-500 tabular-nums">{adj.product.stock}</span>
+            <span className="text-sm font-mono text-slate-500 tabular-nums">{formatQuantity(adj.product.stock)}</span>
             <ArrowRight className="h-3.5 w-3.5 text-slate-300 shrink-0" />
             <span className={cn("text-sm font-bold tabular-nums", isNegative ? "text-red-600" : "text-emerald-600")}>
-              {newStock}
+              {formatQuantity(newStock)}
             </span>
             {isNegative && (
               <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-4 ml-0.5">Low</Badge>
@@ -498,9 +498,9 @@ export default function BulkAdjustmentClient() {
 
             {/* Stock Impact */}
             <div className="shrink-0 flex items-center gap-1.5 bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
-              <span className="text-sm font-mono text-slate-500">{adj.product.stock}</span>
+              <span className="text-sm font-mono text-slate-500">{formatQuantity(adj.product.stock)}</span>
               <ArrowRight className="h-3 w-3 text-slate-300" />
-              <span className={cn("text-sm font-bold", isNegative ? "text-red-600" : "text-emerald-600")}>{newStock}</span>
+              <span className={cn("text-sm font-bold", isNegative ? "text-red-600" : "text-emerald-600")}>{formatQuantity(newStock)}</span>
             </div>
           </div>
 

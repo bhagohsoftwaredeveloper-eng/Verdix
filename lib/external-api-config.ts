@@ -65,7 +65,7 @@ export async function getExternalApiConfig(): Promise<ExternalApiConfig> {
           // Parse boolean and numeric values
           if (value === 'true') value = true;
           else if (value === 'false') value = false;
-          else if (!isNaN(value) && value !== '' && (configKey === 'timeout' || configKey === 'retry_attempts' || configKey === 'retry_delay')) {
+          else if (!isNaN(value) && value !== '' && (configKey === 'timeout' || configKey === 'retryAttempts' || configKey === 'retryDelay')) {
             value = Number(value);
           }
           config[configKey] = value;

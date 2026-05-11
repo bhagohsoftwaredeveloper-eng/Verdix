@@ -40,14 +40,14 @@ export class InventorySyncService {
     factorMap.set(soldProd.unit_of_measure, 1);
 
     // 3. Define the "Anchor" new stock
-    const anchorPreviousStock = soldProd.stock;
+    const anchorPreviousStock = Number(soldProd.stock || 0);
     const anchorNewStock = anchorPreviousStock - item.quantity;
 
     // 4. Force-update all family members based on the anchor's new state
     for (const member of familyMembers) {
       let factor = factorMap.get(member.unit_of_measure);
       if (factor !== undefined) {
-        const currentStock = member.stock;
+        const currentStock = Number(member.stock || 0);
         const newStock = Math.floor(anchorNewStock * factor);
         const quantityChange = newStock - currentStock;
 

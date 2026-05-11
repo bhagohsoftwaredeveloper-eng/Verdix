@@ -3,6 +3,11 @@ const path = require('path');
 const printerSdk = require('./printer-sdk');
 const epsonSdk = require('./epson-sdk');
 
+// Disable hardware acceleration to prevent lag on some systems
+app.disableHardwareAcceleration();
+
+let serverProcess;
+
 function createWindow() {
   const isDev = !app.isPackaged;
   
@@ -52,10 +57,16 @@ function createWindow() {
 
   win.setIcon(path.join(__dirname, 'public', 'Stockpilot.png'));
 
-  // Load the specific route
   const startUrl = `http://localhost:3000${startRoute}`; 
-
   win.loadURL(startUrl);
+
+  // Retry loading if it fails (e.g. server not ready yet)
+  win.webContents.on('did-fail-load', () => {
+    console.log('Failed to load, retrying in 2 seconds...');
+    setTimeout(() => {
+      win.loadURL(startUrl);
+    }, 2000);
+  });
 
   // PREVENT navigating away from the app
   win.webContents.on('will-navigate', (event, url) => {
@@ -84,9 +95,7 @@ function createWindow() {
     return { action: 'allow' };
   });
 
-  if (isDev) {
-    win.webContents.openDevTools();
-  }
+  // win.webContents.openDevTools(); // Force open for debugging
 
   win.on('closed', () => {
     app.quit();
@@ -159,7 +168,69 @@ ipcMain.handle('epson-printer:open-drawer', async () => {
   return epsonSdk.openCashDrawer();
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const { dialog } = require('electron');
+  
+  // Database setup removed as per user request to use working DB
+  
+  const http = require('http');
+  const fs = require('fs');
+  const logPath = 'D:\\BHAGOH PROJECT\\Stock_Pilot\\server.log';
+  const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+  
+  logStream.write(`\n\n--- App started at ${new Date().toISOString()} ---\n`);
+
+  function checkServerRunning() {
+    return new Promise((resolve) => {
+      const req = http.get('http://localhost:3000', (res) => {
+        resolve(true);
+      });
+      req.on('error', () => {
+        resolve(false);
+      });
+      req.end();
+    });
+  }
+
+  try {
+    const isRunning = await checkServerRunning();
+    
+    if (isRunning) {
+      logStream.write('Server is already running on port 3000. Skipping spawn.\n');
+      console.log('Server is already running on port 3000. Skipping spawn.');
+    } else {
+      logStream.write('Server not detected. Spawning Next.js server...\n');
+      console.log('Server not detected. Spawning Next.js server...');
+      
+      const { spawn } = require('child_process');
+      const dotenv = require('dotenv');
+      const envPath = path.join(process.resourcesPath, '..', '.env');
+      let envConfig = {};
+      
+      if (fs.existsSync(envPath)) {
+        envConfig = dotenv.parse(fs.readFileSync(envPath));
+        logStream.write(`Loaded .env from: ${envPath}\n`);
+      } else {
+        logStream.write(`.env file not found at: ${envPath}\n`);
+      }
+      
+      serverProcess = spawn('node', ['server.js'], { 
+        shell: true, 
+        cwd: path.join(process.resourcesPath, '..'),
+        env: { ...process.env, ...envConfig }
+      });
+      
+      serverProcess.stdout.pipe(logStream);
+      serverProcess.stderr.pipe(logStream);
+      
+      serverProcess.on('error', (err) => {
+        dialog.showErrorBox('Server Error', 'Failed to start Next.js server. Please ensure Node.js/NPM is installed.\n\nError: ' + err.message);
+      });
+    }
+  } catch (serverErr) {
+    dialog.showErrorBox('Server Error', 'Exception while checking/starting server: ' + serverErr.message);
+  }
+  
   createWindow();
 });
 
@@ -168,6 +239,8 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+// Server persists after quit as per user request
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {

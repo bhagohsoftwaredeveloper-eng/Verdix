@@ -96,6 +96,7 @@ const salesNavItems = [
   { href: '/sales/voids', label: 'Post Void' },
   { href: '/sales/z-reading', label: 'POS Z-Reading' },
   { href: '/sales/x-reading', label: 'POS X-Reading' },
+  { href: '/sales/overall-reading', label: 'POS Overall Reading' },
   { href: '/sales/analysis', label: 'Sales Analysis' },
 ];
 
@@ -478,7 +479,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex-1" />
           <div className="flex items-center gap-2">
-            <NotificationsBell />
+            <NotificationsBell user={user} />
             <WindowControls />
           </div>
         </header>
@@ -490,12 +491,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NotificationsBell() {
+function NotificationsBell({ user }: { user: { email: string, permissions?: string[], userType?: string, roleId?: string, uid?: string } | null }) {
   const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; type: 'warning' | 'info'; link: string }[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
 
-  const checkStock = useCallback(async () => {
+  const checkNotifications = useCallback(async () => {
     try {
       // First check if notifications are enabled
       const settingsResponse = await fetch('/api/pos-settings');
@@ -506,36 +507,89 @@ function NotificationsBell() {
           return;
       }
 
+      // 1. Fetch Low Stock Alerts
       const lowStock = await getLowStockAlerts();
-      
-      const newNotifications = lowStock.map((p: any) => ({
+      const lowStockNotifications = lowStock.map((p: any) => ({
           id: `low-stock-${p.id}`,
           title: 'Low Stock Alert',
           message: `${p.name} is below reorder point (${p.stock}/${p.reorderPoint})`,
           type: 'warning' as const,
           link: `/products?filter=low-stock`
       }));
+
+      // 2. Fetch Approvals
+      let approvalNotifications: { id: string; title: string; message: string; type: 'warning' | 'info'; link: string }[] = [];
       
-      setNotifications(newNotifications);
+      if (user) {
+        const approvalsRes = await fetch('/api/approvals/queue?status=ALL');
+        const approvalsData = await approvalsRes.json();
+
+        if (approvalsData.success) {
+          const items = approvalsData.data;
+
+          // Approver Notifications (Pending)
+          const canAction = (item: any) => {
+            if (item.status !== 'Pending') return false;
+            const isAdmin = user.userType === 'Admin' || user.userType === 'Super Admin' || user.email === 'admin@example.com';
+            if (isAdmin) return true;
+            const byId   = user.roleId   && String(user.roleId)   === String(item.currentStepRoleId);
+            const byName = user.userType && String(user.userType) === String(item.currentStepRole);
+            return !!(byId || byName);
+          };
+
+          const pendingItems = items.filter(canAction);
+          const approverNotes = pendingItems.map((item: any) => ({
+            id: `approval-pending-${item.id}`,
+            title: 'Pending Approval',
+            message: `${item.transaction_type.replace(/_/g, ' ')} requested by ${item.requester_name}`,
+            type: 'info' as const,
+            link: `/approvals`
+          }));
+
+          // Requester Notifications (Approved/Rejected)
+          const requesterItems = items.filter((item: any) => 
+            item.created_by === user.uid && item.status !== 'Pending'
+          );
+
+          // Filter for items updated in the last 24 hours
+          const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const recentRequesterItems = requesterItems.filter((item: any) => {
+            const updatedAt = new Date(item.updated_at);
+            return updatedAt > oneDayAgo;
+          });
+
+          const requesterNotes = recentRequesterItems.map((item: any) => ({
+            id: `approval-status-${item.id}`,
+            title: `Request ${item.status}`,
+            message: `Your ${item.transaction_type.replace(/_/g, ' ')} request has been ${item.status.toLowerCase()}`,
+            type: item.status === 'Approved' ? 'info' as const : 'warning' as const,
+            link: `/approvals`
+          }));
+
+          approvalNotifications = [...approverNotes, ...requesterNotes];
+        }
+      }
+      
+      setNotifications([...lowStockNotifications, ...approvalNotifications]);
     } catch (e) {
         console.error("Failed to fetch notifications", e);
     }
-  }, []);
+  }, [user]);
 
-  // Poll for low stock notifications and listen for updates
+  // Poll for notifications and listen for updates
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    checkStock();
+    checkNotifications();
     
-    interval = setInterval(checkStock, 30000);
+    interval = setInterval(checkNotifications, 30000);
     
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [checkStock]);
+  }, [checkNotifications]);
 
-  useLiveRefresh(checkStock);
+  useLiveRefresh(checkNotifications);
 
   const unreadCount = notifications.length;
 

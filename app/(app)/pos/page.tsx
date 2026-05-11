@@ -73,12 +73,22 @@ import { OverallReadingDialog } from './overall-reading-dialog';
 
 import { CancelSaleDialog } from './cancel-sale-dialog';
 import { DiscountDialog } from './discount-dialog';
+import { SuspendNoteDialog } from './suspend-note-dialog';
+import { PriceEditDialog } from './price-edit-dialog';
 import { ShutdownConfirmationDialog } from './shutdown-confirmation-dialog';
 import { useToast } from '@/hooks/use-toast';
+
+export type SuspendedTransaction = {
+  id: string;
+  items: SaleItem[];
+  note: string;
+  timestamp: string;
+};
 import { InsufficientStockDialog } from './insufficient-stock-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { calculateEffectivePrice } from '@/lib/pricing';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity, formatStockQuantity } from '@/lib/utils';
 
 
 import { SystemSettings } from '@/lib/types';
@@ -183,9 +193,11 @@ const MOCK_PRODUCTS: Product[] = [
 export type SaleItem = Product & { 
     quantity: number; 
     discount: number; 
+    discountType?: string;
     name: string;
     taxType?: 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT';
 };
+
 
 const initialItems: SaleItem[] = [];
 
@@ -286,7 +298,9 @@ export default function POSPage() {
 
   const [isTenderDialogOpen, setIsTenderDialogOpen] = useState(false);
   const [tenderMethod, setTenderMethod] = useState<string | null>(null);
-  const [heldTransactions, setHeldTransactions] = useState<SaleItem[][]>([]);
+  const [heldTransactions, setHeldTransactions] = useState<SuspendedTransaction[]>([]);
+  const [isSuspendNoteOpen, setIsSuspendNoteOpen] = useState(false);
+  const [isPriceEditOpen, setIsPriceEditOpen] = useState(false);
   const [shiftActive, setShiftActive] = useState(false);
   const [startingCash, setStartingCash] = useState(0);
   const [cashSales, setCashSales] = useState(0);
@@ -434,9 +448,9 @@ export default function POSPage() {
   }, [selectedItemId]);
 
   // Fetch POS settings - stable reference via useCallback so polling interval never resets
-  const fetchSettings = useCallback(async () => {
+  const fetchSettings = useCallback(async (signal?: AbortSignal) => {
       try {
-          const response = await fetch(getApiUrl('/pos-settings'));
+          const response = await fetch(getApiUrl('/pos-settings'), { signal });
           const result = await response.json();
           if (result.success) {
               setEnableNegativeInventory(result.data.enableNegativeInventory);
@@ -462,8 +476,10 @@ export default function POSPage() {
               setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
               setBusinessSettings(result.data);
           }
-      } catch (error) {
-          console.error('Error fetching settings:', error);
+      } catch (error: any) {
+          // Suppress AbortError (expected on cleanup) and transient network errors during polling
+          if (error?.name === 'AbortError') return;
+          console.warn('[POS] fetchSettings: transient network error (server may be restarting):', error?.message ?? error);
       }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -471,20 +487,26 @@ export default function POSPage() {
   // Auto-refresh settings when they are changed from another tab/window
   // Storage event works for browser-to-browser; polling works universally (including Electron)
   useEffect(() => {
+    const controller = new AbortController();
+
+    // Initial fetch with abort support
+    fetchSettings(controller.signal);
+
     // Fast refresh for browser tabs via storage event
     const handleSettingsChange = (e: StorageEvent) => {
       if (e.key === 'pos_settings_version') {
-        fetchSettings();
+        fetchSettings(controller.signal);
       }
     };
     window.addEventListener('storage', handleSettingsChange);
 
     // Universal polling fallback every 30 seconds (works in Electron + browser)
     const pollInterval = setInterval(() => {
-      fetchSettings();
+      fetchSettings(controller.signal);
     }, 30000);
 
     return () => {
+      controller.abort();
       window.removeEventListener('storage', handleSettingsChange);
       clearInterval(pollInterval);
     };
@@ -507,9 +529,6 @@ export default function POSPage() {
       }
     };
     fetchPriceLevels();
-    
-    // Fetch POS settings on mount
-    fetchSettings();
 
     // Fetch Terminals
     const fetchTerminals = async () => {
@@ -1003,16 +1022,16 @@ export default function POSPage() {
     }
   };
 
-  const handleApplyDiscount = (itemId: string | 'ALL', percentage: number) => {
+  const handleApplyDiscount = (itemId: string | 'ALL', percentage: number, discountType?: string) => {
     if (itemId === 'ALL') {
-      setItems(items.map(item => ({ ...item, discount: percentage })));
+      setItems(items.map(item => ({ ...item, discount: percentage, discountType })));
       toast({
         title: "Global Discount Applied",
         description: `Applied ${percentage.toFixed(2)}% discount to all items.`,
       });
     } else {
       setItems(items.map(item =>
-        item.id === itemId ? { ...item, discount: percentage } : item
+        item.id === itemId ? { ...item, discount: percentage, discountType } : item
       ));
       toast({
         title: "Discount Applied",
@@ -1020,6 +1039,7 @@ export default function POSPage() {
       });
     }
   };
+
 
   const handleOpenQuantityDialog = () => {
     if (selectedItem) {
@@ -1035,10 +1055,7 @@ export default function POSPage() {
 
   const handleHold = () => {
     if (items.length > 0) {
-      setHeldTransactions(prev => [...prev, items]);
-      setItems([]);
-      setSelectedItemId(null);
-      setSelectedCustomer(WALK_IN_CUSTOMER);
+      setIsSuspendNoteOpen(true);
     } else {
       toast({
         title: "Empty Cart",
@@ -1046,6 +1063,19 @@ export default function POSPage() {
         variant: "destructive",
       });
     }
+  };
+
+  const confirmHold = (note: string) => {
+    setHeldTransactions(prev => [...prev, {
+      id: Date.now().toString(),
+      items: [...items],
+      note: note || 'No Note',
+      timestamp: new Date().toISOString()
+    }]);
+    setItems([]);
+    setSelectedItemId(null);
+    setSelectedCustomer(WALK_IN_CUSTOMER);
+    setIsSuspendNoteOpen(false);
   };
 
   const handleRestore = (index: number) => {
@@ -1058,7 +1088,7 @@ export default function POSPage() {
       return;
     }
     const transactionToRestore = heldTransactions[index];
-    setItems(transactionToRestore);
+    setItems(transactionToRestore.items);
     setHeldTransactions(prev => prev.filter((_, i) => i !== index));
     setIsHeldTransOpen(false);
   };
@@ -1375,9 +1405,7 @@ export default function POSPage() {
       if (businessSettings?.enablePriceEditAuth) {
           setIsPriceEditAuthOpen(true);
       } else {
-         // Direct access if auth is disabled
-         setEditDialogMode('price-only');
-         setIsEditItemOpen(true);
+         setIsPriceEditOpen(true);
       }
     } else {
       toast({
@@ -1396,8 +1424,7 @@ export default function POSPage() {
 
   const handlePriceEditAuthSuccess = () => {
     setIsPriceEditAuthOpen(false);
-    setEditDialogMode('price-only');
-    setIsEditItemOpen(true);
+    setIsPriceEditOpen(true);
   };
 
 
@@ -1609,14 +1636,14 @@ export default function POSPage() {
                     key={label} 
                     variant="ghost" 
                     size="sm"
-                    className={`flex flex-col gap-0.5 h-12 min-w-[4.5rem] px-2 transition-all font-normal border ${className}`} 
+                    className={`relative flex flex-col gap-0.5 h-12 min-w-[4.5rem] px-2 transition-all font-normal border ${className}`} 
                     onClick={action}
                   >
                     <Icon className="w-4 h-4 mb-0.5" />
                     <span className="text-[10px] leading-none font-medium text-center">{label}</span>
                     <span className="text-[9px] text-black leading-none font-mono opacity-100">{fKey}</span>
-                    {label === 'Hold Trans' && heldTransactions.length > 0 && (
-                      <span className="absolute top-1 right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
+                    {label === 'Suspended' && heldTransactions.length > 0 && (
+                      <span className="absolute top-1 right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-white/50">
                         {heldTransactions.length}
                       </span>
                     )}
@@ -1766,7 +1793,7 @@ export default function POSPage() {
                                     </TableCell>
                                     <TableCell className="p-0">
                                         <div className="flex items-center justify-center gap-1 h-full">
-                                            <span className="w-8 text-center font-mono text-sm font-medium">{item.quantity}</span>
+                                            <span className="w-8 text-center font-mono text-sm font-medium">{formatStockQuantity(item.quantity)}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right font-mono font-medium">
@@ -2024,6 +2051,17 @@ export default function POSPage() {
         onRestore={handleRestore}
         onDelete={handleDeleteHeld}
       />
+      <SuspendNoteDialog
+        isOpen={isSuspendNoteOpen}
+        onOpenChange={setIsSuspendNoteOpen}
+        onConfirm={confirmHold}
+      />
+      <PriceEditDialog
+        isOpen={isPriceEditOpen}
+        onOpenChange={setIsPriceEditOpen}
+        item={selectedItem}
+        onUpdate={handleUpdateItem}
+      />
       <AdminAuthDialog
         isOpen={isAuthDialogOpen}
         onOpenChange={setIsAuthDialogOpen}
@@ -2134,8 +2172,9 @@ export default function POSPage() {
                 setPendingOverallReading(false);
             }
         }}
-        terminalId="all"
-        terminalName="All Terminals"
+        terminalId={selectedTerminalId || "all"}
+        terminalName={currentTerminalName || "All Terminals"}
+
         printMode={businessSettings?.printMode || 'browser'}
       />
       

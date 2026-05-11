@@ -46,6 +46,7 @@ export class ReceiptGenerator {
         pointsUsedValue?: number;
         pointsBalance?: number;
         paymentReference?: string;
+        payments?: { method: string; amount: number; reference?: string }[];
         terminalName?: string;
         taxBreakdown?: {
             vatableSales: number;
@@ -72,7 +73,7 @@ export class ReceiptGenerator {
 
             items.forEach(item => {
                 const lineTotal = (item.price * item.quantity) - (item.discount || 0);
-                const taxType = (item as any).taxType || item.taxType || (item.product as any)?.taxType || 'VAT';
+                const taxType = (item as any).taxType || item.taxType || (item as any).product?.taxType || 'VAT';
 
                 if (taxType === 'VAT') {
                     const vatable = lineTotal / 1.12;
@@ -226,14 +227,26 @@ export class ReceiptGenerator {
         if (sale.pointsUsedValue && sale.pointsUsedValue > 0) {
             enc.bold(true).line(this.row('Points Redeemed:', `-${this.fmt(sale.pointsUsedValue)}`, COLS)).bold(false);
             enc.bold(true).line(this.row('Net Balance Due:', this.fmt(totalDue - sale.pointsUsedValue), COLS)).bold(false);
-            enc.bold(true).line(this.row('CASH Tendered:', this.fmt(amountTendered || (totalDue + change)), COLS)).bold(false);
-        } else {
-            const cashLabel = paymentMethod?.toUpperCase() === 'CASH' ? 'CASH:' : `${paymentMethod}:`;
-            enc.bold(true).line(this.row(cashLabel, this.fmt(amountTendered || (totalDue + change)), COLS)).bold(false);
         }
 
-        if (sale.paymentReference) {
-            enc.line(this.row('REF NO:', sale.paymentReference, COLS));
+        if (sale.payments && sale.payments.length > 0) {
+             sale.payments.forEach(p => {
+                 const lbl = p.method.toUpperCase() === 'CASH' ? 'CASH:' : `${p.method}:`;
+                 enc.bold(true).line(this.row(lbl, this.fmt(p.amount), COLS)).bold(false);
+                 if (p.reference) {
+                     enc.line(this.row('REF NO:', p.reference, COLS));
+                 }
+             });
+        } else {
+             if (sale.pointsUsedValue && sale.pointsUsedValue > 0) {
+                 enc.bold(true).line(this.row('CASH Tendered:', this.fmt(amountTendered || (totalDue + change)), COLS)).bold(false);
+             } else {
+                 const cashLabel = paymentMethod?.toUpperCase() === 'CASH' ? 'CASH:' : `${paymentMethod}:`;
+                 enc.bold(true).line(this.row(cashLabel, this.fmt(amountTendered || (totalDue + change)), COLS)).bold(false);
+             }
+             if (sale.paymentReference) {
+                 enc.line(this.row('REF NO:', sale.paymentReference, COLS));
+             }
         }
 
         if (change > 0) {

@@ -2,6 +2,7 @@ import React, { forwardRef } from 'react';
 import { format } from 'date-fns';
 import { SaleItem } from '@/lib/types';
 import { SystemSettings } from '@/lib/types';
+import { formatQuantity } from '@/lib/utils';
 
 interface CreditSlipViewProps {
     creditDetails: {
@@ -53,7 +54,7 @@ export const CreditSlipView = forwardRef<HTMLDivElement, CreditSlipViewProps>(({
                 </div>
                 {items.map((item, index) => (
                     <div key={index} className="flex justify-between mb-1 items-start text-[10px]">
-                        <span className="w-10 text-left">{item.quantity} {item.product?.unitOfMeasure || 'pc'}</span>
+                        <span className="w-10 text-left">{formatQuantity(item.quantity)} {item.product?.unitOfMeasure || 'pc'}</span>
                         <span className="flex-1 text-left px-1">
                             <div>{item.product?.name || 'Unknown Item'}</div>
                             <div className="text-black">@ {formatCurrency(item.price)}</div>

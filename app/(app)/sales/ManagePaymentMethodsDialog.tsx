@@ -529,14 +529,14 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
           {trigger}
         </DialogTrigger>
       )}
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Manage Payment Methods</DialogTitle>
           <DialogDescription>
             Add, edit, or delete your payment methods.
           </DialogDescription>
         </DialogHeader>
-        <div className="mt-4 flex-1 flex flex-col overflow-hidden">
+        <div className="mt-4 flex flex-col overflow-hidden min-h-0 flex-1">
             <div className="flex items-center justify-between mb-4 gap-2">
               <div className="relative flex-1 max-w-xs mr-3 ml-1 mt-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -554,9 +554,9 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
                 </Button>
               </AddPaymentMethodDialog>
             </div>
-            <Card className="flex-1 flex flex-col overflow-hidden">
-                <CardContent className='p-0 flex-1 overflow-hidden'>
-                    <ScrollArea className="h-full">
+            <Card className="overflow-hidden">
+                <CardContent className='p-0'>
+                    <ScrollArea className="max-h-[45vh] overflow-auto">
                         <Table>
                         <TableHeader>
                             <TableRow>

@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, PackageOpen, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 
 interface InventoryBatch {
   id: string;
@@ -235,16 +235,15 @@ export function BatchInventoryDrawer({ open, onOpenChange }: BatchInventoryDrawe
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {formatDate(batch.received_date)}
                       </TableCell>
-                      {/* Qty In */}
                       <TableCell className="text-right font-medium tabular-nums">
-                        {Number(batch.quantity_in).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        {formatQuantity(batch.quantity_in)}
                       </TableCell>
                       {/* Remaining */}
                       <TableCell className={cn(
                         'text-right font-semibold tabular-nums',
                         isExhausted ? 'text-muted-foreground' : 'text-emerald-600'
                       )}>
-                        {Number(batch.quantity_remaining).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        {formatQuantity(batch.quantity_remaining)}
                       </TableCell>
                       {/* Usage bar */}
                       <TableCell>

@@ -33,7 +33,7 @@ export type OverallReadingData = {
   };
 };
 
-type PrinterFormat = '58mm' | '80mm';
+type PrinterFormat = '58mm' | '80mm' | 'A4';
 
 interface OverallReadingPreviewProps {
   data: OverallReadingData;
@@ -41,16 +41,21 @@ interface OverallReadingPreviewProps {
 }
 
 export function OverallReadingPreview({ data, printerFormat = '58mm' }: OverallReadingPreviewProps) {
-  const is58mm = printerFormat === '58mm';
-  
+  const formatCurrency = (amount: number) => 
+    (amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const isA4 = printerFormat === 'A4';
+
   const DashedLine = () => (
     <div style={{ width: '100%', borderTop: '1px dashed black', margin: '5px 0' }} />
   );
 
-  const formatCurrency = (amount: number) => 
-    amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const SolidLine = () => (
+    <div style={{ width: '100%', borderTop: '1px solid black', margin: '3px 0' }} />
+  );
 
-  const styles = {
+  // Styles for Receipt (58mm/80mm)
+  const receiptStyles = {
     container: {
         width: '100%',
         margin: '0', 
@@ -58,9 +63,8 @@ export function OverallReadingPreview({ data, printerFormat = '58mm' }: OverallR
         color: 'black',
         fontFamily: '"Courier New", Courier, monospace',
         fontSize: '11px', 
-        lineHeight: '1.2',
+        lineHeight: '1.3',
         padding: '4mm',
-        fontWeight: 'bold',
     },
     headerDiv: {
         textAlign: 'center' as const,
@@ -71,149 +75,299 @@ export function OverallReadingPreview({ data, printerFormat = '58mm' }: OverallR
         fontSize: '14px',
         textTransform: 'uppercase' as const,
         marginBottom: '2px',
+        fontWeight: 'bold',
     },
     sectionTitle: {
         textAlign: 'center' as const,
         marginTop: '5px',
         marginBottom: '2px',
         fontWeight: 'bold',
-        fontSize: '12px',
+        fontSize: '11px',
         textTransform: 'uppercase' as const,
+        letterSpacing: '0.5px',
     },
     row: {
         display: 'flex',
         justifyContent: 'space-between',
         marginBottom: '2px', 
     },
-    section: {
-        marginBottom: '2px',
-    },
-    bold: {
-        fontWeight: 'bold',
-    },
     footer: {
         marginTop: '10px',
         marginBottom: '10px',
         textAlign: 'center' as const,
         fontSize: '10px',
-    },
-    center: {
-        textAlign: 'center' as const,
     }
   };
 
+  // Styles for A4
+  const a4Styles = {
+    container: {
+        width: '210mm', // A4 width
+        margin: '0 auto', 
+        backgroundColor: 'white',
+        color: 'black',
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '12px', 
+        lineHeight: '1.5',
+        padding: '15mm',
+        boxSizing: 'border-box' as const,
+    },
+    header: {
+        textAlign: 'center' as const,
+        marginBottom: '20px',
+    },
+    title: {
+        fontSize: '24px',
+        fontWeight: 'bold',
+        marginBottom: '5px',
+    },
+    subtitle: {
+        fontSize: '14px',
+        color: '#666',
+        marginBottom: '15px',
+    },
+    section: {
+        marginBottom: '20px',
+    },
+    sectionTitle: {
+        fontSize: '16px',
+        fontWeight: 'bold',
+        marginBottom: '10px',
+        borderBottom: '2px solid #333',
+        paddingBottom: '5px',
+    },
+    table: {
+        width: '100%',
+        borderCollapse: 'collapse' as const,
+        marginBottom: '15px',
+    },
+    th: {
+        borderBottom: '1px solid #ddd',
+        padding: '8px',
+        textAlign: 'left' as const,
+        backgroundColor: '#f9f9f9',
+        fontWeight: 'bold',
+    },
+    td: {
+        borderBottom: '1px solid #ddd',
+        padding: '8px',
+        textAlign: 'left' as const,
+    },
+    textRight: {
+        textAlign: 'right' as const,
+    },
+    totalsGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: '15px',
+        marginBottom: '20px',
+    },
+    totalCard: {
+        border: '1px solid #ddd',
+        padding: '15px',
+        borderRadius: '5px',
+        backgroundColor: '#f9f9f9',
+    },
+    totalLabel: {
+        fontSize: '12px',
+        color: '#666',
+        textTransform: 'uppercase' as const,
+    },
+    totalValue: {
+        fontSize: '20px',
+        fontWeight: 'bold',
+        marginTop: '5px',
+    }
+  };
+
+  if (isA4) {
+    return (
+      <div style={a4Styles.container} className="printable-area">
+        {/* Business Header */}
+        <div style={a4Styles.header}>
+            <div style={a4Styles.title}>{data.businessSettings.businessName}</div>
+            <div>{data.businessSettings.address}</div>
+            <div>VAT REG TIN: {data.businessSettings.tin}</div>
+            <div style={a4Styles.subtitle}>OVERALL READING REPORT</div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '12px' }}>
+                <div>
+                    <strong>Terminal:</strong> {data.terminalId} ({data.terminalName})
+                </div>
+                <div>
+                    <strong>Date:</strong> {format(new Date(), 'PPpp')}
+                </div>
+            </div>
+        </div>
+
+        {/* Summary Totals */}
+        <div style={a4Styles.section}>
+            <div style={a4Styles.sectionTitle}>Summary Totals</div>
+            <div style={a4Styles.totalsGrid}>
+                <div style={a4Styles.totalCard}>
+                    <div style={a4Styles.totalLabel}>Net Sales</div>
+                    <div style={a4Styles.totalValue}>₱{formatCurrency(data.netSales)}</div>
+                </div>
+                <div style={a4Styles.totalCard}>
+                    <div style={a4Styles.totalLabel}>Gross Sales</div>
+                    <div style={a4Styles.totalValue}>₱{formatCurrency(data.grossSales)}</div>
+                </div>
+                <div style={a4Styles.totalCard}>
+                    <div style={a4Styles.totalLabel}>Transactions</div>
+                    <div style={a4Styles.totalValue}>{data.transactionCount}</div>
+                </div>
+                <div style={a4Styles.totalCard}>
+                    <div style={a4Styles.totalLabel}>Total Discounts</div>
+                    <div style={a4Styles.totalValue}>₱{formatCurrency(data.totalDiscounts)}</div>
+                </div>
+            </div>
+        </div>
+
+        {/* Terminal Breakdown */}
+        {data.terminals.some(t => t.netSales > 0 || t.transactionCount > 0) && (
+            <div style={a4Styles.section}>
+                <div style={a4Styles.sectionTitle}>Terminal Breakdown</div>
+                <table style={a4Styles.table}>
+                    <thead>
+                        <tr>
+                            <th style={a4Styles.th}>Terminal</th>
+                            <th style={{ ...a4Styles.th, ...a4Styles.textRight }}>Transactions</th>
+                            <th style={{ ...a4Styles.th, ...a4Styles.textRight }}>Net Sales</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {data.terminals.filter(t => t.netSales > 0 || t.transactionCount > 0).map((term, idx) => (
+                            <tr key={idx}>
+                                <td style={a4Styles.td}>{term.terminalName}</td>
+                                <td style={{ ...a4Styles.td, ...a4Styles.textRight }}>{term.transactionCount}</td>
+                                <td style={{ ...a4Styles.td, ...a4Styles.textRight }}>₱{formatCurrency(term.netSales)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )}
+
+        {/* Cashier Breakdown */}
+        {data.cashiers.some(c => c.netSales > 0 || c.transactionCount > 0) && (
+            <div style={a4Styles.section}>
+                <div style={a4Styles.sectionTitle}>Cashier Breakdown</div>
+                <table style={a4Styles.table}>
+                    <thead>
+                        <tr>
+                            <th style={a4Styles.th}>Cashier</th>
+                            <th style={{ ...a4Styles.th, ...a4Styles.textRight }}>Transactions</th>
+                            <th style={{ ...a4Styles.th, ...a4Styles.textRight }}>Net Sales</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {data.cashiers.filter(c => c.netSales > 0 || c.transactionCount > 0).map((cashier, idx) => (
+                            <tr key={idx}>
+                                <td style={a4Styles.td}>{cashier.cashierName}</td>
+                                <td style={{ ...a4Styles.td, ...a4Styles.textRight }}>{cashier.transactionCount}</td>
+                                <td style={{ ...a4Styles.td, ...a4Styles.textRight }}>₱{formatCurrency(cashier.netSales)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )}
+
+        <div style={{ textAlign: 'center', marginTop: '50px', fontSize: '10px', color: '#aaa' }}>
+            End of Overall Reading Report • THIS IS NOT AN OFFICIAL RECEIPT
+        </div>
+      </div>
+    );
+  }
+
+  // Receipt Layout (58mm/80mm)
   return (
-    <div style={styles.container} className="printable-area">
+    <div style={receiptStyles.container} className="printable-area">
       
-      {/* Business Header */}
-      <div style={styles.headerDiv}>
-        <div style={styles.headerTitle}>{data.businessSettings.businessName}</div>
+      {/* ── Business Header ─────────────────────────────────────── */}
+      <div style={receiptStyles.headerDiv}>
+        <div style={receiptStyles.headerTitle}>{data.businessSettings.businessName}</div>
         <div style={{ fontSize: '10px' }}>{data.businessSettings.address}</div>
         <div style={{ fontSize: '10px' }}>VAT REG TIN: {data.businessSettings.tin}</div>
-        <div style={{ fontSize: '10px' }}>MIN: {data.terminalInfo.min}</div>
-        <div style={{ fontSize: '10px' }}>S/N: {data.terminalInfo.sn}</div>
+        {data.terminalInfo.min && <div style={{ fontSize: '10px' }}>MIN: {data.terminalInfo.min}</div>}
+        {data.terminalInfo.sn  && <div style={{ fontSize: '10px' }}>S/N: {data.terminalInfo.sn}</div>}
         <div style={{ fontSize: '10px' }}>Terminal: {data.terminalId}</div>
       </div>
 
-      <div style={styles.sectionTitle}>
-        <div>OVERALL TERMINAL READING</div>
-      </div>
-
-      <div style={styles.section}>
-        <div style={styles.row}>
-          <span>Report Date:</span>
-          <span>{format(new Date(data.endDate), 'MM/dd/yyyy h:mm a')}</span>
-        </div>
-        <div style={styles.row}>
-          <span>From:</span>
-          <span style={{textAlign: 'right'}}>{data.startDate ? format(new Date(data.startDate), 'MM/dd/yy h:mm a') : 'Creation'}</span>
-        </div>
-        <div style={styles.row}>
-          <span>To:</span>
-          <span style={{textAlign: 'right'}}>{format(new Date(data.endDate), 'MM/dd/yy h:mm a')}</span>
-        </div>
-      </div>
-
       <DashedLine />
 
-      <div style={styles.sectionTitle}>
-        <div>TERMINAL PERFORMANCE</div>
+      {/* ── Summary Totals (Added for Receipt too) ────────────────── */}
+      <div style={receiptStyles.sectionTitle}>SUMMARY TOTALS</div>
+      <DashedLine />
+      <div style={receiptStyles.row}>
+        <span>NET SALES:</span>
+        <span>{formatCurrency(data.netSales)}</span>
       </div>
-
-      <div style={styles.section}>
-        <div style={styles.row}>
-          <span>Gross Sales:</span>
-          <span>{formatCurrency(data.grossSales)}</span>
-        </div>
-        <div style={styles.row}>
-          <span>Total Discounts:</span>
-          <span>{formatCurrency(data.totalDiscounts)}</span>
-        </div>
-        <div style={{ ...styles.row, ...styles.bold }}>
-          <span>Net Sales:</span>
-          <span>{formatCurrency(data.netSales)}</span>
-        </div>
-        <div style={styles.row}>
-          <span>Transactions:</span>
-          <span>{data.transactionCount}</span>
-        </div>
+      <div style={receiptStyles.row}>
+        <span>GROSS SALES:</span>
+        <span>{formatCurrency(data.grossSales)}</span>
       </div>
-
-      <div style={styles.sectionTitle}>
-        <div>TERMINAL BREAKDOWN</div>
+      <div style={receiptStyles.row}>
+        <span>TRANSACTIONS:</span>
+        <span>{data.transactionCount}</span>
       </div>
+      <div style={receiptStyles.row}>
+        <span>DISCOUNTS:</span>
+        <span>{formatCurrency(data.totalDiscounts)}</span>
+      </div>
+      <DashedLine />
 
-      <div style={styles.section}>
-        <div style={styles.row}>
-          <span style={{flex: 1}}>TERMINAL</span>
-          <span style={{width: '40px', textAlign: 'right'}}>TXNS</span>
-          <span style={{width: '80px', textAlign: 'right'}}>AMOUNT</span>
-        </div>
-        <DashedLine />
-        {data.terminals.map((term, idx) => (
-          <div key={idx} style={styles.row}>
-            <span style={{flex: 1, textTransform: 'uppercase'}}>{term.terminalName}</span>
-            <span style={{width: '40px', textAlign: 'right'}}>{term.transactionCount}</span>
-            <span style={{width: '80px', textAlign: 'right'}}>{formatCurrency(term.netSales)}</span>
+      {/* ── Terminal Breakdown ───────────────────────────────────── */}
+      {data.terminals.some(t => t.netSales > 0 || t.transactionCount > 0) && (
+        <>
+          <div style={receiptStyles.sectionTitle}>TERMINAL BREAKDOWN</div>
+          <div style={{ marginBottom: '2px' }}>
+            <div style={receiptStyles.row}>
+              <span style={{ flex: 1 }}>TERMINAL</span>
+              <span style={{ width: '40px', textAlign: 'right' }}>TXNS</span>
+              <span style={{ width: '80px', textAlign: 'right' }}>AMOUNT</span>
+            </div>
+            <DashedLine />
+            {data.terminals.filter(t => t.netSales > 0 || t.transactionCount > 0).map((term, idx) => (
+              <div key={idx} style={receiptStyles.row}>
+                <span style={{ flex: 1, textTransform: 'uppercase' }}>{term.terminalName}</span>
+                <span style={{ width: '40px', textAlign: 'right' }}>{term.transactionCount}</span>
+                <span style={{ width: '80px', textAlign: 'right' }}>{formatCurrency(term.netSales)}</span>
+              </div>
+            ))}
           </div>
-        ))}
-        {data.terminals.length === 0 && (
-          <div style={{ ...styles.center, fontStyle: 'italic', fontSize: '10px' }}>No terminal data</div>
-        )}
-      </div>
+          <DashedLine />
+        </>
+      )}
 
-      <DashedLine />
-
-      <div style={styles.sectionTitle}>
-        <div>CASHIER BREAKDOWN</div>
-      </div>
-
-      <div style={styles.section}>
-        <div style={styles.row}>
-          <span style={{flex: 1}}>CASHIER</span>
-          <span style={{width: '40px', textAlign: 'right'}}>TXNS</span>
-          <span style={{width: '80px', textAlign: 'right'}}>AMOUNT</span>
-        </div>
-        <DashedLine />
-        {data.cashiers.map((cashier, idx) => (
-          <div key={idx} style={styles.row}>
-            <span style={{flex: 1, textTransform: 'uppercase'}}>{cashier.cashierName}</span>
-            <span style={{width: '40px', textAlign: 'right'}}>{cashier.transactionCount}</span>
-            <span style={{width: '80px', textAlign: 'right'}}>{formatCurrency(cashier.netSales)}</span>
+      {/* ── Cashier Breakdown ───────────────────────────────────── */}
+      {data.cashiers.some(c => c.netSales > 0 || c.transactionCount > 0) && (
+        <>
+          <div style={receiptStyles.sectionTitle}>CASHIER BREAKDOWN</div>
+          <div style={{ marginBottom: '2px' }}>
+            <div style={receiptStyles.row}>
+              <span style={{ flex: 1 }}>CASHIER</span>
+              <span style={{ width: '40px', textAlign: 'right' }}>TXNS</span>
+              <span style={{ width: '80px', textAlign: 'right' }}>AMOUNT</span>
+            </div>
+            <DashedLine />
+            {data.cashiers.filter(c => c.netSales > 0 || c.transactionCount > 0).map((cashier, idx) => (
+              <div key={idx} style={receiptStyles.row}>
+                <span style={{ flex: 1, textTransform: 'uppercase' }}>{cashier.cashierName}</span>
+                <span style={{ width: '40px', textAlign: 'right' }}>{cashier.transactionCount}</span>
+                <span style={{ width: '80px', textAlign: 'right' }}>{formatCurrency(cashier.netSales)}</span>
+              </div>
+            ))}
           </div>
-        ))}
-        {data.cashiers.length === 0 && (
-          <div style={{ ...styles.center, fontStyle: 'italic', fontSize: '10px' }}>No cashier data</div>
-        )}
-      </div>
+          <DashedLine />
+        </>
+      )}
 
-      <DashedLine />
-      
-      <div style={styles.footer}>
-          <div style={{marginTop: '5px', fontStyle: 'italic'}}>End of Overall Reading Report</div>
+      <div style={receiptStyles.footer}>
+          <div style={{ marginTop: '5px', fontStyle: 'italic' }}>End of Overall Reading Report</div>
       </div>
     
-      <div style={{ ...styles.center, ...styles.bold }}>
+      <div style={{ textAlign: 'center', fontWeight: 'bold' }}>
          <div>THIS IS NOT AN OFFICIAL RECEIPT</div>
       </div>
 

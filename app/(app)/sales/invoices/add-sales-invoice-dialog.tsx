@@ -52,6 +52,7 @@ import { CustomerSelectionField } from './customer-selection-field';
 import { useProducts, useCustomers } from '@/hooks/use-api';
 import { format, addDays } from 'date-fns';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity } from '@/lib/utils';
 
 const salesInvoiceItemSchema = z.object({
   product: z.any(), // Keep full product object
@@ -150,7 +151,7 @@ function ProductSelector({ onSelectProduct, warehouseId }: { onSelectProduct: (p
                       <div className="flex flex-col">
                         <span className="font-medium">{product.name}</span>
                         <span className="text-sm text-muted-foreground">
-                          SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {product.stock}
+                          SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock: {formatQuantity(product.stock)}
                         </span>
                       </div>
                     </CommandItem>
@@ -673,7 +674,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                                                 <span>{field.product.sku || 'No SKU'}</span>
                                                 {field.product.stock !== undefined && (
                                                     <span className={field.product.stock <= 0 ? "text-destructive" : "text-emerald-600"}>
-                                                    Stock: {field.product.stock}
+                                                    Stock: {formatQuantity(field.product.stock)}
                                                     </span>
                                                 )}
                                             </div>

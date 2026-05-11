@@ -4,6 +4,8 @@ import { query, withTransaction } from '@/lib/mysql';
 import { generateBatchId } from '@/lib/batch-utils';
 import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
 import { PriceLevel, Category, Brand, Supplier, Warehouse, Department, UnitOfMeasure, ShelfLocation, Account, TaxRate } from '@/lib/types';
+import { v4 as uuidv4 } from 'uuid';
+import { findUltimateRoot, deductFamilyStock, addFamilyStock } from '@/lib/family-sync';
 
 
 export type ProductFormData = {
@@ -582,6 +584,24 @@ export async function updateProduct(id: string, formData: ProductFormData) {
 
       const legacyShelfId = formData.shelfLocationIds && formData.shelfLocationIds.length > 0 ? formData.shelfLocationIds[0] : existing.shelf_location_id;
 
+      // --- Family Stock Sync for manual stock edits ---
+      if (productData.stock !== undefined) {
+        const originalStock = Number(existing.stock || 0);
+        const newStock = Number(productData.stock);
+        const delta = newStock - originalStock;
+
+        if (delta !== 0) {
+          const { rootId, factorToRoot } = await findUltimateRoot(id, connection as any);
+          const rootDelta = delta / factorToRoot;
+
+          if (delta < 0) {
+            await deductFamilyStock(rootId, Math.abs(rootDelta), `adj_edit_${Date.now()}`, 'adjustment', `Manual edit of ${existing.name}`, connection as any);
+          } else {
+            await addFamilyStock(rootId, rootDelta, `adj_edit_${Date.now()}`, 'adjustment', `Manual edit of ${existing.name}`, connection as any);
+          }
+        }
+      }
+
       const values_array = [
         productData.name, productData.description, productData.additional_description,
         productData.category, productData.brand, productData.department, productData.subcategory,
@@ -729,7 +749,7 @@ export async function breakPack(
       const isApprovalRequired = await checkApprovalRequired('REPACKAGING');
       if (isApprovalRequired) {
         // Enrich data for the approval card
-        const parentRows: any = await query('SELECT name, stock, unit_of_measure, sku, barcode, price, cost FROM products WHERE id = ? OR sku = ?', [parentId, parentId]);
+        const parentRows: any = await query('SELECT p.name, p.stock, p.unit_of_measure, p.sku, p.barcode, p.price, p.cost, w.name as warehouse_name FROM products p LEFT JOIN warehouses w ON p.warehouse_id = w.id WHERE p.id = ? OR p.sku = ?', [parentId, parentId]);
         const parentInfo = (Array.isArray(parentRows) && parentRows.length > 0) ? parentRows[0] : null;
         
         let targetName = newProductData?.name || 'New Product';
@@ -789,6 +809,9 @@ export async function breakPack(
           targetProductName: targetName,
           sourceUnit: parentInfo?.unit_of_measure || '',
           currentStock: parentInfo?.stock || 0,
+          quantity: `${quantityToBreak} ${parentInfo?.unit_of_measure || ''}`.trim(),
+          warehouseName: parentInfo?.warehouse_name || 'N/A',
+          reason: 'Break Pack',
           items // Add items array for consistency with other transaction types
         }, userId);
         if (pendingApproval) {
@@ -799,6 +822,7 @@ export async function breakPack(
     }
 
     return await withTransaction(async (connection) => {
+      const repackagingId = `rpkg_${uuidv4()}`;
       // 1. Fetch parent info
       const [parentResult]: any = await connection.query(
         'SELECT id, name, stock, unit_of_measure, sku, brand, category, subcategory, department, supplier_id, warehouse_id, vat_status, income_account, expense_account FROM products WHERE id = ?', 
@@ -867,50 +891,16 @@ export async function breakPack(
 
       const childQuantityToAdd = quantityToBreak * factor;
 
-      // 2. Update parent stock
-      await connection.query('UPDATE products SET stock = stock - ? WHERE id = ?', [quantityToBreak, parentId]);
-      
-      // Update parent shelves
-      const [parentShelves]: any = await connection.query('SELECT shelf_id, quantity FROM product_shelves WHERE product_id = ? ORDER BY quantity DESC', [parentId]);
-      let remainingToDeduct = quantityToBreak;
-      for (const shelf of parentShelves) {
-        const deduct = Math.min(shelf.quantity, remainingToDeduct);
-        if (deduct > 0) {
-          await connection.query('UPDATE product_shelves SET quantity = quantity - ? WHERE product_id = ? AND shelf_id = ?', [deduct, parentId, shelf.shelf_id]);
-          remainingToDeduct -= deduct;
-        }
-        if (remainingToDeduct <= 0) break;
-      }
+      // 2. Perform Stock Update with Family Sync
+      const { rootId: sourceRootId, factorToRoot: sourceFactorToRoot } = await findUltimateRoot(parentId, connection as any);
+      const sourceRootQty = quantityToBreak / sourceFactorToRoot;
+      await deductFamilyStock(sourceRootId, sourceRootQty, repackagingId, 'adjustment', `Repackaging: Break Pack from ${parentId}`, connection as any);
 
-      // 3. Update child stock
-      await connection.query('UPDATE products SET stock = stock + ? WHERE id = ?', [childQuantityToAdd, resolvedChildId]);
+      const { rootId: destRootId, factorToRoot: destFactorToRoot } = await findUltimateRoot(resolvedChildId, connection as any);
+      const destRootQty = childQuantityToAdd / destFactorToRoot;
+      await addFamilyStock(destRootId, destRootQty, repackagingId, 'adjustment', `Repackaging: Produced from ${parentId}`, connection as any);
 
-      // Update child shelves
-      const [childShelves]: any = await connection.query('SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1', [resolvedChildId]);
-      let targetChildShelf = childShelves[0]?.shelf_id;
-
-      if (!targetChildShelf && parentShelves[0]?.shelf_id) {
-          targetChildShelf = parentShelves[0].shelf_id;
-          await connection.query('INSERT INTO product_shelves (product_id, shelf_id, quantity) VALUES (?, ?, ?)', [resolvedChildId, targetChildShelf, childQuantityToAdd]);
-      } else if (targetChildShelf) {
-          await connection.query('UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?', [childQuantityToAdd, resolvedChildId, targetChildShelf]);
-      }
-
-      // 4. Record stock movements
-      const movementId1 = `mov_break_p_${Date.now()}`;
-      const movementId2 = `mov_break_c_${Date.now() + 1}`;
-
-      await connection.query(
-        `INSERT INTO stock_movements (id, product_id, product_name, movement_type, quantity_change, previous_stock, new_stock, reference_id, reference_type, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [movementId1, parentId, parent.name, 'adjustment', -quantityToBreak, parent.stock, parent.stock - quantityToBreak, resolvedChildId, 'break_pack', `Broke ${quantityToBreak} ${parent.unit_of_measure} into ${childName!}`]
-      );
-
-      await connection.query(
-        `INSERT INTO stock_movements (id, product_id, product_name, movement_type, quantity_change, previous_stock, new_stock, reference_id, reference_type, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [movementId2, resolvedChildId!, childName!, 'adjustment', childQuantityToAdd, childStock!, childStock! + childQuantityToAdd, parentId, 'break_pack', `Received ${childQuantityToAdd} ${childUnit!} from breaking ${parent.name}`]
-      );
+      // 4. Record repackaging logs
 
       // 5. Log to repackaging_logs
       const logId = `rpkg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -1012,7 +1002,7 @@ export async function consolidatePack(
       const isApprovalRequired = await checkApprovalRequired('REPACKAGING');
       if (isApprovalRequired) {
         const packRows: any = await query(
-          'SELECT name, stock, unit_of_measure, sku, barcode, price, cost FROM products WHERE id = ?',
+          'SELECT p.name, p.stock, p.unit_of_measure, p.sku, p.barcode, p.price, p.cost, w.name as warehouse_name FROM products p LEFT JOIN warehouses w ON p.warehouse_id = w.id WHERE p.id = ?',
           [packId]
         );
         const packInfo = Array.isArray(packRows) && packRows.length > 0 ? packRows[0] : null;
@@ -1080,6 +1070,9 @@ export async function consolidatePack(
             targetProductName: targetName,
             sourceUnit: packInfo?.unit_of_measure || '',
             currentStock: packInfo?.stock || 0,
+            quantity: `${packQtyUsed} ${packInfo?.unit_of_measure || ''}`.trim(),
+            warehouseName: packInfo?.warehouse_name || 'N/A',
+            reason: 'Consolidate Pack',
             items,
           },
           userId
@@ -1097,6 +1090,7 @@ export async function consolidatePack(
     }
 
     return await withTransaction(async (connection) => {
+      const repackagingId = `rpkg_${uuidv4()}`;
       // 1. Fetch pack (source) info
       const [packResult]: any = await connection.query(
         'SELECT id, name, stock, unit_of_measure, sku, brand, category, subcategory, department, supplier_id, warehouse_id, vat_status, income_account, expense_account FROM products WHERE id = ?',
@@ -1166,54 +1160,14 @@ export async function consolidatePack(
       const bulkQtyToAdd = packQtyUsed / factor;
 
       // 2. Deduct pack stock
-      await connection.query(
-        'UPDATE products SET stock = stock - ? WHERE id = ?',
-        [packQtyUsed, packId]
-      );
+      // 2. Perform Stock Update with Family Sync
+      const { rootId: packRootId, factorToRoot: packFactorToRoot } = await findUltimateRoot(packId, connection as any);
+      const packRootQty = packQtyUsed / packFactorToRoot;
+      await deductFamilyStock(packRootId, packRootQty, repackagingId, 'adjustment', `Consolidation: Used ${packQtyUsed} of ${packId}`, connection as any);
 
-      // Deduct from pack shelves (highest qty first)
-      const [packShelves]: any = await connection.query(
-        'SELECT shelf_id, quantity FROM product_shelves WHERE product_id = ? ORDER BY quantity DESC',
-        [packId]
-      );
-      let remainingToDeduct = packQtyUsed;
-      for (const shelf of packShelves) {
-        const deduct = Math.min(shelf.quantity, remainingToDeduct);
-        if (deduct > 0) {
-          await connection.query(
-            'UPDATE product_shelves SET quantity = quantity - ? WHERE product_id = ? AND shelf_id = ?',
-            [deduct, packId, shelf.shelf_id]
-          );
-          remainingToDeduct -= deduct;
-        }
-        if (remainingToDeduct <= 0) break;
-      }
-
-      // 3. Add bulk stock
-      await connection.query(
-        'UPDATE products SET stock = stock + ? WHERE id = ?',
-        [bulkQtyToAdd, resolvedBulkId]
-      );
-
-      // Add to bulk shelves
-      const [bulkShelves]: any = await connection.query(
-        'SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1',
-        [resolvedBulkId]
-      );
-      let targetBulkShelf = bulkShelves[0]?.shelf_id;
-
-      if (!targetBulkShelf && packShelves[0]?.shelf_id) {
-        targetBulkShelf = packShelves[0].shelf_id;
-        await connection.query(
-          'INSERT INTO product_shelves (product_id, shelf_id, quantity) VALUES (?, ?, ?)',
-          [resolvedBulkId, targetBulkShelf, bulkQtyToAdd]
-        );
-      } else if (targetBulkShelf) {
-        await connection.query(
-          'UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?',
-          [bulkQtyToAdd, resolvedBulkId, targetBulkShelf]
-        );
-      }
+      const { rootId: bulkRootId, factorToRoot: bulkFactorToRoot } = await findUltimateRoot(resolvedBulkId, connection as any);
+      const bulkRootQty = bulkQtyToAdd / bulkFactorToRoot;
+      await addFamilyStock(bulkRootId, bulkRootQty, repackagingId, 'adjustment', `Consolidation: Produced from ${packId}`, connection as any);
 
       // 4. Record stock movements
       const movementId1 = `mov_cons_p_${Date.now()}`;

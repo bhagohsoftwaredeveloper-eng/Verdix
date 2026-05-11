@@ -4,6 +4,7 @@ import { SaleItem, mapVatStatusToTaxType } from './page';
 import { Customer } from '@/lib/types';
 
 import { SystemSettings } from '@/lib/types';
+import { formatQuantity } from '@/lib/utils';
 
 interface ReceiptViewProps {
     saleDetails: {
@@ -12,6 +13,7 @@ interface ReceiptViewProps {
         totalDue: number;
         change: number;
         paymentMethod: string;
+        payments?: { method: string; amount: number; reference?: string }[];
         orderNumber?: string;
         amountTendered?: number;
         transactionDate?: Date; // Add support for date if available
@@ -110,7 +112,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 </div>
                 {items.map((item, index) => (
                     <div key={index} className="flex justify-between mb-1 items-start text-[10px]">
-                        <span className="w-10 text-left">{item.quantity} {item.unitOfMeasure}</span>
+                        <span className="w-10 text-left">{formatQuantity(item.quantity)} {item.unitOfMeasure}</span>
                         <span className="flex-1 text-left px-1">
                             <div>{item.name}</div>
                             {item.discount > 0 && <div className="text-[9px] italic">Disc: {item.discount}%</div>}
@@ -160,16 +162,35 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                     </>
                 ) : null}
 
-                <div className="flex justify-between font-bold">
-                    <span>{saleDetails.pointsUsedValue && saleDetails.pointsUsedValue > 0 ? 'CASH Tendered:' : (paymentMethod?.toUpperCase() === 'CASH' ? 'CASH:' : paymentMethod + ':')}</span>
-                    <span>{formatCurrency(saleDetails.amountTendered || (totalDue + change))}</span>
-                </div>
+                {saleDetails.payments && saleDetails.payments.length > 0 ? (
+                    saleDetails.payments.map((p, idx) => (
+                        <div key={idx}>
+                            <div className="flex justify-between font-bold">
+                                <span>{p.method.toUpperCase() === 'CASH' ? 'CASH:' : p.method + ':'}</span>
+                                <span>{formatCurrency(p.amount)}</span>
+                            </div>
+                            {p.reference && (
+                                <div className="flex justify-between font-bold text-[9px]">
+                                    <span>REF NO:</span>
+                                    <span>{p.reference}</span>
+                                </div>
+                            )}
+                        </div>
+                    ))
+                ) : (
+                    <>
+                        <div className="flex justify-between font-bold">
+                            <span>{saleDetails.pointsUsedValue && saleDetails.pointsUsedValue > 0 ? 'CASH Tendered:' : (paymentMethod?.toUpperCase() === 'CASH' ? 'CASH:' : paymentMethod + ':')}</span>
+                            <span>{formatCurrency(saleDetails.amountTendered || (totalDue + change))}</span>
+                        </div>
 
-                {saleDetails.paymentReference && (
-                    <div className="flex justify-between font-bold text-[9px]">
-                        <span>REF NO:</span>
-                        <span>{saleDetails.paymentReference}</span>
-                    </div>
+                        {saleDetails.paymentReference && (
+                            <div className="flex justify-between font-bold text-[9px]">
+                                <span>REF NO:</span>
+                                <span>{saleDetails.paymentReference}</span>
+                            </div>
+                        )}
+                    </>
                 )}
 
                 {change > 0 && (
@@ -218,19 +239,19 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                         {saleDetails.pointsUsedCount && saleDetails.pointsUsedCount > 0 && (
                             <div className="flex justify-between">
                                 <span>Used Points:</span>
-                                <span>{saleDetails.pointsUsedCount.toLocaleString()} pts</span>
+                                <span>{formatQuantity(saleDetails.pointsUsedCount)} pts</span>
                             </div>
                         )}
                         {saleDetails.pointsEarned && saleDetails.pointsEarned > 0 && (
                             <div className="flex justify-between">
                                 <span>Earned Points:</span>
-                                <span>{saleDetails.pointsEarned.toLocaleString()} pts</span>
+                                <span>{formatQuantity(saleDetails.pointsEarned)} pts</span>
                             </div>
                         )}
                         {saleDetails.pointsBalance !== undefined && (
                             <div className="flex justify-between font-bold">
                                 <span>New Balance:</span>
-                                <span>{Number(saleDetails.pointsBalance).toLocaleString()} pts</span>
+                                <span>{formatQuantity(Number(saleDetails.pointsBalance))} pts</span>
                             </div>
                         )}
                     </div>

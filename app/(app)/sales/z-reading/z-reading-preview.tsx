@@ -37,7 +37,13 @@ export type ZReadingData = {
   resetCounter?: number;
   terminalName?: string;
   intervalStartDate?: string | Date;
+  discountSummary?: Array<{ type: string; amount: number; count: number; itemCount?: number }>;
+  salesAdjustment?: {
+    void: { count: number; amount: number };
+    return: { count: number; amount: number };
+  };
 };
+
 
 type PrinterFormat = '58mm' | '80mm';
 
@@ -290,27 +296,50 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
       </div>
       
        <div style={styles.section}>
-         <div style={styles.row}>
-          <span>SC Disc. :</span>
-          <span>0.00</span>
-        </div>
-         <div style={styles.row}>
-          <span>PWD Disc. :</span>
-          <span>0.00</span>
-        </div>
-         <div style={styles.row}>
-          <span>NAAC Disc. :</span>
-          <span>0.00</span>
-        </div>
-         <div style={styles.row}>
-          <span>Solo Parent Disc. :</span>
-          <span>0.00</span>
-        </div>
-         <div style={styles.row}>
-          <span>Other Disc. :</span>
-          <span>{formatCurrency(data.discounts)}</span>
-        </div>
+        {(() => {
+          const ds = data.discountSummary || [];
+          let scAmt = 0;
+          let pwdAmt = 0;
+          let naacAmt = 0;
+          let soloAmt = 0;
+          let otherAmt = 0;
+
+          ds.forEach(d => {
+              const type = d.type?.toLowerCase();
+              if (type === 'senior') scAmt += d.amount;
+              else if (type === 'pwd') pwdAmt += d.amount;
+              else if (type === 'naac') naacAmt += d.amount;
+              else if (type === 'solo_parent') soloAmt += d.amount;
+              else otherAmt += d.amount;
+          });
+
+          return (
+            <>
+              <div style={styles.row}>
+                <span>SC Disc. :</span>
+                <span>{formatCurrency(scAmt)}</span>
+              </div>
+              <div style={styles.row}>
+                <span>PWD Disc. :</span>
+                <span>{formatCurrency(pwdAmt)}</span>
+              </div>
+              <div style={styles.row}>
+                <span>NAAC Disc. :</span>
+                <span>{formatCurrency(naacAmt)}</span>
+              </div>
+              <div style={styles.row}>
+                <span>Solo Parent Disc. :</span>
+                <span>{formatCurrency(soloAmt)}</span>
+              </div>
+              <div style={styles.row}>
+                <span>Other Disc. :</span>
+                <span>{formatCurrency(otherAmt)}</span>
+              </div>
+            </>
+          );
+        })()}
       </div>
+
 
       <DashedLine />
 
@@ -321,13 +350,14 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
        <div style={styles.section}>
          <div style={styles.row}>
           <span>VOID :</span>
-          <span>0.00</span>
+          <span>{formatCurrency(data.salesAdjustment?.void.amount || 0)}</span>
         </div>
          <div style={styles.row}>
           <span>RETURN :</span>
-          <span>{formatCurrency(data.returns)}</span>
+          <span>{formatCurrency(data.salesAdjustment?.return.amount || 0)}</span>
         </div>
       </div>
+
 
       <DashedLine />
 
@@ -337,31 +367,19 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
 
       <div style={styles.section}>
          <div style={styles.row}>
-          <span>SC TRANS. :</span>
-          <span>0.00</span>
+          <span>VAT ADJ. ON SC/PWD :</span>
+          <span>{formatCurrency(data.vatAdjustment || 0)}</span>
         </div>
          <div style={styles.row}>
-          <span>PWD TRANS :</span>
+          <span>VAT ADJ. ON RETURN :</span>
           <span>0.00</span>
         </div>
-         <div style={styles.row}>
-          <span>REG.Disc. TRANS :</span>
-          <span>0.00</span>
-        </div>
-         <div style={styles.row}>
-          <span>ZERO-RATED TRANS.:</span>
-          <span>0.00</span>
-        </div>
-         <div style={styles.row}>
-          <span>VAT on Return:</span>
-          {/* Approximate VAT on Return if known, otherwise placeholders */}
-          <span>0.00</span>
-        </div>
-         <div style={styles.row}>
-          <span>Other VAT Adjustments</span>
-          <span>0.00</span>
+         <div style={{ ...styles.row, ...styles.bold }}>
+          <span>Total VAT Adj. :</span>
+          <span>{formatCurrency(data.vatAdjustment || 0)}</span>
         </div>
       </div>
+
 
       <DashedLine />
 

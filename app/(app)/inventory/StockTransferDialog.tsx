@@ -29,6 +29,7 @@ import { Product, Warehouse } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowRight, Loader2, Send, WarehouseIcon } from 'lucide-react';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity } from '@/lib/utils';
 
 interface StockTransferDialogProps {
   product: Product;
@@ -95,7 +96,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
       toast({
         variant: 'destructive',
         title: 'Insufficient Stock',
-        description: `You only have ${product.stock} units available.`,
+        description: `You only have ${formatQuantity(product.stock)} units available.`,
       });
       return;
     }
@@ -121,7 +122,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
       toast({
         variant: 'destructive',
         title: 'Insufficient Stock',
-        description: `You only have ${product.stock} units available.`,
+        description: `You only have ${formatQuantity(product.stock)} units available.`,
       });
       return;
     }
@@ -199,7 +200,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
             <div className="bg-muted/50 p-3 rounded-md border text-sm space-y-1">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Current Stock:</span>
-                <span className="font-semibold">{product.stock} {product.unitOfMeasure}</span>
+                <span className="font-semibold">{formatQuantity(product.stock)} {product.unitOfMeasure}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">SKU / Barcode:</span>
@@ -233,7 +234,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
                 max={product.stock}
                 value={quantity || ''}
                 onChange={(e) => setQuantity(Math.min(product.stock, Number(e.target.value)))}
-                placeholder={`Max: ${product.stock}`}
+                placeholder={`Max: ${formatQuantity(product.stock)}`}
                 className="w-full"
               />
             </div>
@@ -251,7 +252,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
                 </div>
                 <div className="ml-auto text-right">
                   <div className="text-[10px] uppercase text-primary font-bold">Moving</div>
-                  <div className="text-sm font-bold text-primary">{quantity}</div>
+                  <div className="text-sm font-bold text-primary">{formatQuantity(quantity)}</div>
                 </div>
               </div>
             )}
@@ -286,7 +287,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Stock Transfer</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to move <strong>{quantity} {product.unitOfMeasure}</strong> of <strong>{product.name}</strong> to <strong>{targetWhName}</strong>?
+              Are you sure you want to move <strong>{formatQuantity(quantity)} {product.unitOfMeasure}</strong> of <strong>{product.name}</strong> to <strong>{targetWhName}</strong>?
               This action will update stock levels in both locations.
             </AlertDialogDescription>
           </AlertDialogHeader>

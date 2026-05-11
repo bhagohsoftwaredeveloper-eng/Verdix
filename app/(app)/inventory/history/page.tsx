@@ -26,7 +26,7 @@ import type { StockAdjustment } from '@/lib/types';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { CalendarIcon, Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 import { getStockAdjustments, getStockAdjustmentsCount } from './actions';
 
 function AdjustmentRow({ adjustment }: { adjustment: StockAdjustment }) {
@@ -51,12 +51,12 @@ function AdjustmentRow({ adjustment }: { adjustment: StockAdjustment }) {
       <TableCell suppressHydrationWarning>{formattedDate}</TableCell>
       <TableCell>
          <Badge variant={adjustment.quantity > 0 ? "default" : "destructive"} className="text-xs">
-          {adjustment.quantity > 0 ? '+' : ''}{adjustment.quantity}
+          {adjustment.quantity > 0 ? '+' : ''}{formatQuantity(adjustment.quantity)}
         </Badge>
       </TableCell>
       <TableCell className="text-muted-foreground italic text-xs">{adjustment.reason}</TableCell>
       <TableCell className="text-right font-bold">
-        {adjustment.status === 'Pending' ? '---' : adjustment.newStock}
+        {adjustment.status === 'Pending' ? '---' : formatQuantity(adjustment.newStock)}
       </TableCell>
     </TableRow>
   );

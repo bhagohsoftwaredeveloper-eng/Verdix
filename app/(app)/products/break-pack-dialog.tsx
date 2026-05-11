@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Scissors, Package, ArrowRight, Search, PlusCircle, Link2, CheckCircle2, ChevronLeft, Info } from 'lucide-react';
 import { breakPack, searchProducts } from './actions';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
 type Step = 'source' | 'target' | 'count';
@@ -206,7 +206,7 @@ export function BreakPackDialog({ parentProduct, onPackBroken, trigger }: {
                     <Package className="h-6 w-6 text-muted-foreground" />
                     <div>
                       <p className="font-bold">{parentProduct.name}</p>
-                      <p className="text-sm text-muted-foreground">Available Stock: {parentProduct.stock} {parentProduct.unitOfMeasure}</p>
+                      <p className="text-sm text-muted-foreground">Available Stock: {formatQuantity(parentProduct.stock)} {parentProduct.unitOfMeasure}</p>
                     </div>
                   </div>
                 </div>

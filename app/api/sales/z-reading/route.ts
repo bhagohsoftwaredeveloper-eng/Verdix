@@ -4,7 +4,8 @@ import { format } from 'date-fns';
 
 const safeParseFloat = (val: any): number => {
     if (val === null || val === undefined) return 0;
-    return parseFloat(val);
+    const n = parseFloat(val);
+    return isNaN(n) ? 0 : n;
 }
 
 const safeInt = (val: any): number => {
@@ -13,8 +14,61 @@ const safeInt = (val: any): number => {
     return parseInt(val);
 }
 
+async function ensureZReadingsSchema() {
+    try {
+        const currentColumnsResult = await query(
+            "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'z_readings' AND TABLE_SCHEMA = DATABASE()"
+        ) as any[];
+        const existingColumnsMap = new Map<string, string>(
+            currentColumnsResult.map((c: any) => [c.COLUMN_NAME, (c.DATA_TYPE || '').toLowerCase()])
+        );
+        const existingColumns = new Set(existingColumnsMap.keys());
+
+        const columnsToAdd = [
+            { name: 'discount_summary', type: 'JSON' },
+            { name: 'sales_adjustment', type: 'JSON' },
+            { name: 'vat_adjustment', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'vatable_sales', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'vat_exempt', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'zero_rated', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'non_vat', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'min_void_id', type: 'VARCHAR(50)' },
+            { name: 'max_void_id', type: 'VARCHAR(50)' },
+            { name: 'min_return_id', type: 'VARCHAR(50)' },
+            { name: 'max_return_id', type: 'VARCHAR(50)' },
+            { name: 'void_amount', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'previous_reading', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'running_total', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'z_counter', type: 'INT DEFAULT 0' },
+            { name: 'reset_counter', type: 'INT DEFAULT 0' },
+            { name: 'min_sale_id', type: 'VARCHAR(50)' },
+            { name: 'max_sale_id', type: 'VARCHAR(50)' },
+            { name: 'actual_cash', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+            { name: 'cash_difference', type: 'DECIMAL(15,2) DEFAULT 0.00' }
+        ];
+
+        for (const col of columnsToAdd) {
+            if (!existingColumns.has(col.name)) {
+                await query(`ALTER TABLE z_readings ADD COLUMN ${col.name} ${col.type}`);
+                console.log(`✅ Added ${col.name} column to z_readings`);
+            }
+        }
+
+        // Fix vat_adjustment if it was previously created as JSON instead of DECIMAL
+        const vatAdjType = existingColumnsMap.get('vat_adjustment');
+        if (vatAdjType && vatAdjType === 'json') {
+            await query(`ALTER TABLE z_readings MODIFY COLUMN vat_adjustment DECIMAL(15,2) DEFAULT 0.00`);
+            console.log(`✅ Migrated vat_adjustment column type from JSON to DECIMAL(15,2)`);
+        }
+    } catch (error) {
+        console.error('Error ensuring z_readings schema:', error);
+    }
+}
+
 export async function GET(request: NextRequest) {
   try {
+    await ensureZReadingsSchema();
+
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get('mode');
     let startDate = searchParams.get('startDate');
@@ -133,9 +187,54 @@ export async function GET(request: NextRequest) {
           GROUP BY st.payment_method
         `;
         const paymentResults = await query(paymentSql, dateParams) as any[];
+        
+        // Detailed Summaries
+        const discountSummarySql = `
+            SELECT 
+                COALESCE(pti.discount_type, 'percent') as discount_type,
+                SUM(pti.discount_amount) as total_amount,
+                COUNT(DISTINCT pt.id) as txn_count,
+                COUNT(pti.id) as item_count
+
+            FROM pos_transaction_items pti
+            JOIN pos_transactions pt ON pti.pos_transaction_id = pt.id
+            JOIN sales_transactions st ON pt.sale_id = st.id
+            WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+            AND pt.is_training = 0
+            AND pti.discount_amount > 0
+            ${dateCondition.replace(/st\.created_at/g, 'pt.created_at')}
+            ${terminalCondition}
+            GROUP BY pti.discount_type
+            HAVING SUM(pti.discount_amount) > 0
+            ORDER BY SUM(pti.discount_amount) DESC
+        `;
+        const discountSummaryResults = await query(discountSummarySql, dateParams) as any[];
+
+        const vatAdjustmentSql = `
+            SELECT 
+                COALESCE(pti.tax_type, 'VAT') as tax_type,
+                SUM(pti.line_total) as total_amount,
+                SUM(CASE 
+                    WHEN COALESCE(pti.tax_type, 'VAT') = 'VAT' THEN pti.line_total - (pti.line_total / 1.12)
+                    ELSE 0 
+                END) as vat_amount
+
+            FROM pos_transaction_items pti
+            JOIN pos_transactions pt ON pti.pos_transaction_id = pt.id
+            JOIN sales_transactions st ON pt.sale_id = st.id
+            WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+            AND pt.is_training = 0
+            ${dateCondition.replace(/st\.created_at/g, 'pt.created_at')}
+            ${terminalCondition}
+            GROUP BY pti.tax_type
+        `;
+        const vatAdjustmentResults = await query(vatAdjustmentSql, dateParams) as any[];
 
         const shiftSql = `
-            SELECT SUM(starting_cash) as total_starting_cash
+            SELECT 
+                SUM(starting_cash) as total_starting_cash,
+                SUM(actual_cash) as total_actual_cash,
+                SUM(cash_difference) as total_cash_difference
             FROM shifts
             WHERE 1=1
             ${startDate ? ' AND start_time > ?' : ''}
@@ -165,9 +264,13 @@ export async function GET(request: NextRequest) {
         
         const adjustedGrossSales = rawNetSales + discounts + returns + voidAmount;
         const finalNetSales = rawNetSales; 
-        const vatAmount = finalNetSales - (finalNetSales / 1.12);
-        const vatableSales = finalNetSales / 1.12;
+        const vatRow = vatAdjustmentResults.find((v: any) => v.tax_type === 'VAT');
+        const vatTotalAmount = parseFloat(vatRow?.total_amount || 0);
+        const vatAmount = parseFloat(vatRow?.vat_amount || 0);
+        const vatableSales = vatTotalAmount - vatAmount;
         const startingCash = parseFloat(shiftResult?.total_starting_cash || 0);
+        const actualCash = parseFloat(shiftResult?.total_actual_cash || 0);
+        const cashVariance = parseFloat(shiftResult?.total_cash_difference || 0);
         
         const cashSalesObj = paymentResults.find((p: any) => p.payment_method?.toUpperCase() === 'CASH');
         const cashSales = parseFloat(cashSalesObj?.amount || 0);
@@ -195,6 +298,11 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        const vatExemptSales = vatAdjustmentResults.find((v: any) => v.tax_type === 'VAT_EXEMPT')?.total_amount || 0;
+        const zeroRatedSales = vatAdjustmentResults.find((v: any) => v.tax_type === 'ZERO_RATED')?.total_amount || 0;
+        const nonVatSales = vatAdjustmentResults.find((v: any) => v.tax_type === 'NON_VAT')?.total_amount || 0;
+        const vatAdjustmentAmount = vatAdjustmentResults.filter((v: any) => v.tax_type !== 'VAT').reduce((acc: number, v: any) => acc + parseFloat(v.vat_amount || 0), 0);
+
         const generatedReading = {
             id: `PREVIEW`,
             date: format(new Date(), 'yyyy-MM-dd HH:mm:ss'),
@@ -207,9 +315,9 @@ export async function GET(request: NextRequest) {
             netSales: safeParseFloat(finalNetSales),
             vatSales: safeParseFloat(vatableSales),
             vatAmount: safeParseFloat(vatAmount),
-            vatExempt: 0.00,
-            zeroRated: 0.00,
-            nonVat: 0.00,
+            vatExempt: safeParseFloat(vatExemptSales),
+            zeroRated: safeParseFloat(zeroRatedSales),
+            nonVat: safeParseFloat(nonVatSales),
             paymentMethods: paymentMethods.map((pm: any) => ({
                 name: String(pm.name),
                 amount: safeParseFloat(pm.amount)
@@ -231,11 +339,30 @@ export async function GET(request: NextRequest) {
             previousReading: safeParseFloat(previousReading),
             runningTotal: safeParseFloat(runningTotal),
             voidAmount: safeParseFloat(voidAmount),
-            vatAdjustment: 0.00,
+            vatAdjustment: safeParseFloat(vatAdjustmentAmount),
+            discountSummary: discountSummaryResults.map((d: any) => ({
+                type: d.discount_type,
+                amount: parseFloat(d.total_amount),
+                count: parseInt(d.txn_count),
+                itemCount: parseInt(d.item_count)
+            })),
+            salesAdjustment: {
+                void: {
+                    count: 0, // Need to implement void count if possible
+                    amount: voidAmount
+                },
+                return: {
+                    count: 0, // Need to implement return count if possible
+                    amount: returns
+                }
+            },
             zCounter: terminalZCounter + 1,
             resetCounter: terminalResetCounter,
+            actualCash,
+            variance: cashVariance,
             intervalStartDate: startDate
         };
+
         
         return NextResponse.json({ success: true, data: [generatedReading] });
 
@@ -271,6 +398,18 @@ export async function GET(request: NextRequest) {
              } catch (e) {
                 paymentMethods = [];
              }
+
+             let discountSummary = [];
+             try {
+                 const parsed = typeof row.discount_summary === 'string' ? JSON.parse(row.discount_summary) : row.discount_summary;
+                 discountSummary = Array.isArray(parsed) ? parsed : [];
+             } catch (e) {}
+
+             let salesAdjustment = { void: { count: 0, amount: 0 }, return: { count: 0, amount: 0 } };
+             try {
+                 const parsed = typeof row.sales_adjustment === 'string' ? JSON.parse(row.sales_adjustment) : row.sales_adjustment;
+                 if (parsed) salesAdjustment = parsed;
+             } catch (e) {}
              
              return {
                 id: row.reading_number,
@@ -307,9 +446,16 @@ export async function GET(request: NextRequest) {
                 maxReturnId: row.max_return_id || '',
                 previousReading: safeParseFloat(row.previous_reading), 
                 runningTotal: safeParseFloat(row.running_total),
+                voidAmount: safeParseFloat(row.void_amount),
+                vatAdjustment: safeParseFloat(row.vat_adjustment),
+                discountSummary,
+                salesAdjustment,
+                actualCash: safeParseFloat(row.actual_cash),
+                variance: safeParseFloat(row.cash_difference),
                 zCounter: safeInt(row.z_counter),
                 resetCounter: safeInt(row.reset_counter)
              };
+
         });
 
         return NextResponse.json({ success: true, data: mappedResults });
@@ -322,6 +468,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
+        await ensureZReadingsSchema();
+
         const body = await request.json();
         let { terminalId, cashierName } = body;
         terminalId = terminalId && terminalId !== 'all' ? terminalId : 'terminal_default_01';
@@ -370,14 +518,66 @@ export async function POST(request: NextRequest) {
         const returnSeqSql = `SELECT MIN(st.receipt_number) as min_return_id, MAX(st.receipt_number) as max_return_id FROM pos_transactions pt LEFT JOIN sales_transactions st ON pt.sale_id = st.id WHERE pt.transaction_type = 'return' AND pt.is_training = 0 ${dateCondition.replace(/st\.created_at/g, 'pt.created_at')} AND pt.terminal_id = ?`;
         const [returnSeqResult] = await query(returnSeqSql, salesParams) as any[];
 
-        const shiftSql = `SELECT SUM(starting_cash) as total_starting_cash FROM shifts WHERE 1=1 ${startDate ? ' AND start_time > ?' : ''} AND start_time <= ? AND terminal_id = ?`;
+        // Detailed Summaries for POST
+        const discountSummarySql = `
+            SELECT 
+                pti.discount_type,
+                SUM(pti.discount_amount) as total_amount,
+                COUNT(DISTINCT pt.id) as txn_count,
+                COUNT(pti.id) as item_count
+            FROM pos_transaction_items pti
+            JOIN pos_transactions pt ON pti.pos_transaction_id = pt.id
+            JOIN sales_transactions st ON pt.sale_id = st.id
+            WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+            AND pt.is_training = 0
+            AND pti.discount_amount > 0
+            ${dateCondition.replace(/st\.created_at/g, 'pt.created_at')}
+            AND pt.terminal_id = ?
+            GROUP BY pti.discount_type
+            HAVING SUM(pti.discount_amount) > 0
+            ORDER BY SUM(pti.discount_amount) DESC
+        `;
+        const discountSummaryResults = await query(discountSummarySql, [...dateParams, terminalId]) as any[];
+
+        const vatAdjustmentSql = `
+            SELECT 
+                pti.tax_type,
+                SUM(pti.line_total) as total_amount,
+                SUM(CASE 
+                    WHEN pti.tax_type = 'VAT' THEN pti.line_total - (pti.line_total / 1.12)
+                    ELSE 0 
+                END) as vat_amount
+            FROM pos_transaction_items pti
+            JOIN pos_transactions pt ON pti.pos_transaction_id = pt.id
+            JOIN sales_transactions st ON pt.sale_id = st.id
+            WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+            AND pt.is_training = 0
+            ${dateCondition.replace(/st\.created_at/g, 'pt.created_at')}
+            AND pt.terminal_id = ?
+            GROUP BY pti.tax_type
+        `;
+        const vatAdjustmentResults = await query(vatAdjustmentSql, [...dateParams, terminalId]) as any[];
+
+        const shiftSql = `
+            SELECT 
+                SUM(starting_cash) as total_starting_cash,
+                SUM(actual_cash) as total_actual_cash,
+                SUM(cash_difference) as total_cash_difference
+            FROM shifts 
+            WHERE 1=1 ${startDate ? ' AND start_time > ?' : ''} AND start_time <= ? AND terminal_id = ?
+        `;
         const shiftParams = startDate ? [startDate, endDate, terminalId] : [endDate, terminalId];
         const [shiftResult] = await query(shiftSql, shiftParams) as any[];
 
         const rawNetSales = parseFloat(salesResult?.gross_sales || 0);
         const finalNetSales = rawNetSales; 
-        const vatAmount = finalNetSales - (finalNetSales / 1.12);
+        const vatRow = vatAdjustmentResults.find((v: any) => v.tax_type === 'VAT');
+        const vatTotalAmount = parseFloat(vatRow?.total_amount || 0);
+        const vatAmount = parseFloat(vatRow?.vat_amount || 0);
+        const vatableSales = vatTotalAmount - vatAmount;
         const startingCash = parseFloat(shiftResult?.total_starting_cash || 0);
+        const actualCash = parseFloat(shiftResult?.total_actual_cash || 0);
+        const cashVariance = parseFloat(shiftResult?.total_cash_difference || 0);
         const cashSalesObj = paymentResults.find((p: any) => p.payment_method?.toUpperCase() === 'CASH');
         const cashSales = parseFloat(cashSalesObj?.amount || 0);
         const cashInDrawer = startingCash + cashSales; 
@@ -385,7 +585,27 @@ export async function POST(request: NextRequest) {
         const paymentMethods = paymentResults.map((p: any) => ({ name: p.payment_method || 'Unknown', amount: parseFloat(p.amount) }));
         const [termResult] = await query(`SELECT terminal_min, terminal_serial_number, z_counter, reset_counter FROM pos_terminals WHERE id = ?`, [terminalId]) as any[];
         const [prevResult] = await query(`SELECT SUM(net_sales) as previous_total FROM z_readings WHERE report_date <= ? AND terminal_id = ?`, [startDate || '2000-01-01', terminalId]) as any[];
+        
+
+        const vatExemptSales = vatAdjustmentResults.find((v: any) => v.tax_type === 'VAT_EXEMPT')?.total_amount || 0;
+        const zeroRatedSales = vatAdjustmentResults.find((v: any) => v.tax_type === 'ZERO_RATED')?.total_amount || 0;
+        const nonVatSales = vatAdjustmentResults.find((v: any) => v.tax_type === 'NON_VAT')?.total_amount || 0;
+        const vatAdjustmentAmount = vatAdjustmentResults.filter((v: any) => v.tax_type !== 'VAT').reduce((acc: number, v: any) => acc + parseFloat(v.vat_amount || 0), 0);
+
+        const discountSummary = discountSummaryResults.map((d: any) => ({
+            type: d.discount_type,
+            amount: parseFloat(d.total_amount),
+            count: parseInt(d.txn_count),
+            itemCount: parseInt(d.item_count)
+        }));
+
+        const salesAdjustment = {
+            void: { count: 0, amount: voidAmount },
+            return: { count: 0, amount: parseFloat(returnsResult?.total_returns || 0) }
+        };
+
         const previousReading = parseFloat(prevResult?.previous_total || 0);
+
         const runningTotal = previousReading + finalNetSales;
 
         const insertSql = `
@@ -393,8 +613,10 @@ export async function POST(request: NextRequest) {
                 reading_number, report_date, terminal_id, cashier_name, gross_sales, returns, discounts, net_sales, vat_amount,
                 payment_methods, transaction_count, starting_cash, cash_sales, cash_in_drawer, min_sale_id, max_sale_id,
                 min_void_id, max_void_id, min_return_id, max_return_id, z_counter, reset_counter, previous_reading, running_total,
-                vat_sales, vat_exempt, zero_rated, non_vat
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                vatable_sales, vat_exempt, zero_rated, non_vat,
+                discount_summary, sales_adjustment, vat_adjustment, void_amount,
+                actual_cash, cash_difference
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         
         await query(insertSql, [
@@ -402,27 +624,46 @@ export async function POST(request: NextRequest) {
             parseFloat(returnsResult?.total_returns || 0), parseFloat(salesResult?.total_discounts || 0), finalNetSales, vatAmount,
             JSON.stringify(paymentMethods), parseInt(salesResult?.transaction_count || 0), startingCash, cashSales, cashInDrawer,
             salesResult?.min_sale_id || '000000', salesResult?.max_sale_id || '000000', voidSeqResult?.min_void_id || '000000', voidSeqResult?.max_void_id || '000000',
-            returnSeqResult?.min_return_id || '000000', returnSeqResult?.max_return_id || '000000', termResult?.z_counter || 0, termResult?.reset_counter || 0,
-            previousReading, runningTotal, finalNetSales / 1.12, 0, 0, 0
+            returnSeqResult?.min_return_id || '000000', returnSeqResult?.max_return_id || '000000', (termResult?.z_counter || 0) + 1, termResult?.reset_counter || 0,
+            previousReading, runningTotal, vatableSales, vatExemptSales, zeroRatedSales, nonVatSales,
+            JSON.stringify(discountSummary), JSON.stringify(salesAdjustment), vatAdjustmentAmount, voidAmount,
+            actualCash, cashVariance
         ]);
+
+        // Increment Z-Counter in pos_terminals
+        await query(`UPDATE pos_terminals SET z_counter = z_counter + 1 WHERE id = ?`, [terminalId]);
+
 
         const [settingsResult] = await query(`SELECT business_name, address FROM pos_settings LIMIT 1`) as any[];
         const generatedReading = {
             id: readingNumber, date: endDate, reportDate: new Date(endDate), businessName: settingsResult?.business_name || 'Business Name', address: settingsResult?.address || '',
             grossSales: rawNetSales + parseFloat(salesResult?.total_discounts || 0) + parseFloat(returnsResult?.total_returns || 0) + voidAmount,
             returns: parseFloat(returnsResult?.total_returns || 0), discounts: parseFloat(salesResult?.total_discounts || 0),
-            netSales: finalNetSales, vatSales: finalNetSales / 1.12, vatAmount, vatExempt: 0, zeroRated: 0, nonVat: 0, paymentMethods,
+            netSales: finalNetSales, vatSales: vatableSales, vatAmount, paymentMethods,
             transactionCount: parseInt(salesResult?.transaction_count || 0), startingCash, cashSales, cashInDrawer, cashierName, terminalId,
             terminalMin: termResult?.terminal_min || '', terminalSerialNumber: termResult?.terminal_serial_number || '',
             minSaleId: salesResult?.min_sale_id || '000000', maxSaleId: salesResult?.max_sale_id || '000000',
             minVoidId: voidSeqResult?.min_void_id || '000000', maxVoidId: voidSeqResult?.max_void_id || '000000',
             minReturnId: returnSeqResult?.min_return_id || '000000', maxReturnId: returnSeqResult?.max_return_id || '000000',
-            previousReading, runningTotal, voidAmount, vatAdjustment: 0.00, zCounter: termResult?.z_counter || 0, resetCounter: termResult?.reset_counter || 0
+            previousReading, runningTotal, voidAmount, vatAdjustment: vatAdjustmentAmount, 
+            discountSummary: discountSummary, 
+            salesAdjustment: salesAdjustment,
+            vatExempt: vatExemptSales,
+            zeroRated: zeroRatedSales,
+            nonVat: nonVatSales,
+            actualCash,
+            variance: cashVariance,
+            zCounter: (termResult?.z_counter || 0) + 1, resetCounter: termResult?.reset_counter || 0
         };
 
+
         return NextResponse.json({ success: true, data: [generatedReading] });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error in Z-Reading POST:', error);
-        return NextResponse.json({ success: false, error: 'Failed to save Z-Reading' }, { status: 500 });
+        return NextResponse.json({ 
+            success: false, 
+            error: 'Failed to save Z-Reading',
+            details: error.message 
+        }, { status: 500 });
     }
 }

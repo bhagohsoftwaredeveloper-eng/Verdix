@@ -114,6 +114,7 @@ export function TenderDialog({
     const [selectedMethod, setSelectedMethod] = useState(paymentMethod);
     const [amountTendered, setAmountTendered] = useState('');
     const [referenceInput, setReferenceInput] = useState('');
+    const [payments, setPayments] = useState<{ id: string; method: string; amount: number; reference?: string }[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [view, setView] = useState<'tender' | 'receipt' | 'change' | 'print_prompt'>('tender');
     const [completedSale, setCompletedSale] = useState<any>(null);
@@ -162,6 +163,7 @@ export function TenderDialog({
         if (justOpened) {
             setAmountTendered(totalDue.toFixed(2));
             setPointsToRedeemInput('');
+            setPayments([]);
         }
         lastOpenRef.current = isOpen;
     }, [isOpen, totalDue]);
@@ -177,11 +179,13 @@ export function TenderDialog({
 
     const amountTenderedNum = useMemo(() => parseFloat(amountTendered) || 0, [amountTendered]);
     
-    const balanceRemaining = useMemo(() => {
-        return Math.max(0, totalDue - pointsToRedeemValue);
-    }, [totalDue, pointsToRedeemValue]);
+    const totalAddedPayments = useMemo(() => payments.reduce((acc, p) => acc + p.amount, 0), [payments]);
 
-    // Sync amountTendered with balanceRemaining when points change
+    const balanceRemaining = useMemo(() => {
+        return Math.max(0, totalDue - pointsToRedeemValue - totalAddedPayments);
+    }, [totalDue, pointsToRedeemValue, totalAddedPayments]);
+
+    // Sync amountTendered with balanceRemaining when points or payments change
     // Modified: Only auto-sync if amountTendered is empty or was previously exactly equal to the old balance
     const lastBalanceRef = useRef(balanceRemaining);
     useEffect(() => {
@@ -193,8 +197,12 @@ export function TenderDialog({
     }, [balanceRemaining, amountTendered]);
 
     const change = useMemo(() => {
-        return Math.max(0, amountTenderedNum - balanceRemaining);
-    }, [amountTenderedNum, balanceRemaining]);
+        // Change is calculated from the *current* amountTendered (if it's cash and covers the rest)
+        // plus any excess from already added cash payments.
+        // For simplicity, we assume change is only calculated when the *last* payment added (or being added) is Cash and exceeds the balance.
+        // Actually, if we allow adding payments until total >= totalDue, change is simply:
+        return Math.max(0, totalAddedPayments + (isCashPayment ? amountTenderedNum : 0) - (totalDue - pointsToRedeemValue));
+    }, [amountTenderedNum, totalAddedPayments, totalDue, pointsToRedeemValue, isCashPayment]);
 
     const isReferenceRequired = useMemo(() => {
         if (!selectedMethod) return false;
@@ -279,21 +287,32 @@ export function TenderDialog({
     };
 
 
+    const handleAddPayment = () => {
+        if (isReferenceRequired && !referenceInput.trim()) {
+            toast({
+                title: "Reference Required",
+                description: "Please enter a reference number.",
+                variant: 'destructive'
+            });
+            return;
+        }
+        if (amountTenderedNum <= 0 && !isChargePayment) return;
+        
+        setPayments([...payments, {
+            id: Math.random().toString(),
+            method: selectedMethod,
+            amount: isChargePayment ? balanceRemaining : amountTenderedNum,
+            reference: isReferenceRequired ? referenceInput : undefined
+        }]);
+        setAmountTendered('');
+        setReferenceInput('');
+        setSelectedMethod(''); // Clear selection so they must choose the next payment method
+    };
+
     const handleConfirmPayment = async () => {
         
         // Strict Point Validation
         const availablePoints = (customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0;
-        
-        if (selectedMethod === 'POINTS') {
-            if (amountTenderedNum < balanceRemaining) {
-                toast({
-                    title: "Insufficient Cash",
-                    description: `Remaining balance is ₱${balanceRemaining.toFixed(2)}. Please enter enough cash.`,
-                    variant: "destructive"
-                });
-                return;
-            }
-        }
 
         if (pointsToRedeemValue > (Number(availablePoints) * pointsRate)) {
             toast({
@@ -304,21 +323,31 @@ export function TenderDialog({
             return;
         }
 
-        const finalAmountTendered = isCashPayment ? amountTenderedNum : balanceRemaining;
-
-        if (isCashPayment && finalAmountTendered < balanceRemaining) {
-             toast({
-                title: "Insufficient Amount",
-                description: "Amount tendered must be greater than or equal to balance due.",
-                variant: 'destructive'
+        // Assemble final payments array combining already added payments and current input
+        const finalPayments = [...payments];
+        if (amountTenderedNum > 0 || (isChargePayment && balanceRemaining > 0)) {
+            if (isReferenceRequired && !referenceInput.trim()) {
+                 toast({
+                    title: "Reference Required",
+                    description: "Please enter a reference number for this payment method.",
+                    variant: 'destructive'
+                });
+                return;
+            }
+            finalPayments.push({
+                id: Math.random().toString(),
+                method: selectedMethod,
+                amount: isChargePayment ? balanceRemaining : amountTenderedNum,
+                reference: isReferenceRequired ? referenceInput : undefined
             });
-            return;
         }
 
-        if (isReferenceRequired && !referenceInput.trim()) {
+        const totalTenderedAll = finalPayments.reduce((acc, p) => acc + p.amount, 0);
+        
+        if (totalTenderedAll < balanceRemaining) {
              toast({
-                title: "Reference Required",
-                description: "Please enter a reference number for this payment method.",
+                title: "Insufficient Amount",
+                description: `Amount tendered must be greater than or equal to balance due (₱${balanceRemaining.toFixed(2)}).`,
                 variant: 'destructive'
             });
             return;
@@ -346,23 +375,25 @@ export function TenderDialog({
                         }
                         return acc;
                     }, 0),
-                    amountTendered: pointsToRedeemValue > 0 ? (pointsToRedeemValue + finalAmountTendered) : finalAmountTendered,
-                    change: isCashPayment ? (amountTenderedNum - balanceRemaining) : 0,
-                    paymentMethod: pointsToRedeemValue > 0 && balanceRemaining > 0 ? `POINTS + ${selectedMethod}` : (pointsToRedeemValue > 0 && balanceRemaining === 0 ? 'POINTS' : selectedMethod), 
+                    payments: finalPayments,
+                    change: change,
+                    paymentMethod: pointsToRedeemValue > 0 && finalPayments.length === 0 ? 'POINTS' : (finalPayments.length > 1 ? 'MULTIPLE' : finalPayments[0]?.method || 'UNKNOWN'),
                     items: items.map(item => ({
                         id: item.id,
                         name: item.name,
                         quantity: item.quantity,
                         price: item.price,
                         discount: item.discount,
+                        discountType: item.discountType,
+                        taxType: item.taxType || mapTax(item.vatStatus),
                         cost: item.cost 
                     })),
+
                     customer: customer || { id: 'walk-in', name: 'Walk-in Customer' },
                     status: 'completed',
                     paymentDetails: {
                         pointsUsed: pointsToRedeemCount, 
-                        pointsConversionRate: pointsRate,
-                        gatewayReference: isReferenceRequired ? referenceInput : undefined
+                        pointsConversionRate: pointsRate
                     },
                     currentUser: { ...currentUser, id: currentUser?.id || 'admin' }, // Ensure ID exists
                     userId: currentUser?.id || currentUser?.uid || 'admin',
@@ -421,9 +452,10 @@ export function TenderDialog({
                 customer: customer || { id: 'walk-in', name: 'Walk-in' } as any,
                 totalDue,
                 change,
-                paymentMethod: selectedMethod,
+                paymentMethod: pointsToRedeemValue > 0 && finalPayments.length === 0 ? 'POINTS' : (finalPayments.length > 1 ? 'MULTIPLE' : finalPayments[0]?.method || 'UNKNOWN'),
+                payments: finalPayments,
                 orderNumber: result.data.orderNumber.toString(),
-                amountTendered: amountTendered !== '' ? Number(amountTendered) : totalDue,
+                amountTendered: totalTenderedAll,
                 transactionDate: new Date(),
                 cashierName: currentUser?.display_name || currentUser?.username || 'Admin',
                 pointsEarned: result.data.pointsEarned,
@@ -434,7 +466,6 @@ export function TenderDialog({
                 terminalSerialNumber: terminalSerialNumber || settings?.serialNumber,
                 terminalName: terminalName,
                 isTrainingMode: isTrainingMode,
-                paymentReference: referenceInput.trim() || undefined,
                 taxBreakdown: {
                     vatableSales,
                     vatAmount: vatAmountResult,
@@ -923,6 +954,29 @@ export function TenderDialog({
                             )}
 
 
+                            {/* Added Payments List */}
+                            {payments.length > 0 && (
+                                <div className="space-y-3 pt-4 border-t border-dashed border-gray-200">
+                                    <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Added Payments</Label>
+                                    <div className="space-y-2">
+                                        {payments.map(p => (
+                                            <div key={p.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm animate-in fade-in slide-in-from-top-1">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-gray-900">{p.method}</span>
+                                                    {p.reference && <span className="text-xs text-gray-500 font-medium">Ref: {p.reference}</span>}
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="font-black text-gray-900">₱{p.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    <Button variant="ghost" size="sm" onClick={() => setPayments(payments.filter(x => x.id !== p.id))} className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2">
+                                                        Remove
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {totalDue > 0 && selectedMethod === 'CASH' && (
                                 <div className="grid grid-cols-4 gap-2">
                                     {getQuickAmounts(balanceRemaining || totalDue).map(amount => (
@@ -931,7 +985,17 @@ export function TenderDialog({
                                 </div>
                             )}
 
-                            {/* Split Payment Removed - Integrated into main manual flow */}
+                            <div className="flex justify-end pt-2">
+                                <Button 
+                                    type="button" 
+                                    variant="secondary"
+                                    onClick={handleAddPayment}
+                                    disabled={amountTenderedNum <= 0 && !isChargePayment}
+                                    className="font-bold shadow-sm"
+                                >
+                                    + Add Split Payment
+                                </Button>
+                            </div>
 
                             <DialogFooter className="mt-6 sm:justify-between gap-4">
                                 <Button
@@ -948,10 +1012,10 @@ export function TenderDialog({
                                     ref={confirmButtonRef}
                                     disabled={
                                         isProcessing || 
-                                        (!amountTendered && balanceRemaining > 0 && !isChargePayment) || 
-                                        ((selectedMethod === 'CASH' || selectedMethod === 'POINTS') && parseFloat(amountTendered) < balanceRemaining) ||
+                                        (balanceRemaining > 0 && !amountTendered && !isChargePayment) || 
+                                        (payments.length === 0 && (selectedMethod === 'CASH' || selectedMethod === 'POINTS') && parseFloat(amountTendered) < balanceRemaining) ||
                                         (pointsToRedeemValue > (Number((customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0) * pointsRate)) ||
-                                        (isReferenceRequired && !referenceInput.trim()) ||
+                                        (payments.length === 0 && isReferenceRequired && !referenceInput.trim()) ||
                                         (isChargePayment && (!customer || (customer as any).id === 'walk-in'))
                                     }
                                     className="w-full sm:w-auto min-w-[140px] font-bold text-lg h-12 shadow-md shadow-primary/20"

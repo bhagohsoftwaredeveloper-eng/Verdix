@@ -22,3 +22,28 @@ export function toSafeNumber(value: any): number {
   const num = typeof value === 'string' ? parseFloat(value) : Number(value);
   return isNaN(num) ? 0 : num;
 }
+/**
+ * Formats a quantity for display, stripping trailing zeros for decimals.
+ * Example: 8.000 -> "8", 8.500 -> "8.5", 8.1234 -> "8.1234"
+ */
+export function formatQuantity(value: any, unit?: string): string {
+  const num = toSafeNumber(value);
+  if (unit && (unit.toLowerCase() === 'kilogram' || unit.toLowerCase() === 'kg')) {
+    return parseFloat(num.toFixed(3)).toString();
+  }
+  return Math.round(num).toString();
+}
+
+/**
+ * Formats a stock quantity for display in inventory tables.
+ * Rounds up to the nearest whole number to handle parent-child unit conversions
+ * and avoid displaying decimal points for discrete items.
+ * Example: 9.9167 -> "10"
+ */
+export function formatStockQuantity(value: any, unit?: string): string {
+  const num = toSafeNumber(value);
+  if (unit && (unit.toLowerCase() === 'kilogram' || unit.toLowerCase() === 'kg')) {
+    return parseFloat(num.toFixed(3)).toString();
+  }
+  return Math.ceil(num).toString();
+}

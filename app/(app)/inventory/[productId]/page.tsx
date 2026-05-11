@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { Separator } from '@/components/ui/separator';
 import { EditProductDialog } from '../../products/edit-product-dialog';
+import { formatQuantity } from '@/lib/utils';
 
 
 function DetailItem({ label, value }: { label: string, value: React.ReactNode }) {
@@ -126,7 +127,7 @@ export default function ProductDetailPage() {
                     </div>
                      <Separator />
                      <div className="grid grid-cols-3 gap-6">
-                         <DetailItem label="Total Stock" value={`${product.stock} ${product.unitOfMeasure}(s)`} />
+                         <DetailItem label="Total Stock" value={`${formatQuantity(product.stock)} ${product.unitOfMeasure}(s)`} />
                          <DetailItem label="Reorder Point" value={'N/A'} />
                           
                      </div>

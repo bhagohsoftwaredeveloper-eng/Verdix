@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { useProducts, useBusinessProfile } from "@/hooks/use-api";
 import { calculatePurchaseCosts } from "@/lib/purchase-utils";
 // import { Logo } from "@/components/logo"; // Removed to avoid text overlap
+import { formatQuantity } from "@/lib/utils";
 
 import { printPurchaseOrder } from "./purchase-order-print-utils";
 
@@ -171,11 +172,11 @@ export function ViewPurchaseOrderDialog({
                     </TableCell>
                     <TableCell className="text-center text-zinc-900 font-bold">
                         <span className={currentStock <= 0 ? 'text-destructive font-black' : ''}>
-                            {currentStock}
+                            {formatQuantity(currentStock)}
                         </span>
                     </TableCell>
                     <TableCell className="text-right text-zinc-900 font-bold">₱{item.cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</TableCell>
-                    <TableCell className="text-right text-zinc-900 font-bold">{item.quantity} <span className="text-xs text-zinc-700">pc</span></TableCell>
+                    <TableCell className="text-right text-zinc-900 font-bold">{formatQuantity(item.quantity)} <span className="text-xs text-zinc-700">pc</span></TableCell>
                     <TableCell className="text-right italic text-zinc-800 bg-zinc-100/50 font-mono text-xs font-bold border-l border-zinc-200">
                         ₱{(() => {
                             const results = calculatePurchaseCosts(order.items as any, order.shippingFee || 0);

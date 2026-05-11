@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Printer } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatQuantity, formatStockQuantity } from '@/lib/utils';
 import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import { getApiUrl } from '@/lib/api-config';
@@ -188,7 +188,7 @@ export default function InventoryReportPage() {
             <CardTitle className="text-sm font-medium">Total Quantity</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summary.totalStock}</div>
+            <div className="text-2xl font-bold">{formatStockQuantity(summary.totalStock)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -252,7 +252,7 @@ export default function InventoryReportPage() {
                         <TableCell className="text-right">{formatCurrency(product.cost)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
                         <TableCell className="text-right whitespace-nowrap">
-                            {product.stock} {product.unit_of_measure}
+                            {formatStockQuantity(product.stock)} {product.unit_of_measure}
                         </TableCell>
                         <TableCell className="text-right font-medium">
                             {formatCurrency(product.total_value)}
@@ -285,7 +285,7 @@ export default function InventoryReportPage() {
                         </div>
                         <div>
                             <p className="text-xs text-slate-500">Total Stock Quantity</p>
-                            <p className="text-xl font-black text-slate-900">{summary.totalStock}</p>
+                            <p className="text-xl font-black text-slate-900">{formatStockQuantity(summary.totalStock)}</p>
                         </div>
                      </div>
                  </div>

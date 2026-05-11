@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { getApiUrl } from '@/lib/api-config';
-import { cn } from '@/lib/utils';
+import { cn, formatStockQuantity } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ManageWarehousesDialog } from '../../sales/ManageWarehousesDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -131,8 +131,8 @@ export function TransferBoard() {
         product: item.product,
         sourceWarehouseId: item.warehouseId,
         sourceWarehouseName: item.warehouseName,
-        maxQuantity: item.quantity,
-        transferQuantity: item.quantity
+        maxQuantity: Math.ceil(item.quantity),
+        transferQuantity: Math.ceil(item.quantity)
       });
       addedCount++;
     });
@@ -228,7 +228,7 @@ export function TransferBoard() {
                               <p className="text-xs font-bold truncate leading-tight">{item.product.name}</p>
                               <div className="flex items-center gap-1.5 opacity-70"><Badge variant="outline" className="text-[9px] px-1 h-3.5 truncate max-w-[80px]">{item.warehouseName}</Badge><span className="text-[9px] truncate font-mono">{item.product.sku}</span></div>
                           </div>
-                          <div className="flex justify-end"><Button variant="ghost" size="sm" className="h-8 px-1.5 text-xs font-black" onClick={(e) => { e.stopPropagation(); stageItems(item.uniqueId); }}>{item.quantity}</Button></div>
+                          <div className="flex justify-end"><Button variant="ghost" size="sm" className="h-8 px-1.5 text-xs font-black" onClick={(e) => { e.stopPropagation(); stageItems(item.uniqueId); }}>{formatStockQuantity(item.quantity)}</Button></div>
                       </div>
                   ))}
                   {filteredSourceItems.length === 0 && <div className="py-20 text-center text-xs text-muted-foreground opacity-50">No products found</div>}
@@ -258,10 +258,10 @@ export function TransferBoard() {
                       <div key={item.stagedId} className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-card">
                           <div className="min-w-0 flex-1">
                               <p className="text-xs font-bold truncate leading-tight">{item.product.name}</p>
-                              <p className="text-[9px] opacity-60 truncate">From: {item.sourceWarehouseName} | Max: {item.maxQuantity}</p>
+                              <p className="text-[9px] opacity-60 truncate">From: {item.sourceWarehouseName} | Max: {formatStockQuantity(item.maxQuantity)}</p>
                           </div>
                           <div className="flex items-center gap-1">
-                              <Input type="number" value={item.transferQuantity} onChange={e => { const v = parseInt(e.target.value) || 1; setStagedItems(prev => prev.map(i => i.stagedId === item.stagedId ? { ...i, transferQuantity: Math.min(i.maxQuantity, Math.max(1, v)) } : i)); }} className="h-7 w-12 text-center text-xs p-1" />
+                              <Input type="number" step="1" value={item.transferQuantity} onChange={e => { const v = parseInt(e.target.value) || 1; setStagedItems(prev => prev.map(i => i.stagedId === item.stagedId ? { ...i, transferQuantity: Math.min(i.maxQuantity, Math.max(1, v)) } : i)); }} className="h-7 w-12 text-center text-xs p-1" />
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setStagedItems(prev => prev.filter(i => i.stagedId !== item.stagedId))}><Trash2 className="h-3.5 w-3.5" /></Button>
                           </div>
                       </div>

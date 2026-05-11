@@ -30,7 +30,7 @@ import type { Product, StockMovement } from '@/lib/types';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { CalendarIcon, Search, X, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity, formatStockQuantity } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 function MovementRow({ movement }: { movement: StockMovement }) {
@@ -57,10 +57,10 @@ function MovementRow({ movement }: { movement: StockMovement }) {
       </TableCell>
       <TableCell>
          <Badge variant={movement.quantityChange > 0 ? "default" : "destructive"} className="text-sm">
-          {movement.quantityChange > 0 ? '+' : ''}{movement.quantityChange}
+          {movement.quantityChange > 0 ? '+' : ''}{formatQuantity(movement.quantityChange)}
         </Badge>
       </TableCell>
-      <TableCell className="text-right">{movement.newStock}</TableCell>
+      <TableCell className="text-right">{formatStockQuantity(movement.newStock)}</TableCell>
       <TableCell className="max-w-[200px] truncate text-muted-foreground text-xs">{movement.notes}</TableCell>
     </TableRow>
   );

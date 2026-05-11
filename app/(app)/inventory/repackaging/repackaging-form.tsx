@@ -10,7 +10,7 @@ import { breakPack, searchProducts, getUnitsOfMeasure } from '../../products/act
 import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Package, ArrowRight, CheckCircle2, Info, Wand2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
@@ -235,7 +235,7 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
                     >
                       <div>
                         <p className="font-bold">{p.name}</p>
-                        <p className="text-sm text-muted-foreground">{p.sku} · Stock: {p.stock} {p.unitOfMeasure}</p>
+                        <p className="text-sm text-muted-foreground">{p.sku} · Stock: {formatQuantity(p.stock)} {p.unitOfMeasure}</p>
                       </div>
                       <Badge variant="outline">Select</Badge>
                     </button>
@@ -255,7 +255,7 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-primary/10">
                     <div className="space-y-1">
                       <p className="text-xs uppercase text-muted-foreground font-bold italic">Available Stock</p>
-                      <p className="text-2xl font-black">{selectedSource.stock} {selectedSource.unitOfMeasure}</p>
+                      <p className="text-2xl font-black">{formatQuantity(selectedSource.stock)} {selectedSource.unitOfMeasure}</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="qtyToUse" className="text-xs uppercase text-primary font-bold">Qty to Break/Use</Label>

@@ -1,22 +1,21 @@
 ; Stock Pilot Inno Setup Script
 #define AppName "Stock Pilot"
-#define AppVersion "1.0.0"
+#define AppVersion "1.8"
 #define AppPublisher "JhazonE"
 #define AppURL "https://github.com/JhazonE/Stock_Pilot"
-#define AppExeName "StockPilot.exe"
+#define AppExeName "Stock Pilot.exe"
 
 [Setup]
 AppId={{D3F73FF9-A96F-4F5C-9E2B-62972F84B373}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-AppProvider={#AppPublisher}
 AppSupportURL={#AppURL}
 AppUpdatesURL={#AppURL}
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
-OutputBaseFilename=StockPilotSetup
-Compression=lzma
+OutputBaseFilename=StockPilotSetup_{#AppVersion}
+Compression=none
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
@@ -28,24 +27,32 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; These would be the files generated after 'npm run build' and 'electron-builder'
+; App Files
 Source: "dist\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: ".env"; DestDir: "{app}"; Flags: ignoreversion
 Source: "establish_mysql_connection.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start_mysql.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: ".env"; DestDir: "{app}"; Flags: ignoreversion
+Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; Next.js Standalone Files
+Source: ".next\standalone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: ".next\static\*"; DestDir: "{app}\.next\static"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 
 [Icons]
-Name: "{autoprogramgroups}\{#AppName}"; Filename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\Stock Pilot POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""
+Name: "{autodesktop}\Stock Pilot POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; Tasks: desktopicon
+Name: "{userstartup}\Stock Pilot POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""
+Name: "{userstartup}\Stock Pilot Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
+
+Name: "{autoprograms}\Stock Pilot Backoffice"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/dashboard --role=""Admin Dashboard"""
+Name: "{autodesktop}\Stock Pilot Backoffice"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/dashboard --role=""Admin Dashboard"""; Tasks: desktopicon
 
 [Run]
-; Run the database setup script after installation
-Filename: "{app}\establish_mysql_connection.bat"; Description: "Setup MySQL Database"; Flags: runascurrentuser waituntilterminated
-
-; Launch the app
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
-[UninstallRun]
-; Optional: stop services on uninstall
-; Filename: "{cmd}"; Parameters: "/C pm2 stop stock-pilot && pm2 delete stock-pilot"; Flags: runhidden
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"

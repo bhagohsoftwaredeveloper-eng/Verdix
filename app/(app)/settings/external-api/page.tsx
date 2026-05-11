@@ -411,7 +411,7 @@ export default function ExternalApiSettingsPage() {
                             )}
                           </td>
                           <td className="p-4 align-middle text-center">
-                            {log.retryCount + 1}
+                            {(log.retryCount ?? 0) + 1}
                           </td>
                           <td className="p-4 align-middle text-xs">
                             {log.nextRetryAt ? new Date(log.nextRetryAt).toLocaleTimeString() : '-'}

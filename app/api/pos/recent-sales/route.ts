@@ -109,6 +109,20 @@ export async function GET(request: NextRequest) {
         `;
         const items = await query(itemsQuery, [sale.id]);
 
+        // 3. Fetch payment details for split payments
+        const paymentsQuery = `
+          SELECT payment_method, amount_tendered, gateway_reference
+          FROM payment_details
+          WHERE transaction_id = (SELECT id FROM pos_transactions WHERE sale_id = ? LIMIT 1)
+        `;
+        const paymentDetailsRows = await query(paymentsQuery, [sale.id]) as any[];
+        
+        const mappedPayments = paymentDetailsRows.map(row => ({
+            method: row.payment_method,
+            amount: parseFloat(row.amount_tendered),
+            reference: row.gateway_reference
+        }));
+
         return {
           id: sale.id,
           customer: {
@@ -122,6 +136,7 @@ export async function GET(request: NextRequest) {
           total: parseFloat(sale.total),
           paidAmount: parseFloat(sale.amount_paid || 0),
           paymentMethod: sale.payment_method,
+          payments: mappedPayments,
           status: sale.status,
           notes: sale.notes,
           orderNumber: sale.order_number,

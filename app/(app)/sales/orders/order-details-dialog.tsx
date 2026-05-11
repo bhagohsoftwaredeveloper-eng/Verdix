@@ -14,6 +14,7 @@ import type { Sale } from '@/lib/types';
 import { Printer, FileText, X } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { getApiUrl } from '@/lib/api-config';
+import { formatQuantity } from '@/lib/utils';
 
 export type OrderDialogMode = 'order' | 'delivery-note';
 
@@ -163,7 +164,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
               ${order.items.map(item => `
                 <tr>
                   <td style="text-transform: uppercase; font-weight: 500;">${item.product.name}</td>
-                  <td>${item.quantity} ${(item.product as any).unit || 'pc'}</td>
+                  <td>\${formatQuantity(item.quantity)} \${(item.product as any).unit || 'pc'}</td>
                   <td>${item.price.toFixed(2)}</td>
                   <td>0.00</td>
                   <td class="amount">${(item.price * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -267,7 +268,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
                   ${item.product.barcode ? `<div style="font-size: 11px; color: #000; font-weight: bold; font-family: monospace;">BC: ${item.product.barcode}</div>` : ''}
                 </div>
                 <div class="item-details">
-                  <span>${item.quantity} x ₱${item.price.toFixed(2)}</span>
+                  <span>\${formatQuantity(item.quantity)} x ₱\${item.price.toFixed(2)}</span>
                   <span>₱${(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               </div>
@@ -410,7 +411,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
                       {item.product.name}
                     </td>
                     <td className="py-3 text-center">
-                      {item.quantity} {(item.product as any).unit || 'pc'}
+                      {formatQuantity(item.quantity)} {(item.product as any).unit || 'pc'}
                     </td>
                     <td className="py-2 text-right">{item.price.toFixed(2)}</td>
                     <td className="py-2 text-right">0.00</td>

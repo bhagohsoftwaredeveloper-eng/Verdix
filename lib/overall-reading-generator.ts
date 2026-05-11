@@ -58,22 +58,10 @@ export class OverallReadingGenerator {
                     ['To:', format(new Date(endDate), 'MM/dd/yy h:mm a')]
                 ]
             )
-            .line('--------------------------------')
-            .raw([0x1b, 0x61, 0x31]).line('TERMINAL PERFORMANCE').raw([0x1b, 0x61, 0x30])
-            .table(
-                [
-                    { width: 20, align: 'left' },
-                    { width: 12, align: 'right' }
-                ],
-                [
-                    ['Gross Sales:', formatCurrency(grossSales)],
-                    ['Total Discounts:', formatCurrency(totalDiscounts)],
-                    ['NET SALES:', formatCurrency(netSales)],
-                    ['Transactions:', String(transactionCount)]
-                ]
-            )
+
             .line('--------------------------------')
             .raw([0x1b, 0x61, 0x31]).line('TERMINAL BREAKDOWN').raw([0x1b, 0x61, 0x30])
+
             .table(
                 [
                     { width: 12, align: 'left' },
@@ -98,7 +86,7 @@ export class OverallReadingGenerator {
         });
 
         if (data.terminals.length === 0) {
-            enc.line(center('No terminal data'));
+            enc.align('center').line('No terminal data').align('left');
         }
 
         enc
@@ -128,7 +116,7 @@ export class OverallReadingGenerator {
         });
 
         if (cashiers.length === 0) {
-            enc.line(center('No cashier data'));
+            enc.align('center').line('No cashier data').align('left');
         }
 
         enc
