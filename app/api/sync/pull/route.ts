@@ -14,14 +14,18 @@ export async function GET(request: Request) {
       params.push(lastSync);
     }
 
-    sql += ' ORDER BY updated_at ASC';
-
     const products = await query(sql, params);
+    const categories = await query('SELECT * FROM categories');
+    const brands = await query('SELECT * FROM brands');
 
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
-      data: products
+      data: {
+        products,
+        categories,
+        brands
+      }
     });
   } catch (error: any) {
     console.error('Failed to pull sync data:', error);

@@ -189,32 +189,64 @@ export async function processPullSync(): Promise<void> {
     }
 
     const result = await response.json();
-    if (result.success && result.data.length > 0) {
-      console.log(`Pull Sync: Received ${result.data.length} updated products.`);
-      
-      for (const product of result.data) {
-        await query(`
-          INSERT INTO products (id, name, barcode, price, cost, stock, category, brand, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE
-          name = VALUES(name),
-          barcode = VALUES(barcode),
-          price = VALUES(price),
-          cost = VALUES(cost),
-          stock = VALUES(stock),
-          category = VALUES(category),
-          brand = VALUES(brand),
-          updated_at = VALUES(updated_at)
-        `, [
-          product.id, product.name, product.barcode, product.price, product.cost, 
-          product.stock, product.category, product.brand, 
-          product.created_at ? product.created_at.slice(0, 19).replace('T', ' ') : null,
-          product.updated_at ? product.updated_at.slice(0, 19).replace('T', ' ') : null
-        ]);
+    if (result.success && result.data) {
+      const { products, categories, brands } = result.data;
+
+      // 1. Update Products
+      if (products && products.length > 0) {
+        console.log(`Pull Sync: Received ${products.length} updated products.`);
+        for (const product of products) {
+          await query(`
+            INSERT INTO products (id, name, barcode, price, cost, stock, category, brand, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            barcode = VALUES(barcode),
+            price = VALUES(price),
+            cost = VALUES(cost),
+            stock = VALUES(stock),
+            category = VALUES(category),
+            brand = VALUES(brand),
+            updated_at = VALUES(updated_at)
+          `, [
+            product.id, product.name, product.barcode, product.price, product.cost, 
+            product.stock, product.category, product.brand, 
+            product.created_at ? product.created_at.slice(0, 19).replace('T', ' ') : null,
+            product.updated_at ? product.updated_at.slice(0, 19).replace('T', ' ') : null
+          ]);
+        }
+      }
+
+      // 2. Update Categories
+      if (categories && categories.length > 0) {
+        console.log(`Pull Sync: Received ${categories.length} categories.`);
+        for (const cat of categories) {
+          await query(`
+            INSERT INTO categories (id, name, markup_percentage)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            markup_percentage = VALUES(markup_percentage)
+          `, [cat.id, cat.name, cat.markup_percentage]);
+        }
+      }
+
+      // 3. Update Brands
+      if (brands && brands.length > 0) {
+        console.log(`Pull Sync: Received ${brands.length} brands.`);
+        for (const brand of brands) {
+          await query(`
+            INSERT INTO brands (id, name, markup_percentage)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            markup_percentage = VALUES(markup_percentage)
+          `, [brand.id, brand.name, brand.markup_percentage]);
+        }
       }
 
       await query("INSERT INTO external_api_settings (setting_key, setting_value) VALUES ('last_pull_sync', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", [result.timestamp]);
-      console.log(`✅ Success: Synced ${result.data.length} products down.`);
+      console.log(`✅ Success: Synced data down (Products, Categories, Brands).`);
     }
   } catch (error) {
     console.error('Failed to process pull sync:', error);
