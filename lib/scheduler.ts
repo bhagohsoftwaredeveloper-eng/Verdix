@@ -197,8 +197,14 @@ export async function processPullSync(): Promise<void> {
         console.log(`Pull Sync: Received ${products.length} updated products.`);
         for (const product of products) {
           await query(`
-            INSERT INTO products (id, name, barcode, price, cost, stock, category, brand, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products (
+              id, name, barcode, price, cost, stock, category, brand, created_at, updated_at,
+              description, additional_description, department, subcategory, reorder_point,
+              avg_daily_sales, sku, image_url, image_hint, unit_of_measure, parent_id,
+              conversion_factor, supplier_id, income_account, expense_account, warehouse_id,
+              vat_status, availability, earns_points, expiration_date, shelf_location_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
             name = VALUES(name),
             barcode = VALUES(barcode),
@@ -207,12 +213,54 @@ export async function processPullSync(): Promise<void> {
             stock = VALUES(stock),
             category = VALUES(category),
             brand = VALUES(brand),
-            updated_at = VALUES(updated_at)
+            updated_at = VALUES(updated_at),
+            description = VALUES(description),
+            additional_description = VALUES(additional_description),
+            department = VALUES(department),
+            subcategory = VALUES(subcategory),
+            reorder_point = VALUES(reorder_point),
+            avg_daily_sales = VALUES(avg_daily_sales),
+            sku = VALUES(sku),
+            image_url = VALUES(image_url),
+            image_hint = VALUES(image_hint),
+            unit_of_measure = VALUES(unit_of_measure),
+            parent_id = VALUES(parent_id),
+            conversion_factor = VALUES(conversion_factor),
+            supplier_id = VALUES(supplier_id),
+            income_account = VALUES(income_account),
+            expense_account = VALUES(expense_account),
+            warehouse_id = VALUES(warehouse_id),
+            vat_status = VALUES(vat_status),
+            availability = VALUES(availability),
+            earns_points = VALUES(earns_points),
+            expiration_date = VALUES(expiration_date),
+            shelf_location_id = VALUES(shelf_location_id)
           `, [
             product.id, product.name, product.barcode, product.price, product.cost, 
             product.stock, product.category, product.brand, 
             product.created_at ? product.created_at.slice(0, 19).replace('T', ' ') : null,
-            product.updated_at ? product.updated_at.slice(0, 19).replace('T', ' ') : null
+            product.updated_at ? product.updated_at.slice(0, 19).replace('T', ' ') : null,
+            product.description ?? null, 
+            product.additional_description ?? null, 
+            product.department ?? null, 
+            product.subcategory ?? null, 
+            product.reorder_point ?? null,
+            product.avg_daily_sales ?? null, 
+            product.sku ?? null, 
+            product.image_url ?? null, 
+            product.image_hint ?? null, 
+            product.unit_of_measure ?? null, 
+            product.parent_id ?? null,
+            product.conversion_factor ?? null, 
+            product.supplier_id ?? null, 
+            product.income_account ?? null, 
+            product.expense_account ?? null, 
+            product.warehouse_id ?? null,
+            product.vat_status ?? null, 
+            product.availability ?? null, 
+            product.earns_points ?? null, 
+            product.expiration_date ? product.expiration_date.slice(0, 10) : null,
+            product.shelf_location_id ?? null
           ]);
         }
       }
