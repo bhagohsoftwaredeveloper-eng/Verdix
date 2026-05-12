@@ -190,7 +190,7 @@ export async function processPullSync(): Promise<void> {
 
     const result = await response.json();
     if (result.success && result.data) {
-      const { products, categories, brands } = result.data;
+      const { products, categories, brands, users, userPermissions } = result.data;
 
       // 1. Update Products
       if (products && products.length > 0) {
@@ -293,8 +293,42 @@ export async function processPullSync(): Promise<void> {
         }
       }
 
+      // 4. Update Users
+      if (users && users.length > 0) {
+        console.log(`Pull Sync: Received ${users.length} users.`);
+        for (const user of users) {
+          await query(`
+            INSERT INTO users (uid, username, password, user_type, display_name, disabled, creation_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            username = VALUES(username),
+            password = VALUES(password),
+            user_type = VALUES(user_type),
+            display_name = VALUES(display_name),
+            disabled = VALUES(disabled)
+          `, [
+            user.uid, user.username, user.password, user.user_type, 
+            user.display_name, user.disabled ? 1 : 0, 
+            user.creation_time ? user.creation_time.slice(0, 19).replace('T', ' ') : null
+          ]);
+        }
+      }
+
+      // 5. Update User Permissions
+      if (userPermissions && userPermissions.length > 0) {
+        console.log(`Pull Sync: Received ${userPermissions.length} user permissions.`);
+        for (const perm of userPermissions) {
+          await query(`
+            INSERT INTO user_permissions (id, user_uid, permission)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            permission = VALUES(permission)
+          `, [perm.id, perm.user_uid, perm.permission]);
+        }
+      }
+
       await query("INSERT INTO external_api_settings (setting_key, setting_value) VALUES ('last_pull_sync', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", [result.timestamp]);
-      console.log(`✅ Success: Synced data down (Products, Categories, Brands).`);
+      console.log(`✅ Success: Synced data down (Products, Categories, Brands, Users).`);
     }
   } catch (error) {
     console.error('Failed to process pull sync:', error);

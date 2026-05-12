@@ -17,6 +17,8 @@ export async function GET(request: Request) {
     const products = await query(sql, params);
     const categories = await query('SELECT * FROM categories');
     const brands = await query('SELECT * FROM brands');
+    const users = await query('SELECT uid, username, password, user_type, display_name, disabled, creation_time FROM users');
+    const userPermissions = await query('SELECT * FROM user_permissions');
 
     return NextResponse.json({
       success: true,
@@ -24,7 +26,9 @@ export async function GET(request: Request) {
       data: {
         products,
         categories,
-        brands
+        brands,
+        users,
+        userPermissions
       }
     });
   } catch (error: any) {
