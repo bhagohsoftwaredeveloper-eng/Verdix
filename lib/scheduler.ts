@@ -207,7 +207,9 @@ export async function processPullSync(): Promise<void> {
           updated_at = VALUES(updated_at)
         `, [
           product.id, product.name, product.barcode, product.price, product.cost, 
-          product.stock, product.category, product.brand, product.created_at, product.updated_at
+          product.stock, product.category, product.brand, 
+          product.created_at ? product.created_at.slice(0, 19).replace('T', ' ') : null,
+          product.updated_at ? product.updated_at.slice(0, 19).replace('T', ' ') : null
         ]);
       }
 
