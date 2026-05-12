@@ -3,10 +3,80 @@ const path = require('path');
 const printerSdk = require('./printer-sdk');
 const epsonSdk = require('./epson-sdk');
 
-// Disable hardware acceleration to prevent lag on some systems
-app.disableHardwareAcceleration();
+// Hardware acceleration enabled for better performance (User requested)
+// app.disableHardwareAcceleration();
 
 let serverProcess;
+let splashWindow;
+
+function createSplashScreen() {
+  const { BrowserWindow } = require('electron');
+  splashWindow = new BrowserWindow({
+    width: 400,
+    height: 300,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    webPreferences: {
+      nodeIntegration: false,
+    }
+  });
+
+  const splashHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body {
+          margin: 0;
+          background: #1e1e2e;
+          color: #cdd6f4;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          border-radius: 12px;
+          overflow: hidden;
+          border: 1px solid #313244;
+        }
+        .title {
+          font-size: 28px;
+          font-weight: bold;
+          margin-bottom: 8px;
+          color: #f5c2e7;
+          letter-spacing: 1px;
+        }
+        .subtitle {
+          font-size: 14px;
+          color: #a6adc8;
+          margin-bottom: 24px;
+        }
+        .spinner {
+          border: 4px solid #313244;
+          border-top: 4px solid #f5c2e7;
+          border-radius: 50%;
+          width: 36px;
+          height: 36px;
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="title">Stock Pilot</div>
+      <div class="subtitle">Starting background services...</div>
+      <div class="spinner"></div>
+    </body>
+    </html>
+  `;
+
+  splashWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(splashHtml));
+}
 
 function createWindow() {
   const isDev = !app.isPackaged;
@@ -171,6 +241,8 @@ ipcMain.handle('epson-printer:open-drawer', async () => {
 app.whenReady().then(async () => {
   const { dialog } = require('electron');
   
+  createSplashScreen();
+  
   // Database setup removed as per user request to use working DB
   
   const http = require('http');
@@ -242,8 +314,10 @@ app.whenReady().then(async () => {
     if (ready) {
       logStream.write('Server is ready. Creating window.\n');
       createWindow();
+      if (splashWindow) splashWindow.close();
     } else {
       logStream.write('Server failed to respond within timeout.\n');
+      if (splashWindow) splashWindow.close();
       dialog.showErrorBox('Server Error', 'Next.js server failed to respond within 30 seconds. Please check server.log.');
     }
   } catch (serverErr) {

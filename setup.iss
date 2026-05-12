@@ -1,6 +1,6 @@
 ; Stock Pilot Inno Setup Script
 #define AppName "Stock Pilot"
-#define AppVersion "1.9"
+#define AppVersion "1.11"
 #define AppPublisher "JhazonE"
 #define AppURL "https://github.com/JhazonE/Stock_Pilot"
 #define AppExeName "Stock Pilot.exe"
