@@ -579,7 +579,7 @@ export function EditProductDialog({
                             <FormItem>
                               <FormLabel>Product Name</FormLabel>
                               <FormControl>
-                                <Input {...field} />
+                                <Input {...field} value={field.value ?? ''} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -664,7 +664,7 @@ export function EditProductDialog({
                             <FormItem>
                               <FormLabel>SKU</FormLabel>
                               <FormControl>
-                                <Input {...field} readOnly className="bg-muted" />
+                                <Input {...field} value={field.value ?? ''} readOnly className="bg-muted" />
                               </FormControl>
                               <FormDescription>SKU cannot be changed after creation.</FormDescription>
                               <FormMessage />
@@ -679,7 +679,7 @@ export function EditProductDialog({
                               <FormLabel>Barcode (UPC)</FormLabel>
                               <div className="relative">
                                 <FormControl>
-                                <Input placeholder="e.g., 123456789012" {...field} className="pr-10" />
+                                <Input placeholder="e.g., 123456789012" {...field} value={field.value ?? ''} className="pr-10" />
                                 </FormControl>
                                 <Button
                                   type="button"
@@ -1243,7 +1243,7 @@ export function EditProductDialog({
                               <FormItem>
                                 <FormLabel>Reorder Point</FormLabel>
                                 <FormControl>
-                                  <Input type="number" placeholder="0" value={formatQuantity(field.value)} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                  <Input type="number" placeholder="0" value={field.value != null ? formatQuantity(field.value) : ''} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -1375,7 +1375,7 @@ export function EditProductDialog({
                                             type="number"
                                             step="0.01"
                                             placeholder="Qty"
-                                            value={field.value}
+                                            value={field.value ?? ''}
                                             onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                                           />
                                         </FormControl>
@@ -1510,7 +1510,7 @@ export function EditProductDialog({
                                                 type="number"
                                                 step="0.01"
                                                 placeholder="0.00"
-                                                value={field.value}
+                                                value={field.value ?? ''}
                                                 onChange={(e) => {
                                                   const newVal = parseFloat(e.target.value) || 0;
                                                   field.onChange(newVal);
