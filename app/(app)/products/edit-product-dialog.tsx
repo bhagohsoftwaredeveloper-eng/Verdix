@@ -283,6 +283,7 @@ export function EditProductDialog({
           availability: product.availability || 'Available',
           earnsPoints: product.earnsPoints ?? true,
           description: product.description ?? '',
+          department: product.department ?? '',
       };
       console.log('Resetting form with:', sanitizedProduct);
       form.reset(sanitizedProduct);
