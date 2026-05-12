@@ -194,7 +194,7 @@ export async function processPullSync(): Promise<void> {
       
       for (const product of result.data) {
         await query(`
-          INSERT INTO products (id, name, barcode, price, cost, stock, category_id, brand_id, created_at, updated_at)
+          INSERT INTO products (id, name, barcode, price, cost, stock, category, brand, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE
           name = VALUES(name),
@@ -202,12 +202,12 @@ export async function processPullSync(): Promise<void> {
           price = VALUES(price),
           cost = VALUES(cost),
           stock = VALUES(stock),
-          category_id = VALUES(category_id),
-          brand_id = VALUES(brand_id),
+          category = VALUES(category),
+          brand = VALUES(brand),
           updated_at = VALUES(updated_at)
         `, [
           product.id, product.name, product.barcode, product.price, product.cost, 
-          product.stock, product.category_id, product.brand_id, product.created_at, product.updated_at
+          product.stock, product.category, product.brand, product.created_at, product.updated_at
         ]);
       }
 
