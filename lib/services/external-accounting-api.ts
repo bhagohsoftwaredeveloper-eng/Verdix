@@ -203,7 +203,7 @@ export async function syncAccountsPayable(
       transactions: supplierData.transactions || [],
     };
 
-    const endpoint = `${config.apiEndpoint}/accounts-payable`;
+    const endpoint = `${config.apiEndpoint}/sync/push`;
     return await sendToExternalApi(endpoint, payload, config, 'ACCOUNTS_PAYABLE', supplierId);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -262,7 +262,7 @@ export async function syncPurchaseTransaction(
       };
     }
 
-    const endpoint = `${config.apiEndpoint}/purchase-transactions`;
+    const endpoint = `${config.apiEndpoint}/sync/push`;
     return await sendToExternalApi(endpoint, payload, config, 'PURCHASE_ORDER', purchaseOrderId);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -303,7 +303,7 @@ export async function syncPaymentTransaction(
       };
     }
 
-    const endpoint = `${config.apiEndpoint}/payment-transactions`;
+    const endpoint = `${config.apiEndpoint}/sync/push`;
     return await sendToExternalApi(endpoint, payload, config, 'SUPPLIER_PAYMENT', paymentId);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -355,7 +355,7 @@ export async function syncSalesTransaction(
       };
     }
 
-    const endpoint = `${config.apiEndpoint}/sales-transactions`;
+    const endpoint = `${config.apiEndpoint}/sync/push`;
     return await sendToExternalApi(endpoint, payload, config, 'SALES_INVOICE', invoiceId);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
