@@ -11,6 +11,9 @@ import {
   syncAccountsPayable 
 } from './services/external-accounting-api';
 
+// Disable SSL verification to fix "fetch failed" error on Windows systems with outdated root certs
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 export interface BackupSchedule {
   enabled: boolean;
   frequency: 'daily' | 'weekly';
