@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Product, Sale, Customer, PaymentMethod, PurchaseOrder, Supplier } from '@/lib/types';
 import { getApiUrl } from '@/lib/api-config';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
+import { useQuery } from '@tanstack/react-query';
 
 
 export interface UseProductsResult {
@@ -19,29 +20,15 @@ export interface UseSalesInvoicesResult {
 }
 
 export function useProducts(search?: string, availability?: string, supplierId?: string, warehouseId?: string): UseProductsResult {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['products', search, availability, supplierId, warehouseId],
+    queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) {
-        params.append('search', search);
-      }
-      if (availability) {
-        params.append('availability', availability);
-      }
-      if (supplierId) {
-        params.append('supplierId', supplierId);
-      }
-      if (warehouseId) {
-        params.append('warehouseId', warehouseId);
-      }
-      params.append('limit', '100'); // Get more products for search
+      if (search) params.append('search', search);
+      if (availability) params.append('availability', availability);
+      if (supplierId) params.append('supplierId', supplierId);
+      if (warehouseId) params.append('warehouseId', warehouseId);
+      params.append('limit', '100');
 
       const response = await fetch(getApiUrl(`/products?${params.toString()}`), {
         cache: 'no-store'
@@ -52,8 +39,7 @@ export function useProducts(search?: string, availability?: string, supplierId?:
         throw new Error(result.error || 'Failed to fetch products');
       }
 
-      // Transform the data to match the Product interface
-      const transformedProducts: Product[] = result.data.map((item: any) => ({
+      return result.data.map((item: any) => ({
         id: item.id,
         name: item.name,
         description: item.description || '',
@@ -80,24 +66,17 @@ export function useProducts(search?: string, availability?: string, supplierId?:
         createdAt: item.created_at,
         updatedAt: item.updated_at,
       }));
+    },
+  });
 
-      setProducts(transformedProducts);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching products:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProducts();
-  }, [search, availability, supplierId, warehouseId]);
-
-  const refetch = useCallback(() => { fetchProducts(); }, [search, availability, supplierId, warehouseId]);
   useLiveRefresh(refetch);
 
-  return { products, loading, error, refetch };
+  return { 
+    products: data || [], 
+    loading: isLoading, 
+    error: error instanceof Error ? error.message : null, 
+    refetch 
+  };
 }
 
 export interface UseCustomersResult {
@@ -108,71 +87,34 @@ export interface UseCustomersResult {
 }
 
 export function useSalesInvoices(): UseSalesInvoicesResult {
-  const [salesInvoices, setSalesInvoices] = useState<Sale[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchSalesInvoices = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch(getApiUrl('/sales'), {
-        cache: 'no-store'
-      });
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['salesInvoices'],
+    queryFn: async () => {
+      const response = await fetch(getApiUrl('/sales'), { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to fetch sales invoices');
+      return result.data || [];
+    },
+  });
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch sales invoices');
-      }
-
-      // The API already returns data in the correct format
-      setSalesInvoices(result.data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching sales invoices:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSalesInvoices();
-  }, []);
-
-  const refetch = useCallback(() => { fetchSalesInvoices(); }, []);
   useLiveRefresh(refetch);
 
-  return { salesInvoices, loading, error, refetch };
+  return { salesInvoices: data || [], loading: isLoading, error: error instanceof Error ? error.message : null, refetch };
 }
 
 export function useCustomers(search?: string): UseCustomersResult {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchCustomers = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['customers', search],
+    queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) {
-        params.append('search', search);
-      }
-      params.append('limit', '100'); // Get more customers for search
+      if (search) params.append('search', search);
+      params.append('limit', '100');
 
-      const response = await fetch(getApiUrl(`/customers?${params.toString()}`), {
-        cache: 'no-store'
-      });
+      const response = await fetch(getApiUrl(`/customers?${params.toString()}`), { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to fetch customers');
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch customers');
-      }
-
-      // Transform the data to match the Customer interface
-      const transformedCustomers: Customer[] = result.data.map((item: any) => ({
+      return result.data.map((item: any) => ({
         id: item.id,
         name: item.name,
         contactNumber: item.contactNumber || '',
@@ -188,24 +130,12 @@ export function useCustomers(search?: string): UseCustomersResult {
         creditLimit: item.creditLimit || 0,
         priceLevelId: item.priceLevelId || '',
       }));
+    },
+  });
 
-      setCustomers(transformedCustomers);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching customers:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCustomers();
-  }, [search]);
-
-  const refetch = useCallback(() => { fetchCustomers(); }, [search]);
   useLiveRefresh(refetch);
 
-  return { customers, loading, error, refetch };
+  return { customers: data || [], loading: isLoading, error: error instanceof Error ? error.message : null, refetch };
 }
 
 export interface UsePaymentMethodsResult {
@@ -216,55 +146,29 @@ export interface UsePaymentMethodsResult {
 }
 
 export function usePaymentMethods(search?: string): UsePaymentMethodsResult {
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchPaymentMethods = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['paymentMethods', search],
+    queryFn: async () => {
       const params = new URLSearchParams();
-      if (search) {
-        params.append('search', search);
-      }
-      params.append('activeOnly', 'true'); // Only fetch active payment methods
+      if (search) params.append('search', search);
+      params.append('activeOnly', 'true');
       params.append('limit', '100');
 
-      const response = await fetch(getApiUrl(`/payment-methods?${params.toString()}`), {
-        cache: 'no-store'
-      });
+      const response = await fetch(getApiUrl(`/payment-methods?${params.toString()}`), { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to fetch payment methods');
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch payment methods');
-      }
-
-      // Transform the data to match the PaymentMethod interface
-      const transformedPaymentMethods: PaymentMethod[] = result.data.map((item: any) => ({
+      return result.data.map((item: any) => ({
         id: item.id,
         name: item.name,
         isReferenceRequired: item.isReferenceRequired ?? false,
       }));
+    },
+  });
 
-      setPaymentMethods(transformedPaymentMethods);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching payment methods:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPaymentMethods();
-  }, [search]);
-
-  const refetch = useCallback(() => { fetchPaymentMethods(); }, [search]);
   useLiveRefresh(refetch);
 
-  return { paymentMethods, loading, error, refetch };
+  return { paymentMethods: data || [], loading: isLoading, error: error instanceof Error ? error.message : null, refetch };
 }
 
 export interface UsePurchaseOrdersResult {
@@ -281,67 +185,37 @@ export interface UsePurchaseOrdersResult {
 }
 
 export function usePurchaseOrders(search?: string, status?: string, page: number = 1, limit: number = 10, startDate?: string, endDate?: string, supplierId?: string): UsePurchaseOrdersResult {
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
-  const [pagination, setPagination] = useState({ total: 0, limit: 10, offset: 0, hasMore: false });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchPurchaseOrders = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['purchaseOrders', search, status, page, limit, startDate, endDate, supplierId],
+    queryFn: async () => {
       const offset = (page - 1) * limit;
       const params = new URLSearchParams();
-      if (search) {
-        params.append('search', search);
-      }
-      if (status && status !== 'all') {
-        params.append('status', status);
-      }
-      if (supplierId && supplierId !== 'all') {
-        params.append('supplierId', supplierId);
-      }
-      if (startDate) {
-        params.append('startDate', startDate);
-      }
-      if (endDate) {
-        params.append('endDate', endDate);
-      }
+      if (search) params.append('search', search);
+      if (status && status !== 'all') params.append('status', status);
+      if (supplierId && supplierId !== 'all') params.append('supplierId', supplierId);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
       params.append('limit', limit.toString());
       params.append('offset', offset.toString());
 
-      const response = await fetch(getApiUrl(`/purchase-orders?${params.toString()}`), {
-        cache: 'no-store'
-      });
+      const response = await fetch(getApiUrl(`/purchase-orders?${params.toString()}`), { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to fetch purchase orders');
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch purchase orders');
-      }
+      return result;
+    },
+  });
 
-      setPurchaseOrders(result.data || []);
-      if (result.pagination) {
-        setPagination(result.pagination);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching purchase orders:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPurchaseOrders();
-  }, [search, status, page, limit, startDate, endDate, supplierId]);
-
-  const refetch = useCallback(() => { fetchPurchaseOrders(); }, [search, status, page, limit, startDate, endDate, supplierId]);
   useLiveRefresh(refetch);
 
-  return { purchaseOrders, loading, error, refetch, pagination };
+  return { 
+    purchaseOrders: data?.data || [], 
+    loading: isLoading, 
+    error: error instanceof Error ? error.message : null, 
+    refetch,
+    pagination: data?.pagination || { total: 0, limit: 10, offset: 0, hasMore: false }
+  };
 }
-// ... existing code ...
 
 export interface BusinessProfile {
   businessName: string;
@@ -360,41 +234,19 @@ export interface UseBusinessProfileResult {
 }
 
 export function useBusinessProfile(): UseBusinessProfileResult {
-  const [profile, setProfile] = useState<BusinessProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchProfile = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch(getApiUrl('/pos-settings'), {
-        cache: 'no-store'
-      });
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['businessProfile'],
+    queryFn: async () => {
+      const response = await fetch(getApiUrl('/pos-settings'), { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to fetch business profile');
+      return result.data;
+    },
+  });
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch business profile');
-      }
-
-      setProfile(result.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching business profile:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  const refetch = useCallback(() => { fetchProfile(); }, []);
   useLiveRefresh(refetch);
 
-  return { profile, loading, error, refetch };
+  return { profile: data || null, loading: isLoading, error: error instanceof Error ? error.message : null, refetch };
 }
 
 export interface UseBadOrdersResult {
@@ -411,56 +263,33 @@ export interface UseBadOrdersResult {
 }
 
 export function useBadOrders(search?: string, status?: string, page: number = 1, limit: number = 10): UseBadOrdersResult {
-  const [badOrders, setBadOrders] = useState<any[]>([]);
-  const [pagination, setPagination] = useState({ total: 0, limit: 10, offset: 0, hasMore: false });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchBadOrders = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['badOrders', search, status, page, limit],
+    queryFn: async () => {
       const offset = (page - 1) * limit;
       const params = new URLSearchParams();
-      if (search) {
-        params.append('search', search);
-      }
-      if (status && status !== 'all') {
-        params.append('status', status);
-      }
+      if (search) params.append('search', search);
+      if (status && status !== 'all') params.append('status', status);
       params.append('limit', limit.toString());
       params.append('offset', offset.toString());
 
-      const response = await fetch(getApiUrl(`/bad-orders?${params.toString()}`), {
-        cache: 'no-store'
-      });
+      const response = await fetch(getApiUrl(`/bad-orders?${params.toString()}`), { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to fetch bad orders');
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch bad orders');
-      }
+      return result;
+    },
+  });
 
-      setBadOrders(result.data || []);
-      if (result.pagination) {
-        setPagination(result.pagination);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching bad orders:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBadOrders();
-  }, [search, status, page, limit]);
-
-  const refetch = useCallback(() => { fetchBadOrders(); }, [search, status, page, limit]);
   useLiveRefresh(refetch);
 
-  return { badOrders, loading, error, refetch, pagination };
+  return { 
+    badOrders: data?.data || [], 
+    loading: isLoading, 
+    error: error instanceof Error ? error.message : null, 
+    refetch, 
+    pagination: data?.pagination || { total: 0, limit: 10, offset: 0, hasMore: false }
+  };
 }
 
 export interface BadOrderStatsData {
@@ -476,42 +305,28 @@ export interface BadOrderStatsData {
 }
 
 export function useBadOrderStats() {
-  const [stats, setStats] = useState<BadOrderStatsData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(getApiUrl('/bad-orders/stats'), {
-        cache: 'no-store'
-      });
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['badOrderStats'],
+    queryFn: async () => {
+      const response = await fetch(getApiUrl('/bad-orders/stats'), { cache: 'no-store' });
       const result = await response.json();
-      if (result.success) {
-        setStats(result.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (!result.success) throw new Error('Failed to fetch stats');
+      return result.data;
+    },
+  });
 
   useEffect(() => {
-    fetchStats();
-    
-    // Listen for updates
-    const handleUpdate = () => fetchStats();
+    const handleUpdate = () => refetch();
     window.addEventListener('bad-orders-updated', handleUpdate);
-    // Listen for stock updates too as they might trigger bad order creation
     window.addEventListener('stock-updated', handleUpdate);
     
     return () => {
       window.removeEventListener('bad-orders-updated', handleUpdate);
       window.removeEventListener('stock-updated', handleUpdate);
     };
-  }, []);
+  }, [refetch]);
 
-  return { stats, loading, refetch: fetchStats };
+  return { stats: data || null, loading: isLoading, refetch };
 }
 
 export interface UseSuppliersResult {
@@ -528,51 +343,30 @@ export interface UseSuppliersResult {
 }
 
 export function useSuppliers(search?: string, page: number = 1, limit: number = 100): UseSuppliersResult {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [pagination, setPagination] = useState({ total: 0, limit: 100, offset: 0, hasMore: false });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchSuppliers = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['suppliers', search, page, limit],
+    queryFn: async () => {
       const offset = (page - 1) * limit;
       const params = new URLSearchParams();
-      if (search) {
-        params.append('search', search);
-      }
+      if (search) params.append('search', search);
       params.append('limit', limit.toString());
       params.append('offset', offset.toString());
 
-      const response = await fetch(getApiUrl(`/suppliers?${params.toString()}`), {
-        cache: 'no-store'
-      });
+      const response = await fetch(getApiUrl(`/suppliers?${params.toString()}`), { cache: 'no-store' });
       const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to fetch suppliers');
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch suppliers');
-      }
+      return result;
+    },
+  });
 
-      setSuppliers(result.data || []);
-      if (result.pagination) {
-        setPagination(result.pagination);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching suppliers:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSuppliers();
-  }, [search, page, limit]);
-
-  const refetch = useCallback(() => { fetchSuppliers(); }, [search, page, limit]);
   useLiveRefresh(refetch);
 
-  return { suppliers, loading, error, refetch, pagination };
+  return { 
+    suppliers: data?.data || [], 
+    loading: isLoading, 
+    error: error instanceof Error ? error.message : null, 
+    refetch, 
+    pagination: data?.pagination || { total: 0, limit: 100, offset: 0, hasMore: false }
+  };
 }

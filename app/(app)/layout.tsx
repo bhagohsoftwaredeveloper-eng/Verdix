@@ -4,6 +4,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WindowControls } from '@/components/window-controls';
 import {
   SidebarProvider,
@@ -127,6 +128,7 @@ const purchasesNavItems = [
   { href: '/purchases/bad-orders', label: 'Bad Orders' },
 ];
 
+const queryClient = new QueryClient();
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -209,7 +211,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const filteredOtherNavItems = otherNavItems.filter(item => hasPermission(item.permission));
 
   return (
-    <SidebarProvider className="h-screen overflow-hidden">
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider className="h-screen overflow-hidden">
       <Sidebar className="non-printable border-r" collapsible="icon">
         <SidebarHeader className="h-20 border-b border-sidebar-border sticky top-0 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl z-10 px-6 group-data-[collapsible=icon]:px-0 justify-center shadow-sm">
           <div className="flex items-center gap-3 transition-all duration-300 group-data-[collapsible=icon]:justify-center">
@@ -488,6 +491,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </SidebarInset>
     </SidebarProvider>
+    </QueryClientProvider>
   );
 }
 

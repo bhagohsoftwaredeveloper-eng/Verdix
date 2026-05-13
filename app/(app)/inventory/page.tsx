@@ -29,6 +29,7 @@ import { adjustStock } from './history/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Pencil, Minus, Plus, ClipboardCheck, ArrowRight, Tags, Search, ChevronDown, LayoutGrid, List, CornerDownRight, MoveHorizontal, Kanban, History, MoreHorizontal, Layers, Rows3, PackageOpen } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { BatchInventoryDrawer } from './BatchInventoryDrawer';
 import {
   DropdownMenu,
@@ -956,48 +957,34 @@ function ProductTableRowGroup({ productGroup, onSuccess, requireAdjustmentConfir
 
 export default function InventoryPage() {
   const { toast } = useToast();
-  const [allLoadedProducts, setAllLoadedProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'stock' | 'sku'>('name');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
-  const [posSettings, setPosSettings] = useState<any>(null);
   const [isBatchDrawerOpen, setIsBatchDrawerOpen] = useState(false);
 
-  const loadPosSettings = async () => {
-    try {
+  const { data: allLoadedProducts = [], isLoading, refetch } = useQuery({
+    queryKey: ['inventoryProducts'],
+    queryFn: async () => {
+      return getProducts();
+    }
+  });
+
+  const { data: posSettings } = useQuery({
+    queryKey: ['posSettings'],
+    queryFn: async () => {
       const response = await fetch('/api/pos-settings');
-      if (response.ok) {
-        const data = await response.json();
-        setPosSettings(data);
-      }
-    } catch (error) {
-      console.error('Failed to load POS settings:', error);
+      if (!response.ok) throw new Error('Failed to fetch POS settings');
+      return response.json();
     }
-  };
+  });
 
-  // Load ALL products once — search is done client-side for instant results
-  const loadProducts = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const productsData = await getProducts();
-      setAllLoadedProducts(productsData);
-    } catch (error) {
-      console.error('Failed to load products:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const loadProducts = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
-  const refetch = useCallback(() => { loadProducts(); }, [loadProducts]);
   useLiveRefresh(refetch);
-
-  useEffect(() => {
-    loadProducts();
-    loadPosSettings();
-  }, [loadProducts]);
 
   // Instant client-side search + group + sort — no server call, no loading state
   const products = useMemo(() => {

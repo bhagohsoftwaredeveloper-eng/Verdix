@@ -2,6 +2,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useLiveRefresh, dispatchStockUpdate } from '@/hooks/use-live-refresh';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -232,7 +233,17 @@ export function mapVatStatusToTaxType(vatStatus?: string): 'VAT' | 'NON_VAT' | '
   return 'VAT'; // Default to VAT for compliance
 }
 
+const queryClient = new QueryClient();
+
 export default function POSPage() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <POSPageContent />
+    </QueryClientProvider>
+  );
+}
+
+function POSPageContent() {
   // Shift Management State
   const [currentShiftId, setCurrentShiftId] = useState<string | null>(null);
   // Show X-Reading report after shift end

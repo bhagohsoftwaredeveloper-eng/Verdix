@@ -34,6 +34,7 @@ import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
 import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart, MoreVertical, Edit, Eye, Copy, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, Fragment, useEffect, useCallback, Suspense } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -334,15 +335,8 @@ function ProductsContent() {
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [totalProducts, setTotalProducts] = useState(0);
-
-  // Pre-loaded product options for dialogs
-  const [productOptions, setProductOptions] = useState<any>(null);
-  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
 
   const [isBrandsOpen, setIsBrandsOpen] = useState(false);
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
@@ -353,73 +347,48 @@ function ProductsContent() {
   const [isUnitOfMeasureOpen, setIsUnitOfMeasureOpen] = useState(false);
   const [isWarehousesOpen, setIsWarehousesOpen] = useState(false);
 
-  // Load products WITH search — now server-side to search entire database
-  const loadProducts = useCallback(async (page = currentPage, size = pageSize) => {
-    setIsLoadingProducts(true);
-    try {
-      const filters = {
-        search: debouncedSearchTerm || undefined,
-        brand: selectedBrand !== 'all' ? selectedBrand : undefined,
-        category: selectedCategory !== 'all' ? selectedCategory : undefined,
-        supplier: selectedSupplier !== 'all' ? selectedSupplier : undefined,
-        warehouse: selectedWarehouse !== 'all' ? selectedWarehouse : undefined,
-        shelfLocation: selectedShelfLocation !== 'all' ? selectedShelfLocation : undefined,
-        status: selectedStatus !== 'all' ? selectedStatus : undefined,
-        department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
-      };
+  const filters = {
+    search: debouncedSearchTerm || undefined,
+    brand: selectedBrand !== 'all' ? selectedBrand : undefined,
+    category: selectedCategory !== 'all' ? selectedCategory : undefined,
+    supplier: selectedSupplier !== 'all' ? selectedSupplier : undefined,
+    warehouse: selectedWarehouse !== 'all' ? selectedWarehouse : undefined,
+    shelfLocation: selectedShelfLocation !== 'all' ? selectedShelfLocation : undefined,
+    status: selectedStatus !== 'all' ? selectedStatus : undefined,
+    department: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+  };
 
+  const { data: productsDataResult, isLoading: isLoadingProducts, refetch } = useQuery({
+    queryKey: ['products', currentPage, pageSize, filters],
+    queryFn: async () => {
       const [productsData, totalCount] = await Promise.all([
-        getProducts(size, (page - 1) * size, filters),
+        getProducts(pageSize, (currentPage - 1) * pageSize, filters),
         getProductsCount(filters)
       ]);
-      setAllProducts(productsData);
-      setTotalProducts(totalCount);
-    } catch (error) {
-      console.error('Failed to load products:', error);
-      setAllProducts([]);
-      setTotalProducts(0);
-    } finally {
-      setIsLoadingProducts(false);
-    }
-  }, [currentPage, pageSize, selectedBrand, selectedCategory, selectedSupplier, selectedWarehouse, selectedShelfLocation, selectedStatus, selectedDepartment, debouncedSearchTerm]);
+      return { productsData, totalCount };
+    },
+  });
 
-  useEffect(() => {
-    loadProducts(currentPage, pageSize);
-  }, [currentPage, pageSize, loadProducts]);
+  const allProducts = productsDataResult?.productsData || [];
+  const totalProducts = productsDataResult?.totalCount || 0;
 
-  const refetch = useCallback(() => { loadProducts(); }, [loadProducts]);
-  useLiveRefresh(refetch);
-
-  const loadProductOptions = useCallback(async () => {
-    setIsLoadingOptions(true);
-    try {
+  const { data: productOptions, isLoading: isLoadingOptions, refetch: refetchOptions } = useQuery({
+    queryKey: ['productOptions'],
+    queryFn: async () => {
       const { getProductOptions } = await import('./actions');
-      const options = await getProductOptions();
-      setProductOptions(options);
-    } catch (error) {
-      console.error('Failed to load product options:', error);
-      setProductOptions({
-        brands: [], 
-        categories: [], 
-        subcategories: [], 
-        units: [], 
-        suppliers: [], 
-        accounts: [], 
-        warehouses: [], 
-        priceLevels: [], 
-        shelfLocations: [],
-        departments: [],
-        errors: {}
-      });
-    } finally {
-      setIsLoadingOptions(false);
+      return getProductOptions();
     }
-  }, []);
+  });
 
-  // Load product options once on mount
-  useEffect(() => {
-    loadProductOptions();
-  }, [loadProductOptions]);
+  const loadProducts = useCallback((page?: number, size?: number) => {
+    refetch();
+  }, [refetch]);
+
+  const loadProductOptions = useCallback(() => {
+    refetchOptions();
+  }, [refetchOptions]);
+
+  useLiveRefresh(refetch);
 
   // Reset to page 1 when structural filters or search term change
   useEffect(() => {
@@ -440,19 +409,19 @@ function ProductsContent() {
 
     // If filters are active, show flat list
     if (filtersActive) {
-        return products.map(p => ({ ...p, children: [] }));
+        return products.map((p: Product) => ({ ...p, children: [] }));
     }
 
     // Build a recursive tree structure
     const buildTree = (parentId: string | null = null, depth = 0): ProductWithChildren[] => {
       return products
-        .filter(p => {
+        .filter((p: Product) => {
             if (parentId === null) {
                 return p.parentId == null; // Loose equality to catch null and undefined
             }
             return p.parentId === parentId;
         })
-        .map(p => ({
+        .map((p: Product) => ({
           ...p,
           children: depth < 10 ? buildTree(p.id, depth + 1) : [], // Prevent infinite recursion, max depth 10
         }));
@@ -881,7 +850,7 @@ function ProductsContent() {
               {isLoadingProducts ? (
                 Array.from({ length: 5 }).map((_, i) => <ProductSkeleton key={i} />)
               ) : (
-                filteredProducts.map((product) => (
+                filteredProducts.map((product: ProductWithChildren) => (
                   <ProductRow
                     key={product.id}
                     product={product}
