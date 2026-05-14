@@ -3,11 +3,21 @@ const path = require('path');
 const printerSdk = require('./printer-sdk');
 const epsonSdk = require('./epson-sdk');
 
-// Hardware acceleration enabled for better performance (User requested)
-// app.disableHardwareAcceleration();
+// Performance flags — set before app is ready
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512');
+
+// Single instance lock — prevent duplicate windows
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
 
 let serverProcess;
 let splashWindow;
+let logStream;
 
 function createSplashScreen() {
   const { BrowserWindow } = require('electron');
@@ -78,54 +88,76 @@ function createSplashScreen() {
   splashWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(splashHtml));
 }
 
+function loadWindowState(stateKey) {
+  const fs = require('fs');
+  const statePath = path.join(app.getPath('userData'), `window-state-${stateKey}.json`);
+  try {
+    if (fs.existsSync(statePath)) {
+      return JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    }
+  } catch (_) {}
+  return null;
+}
+
+function saveWindowState(win, stateKey) {
+  const fs = require('fs');
+  const statePath = path.join(app.getPath('userData'), `window-state-${stateKey}.json`);
+  if (!win.isMinimized() && !win.isFullScreen()) {
+    try {
+      fs.writeFileSync(statePath, JSON.stringify(win.getBounds()), 'utf8');
+    } catch (_) {}
+  }
+}
+
 function createWindow() {
-  const isDev = !app.isPackaged;
-  
   // Parse command line arguments
-  // Arguments usually look like: [path-to-electron, current-dir, --route=/dashboard, --role=Admin]
   const args = process.argv;
   let startRoute = '/pos';
   let roleName = 'POS Terminal';
 
   args.forEach(arg => {
-    if (arg.startsWith('--route=')) {
-      startRoute = arg.split('=')[1];
-    }
-    if (arg.startsWith('--role=')) {
-      roleName = arg.split('=')[1];
-    }
+    if (arg.startsWith('--route=')) startRoute = arg.split('=')[1];
+    if (arg.startsWith('--role=')) roleName = arg.split('=')[1];
   });
 
-  // Set App User Model ID for Windows Taskbar icon
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.stockpilot.pos');
   }
 
   const isAdmin = roleName === 'Admin Dashboard' || startRoute.includes('dashboard');
+  const stateKey = isAdmin ? 'admin' : 'pos';
+  const savedState = isAdmin ? loadWindowState(stateKey) : null;
 
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: savedState?.width ?? 1200,
+    height: savedState?.height ?? 800,
+    x: savedState?.x,
+    y: savedState?.y,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      // Pass info to preload
-      additionalArguments: [isAdmin ? '--is-admin=true' : '--is-admin=false']
+      additionalArguments: [isAdmin ? '--is-admin=true' : '--is-admin=false'],
+      backgroundThrottling: false,
+      spellcheck: false,
     },
     title: `Stockpilot - ${roleName}`,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, 'public', 'Stockpilot.png'),
-    fullscreen: !isAdmin, // Only POS is true fullscreen
-    frame: isAdmin,       // Admin has frame, POS is frameless
-    resizable: true
+    icon: path.join(__dirname, 'public', 'ljma_logo.png'),
+    fullscreen: !isAdmin,
+    frame: isAdmin,
+    resizable: true,
+    show: false, // show after ready-to-show to avoid blank flash
   });
 
+  win.once('ready-to-show', () => win.show());
+
   if (isAdmin) {
-    win.maximize();
+    if (!savedState) win.maximize();
+    win.on('close', () => saveWindowState(win, stateKey));
   }
 
-  win.setIcon(path.join(__dirname, 'public', 'Stockpilot.png'));
+  win.setIcon(path.join(__dirname, 'public', 'ljma_logo.png'));
 
   const startUrl = `http://localhost:3000${startRoute}`; 
   win.loadURL(startUrl);
@@ -248,7 +280,7 @@ app.whenReady().then(async () => {
   const http = require('http');
   const fs = require('fs');
   const logPath = path.join(app.getPath('userData'), 'server.log');
-  const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+  logStream = fs.createWriteStream(logPath, { flags: 'a' });
   
   logStream.write(`\n\n--- App started at ${new Date().toISOString()} ---\n`);
 
@@ -300,14 +332,14 @@ app.whenReady().then(async () => {
       });
     }
 
-    // Wait for the server to actually respond before showing the window
+    // Wait for the server — poll every 300ms, up to 30s total
     logStream.write('Waiting for server to become responsive...\n');
     let attempts = 0;
     let ready = false;
-    while (attempts < 30) {
+    while (attempts < 100) {
       ready = await checkServerRunning();
       if (ready) break;
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 300));
       attempts++;
     }
 
@@ -325,7 +357,18 @@ app.whenReady().then(async () => {
   }
 });
 
+// Focus existing window when a second instance is launched
+app.on('second-instance', () => {
+  const wins = BrowserWindow.getAllWindows();
+  if (wins.length > 0) {
+    const win = wins[0];
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+});
+
 app.on('window-all-closed', () => {
+  if (logStream) logStream.end();
   if (process.platform !== 'darwin') {
     app.quit();
   }

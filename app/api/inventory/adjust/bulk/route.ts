@@ -60,6 +60,13 @@ export async function POST(request: NextRequest) {
         const isApprovalRequiredForItem = await checkApprovalRequired(approvalType);
 
         if (isApprovalRequiredForItem) {
+          // Resolve warehouse name if warehouseId is provided
+          let resolvedWarehouseName: string | null = null;
+          if (warehouseId) {
+            const [whRow]: any = await connection.query('SELECT name FROM warehouses WHERE id = ?', [warehouseId]);
+            resolvedWarehouseName = whRow?.[0]?.name || null;
+          }
+
           // Submit to approval queue with enriched metadata
           const approvalData: any = {
             productId,
@@ -70,6 +77,7 @@ export async function POST(request: NextRequest) {
             productBarcode: product.barcode,
             currentStock: currentStock,
             warehouseId,
+            warehouseName: resolvedWarehouseName,
             referenceNo,
             supplierId,
             adjustmentType

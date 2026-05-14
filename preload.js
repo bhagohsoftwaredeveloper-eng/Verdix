@@ -26,6 +26,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }
 });
 
-window.addEventListener('DOMContentLoaded', () => {
-  console.log('Stockpilot Electron Preload Loaded');
-});

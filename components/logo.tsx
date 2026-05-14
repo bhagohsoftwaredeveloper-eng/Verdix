@@ -24,8 +24,8 @@ export function Logo({ className, enableLink = true, variant = 'default', size, 
       className
     )}>
       <Image 
-        src="/Stockpilot.png" 
-        alt="Stockpilot" 
+        src="/ljma_logo.png"
+        alt="LJMA"
         width={currentSize} 
         height={isIcon ? currentSize : 80} 
         className={cn("object-contain", isIcon ? "p-0.5" : "p-1")}

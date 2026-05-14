@@ -71,6 +71,7 @@ export default function PurchasesSummaryPage() {
       params.append('limit', '1000');
 
       const response = await fetch(getApiUrl(`/purchase-orders?${params.toString()}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setRecords(result.data || []);

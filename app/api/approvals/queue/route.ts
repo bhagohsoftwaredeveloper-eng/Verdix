@@ -58,10 +58,10 @@ export async function GET(request: NextRequest) {
     const enrichedItems = queueItems.map(item => {
       const itemHistory = (history || []).filter((h: any) => h.approval_queue_id === item.id);
       const itemWorkflow = (workflows || []).filter((w: any) => w.transaction_type === item.transaction_type);
-      
+
       const currentStepInfo = itemWorkflow.find((w: any) => w.step_order === item.current_step);
 
-      let parsedData = {};
+      let parsedData: any = {};
       try {
         parsedData = typeof item.transaction_data === 'string' ? JSON.parse(item.transaction_data) : item.transaction_data;
       } catch (e) {
@@ -77,6 +77,92 @@ export async function GET(request: NextRequest) {
         currentStepRoleId: currentStepInfo?.user_type_id || null
       };
     });
+
+    // ── Enrich missing warehouse / shelf names ─────────────────────────────
+    // Collect IDs that need resolution
+    const warehouseIdSet = new Set<string>();
+    const shelfIdSet = new Set<string>();
+    const productIdSet = new Set<string>(); // for STOCK_ADJUSTMENT missing warehouse
+
+    for (const item of enrichedItems) {
+      const d = item.transaction_data as any;
+      if (!d) continue;
+      if (!d.warehouseName && d.warehouseId)       warehouseIdSet.add(d.warehouseId);
+      if (!d.fromWarehouseName && d.sourceWarehouseId) warehouseIdSet.add(d.sourceWarehouseId);
+      if (!d.toWarehouseName && d.targetWarehouseId)   warehouseIdSet.add(d.targetWarehouseId);
+      if (!d.shelfName && d.shelfId)                shelfIdSet.add(d.shelfId);
+      // For STOCK_ADJUSTMENT with productId but no warehouseName/shelfName
+      if (item.transaction_type === 'STOCK_ADJUSTMENT' && d.productId && !d.warehouseName) {
+        productIdSet.add(d.productId);
+      }
+    }
+
+    // Batch fetch warehouse names
+    const warehouseMap: Record<string, string> = {};
+    if (warehouseIdSet.size > 0) {
+      const whRows: any[] = await query(
+        'SELECT id, name FROM warehouses WHERE id IN (?)',
+        [[...warehouseIdSet]]
+      );
+      for (const r of whRows) warehouseMap[r.id] = r.name;
+    }
+
+    // Batch fetch shelf names
+    const shelfMap: Record<string, string> = {};
+    if (shelfIdSet.size > 0) {
+      const shRows: any[] = await query(
+        'SELECT id, name FROM shelf_locations WHERE id IN (?)',
+        [[...shelfIdSet]]
+      );
+      for (const r of shRows) shelfMap[r.id] = r.name;
+    }
+
+    // Batch fetch warehouse+shelf for products missing that info (STOCK_ADJUSTMENT)
+    const productWarehouseMap: Record<string, { warehouseName: string | null; shelfName: string | null }> = {};
+    if (productIdSet.size > 0) {
+      const pRows: any[] = await query(`
+        SELECT p.id, w.name as warehouse_name, sl.name as shelf_name
+        FROM products p
+        LEFT JOIN warehouses w ON p.warehouse_id = w.id
+        LEFT JOIN shelf_locations sl ON p.shelf_location_id = sl.id
+        WHERE p.id IN (?)
+      `, [[...productIdSet]]);
+      for (const r of pRows) {
+        productWarehouseMap[r.id] = {
+          warehouseName: r.warehouse_name || null,
+          shelfName: r.shelf_name || null,
+        };
+      }
+    }
+
+    // Apply enrichment to each item
+    for (const item of enrichedItems) {
+      const d = item.transaction_data as any;
+      if (!d) continue;
+
+      if (!d.warehouseName && d.warehouseId && warehouseMap[d.warehouseId]) {
+        d.warehouseName = warehouseMap[d.warehouseId];
+      }
+      if (!d.fromWarehouseName && d.sourceWarehouseId && warehouseMap[d.sourceWarehouseId]) {
+        d.fromWarehouseName = warehouseMap[d.sourceWarehouseId];
+      }
+      if (!d.toWarehouseName && d.targetWarehouseId && warehouseMap[d.targetWarehouseId]) {
+        d.toWarehouseName = warehouseMap[d.targetWarehouseId];
+      }
+      if (!d.shelfName && d.shelfId && shelfMap[d.shelfId]) {
+        d.shelfName = shelfMap[d.shelfId];
+      }
+
+      // For STOCK_ADJUSTMENT: fill from product lookup if still missing
+      if (item.transaction_type === 'STOCK_ADJUSTMENT' && d.productId) {
+        const pw = productWarehouseMap[d.productId];
+        if (pw) {
+          if (!d.warehouseName && pw.warehouseName) d.warehouseName = pw.warehouseName;
+          if (!d.shelfName && pw.shelfName) d.shelfName = pw.shelfName;
+        }
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────
 
     return NextResponse.json({
       success: true,

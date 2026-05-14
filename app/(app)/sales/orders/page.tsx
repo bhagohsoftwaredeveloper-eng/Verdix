@@ -189,7 +189,6 @@ export default function SalesOrdersPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [limit, setLimit] = useState(10);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -208,6 +207,7 @@ export default function SalesOrdersPage() {
       const params = new URLSearchParams({ page: currentPage.toString(), limit: limit.toString(), ...filters, ...(searchTerm ? { search: searchTerm } : {}) });
       Array.from(params.keys()).forEach(key => { if (!params.get(key)) params.delete(key); });
       const res = await fetch(getApiUrl(`/sales/orders?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (!data.success) throw new Error('Failed to fetch sales orders');
       return data;
@@ -217,14 +217,13 @@ export default function SalesOrdersPage() {
 
   const sales: Sale[] = ordersResult?.data || [];
   const summary = ordersResult?.summary || { totalCount: 0, totalAmount: 0 };
-  if (ordersResult?.pagination?.totalPages !== totalPages) {
-    setTotalPages(ordersResult?.pagination?.totalPages ?? 1);
-  }
+  const totalPages = ordersResult?.pagination?.totalPages ?? 1;
 
   const { data: salesPersons = [] } = useQuery<SalesPerson[]>({
     queryKey: ['salesPersonsForOrders'],
     queryFn: async () => {
       const res = await fetch(getApiUrl('/sales-persons?activeOnly=true'));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       return data.success ? data.data : [];
     },
@@ -235,6 +234,7 @@ export default function SalesOrdersPage() {
     queryKey: ['customersForOrders'],
     queryFn: async () => {
       const res = await fetch(getApiUrl('/customers'));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       return data.success ? data.data : [];
     },

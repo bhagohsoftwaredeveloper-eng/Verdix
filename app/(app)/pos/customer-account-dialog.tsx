@@ -90,6 +90,10 @@ export function CustomerAccountDialog({
   const [lastPaymentData, setLastPaymentData] = useState<any>(null);
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+  const [rfidInput, setRfidInput] = useState('');
+  const [isRfidSearching, setIsRfidSearching] = useState(false);
+  const [rfidError, setRfidError] = useState('');
+  const rfidInputRef = useRef<HTMLInputElement>(null);
 
   const fetchCustomers = async () => {
     setIsLoading(true);
@@ -110,6 +114,8 @@ export function CustomerAccountDialog({
   useEffect(() => {
     if (isOpen) {
       fetchCustomers();
+      setRfidInput('');
+      setRfidError('');
     }
   }, [isOpen]);
 
@@ -302,6 +308,30 @@ export function CustomerAccountDialog({
     setTimeout(() => setIsPaymentDialogOpen(true), 150);
   };
 
+  const handleRfidSearch = async () => {
+    const code = rfidInput.trim();
+    if (!code) return;
+    setIsRfidSearching(true);
+    setRfidError('');
+    try {
+      const res = await fetch(getApiUrl(`/customer-loyalty/lookup?rfid=${encodeURIComponent(code)}`));
+      const result = await res.json();
+      if (result.success && result.data) {
+        const found = result.data;
+        // Add to customers list if not already present
+        setCustomers(prev => prev.some(c => c.id === found.id) ? prev : [...prev, found]);
+        setSelectedCustomerId(found.id);
+        setRfidInput('');
+      } else {
+        setRfidError('No customer found for this RFID / Loyalty card.');
+      }
+    } catch {
+      setRfidError('Failed to search. Please try again.');
+    } finally {
+      setIsRfidSearching(false);
+    }
+  };
+
   const handleSelect = () => {
     const customer = customers.find(c => c.id === selectedCustomerId) || WALK_IN_CUSTOMER;
     onSelectCustomer(customer);
@@ -385,6 +415,32 @@ export function CustomerAccountDialog({
             </DialogDescription>
             <div className="flex justify-between items-start">
               <div className="space-y-4 w-full">
+                {/* RFID / Loyalty Card Search */}
+                <div>
+                  <p className="text-sm font-medium mb-1">Search by RFID / Loyalty Card</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      ref={rfidInputRef}
+                      placeholder="Scan or type RFID / Loyalty card number..."
+                      value={rfidInput}
+                      onChange={(e) => { setRfidInput(e.target.value); setRfidError(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleRfidSearch(); }}
+                      className="w-full sm:w-[320px]"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 shrink-0"
+                      onClick={handleRfidSearch}
+                      disabled={isRfidSearching || !rfidInput.trim()}
+                      title="Search by RFID"
+                    >
+                      {isRfidSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  {rfidError && <p className="text-xs text-destructive mt-1">{rfidError}</p>}
+                </div>
+
                 <div className="flex items-center gap-4">
                   <div className="flex-grow">
                     <p className="text-sm font-medium mb-1">Customer</p>

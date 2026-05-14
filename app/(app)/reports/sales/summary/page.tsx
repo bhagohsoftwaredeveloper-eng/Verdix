@@ -111,6 +111,7 @@ export default function SalesSummaryPage() {
       }
 
       const response = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setRecords(result.data || []);

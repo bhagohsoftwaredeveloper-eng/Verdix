@@ -56,6 +56,7 @@ export default function DashboardPage() {
     async function fetchData() {
       try {
         const res = await fetch(getApiUrl('/reports/stats'));
+        if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
         const result = await res.json();
         
         // Data processing for charts is now handled within the components

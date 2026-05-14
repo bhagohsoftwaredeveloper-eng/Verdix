@@ -58,6 +58,7 @@ export function TopSellingProductsChart({ data: initialData }: { data?: any[] })
     async function fetchData() {
         try {
             const res = await fetch(getApiUrl('/sales/top-products'))
+            if (!res.ok) throw new Error(`API error ${res.status}`)
             const result = await res.json()
             if (result.success) {
                 const dataWithColors = result.data.map((item: any, index: number) => ({

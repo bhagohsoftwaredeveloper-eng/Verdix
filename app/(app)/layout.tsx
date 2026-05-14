@@ -67,6 +67,7 @@ import { getProducts, getLowStockAlerts } from './products/actions';
 import { Product } from '@/lib/types';
 import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
 import { Logo } from '@/components/logo';
+import { getApiUrl } from '@/lib/api-config';
 import { ApprovalsDrawer } from '@/components/approvals/approvals-drawer';
 import { WorkflowSettingsDrawer } from '@/components/approvals/workflow-settings-drawer';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
@@ -136,6 +137,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<{ email: string, permissions?: string[], userType?: string } | null>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);
+  const [businessName, setBusinessName] = useState<string>('Stockpilot');
 
   const isPOSPage = pathname === '/pos';
 
@@ -154,7 +156,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       router.push('/login');
     }
     setIsUserLoading(false);
+
   }, [router, pathname]);
+
+  useEffect(() => {
+    fetch(getApiUrl('/pos-settings'))
+      .then(res => res.json())
+      .then(result => {
+        if (result.success && result.data?.businessName != null && result.data.businessName !== '') {
+          setBusinessName(result.data.businessName);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    document.title = businessName;
+  }, [businessName]);
 
   // Force Cashiers to the POS page
   useEffect(() => {
@@ -218,7 +236,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3 transition-all duration-300 group-data-[collapsible=icon]:justify-center">
             <Logo variant="icon" size={36} />
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-               <h1 className="text-xl font-extrabold font-headline tracking-tight text-sidebar-foreground">Stockpilot</h1>
+               <h1 className="text-xl font-extrabold font-headline tracking-tight text-sidebar-foreground">{businessName}</h1>
                <span className="text-[10px] uppercase font-bold text-primary tracking-[0.2em] mt-0.5 opacity-90">Enterprise</span>
             </div>
           </div>
@@ -504,8 +522,9 @@ function NotificationsBell({ user }: { user: { email: string, permissions?: stri
     try {
       // First check if notifications are enabled
       const settingsResponse = await fetch('/api/pos-settings');
+      if (!settingsResponse.ok) return;
       const settingsResult = await settingsResponse.json();
-      
+
       if (!settingsResult.success || !settingsResult.data.enablePushNotifications) {
           setNotifications([]);
           return;
@@ -526,6 +545,7 @@ function NotificationsBell({ user }: { user: { email: string, permissions?: stri
       
       if (user) {
         const approvalsRes = await fetch('/api/approvals/queue?status=ALL');
+        if (!approvalsRes.ok) return;
         const approvalsData = await approvalsRes.json();
 
         if (approvalsData.success) {

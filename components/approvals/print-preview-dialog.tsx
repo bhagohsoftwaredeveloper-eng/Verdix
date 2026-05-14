@@ -41,59 +41,64 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
 
   if (!item) return null;
 
+  const PRINT_STYLES = `
+    @page { size: portrait; margin: 15mm; }
+    body { font-family: "Inter", "Segoe UI", Helvetica, Arial, sans-serif; color: #000; line-height: 1.4; font-size: 11pt; margin: 0; padding: 20px; }
+    .document-container { max-width: 800px; margin: 0 auto; }
+    .doc-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+    .company-title { margin: 0; font-size: 20pt; font-weight: 800; text-transform: uppercase; }
+    .doc-type { margin: 0; font-size: 14pt; font-weight: 600; color: #444; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 25px; }
+    .meta-table { width: 100%; border-collapse: collapse; }
+    .meta-table td { padding: 4px 0; vertical-align: top; }
+    .label { font-weight: 600; font-size: 9pt; color: #555; text-transform: uppercase; width: 130px; }
+    .value { font-weight: 500; }
+    .id-value { font-family: monospace; font-weight: 700; font-size: 10pt; }
+    .section-title { font-size: 10pt; font-weight: 700; text-transform: uppercase; border-bottom: 1pt solid #000; padding-bottom: 5px; margin: 25px 0 12px 0; }
+    .data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .data-table th { text-align: left; padding: 8px; border-bottom: 1.5pt solid #000; font-size: 9pt; text-transform: uppercase; font-weight: 700; }
+    .data-table td { padding: 8px; border-bottom: 0.5pt solid #eee; }
+    .audit-trail { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .audit-trail th { text-align: left; padding: 4px 8px; border-bottom: 1pt solid #000; font-size: 8pt; color: #666; text-transform: uppercase; }
+    .audit-trail td { padding: 6px 8px; border-bottom: 0.5pt solid #f5f5f5; font-size: 9pt; }
+    .numeric { text-align: right; font-family: monospace; }
+    .signatures-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; page-break-inside: avoid; }
+    .sig-item { display: flex; flex-direction: column; }
+    .sig-name { font-size: 10pt; min-height: 45px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; border-bottom: 1.5pt solid #000; font-weight: 700; text-align: center; }
+    .sig-label { font-size: 8pt; color: #555; text-align: center; margin-top: 5px; text-transform: uppercase; font-weight: 600; }
+    .footer { border-top: 0.5pt solid #eee; padding-top: 10px; font-size: 8pt; color: #999; text-align: center; margin-top: 50px; }
+    .barcode-value { font-family: monospace; font-size: 13pt; font-weight: 700; color: #000; margin-top: 2px; display: block; }
+    @media print {
+      body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print { display: none; }
+    }
+  `;
+
   const handlePrint = () => {
     const printContent = printRef.current;
     if (!printContent) return;
 
-    const printWindow = window.open('', '', 'height=800,width=800');
-    if (!printWindow) return;
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;';
+    document.body.appendChild(iframe);
 
-    printWindow.document.write('<html><head><title>Print Preview</title>');
-    // Copy computed styles or just use the same styles from print-approval.ts
-    printWindow.document.write(`
-      <style>
-        @page { size: portrait; margin: 15mm; }
-        body { font-family: "Inter", "Segoe UI", Helvetica, Arial, sans-serif; color: #000; line-height: 1.4; font-size: 11pt; margin: 0; padding: 20px; }
-        .document-container { max-width: 800px; margin: 0 auto; }
-        .doc-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-        .company-title { margin: 0; font-size: 20pt; font-weight: 800; text-transform: uppercase; }
-        .doc-type { margin: 0; font-size: 14pt; font-weight: 600; color: #444; }
-        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 25px; }
-        .meta-table { width: 100%; border-collapse: collapse; }
-        .meta-table td { padding: 4px 0; vertical-align: top; }
-        .label { font-weight: 600; font-size: 9pt; color: #555; text-transform: uppercase; width: 130px; }
-        .value { font-weight: 500; }
-        .id-value { font-family: monospace; font-weight: 700; font-size: 10pt; }
-        .section-title { font-size: 10pt; font-weight: 700; text-transform: uppercase; border-bottom: 1pt solid #000; padding-bottom: 5px; margin: 25px 0 12px 0; }
-        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .data-table th { text-align: left; padding: 8px; border-bottom: 1.5pt solid #000; font-size: 9pt; text-transform: uppercase; font-weight: 700; }
-        .data-table td { padding: 8px; border-bottom: 0.5pt solid #eee; }
-        .audit-trail { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .audit-trail th { text-align: left; padding: 4px 8px; border-bottom: 1pt solid #000; font-size: 8pt; color: #666; text-transform: uppercase; }
-        .audit-trail td { padding: 6px 8px; border-bottom: 0.5pt solid #f5f5f5; font-size: 9pt; }
-        .numeric { text-align: right; font-family: monospace; }
-        .signatures-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; page-break-inside: avoid; }
-        .sig-item { display: flex; flex-direction: column; }
-        .sig-name { font-size: 10pt; min-height: 45px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; border-bottom: 1.5pt solid #000; font-weight: 700; text-align: center; }
-        .sig-label { font-size: 8pt; color: #555; text-align: center; margin-top: 5px; text-transform: uppercase; font-weight: 600; }
-        .footer { border-top: 0.5pt solid #eee; padding-top: 10px; font-size: 8pt; color: #999; text-align: center; margin-top: 50px; }
-        .barcode-value { font-family: monospace; font-size: 13pt; font-weight: 700; color: #000; margin-top: 2px; display: block; }
-        @media print {
-          body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .no-print { display: none; }
-        }
-      </style>
-    `);
-    printWindow.document.write('</head><body>');
-    printWindow.document.write(printContent.innerHTML);
-    printWindow.document.write('</body></html>');
-    printWindow.document.close();
-    
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) {
+      document.body.removeChild(iframe);
+      return;
+    }
+
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><title>Print</title><style>${PRINT_STYLES}</style></head><body>${printContent.innerHTML}</body></html>`);
+    doc.close();
+
     setTimeout(() => {
-      printWindow.print();
-      // Only close if it's not a print preview window we want to keep
-      // printWindow.close();
-    }, 500);
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      }, 2000);
+    }, 600);
   };
 
   const formattedType = item.transaction_type.replace(/_/g, ' ');
@@ -180,7 +185,7 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
             {item.transaction_type === 'BAD_ORDER' && (
               <>
                 <div className="grid grid-cols-2 gap-4 mb-5">
-                   <div className="p-3 bg-red-50/30 border border-red-200 rounded-lg">
+                  <div className="p-3 bg-red-50/30 border border-red-200 rounded-lg">
                     <div className="text-[8pt] font-bold text-red-800 uppercase mb-1">Source Warehouse</div>
                     <div className="text-[10pt] font-bold">{item.transaction_data.warehouse_name || item.transaction_data.warehouseName || 'Main Warehouse'}</div>
                   </div>
@@ -193,33 +198,57 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                 <table className="data-table w-full border-collapse mb-5">
                   <thead>
                     <tr className="border-b-2 border-black text-left">
-                      <th className="p-2 text-[9pt] font-bold uppercase w-[45%]">Product Information</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase w-[40%]">Product</th>
                       <th className="p-2 text-[9pt] font-bold uppercase">SKU / Barcode</th>
-                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Quantity</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Qty</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase">Reason</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b border-zinc-100">
-                      <td className="p-2">
-                        <div className="text-[10pt] font-bold">{item.transaction_data.productName || 'Unknown Product'}</div>
-                        <div className="text-[8pt] text-zinc-500 italic">{item.transaction_data.unitOfMeasure || ''}</div>
-                      </td>
-                      <td className="p-2">
-                        <div className="font-mono text-[8pt] text-zinc-600">{item.transaction_data.productSku || '-'}</div>
-                        <div className="font-mono font-bold text-[10pt]">{item.transaction_data.productBarcode || '-'}</div>
-                      </td>
-                      <td className="p-2 text-[11pt] font-black text-right text-red-600">{item.transaction_data.quantity}</td>
-                    </tr>
+                    {(item.transaction_data.items && item.transaction_data.items.length > 0) ? (
+                      item.transaction_data.items.map((it: any, idx: number) => (
+                        <tr key={idx} className="border-b border-zinc-100">
+                          <td className="p-2">
+                            <div className="text-[10pt] font-bold">{it.productName || 'Unknown Product'}</div>
+                            <div className="text-[8pt] text-zinc-500 italic">{it.unitOfMeasure || ''}</div>
+                          </td>
+                          <td className="p-2">
+                            <div className="font-mono text-[8pt] text-zinc-600">{it.productSku || it.sku || '-'}</div>
+                            <div className="font-mono font-bold text-[10pt]">{it.productBarcode || it.barcode || '-'}</div>
+                          </td>
+                          <td className="p-2 text-[11pt] font-black text-right text-red-600">{it.quantity}</td>
+                          <td className="p-2 text-[9pt] text-zinc-600">{it.reason || '-'}</td>
+                          <td className="p-2 text-[10pt] font-mono text-right">₱{(Number(it.cost) || 0).toLocaleString()}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr className="border-b border-zinc-100">
+                        <td className="p-2">
+                          <div className="text-[10pt] font-bold">{item.transaction_data.productName || 'Unknown Product'}</div>
+                          <div className="text-[8pt] text-zinc-500 italic">{item.transaction_data.unitOfMeasure || ''}</div>
+                        </td>
+                        <td className="p-2">
+                          <div className="font-mono text-[8pt] text-zinc-600">{item.transaction_data.productSku || '-'}</div>
+                          <div className="font-mono font-bold text-[10pt]">{item.transaction_data.productBarcode || '-'}</div>
+                        </td>
+                        <td className="p-2 text-[11pt] font-black text-right text-red-600">{item.transaction_data.quantity}</td>
+                        <td className="p-2 text-[9pt] text-zinc-600">{item.transaction_data.reason || '-'}</td>
+                        <td className="p-2 text-[10pt] font-mono text-right">₱{(Number(item.transaction_data.cost) || 0).toLocaleString()}</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
-                <div className="remarks p-3 bg-zinc-50 border border-zinc-200 rounded text-[9pt]">
-                    <div className="font-bold uppercase text-[7pt] text-zinc-500 mb-1">Reason / Notes</div>
-                    <div className="italic">{item.transaction_data.reason || item.transaction_data.notes || 'No notes provided.'}</div>
-                </div>
+                {item.transaction_data.notes && (
+                  <div className="remarks p-3 bg-zinc-50 border border-zinc-200 rounded text-[9pt] mb-4">
+                    <div className="font-bold uppercase text-[7pt] text-zinc-500 mb-1">Notes</div>
+                    <div className="italic">{item.transaction_data.notes}</div>
+                  </div>
+                )}
                 <div className="flex justify-end mt-4">
                   <div className="text-right">
                     <div className="text-[8pt] font-bold text-zinc-400 uppercase">Estimated Loss Value</div>
-                    <div className="text-lg font-black">₱{(item.transaction_data.totalAffectedValue || 0).toLocaleString()}</div>
+                    <div className="text-lg font-black">₱{(Number(item.transaction_data.totalAffectedValue) || 0).toLocaleString()}</div>
                   </div>
                 </div>
               </>
@@ -470,7 +499,98 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
               </>
             )}
 
-            {item.transaction_data.items && !['STOCK_COUNT', 'STOCK_TRANSFER', 'STOCK_ADJUSTMENT', 'RECEIVE_PO', 'PURCHASE_ORDER'].includes(item.transaction_type.toUpperCase()) && (
+            {item.transaction_type.toUpperCase() === 'REPACKAGING' && (
+              <>
+                <div className="grid grid-cols-2 gap-4 mb-5">
+                  <div className="p-3 bg-teal-50/30 border border-teal-200 rounded-lg">
+                    <div className="text-[8pt] font-bold text-teal-800 uppercase mb-1">Source Product</div>
+                    <div className="text-[10pt] font-bold">{item.transaction_data.sourceProductName || item.transaction_data.productName || '—'}</div>
+                  </div>
+                  <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg">
+                    <div className="text-[8pt] font-bold text-zinc-500 uppercase mb-1">Target Product</div>
+                    <div className="text-[10pt] font-bold">{item.transaction_data.targetProductName || '—'}</div>
+                  </div>
+                </div>
+                <table className="meta-table w-full border-collapse mb-4 p-3 bg-zinc-50 border border-zinc-200 rounded">
+                  <tbody>
+                    <tr>
+                      <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Warehouse</td>
+                      <td className="value font-bold py-1">{item.transaction_data.warehouseName || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Quantity</td>
+                      <td className="value font-bold py-1">{item.transaction_data.quantity || item.transaction_data.quantityToBreak || item.transaction_data.packQtyUsed || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Reason</td>
+                      <td className="value py-1">{item.transaction_data.reason || (item.transaction_data.quantityToBreak ? 'Break Pack' : item.transaction_data.packQtyUsed ? 'Consolidate Pack' : 'Repackaging')}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </>
+            )}
+
+            {item.transaction_type.toUpperCase() === 'SHELF_TRANSFER' && (
+              <>
+                {(item.transaction_data.items || item.transaction_data.updates) ? (
+                  <>
+                    <div className="p-3 bg-orange-50/30 border border-orange-200 rounded-lg mb-4">
+                      <div className="text-[8pt] font-bold text-orange-800 uppercase mb-1">Batch Shelf Transfer</div>
+                      <div className="text-[10pt] font-bold">{(item.transaction_data.items || item.transaction_data.updates).length} item(s)</div>
+                    </div>
+                    <table className="data-table w-full border-collapse mb-5">
+                      <thead>
+                        <tr className="border-b-2 border-black text-left">
+                          <th className="p-2 text-[9pt] font-bold uppercase w-[30%]">Product</th>
+                          <th className="p-2 text-[9pt] font-bold uppercase">Barcode</th>
+                          <th className="p-2 text-[9pt] font-bold uppercase">From Shelf</th>
+                          <th className="p-2 text-[9pt] font-bold uppercase">To Shelf</th>
+                          <th className="p-2 text-[9pt] font-bold uppercase text-right">Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(item.transaction_data.items || item.transaction_data.updates || []).map((it: any, idx: number) => (
+                          <tr key={idx} className="border-b border-zinc-100">
+                            <td className="p-2 text-[10pt] font-medium">{it.productName || it.name || '—'}</td>
+                            <td className="p-2 font-mono text-[9pt]">{it.barcode || it.productBarcode || '—'}</td>
+                            <td className="p-2 text-[9pt]">{it.sourceShelfName || it.sourceShelf || it.fromShelfName || 'Unassigned'}</td>
+                            <td className="p-2 text-[9pt]">{it.targetShelfName || it.targetShelf || it.toShelfName || 'Unassigned'}</td>
+                            <td className="p-2 text-[10pt] font-mono text-right font-bold">{it.quantity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                ) : (
+                  <table className="meta-table w-full border-collapse mb-4 p-3 bg-zinc-50 border border-zinc-200 rounded">
+                    <tbody>
+                      <tr>
+                        <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Product</td>
+                        <td className="value font-bold py-1">{item.transaction_data.productName || item.transaction_data.name || '—'}</td>
+                      </tr>
+                      <tr>
+                        <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Barcode</td>
+                        <td className="value font-mono font-bold py-1">{item.transaction_data.barcode || item.transaction_data.productBarcode || '—'}</td>
+                      </tr>
+                      <tr>
+                        <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">From Shelf</td>
+                        <td className="value font-bold py-1">{item.transaction_data.fromShelfName || item.transaction_data.fromShelf || item.transaction_data.sourceShelf || 'Unassigned'}</td>
+                      </tr>
+                      <tr>
+                        <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">To Shelf</td>
+                        <td className="value font-bold py-1">{item.transaction_data.toShelfName || item.transaction_data.toShelf || item.transaction_data.targetShelf || 'Unassigned'}</td>
+                      </tr>
+                      <tr>
+                        <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Quantity</td>
+                        <td className="value font-bold py-1">{item.transaction_data.quantity || '—'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+              </>
+            )}
+
+            {item.transaction_data.items && !['STOCK_COUNT', 'STOCK_TRANSFER', 'STOCK_ADJUSTMENT', 'RECEIVE_PO', 'PURCHASE_ORDER', 'BAD_ORDER', 'REPACKAGING', 'SHELF_TRANSFER'].includes(item.transaction_type.toUpperCase()) && (
               <>
                 <table className="data-table w-full border-collapse mb-2 text-left">
                   <thead>

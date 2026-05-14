@@ -97,7 +97,6 @@ export default function SalesDetailsPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [terminalId, setTerminalId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [limit, setLimit] = useState(10);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -122,6 +121,7 @@ export default function SalesDetailsPage() {
       params.append('page', currentPage.toString());
       params.append('limit', limit.toString());
       const res = await fetch(`/api/sales/transactions?${params.toString()}`);
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch sales');
       return result;
@@ -131,9 +131,7 @@ export default function SalesDetailsPage() {
 
   const sales: any[] = salesResult?.data || [];
   const paginationMeta = salesResult?.pagination;
-  if (paginationMeta && paginationMeta.totalPages !== totalPages) {
-    setTotalPages(paginationMeta.totalPages);
-  }
+  const totalPages = paginationMeta?.totalPages ?? 1;
 
   const toggleRowExpansion = (id: string) => {
     setExpandedRows(prev => {

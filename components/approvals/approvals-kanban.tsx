@@ -630,14 +630,20 @@ export function ApprovalsKanban({ open }: ApprovalsKanbanProps) {
   const fetchQueue = async () => {
     try {
       setIsLoading(true);
-      const [qRes, wRes] = await Promise.all([
-        fetch('/api/approvals/queue?status=ALL'),
-        fetch('/api/approvals/workflows'),
-      ]);
+      const qRes = await fetch('/api/approvals/queue?status=ALL');
+      if (!qRes.ok) {
+        const errData = await qRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error ${qRes.status}`);
+      }
       const qData = await qRes.json();
-      if (qData.success) setItems(qData.data);
-    } catch (err) {
+      if (qData.success) {
+        setItems(qData.data);
+      } else {
+        throw new Error(qData.error || 'Failed to load approvals');
+      }
+    } catch (err: any) {
       console.error('Failed to fetch approval queue:', err);
+      toast({ title: 'Failed to load approvals', description: err.message, variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }

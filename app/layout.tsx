@@ -3,13 +3,13 @@ import './globals.css';
 import ClientLayout from '../components/client-layout';
 
 export const metadata = {
-  title: 'StockPilot',
+  title: 'LJMA SUPERMARKET',
   description: 'Point of Sales + Inventory Management',
   icons: {
     icon: [
-      { url: '/Stockpilot.png' }
+      { url: '/ljma_logo.png' }
     ],
-    apple: '/Stockpilot.png',
+    apple: '/ljma_logo.png',
   },
 };
 

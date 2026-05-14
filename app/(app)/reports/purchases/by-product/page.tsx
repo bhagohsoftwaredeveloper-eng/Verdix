@@ -73,6 +73,7 @@ export default function PurchasesByProductPage() {
       }
 
       const response = await fetch(getApiUrl(`/reports/purchases/by-product?${params.toString()}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setRecords(result.data || []);

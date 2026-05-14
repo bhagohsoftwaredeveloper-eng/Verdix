@@ -287,7 +287,8 @@ export async function PUT(request: NextRequest) {
     Object.entries(fieldMap).forEach(([bodyKey, dbColumn]) => {
       if (body[bodyKey] !== undefined) {
         updates.push(`${dbColumn} = ?`);
-        params.push(typeof body[bodyKey] === 'string' ? body[bodyKey].trim() : body[bodyKey]);
+        const val = body[bodyKey];
+        params.push(typeof val === 'string' ? (val.trim() || null) : val);
       }
     });
 

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Building2, Settings, FileText, Monitor, Users, CreditCard, Lock, Undo, Printer, ClipboardCheck, Layers } from 'lucide-react';
+import { Loader2, Upload, Building2, Settings, FileText, Monitor, Users, CreditCard, Lock, ClipboardCheck, Layers } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ManageTransactionReferenceDialog } from './manage-transaction-reference-dialog';
@@ -126,8 +126,6 @@ export default function PosSetupPage() {
     overallReadingAuthUsername: '',
     overallReadingAuthPassword: '',
   });
-  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
-  const [isScanningPrinters, setIsScanningPrinters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -138,43 +136,7 @@ export default function PosSetupPage() {
   // Fetch POS settings on mount
   useEffect(() => {
     fetchSettings();
-    if (typeof window !== 'undefined' && (window as any).electronAPI) {
-      handleScanPrinters();
-    }
   }, []);
-
-  const handleScanPrinters = async () => {
-    const api = (window as any).electronAPI;
-    if (api && api.listPrinters) {
-      try {
-        setIsScanningPrinters(true);
-        const printers = await api.listPrinters();
-        setAvailablePrinters(printers);
-        // Show feedback to user
-        if (printers.length > 0) {
-          toast({
-            title: "Printers Scanned",
-            description: `Found ${printers.length} available printers.`,
-          });
-        } else {
-          toast({
-            title: "No Printers Found",
-            description: "No installed Windows printers were detected.",
-            variant: "destructive",
-          });
-        }
-      } catch (err) {
-        console.error('Failed to list printers:', err);
-        toast({
-          title: "Scan Failed",
-          description: "An error occurred while scanning for printers.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsScanningPrinters(false);
-      }
-    }
-  };
 
   const fetchSettings = async () => {
     isRefreshingRef.current = true;
@@ -443,106 +405,6 @@ export default function PosSetupPage() {
                   </p>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Printer Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Printer className="h-5 w-5" />
-              Printer Configuration
-            </CardTitle>
-            <CardDescription>Configure receipt printer settings</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="paperSize">Paper Size</Label>
-                <p className="text-sm text-muted-foreground">Select the width of your thermal paper</p>
-              </div>
-              <div className="w-[200px]">
-                <select
-                  id="paperSize"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={settings.paperSize || '58mm'}
-                  onChange={(e) => setSettings(prev => ({ ...prev, paperSize: e.target.value as any }))}
-                >
-                  <option value="58mm">58mm (Standard Thermal)</option>
-                  <option value="80mm">80mm (Wide Thermal)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t">
-              <div className="space-y-0.5">
-                <Label htmlFor="printMode">Print Mode</Label>
-                <p className="text-sm text-muted-foreground">
-                  Choose how receipts are sent to the printer
-                </p>
-              </div>
-              <div className="w-[300px]">
-                <select
-                  id="printMode"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={settings.printMode || 'browser'}
-                  onChange={(e) => setSettings(prev => ({ ...prev, printMode: e.target.value as any }))}
-                >
-                  <option value="browser">Use Installed Driver (Browser Print)</option>
-                  <option value="native">Native (DLL) Printer</option>
-                </select>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  * "Native (DLL)" uses the Windows Print Spooler for maximum reliability.
-                  <br />
-                  * Choose your specific printer driver from the list below.
-                </p>
-              </div>
-            </div>
-
-            {settings.printMode === 'native' && (
-              <div className="flex items-center justify-between pt-4 border-t animate-in fade-in slide-in-from-top-2">
-                <div className="space-y-0.5">
-                  <Label htmlFor="nativePrinterName">Select Printer</Label>
-                  <p className="text-sm text-muted-foreground">Choose the installed Windows printer</p>
-                </div>
-                <div className="flex gap-2 w-[300px]">
-                  <select
-                    id="nativePrinterName"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={settings.nativePrinterName || ''}
-                    onChange={(e) => setSettings(prev => ({ ...prev, nativePrinterName: e.target.value }))}
-                  >
-                    <option value="">-- Select Printer --</option>
-                    {availablePrinters.map(printer => (
-                      <option key={printer} value={printer}>{printer}</option>
-                    ))}
-                  </select>
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
-                    onClick={handleScanPrinters}
-                    disabled={isScanningPrinters}
-                    title="Scan for printers"
-                  >
-                    <Loader2 className={`h-4 w-4 ${isScanningPrinters ? 'animate-spin' : ''}`} />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-4 border-t">
-              <div className="space-y-0.5">
-                <Label htmlFor="printTwoReceipts">Print 2 Receipts</Label>
-                <p className="text-sm text-muted-foreground">
-                  Print two copies of the receipt during tender
-                </p>
-              </div>
-              <Switch
-                id="printTwoReceipts"
-                checked={!!settings.printTwoReceipts}
-                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, printTwoReceipts: checked }))}
-              />
             </div>
           </CardContent>
         </Card>

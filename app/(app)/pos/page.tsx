@@ -485,7 +485,19 @@ function POSPageContent() {
               });
               setIsTrainingMode(result.data.isTrainingMode || false);
               setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
-              setBusinessSettings(result.data);
+
+              // Apply localStorage printer overrides (set from the login-screen settings dialog)
+              const localPrintMode = localStorage.getItem('pos_printer_mode');
+              const localPrinterName = localStorage.getItem('pos_printer_name');
+              const localPaperSize = localStorage.getItem('pos_paper_size');
+              const localTwoReceipts = localStorage.getItem('pos_print_two_receipts');
+              setBusinessSettings({
+                  ...result.data,
+                  ...(localPrintMode ? { printMode: localPrintMode } : {}),
+                  ...(localPrinterName ? { nativePrinterName: localPrinterName } : {}),
+                  ...(localPaperSize ? { paperSize: localPaperSize } : {}),
+                  ...(localTwoReceipts !== null ? { printTwoReceipts: localTwoReceipts === 'true' } : {}),
+              });
           }
       } catch (error: any) {
           // Suppress AbortError (expected on cleanup) and transient network errors during polling
@@ -879,6 +891,7 @@ function POSPageContent() {
       });
     }
     setInputValue('');
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const handleAddItemBySKU = (sku: string) => {
@@ -1692,7 +1705,8 @@ function POSPageContent() {
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                        if (e.key === 'Enter' || (e.key === 'Tab' && inputValue.trim())) {
+                            e.preventDefault();
                             e.stopPropagation();
                             if (inputValue.trim()) {
                                 handleAddItemBySKU(inputValue);
@@ -1851,7 +1865,7 @@ function POSPageContent() {
             {/* Cashier Profile */}
             <div className="border-b flex flex-col items-center bg-muted/10">
                  <div className="bg-primary text-white py-8 w-full flex items-center justify-center mb-6 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)]">
-                     <span className="text-4xl uppercase font-black leading-none tracking-widest text-center drop-shadow-lg">STOCK PILOT</span>
+                     <span className="text-4xl uppercase font-black leading-none tracking-widest text-center drop-shadow-lg">{businessSettings?.businessName || 'STOCK PILOT'}</span>
                  </div>
                  <div className="text-center px-6 pb-6">
                     <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>
@@ -2027,7 +2041,7 @@ function POSPageContent() {
        {/* Product Search Dialog */}
       <ProductSearchDialog
         isOpen={isProductSearchOpen}
-        onOpenChange={setIsProductSearchOpen}
+        onOpenChange={(open) => { setIsProductSearchOpen(open); if (!open) setTimeout(() => inputRef.current?.focus(), 50); }}
         onSelectProduct={handleAddItem}
         showQuantityInSearch={showQuantityInSearch}
         activeLevelId={activeLevelId}
@@ -2090,7 +2104,7 @@ function POSPageContent() {
       <AdminAuthDialog
         isOpen={isLineVoidAuthOpen}
         onOpenChange={setIsLineVoidAuthOpen}
-        title="Authorisation Required"
+        title="Authorization Required"
         description="Please provide credentials to Void Line Items"
         requiredCredentials={lineVoidAuthCredentials}
         onSuccess={() => {

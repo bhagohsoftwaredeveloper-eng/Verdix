@@ -89,6 +89,7 @@ export default function BatchProfitPage() {
       }
 
       const response = await fetch(getApiUrl(`/sales/batch-analysis?${params.toString()}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setRecords(result.data || []);

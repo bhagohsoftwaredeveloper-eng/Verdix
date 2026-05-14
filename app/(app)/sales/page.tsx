@@ -113,7 +113,6 @@ export default function SalesPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [terminalId, setTerminalId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [limit, setLimit] = useState(10);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -160,6 +159,7 @@ export default function SalesPage() {
       params.append('page', currentPage.toString());
       params.append('limit', limit.toString());
       const res = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch sales');
       return result;
@@ -169,14 +169,13 @@ export default function SalesPage() {
 
   const sales: Sale[] = salesResult?.data || [];
   const paginationMeta = salesResult?.pagination;
-  if (paginationMeta && paginationMeta.totalPages !== totalPages) {
-    setTotalPages(paginationMeta.totalPages);
-  }
+  const totalPages = paginationMeta?.totalPages ?? 1;
 
   const { data: users = [] } = useQuery<any[]>({
     queryKey: ['users'],
     queryFn: async () => {
       const res = await fetch('/api/users');
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },

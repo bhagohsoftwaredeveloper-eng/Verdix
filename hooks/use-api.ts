@@ -33,6 +33,7 @@ export function useProducts(search?: string, availability?: string, supplierId?:
       const response = await fetch(getApiUrl(`/products?${params.toString()}`), {
         cache: 'no-store'
       });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
 
       if (!result.success) {
@@ -91,6 +92,7 @@ export function useSalesInvoices(): UseSalesInvoicesResult {
     queryKey: ['salesInvoices'],
     queryFn: async () => {
       const response = await fetch(getApiUrl('/sales'), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch sales invoices');
       return result.data || [];
@@ -111,6 +113,7 @@ export function useCustomers(search?: string): UseCustomersResult {
       params.append('limit', '100');
 
       const response = await fetch(getApiUrl(`/customers?${params.toString()}`), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch customers');
 
@@ -155,6 +158,7 @@ export function usePaymentMethods(search?: string): UsePaymentMethodsResult {
       params.append('limit', '100');
 
       const response = await fetch(getApiUrl(`/payment-methods?${params.toString()}`), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch payment methods');
 
@@ -199,6 +203,7 @@ export function usePurchaseOrders(search?: string, status?: string, page: number
       params.append('offset', offset.toString());
 
       const response = await fetch(getApiUrl(`/purchase-orders?${params.toString()}`), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch purchase orders');
 
@@ -238,6 +243,7 @@ export function useBusinessProfile(): UseBusinessProfileResult {
     queryKey: ['businessProfile'],
     queryFn: async () => {
       const response = await fetch(getApiUrl('/pos-settings'), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch business profile');
       return result.data;
@@ -274,6 +280,7 @@ export function useBadOrders(search?: string, status?: string, page: number = 1,
       params.append('offset', offset.toString());
 
       const response = await fetch(getApiUrl(`/bad-orders?${params.toString()}`), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch bad orders');
 
@@ -309,6 +316,7 @@ export function useBadOrderStats() {
     queryKey: ['badOrderStats'],
     queryFn: async () => {
       const response = await fetch(getApiUrl('/bad-orders/stats'), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (!result.success) throw new Error('Failed to fetch stats');
       return result.data;
@@ -353,6 +361,7 @@ export function useSuppliers(search?: string, page: number = 1, limit: number = 
       params.append('offset', offset.toString());
 
       const response = await fetch(getApiUrl(`/suppliers?${params.toString()}`), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch suppliers');
 
