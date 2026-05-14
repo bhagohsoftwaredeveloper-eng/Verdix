@@ -991,9 +991,9 @@ export default function InventoryPage() {
     const lower = searchTerm.toLowerCase().trim();
     const filtered = lower
       ? allLoadedProducts.filter((p: Product) =>
-          p.name.toLowerCase().includes(lower) ||
-          p.sku.toLowerCase().includes(lower) ||
-          (p.barcode && p.barcode.toLowerCase().includes(lower))
+          (p.name?.toLowerCase() ?? '').includes(lower) ||
+          (p.sku?.toLowerCase() ?? '').includes(lower) ||
+          (p.barcode?.toLowerCase() ?? '').includes(lower)
         )
       : allLoadedProducts;
 

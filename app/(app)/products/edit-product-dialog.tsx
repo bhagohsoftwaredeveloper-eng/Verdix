@@ -679,7 +679,15 @@ export function EditProductDialog({
                               <FormLabel>Barcode (UPC)</FormLabel>
                               <div className="relative">
                                 <FormControl>
-                                <Input placeholder="e.g., 123456789012" {...field} value={field.value ?? ''} className="pr-10" />
+                                <Input
+                                  placeholder="e.g., 123456789012"
+                                  {...field}
+                                  value={field.value ?? ''}
+                                  className="pr-10"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') e.preventDefault();
+                                  }}
+                                />
                                 </FormControl>
                                 <Button
                                   type="button"

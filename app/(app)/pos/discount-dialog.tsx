@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -95,6 +96,7 @@ export function DiscountDialog({
             <DialogTitle className="text-2xl font-extrabold text-center text-slate-800">
               Discounts
             </DialogTitle>
+            <DialogDescription className="sr-only">Apply a discount to the selected item or all cart items</DialogDescription>
             <div className="text-sm text-slate-500 text-center bg-slate-50 py-2 px-3 rounded-lg border border-slate-100 truncate">
               {scope === 'all' ? 'Apply to all items in cart' : `Item: ${item?.name || 'Selected Item'}`}
             </div>

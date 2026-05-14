@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, screen } = require('electron');
 const path = require('path');
 const printerSdk = require('./printer-sdk');
 const epsonSdk = require('./epson-sdk');
@@ -18,6 +18,7 @@ if (!app.requestSingleInstanceLock()) {
 let serverProcess;
 let splashWindow;
 let logStream;
+let customerDisplayWindow = null;
 
 function createSplashScreen() {
   const { BrowserWindow } = require('electron');
@@ -200,6 +201,9 @@ function createWindow() {
   // win.webContents.openDevTools(); // Force open for debugging
 
   win.on('closed', () => {
+    if (customerDisplayWindow && !customerDisplayWindow.isDestroyed()) {
+      customerDisplayWindow.close();
+    }
     app.quit();
   });
 }
@@ -226,6 +230,53 @@ ipcMain.handle('window:maximize', (event) => {
 ipcMain.handle('window:close', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) win.close();
+});
+
+ipcMain.handle('window:open-customer-display', () => {
+  // If already open, just focus it
+  if (customerDisplayWindow && !customerDisplayWindow.isDestroyed()) {
+    customerDisplayWindow.focus();
+    return { success: true, action: 'focused' };
+  }
+
+  const allDisplays = screen.getAllDisplays();
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const secondDisplay = allDisplays.find(d => d.id !== primaryDisplay.id);
+  const targetDisplay = secondDisplay || primaryDisplay;
+  const { x, y, width, height } = targetDisplay.bounds;
+
+  customerDisplayWindow = new BrowserWindow({
+    x,
+    y,
+    width,
+    height,
+    frame: false,
+    fullscreen: true,
+    icon: path.join(__dirname, 'public', 'ljma_logo.png'),
+    title: 'Customer Display',
+    skipTaskbar: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+      backgroundThrottling: false,
+    },
+    show: false,
+  });
+
+  customerDisplayWindow.setIcon(path.join(__dirname, 'public', 'ljma_logo.png'));
+  customerDisplayWindow.loadURL('http://localhost:3000/pos/customer-display');
+  customerDisplayWindow.once('ready-to-show', () => customerDisplayWindow.show());
+  customerDisplayWindow.on('closed', () => { customerDisplayWindow = null; });
+
+  return { success: true, action: 'opened', hasSecondDisplay: !!secondDisplay };
+});
+
+ipcMain.handle('window:close-customer-display', () => {
+  if (customerDisplayWindow && !customerDisplayWindow.isDestroyed()) {
+    customerDisplayWindow.close();
+  }
+  return { success: true };
 });
 
 // Printer SDK IPC Handlers

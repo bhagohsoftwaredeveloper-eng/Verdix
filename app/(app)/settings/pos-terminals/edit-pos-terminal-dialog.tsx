@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -162,6 +163,7 @@ export function EditPosTerminalDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Edit Pos Terminal</DialogTitle>
+          <DialogDescription className="sr-only">Update the configuration for this POS terminal</DialogDescription>
         </DialogHeader>
 
         <div className="py-4">

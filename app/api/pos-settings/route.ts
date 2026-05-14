@@ -32,7 +32,10 @@ export async function GET(request: NextRequest) {
       { name: 'batch_costing_oversell_block', type: 'TINYINT(1) DEFAULT 0' },
       { name: 'enable_overall_reading_auth', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'overall_reading_auth_username', type: 'VARCHAR(255) NULL' },
-      { name: 'overall_reading_auth_password', type: 'VARCHAR(255) NULL' }
+      { name: 'overall_reading_auth_password', type: 'VARCHAR(255) NULL' },
+      { name: 'enable_customer_display', type: 'TINYINT(1) DEFAULT 0' },
+      { name: 'customer_display_message', type: "VARCHAR(255) DEFAULT 'Welcome! Thank you for shopping.'" },
+      { name: 'customer_display_show_logo', type: 'TINYINT(1) DEFAULT 1' }
     ];
 
     const currentColumnsResult = await query(
@@ -117,7 +120,10 @@ export async function GET(request: NextRequest) {
         batch_costing_oversell_block AS batchCostingOversellBlock,
         enable_overall_reading_auth AS enableOverallReadingAuth,
         overall_reading_auth_username AS overallReadingAuthUsername,
-        overall_reading_auth_password AS overallReadingAuthPassword
+        overall_reading_auth_password AS overallReadingAuthPassword,
+        enable_customer_display AS enableCustomerDisplay,
+        customer_display_message AS customerDisplayMessage,
+        customer_display_show_logo AS customerDisplayShowLogo
       FROM pos_settings
       LIMIT 1
     `;
@@ -330,7 +336,10 @@ export async function POST(request: NextRequest) {
         batchCostingOversellBlock: 'batch_costing_oversell_block',
         enableOverallReadingAuth: 'enable_overall_reading_auth',
         overallReadingAuthUsername: 'overall_reading_auth_username',
-        overallReadingAuthPassword: 'overall_reading_auth_password'
+        overallReadingAuthPassword: 'overall_reading_auth_password',
+        enableCustomerDisplay: 'enable_customer_display',
+        customerDisplayMessage: 'customer_display_message',
+        customerDisplayShowLogo: 'customer_display_show_logo'
       };
 
       const updates: string[] = [];

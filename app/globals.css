@@ -54,13 +54,13 @@
 
   .dark {
     /* Premium Dark Mode */
-    --background: 222 47% 11%;
+    --background: 222 47% 7%;        /* Darker page bg for layer contrast */
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 11%;
+    --card: 222 47% 11%;             /* Cards slightly lighter than page bg */
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 11%;
+    --popover: 222 47% 14%;          /* Popovers/dropdowns slightly lighter */
     --popover-foreground: 210 40% 98%;
 
     --primary: 217 91% 60%;
@@ -72,14 +72,14 @@
     --muted: 217 33% 17%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217 33% 17%;
+    --accent: 217 33% 20%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
+    --border: 217 33% 22%;           /* More visible borders */
+    --input: 217 33% 22%;            /* More visible input borders */
     --ring: 224.3 76.3% 48%;
 
     --chart-1: 220 70% 50%;
@@ -105,6 +105,22 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Fix browser autofill overriding dark mode input colors */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px hsl(var(--card)) inset !important;
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
+    transition: background-color 5000s ease-in-out 0s;
   }
 }
 

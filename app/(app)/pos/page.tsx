@@ -47,6 +47,7 @@ import {
   ShoppingCart,
   RefreshCw,
   Files,
+  Monitor,
 } from 'lucide-react';
 import type { Product, Customer, ZReadingData } from '@/lib/types';
 import Link from 'next/link';
@@ -207,6 +208,7 @@ function CurrencyIcon() {
 }
 
 import { useProducts } from '@/hooks/use-api';
+import { useCustomerDisplay } from '@/hooks/use-customer-display';
 
 /**
  * Maps product vat_status string to internal taxType enum
@@ -350,6 +352,9 @@ function POSPageContent() {
   const [isInsufficientStockOpen, setIsInsufficientStockOpen] = useState(false);
   const [insufficientItems, setInsufficientItems] = useState<SaleItem[]>([]);
 
+  const [enableCustomerDisplay, setEnableCustomerDisplay] = useState(false);
+  const { send: cdSend, openOnSecondScreen } = useCustomerDisplay(enableCustomerDisplay);
+
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
   const [isQuantityDialogOpen, setIsQuantityDialogOpen] = useState(false);
   const [isHeldTransOpen, setIsHeldTransOpen] = useState(false);
@@ -485,6 +490,7 @@ function POSPageContent() {
               });
               setIsTrainingMode(result.data.isTrainingMode || false);
               setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
+              setEnableCustomerDisplay(result.data.enableCustomerDisplay || false);
 
               // Apply localStorage printer overrides (set from the login-screen settings dialog)
               const localPrintMode = localStorage.getItem('pos_printer_mode');
@@ -534,6 +540,37 @@ function POSPageContent() {
       clearInterval(pollInterval);
     };
   }, [fetchSettings]);
+
+  // Auto-open customer display on second screen when enabled
+  useEffect(() => {
+    if (enableCustomerDisplay && isPosLoggedIn) {
+      openOnSecondScreen();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enableCustomerDisplay, isPosLoggedIn]);
+
+  // Broadcast cart state to customer display whenever items or totalDue changes
+  useEffect(() => {
+    if (!enableCustomerDisplay) return;
+    if (items.length === 0) {
+      cdSend({ type: 'IDLE' });
+      return;
+    }
+    const gross = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+    const total = items.reduce((acc, item) => {
+      const lineGross = item.price * item.quantity;
+      return acc + (lineGross - (lineGross * item.discount) / 100);
+    }, 0);
+    cdSend({
+      type: 'CART_UPDATE',
+      items,
+      subtotal: gross,
+      discount: gross - total,
+      total,
+      currency: businessSettings?.currencySymbol || '₱',
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, enableCustomerDisplay]);
 
   // Fetch initial data
   useEffect(() => {
@@ -1013,6 +1050,14 @@ function POSPageContent() {
       
       setTenderMethod(method);
       setIsTenderDialogOpen(true);
+      if (enableCustomerDisplay) {
+        cdSend({
+          type: 'PAYMENT_START',
+          total: totalDue,
+          tendered: totalDue,
+          currency: businessSettings?.currencySymbol || '₱',
+        });
+      }
     }
   };
 
@@ -1684,6 +1729,17 @@ function POSPageContent() {
                  <Button variant="outline" size="icon" onClick={() => window.location.reload()} className="h-9 w-9 rounded-md border border-input bg-transparent hover:bg-accent hover:text-accent-foreground" title="Refresh Page">
                     <RefreshCw className="h-4 w-4" />
                  </Button>
+                 {enableCustomerDisplay && (
+                   <Button
+                     variant="outline"
+                     size="icon"
+                     onClick={openOnSecondScreen}
+                     className="h-9 w-9 rounded-md border border-input bg-transparent hover:bg-accent hover:text-accent-foreground"
+                     title="Open Customer Display"
+                   >
+                     <Monitor className="h-4 w-4" />
+                   </Button>
+                 )}
                  <ThemeToggle />
               </div>
           </header>
@@ -2027,6 +2083,16 @@ function POSPageContent() {
         settings={businessSettings as any} 
         onTriggerCustomerSelection={() => {
           setIsCustomerSelectOpen(true);
+        }}
+        onCheckoutComplete={(change, orNumber) => {
+          if (enableCustomerDisplay) {
+            cdSend({
+              type: 'PAYMENT_COMPLETE',
+              change,
+              orNumber,
+              currency: businessSettings?.currencySymbol || '₱',
+            });
+          }
         }}
       />
       <EditItemDialog

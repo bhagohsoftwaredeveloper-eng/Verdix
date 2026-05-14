@@ -53,6 +53,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -936,6 +937,7 @@ export default function SalesByDatePage() {
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Filter Options</DialogTitle>
+            <DialogDescription className="sr-only">Filter sales by date, terminal, and payment method</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">

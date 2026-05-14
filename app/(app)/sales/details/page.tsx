@@ -58,6 +58,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -522,7 +523,7 @@ export default function SalesDetailsPage() {
       {/* Filter Dialogs */}
       <Dialog open={paymentTypeDialogOpen} onOpenChange={setPaymentTypeDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader><DialogTitle>Filter by Payment Type</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Filter by Payment Type</DialogTitle><DialogDescription className="sr-only">Filter sales transactions by payment type</DialogDescription></DialogHeader>
           <div className="py-4"><Label>Payment Type</Label><Select value={tempPaymentType} onValueChange={setTempPaymentType}><SelectTrigger className="mt-2"><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="Cash">Cash</SelectItem><SelectItem value="Card">Card</SelectItem><SelectItem value="GCash">GCash</SelectItem><SelectItem value="Maya">Maya</SelectItem><SelectItem value="Bank Transfer">Bank Transfer</SelectItem><SelectItem value="Account">Account</SelectItem></SelectContent></Select></div>
           <DialogFooter><Button onClick={() => { setPaymentTypeFilter(tempPaymentType); setPaymentTypeDialogOpen(false); }}>Apply</Button></DialogFooter>
         </DialogContent>
@@ -530,7 +531,7 @@ export default function SalesDetailsPage() {
 
       <Dialog open={terminalDialogOpen} onOpenChange={setTerminalDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader><DialogTitle>Filter by Terminal</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Filter by Terminal</DialogTitle><DialogDescription className="sr-only">Filter sales transactions by POS terminal</DialogDescription></DialogHeader>
           <div className="py-4"><TerminalSelector terminalId={tempTerminalId} onTerminalChange={setTempTerminalId} showAllOption={true} /></div>
           <DialogFooter><Button onClick={() => { setTerminalId(tempTerminalId); setTerminalDialogOpen(false); }}>Apply</Button></DialogFooter>
         </DialogContent>
@@ -538,7 +539,7 @@ export default function SalesDetailsPage() {
 
       <Dialog open={dateRangeDialogOpen} onOpenChange={setDateRangeDialogOpen}>
         <DialogContent className="sm:max-w-fit">
-          <DialogHeader><DialogTitle>Filter by Date</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Filter by Date</DialogTitle><DialogDescription className="sr-only">Filter sales transactions by date range</DialogDescription></DialogHeader>
           <div className="py-2 flex justify-center"><Calendar mode="range" selected={tempDateRange} onSelect={setTempDateRange} numberOfMonths={1} className="rounded-md border" /></div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTempDateRange(undefined)}>Clear</Button>

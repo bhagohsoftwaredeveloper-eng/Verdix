@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -136,6 +137,7 @@ export function ManagePosTerminalsDialog() {
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>New Pos Terminal</DialogTitle>
+            <DialogDescription className="sr-only">Configure and add a new POS terminal</DialogDescription>
           </DialogHeader>
 
           {/* Add Terminal Form */}

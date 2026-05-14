@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -307,6 +308,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
       <DialogContent className="sm:max-w-none max-w-full w-full h-screen max-h-screen flex flex-col p-0 gap-0 bg-background border-none rounded-none m-0 shadow-none">
         <DialogHeader className="flex flex-row items-center justify-between non-printable px-6 py-4 border-b shrink-0">
           <DialogTitle>{mode === 'delivery-note' ? 'Delivery Note' : 'Order Details'}</DialogTitle>
+          <DialogDescription className="sr-only">{mode === 'delivery-note' ? 'View and print the delivery note for this order' : 'View and print the sales order details'}</DialogDescription>
         </DialogHeader>
 
         {/* Printable Content */}

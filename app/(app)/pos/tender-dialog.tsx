@@ -54,6 +54,7 @@ interface TenderDialogProps {
     printMode: 'browser' | 'escpos' | 'usb' | 'native';
     settings?: SystemSettings | null;
     onTriggerCustomerSelection?: () => void;
+    onCheckoutComplete?: (change: number, orNumber: string) => void;
 }
 
 
@@ -109,7 +110,8 @@ export function TenderDialog({
     paymentMethods = [],
     printMode,
     settings,
-    onTriggerCustomerSelection
+    onTriggerCustomerSelection,
+    onCheckoutComplete
 }: TenderDialogProps) {
     const [selectedMethod, setSelectedMethod] = useState(paymentMethod);
     const [amountTendered, setAmountTendered] = useState('');
@@ -210,6 +212,22 @@ export function TenderDialog({
         const method = paymentMethods.find(pm => pm.name === selectedMethod);
         return method?.isReferenceRequired || false;
     }, [selectedMethod, paymentMethods]);
+
+    // Broadcast live tendered/change to customer display as cashier types
+    useEffect(() => {
+        if (!isOpen || view !== 'tender') return;
+        try {
+            const channel = new BroadcastChannel('pos-customer-display');
+            const tendered = totalAddedPayments + (isCashPayment ? amountTenderedNum : 0);
+            channel.postMessage({
+                type: 'PAYMENT_UPDATE',
+                tendered,
+                change,
+                currency: settings?.currencySymbol || '₱',
+            });
+            channel.close();
+        } catch { /* BroadcastChannel not available */ }
+    }, [amountTenderedNum, totalAddedPayments, change, isOpen, view, isCashPayment, settings?.currencySymbol]);
 
 
 
@@ -480,6 +498,7 @@ export function TenderDialog({
 
             setCompletedSale(saleDetails);
 
+            onCheckoutComplete?.(change, result.data.orderNumber.toString());
 
             // Auto-print logic moved or handled here based on flow
             

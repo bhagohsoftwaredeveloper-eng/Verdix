@@ -252,13 +252,15 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
           <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
             <Row label="Supplier" value={d.supplierName} />
             <Row label="PO Reference" value={d.reference_number || d.referenceNumber || d.reference} />
-            <Row label="Warehouse" value={d.warehouseName} />
+            <Row label="Warehouse" value={d.warehouseName || d.receiveToWarehouseName} />
             <Row label="Grand Total" value={d.total || d.grandTotal ? `₱${Number(d.total || d.grandTotal).toLocaleString()}` : '—'} />
           </div>
           <ItemsTable
             items={d.items || []}
             cols={[
               { key: 'productName', label: 'Product' },
+              { key: 'productBarcode', label: 'Barcode' },
+              { key: 'productSku', label: 'SKU' },
               { key: 'quantity', label: 'Qty', right: true },
               { key: 'cost', label: 'Unit Cost', right: true },
             ]}
@@ -272,13 +274,15 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
           <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
             <Row label="Supplier" value={d.supplierName} />
             <Row label="PO Reference" value={d.reference || d.referenceNumber || d.id || d.purchaseOrderId} />
-            <Row label="Warehouse" value={d.warehouseName} />
+            <Row label="Warehouse" value={d.warehouseName || d.receiveToWarehouseName} />
             <Row label="Total Received" value={d.receivedTotal || d.total ? `₱${Number(d.receivedTotal || d.total).toLocaleString()}` : '—'} />
           </div>
           <ItemsTable
             items={d.receivedItems || d.items || []}
             cols={[
               { key: 'productName', label: 'Product' },
+              { key: 'productBarcode', label: 'Barcode' },
+              { key: 'productSku', label: 'SKU' },
               { key: 'quantity', label: 'Qty', right: true },
               { key: 'cost', label: 'Unit Cost', right: true },
             ]}
@@ -307,6 +311,8 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
             <Row label="From" value={d.fromWarehouseName || d.sourceWarehouseId} />
             <Row label="To" value={d.toWarehouseName || d.targetWarehouseId} />
             {!d.items && <Row label="Product" value={d.productName} />}
+            {!d.items && <Row label="Barcode" value={d.productBarcode || d.barcode || '—'} />}
+            {!d.items && <Row label="SKU" value={d.productSku || d.sku || '—'} />}
             {!d.items && <Row label="Quantity" value={d.quantity} />}
           </div>
           {d.items && d.items.length > 0 && (
@@ -314,6 +320,8 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
               items={d.items}
               cols={[
                 { key: 'productName', label: 'Product' },
+                { key: 'productBarcode', label: 'Barcode' },
+                { key: 'productSku', label: 'SKU' },
                 { key: 'quantity', label: 'Qty', right: true },
               ]}
             />
@@ -333,6 +341,8 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
             items={d.items || []}
             cols={[
               { key: 'productName', label: 'Product' },
+              { key: 'productBarcode', label: 'Barcode' },
+              { key: 'productSku', label: 'SKU' },
               { key: 'snapshot_quantity', label: 'Expected', right: true },
               { key: 'counted_quantity', label: 'Counted', right: true },
             ]}
@@ -355,6 +365,7 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
             items={d.items || []}
             cols={[
               { key: 'productName', label: 'Product' },
+              { key: 'productBarcode', label: 'Barcode' },
               { key: 'quantity', label: 'Qty', right: true },
               { key: 'reason', label: 'Reason' },
               { key: 'cost', label: 'Cost', right: true },
@@ -365,13 +376,27 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
 
       {/* REPACKAGING */}
       {type === 'REPACKAGING' && (
-        <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
-          <Row label="Source Product" value={d.sourceProductName || d.productName} />
-          <Row label="Target Product" value={d.targetProductName} />
-          <Row label="Quantity" value={d.quantity || d.quantityToBreak || d.packQtyUsed || '—'} />
-          <Row label="Warehouse" value={d.warehouseName || '—'} />
-          <Row label="Reason" value={d.reason || (d.quantityToBreak ? 'Break Pack' : d.packQtyUsed ? 'Consolidate Pack' : 'Repackaging')} />
-        </div>
+        <>
+          <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
+            <Row label="Source Product" value={d.sourceProductName || d.productName} />
+            <Row label="Target Product" value={d.targetProductName} />
+            <Row label="Quantity" value={d.quantity || d.quantityToBreak || d.packQtyUsed || '—'} />
+            <Row label="Warehouse" value={d.warehouseName || '—'} />
+            <Row label="Reason" value={d.reason || (d.quantityToBreak ? 'Break Pack' : d.packQtyUsed ? 'Consolidate Pack' : 'Repackaging')} />
+          </div>
+          {d.items && d.items.length > 0 && (
+            <ItemsTable
+              items={d.items}
+              cols={[
+                { key: 'productName', label: 'Product' },
+                { key: 'barcode', label: 'Barcode' },
+                { key: 'sku', label: 'SKU' },
+                { key: 'quantity', label: 'Qty', right: true },
+                { key: 'unit', label: 'Unit' },
+              ]}
+            />
+          )}
+        </>
       )}
 
       {/* SHELF_TRANSFER */}

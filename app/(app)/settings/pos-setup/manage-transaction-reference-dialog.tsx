@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -201,6 +202,7 @@ export function ManageTransactionReferenceDialog({ onUpdated }: ManageTransactio
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Next Reference Numbers</DialogTitle>
+          <DialogDescription className="sr-only">Set the next reference numbers for each transaction type</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (

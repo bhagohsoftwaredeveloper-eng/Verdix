@@ -17,7 +17,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   maximize: () => ipcRenderer.invoke('window:maximize'),
   close: () => ipcRenderer.invoke('window:close'),
-  
+  openCustomerDisplay: () => ipcRenderer.invoke('window:open-customer-display'),
+  closeCustomerDisplay: () => ipcRenderer.invoke('window:close-customer-display'),
+
   // Flag to tell the UI if it should show custom window controls
   isFrameless: () => {
     // Look for the argument we passed in BrowserWindow additionalArguments

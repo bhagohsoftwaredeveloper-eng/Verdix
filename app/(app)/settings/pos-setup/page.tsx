@@ -70,6 +70,9 @@ interface PosSettings {
   enableOverallReadingAuth?: boolean;
   overallReadingAuthUsername?: string | null;
   overallReadingAuthPassword?: string | null;
+  enableCustomerDisplay?: boolean;
+  customerDisplayMessage?: string | null;
+  customerDisplayShowLogo?: boolean;
 }
 
 export default function PosSetupPage() {
@@ -125,6 +128,9 @@ export default function PosSetupPage() {
     enableOverallReadingAuth: false,
     overallReadingAuthUsername: '',
     overallReadingAuthPassword: '',
+    enableCustomerDisplay: false,
+    customerDisplayMessage: 'Welcome! Thank you for shopping.',
+    customerDisplayShowLogo: true,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -386,6 +392,8 @@ export default function PosSetupPage() {
                       src={logoPreview}
                       alt="Business Logo"
                       fill
+                      sizes="128px"
+                      priority
                       className="object-contain p-2"
                     />
                   ) : (
@@ -1046,6 +1054,72 @@ export default function PosSetupPage() {
                 </Link>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Customer Display */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Customer Display</CardTitle>
+            <Monitor className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <CardDescription>
+              Show a secondary screen for customers with cart and payment information.
+            </CardDescription>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="enableCustomerDisplay">Enable Customer Display</Label>
+                <p className="text-sm text-muted-foreground">
+                  Automatically open on a second monitor when POS starts
+                </p>
+              </div>
+              <Switch
+                id="enableCustomerDisplay"
+                checked={!!settings.enableCustomerDisplay}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableCustomerDisplay: checked }))}
+              />
+            </div>
+
+            {settings.enableCustomerDisplay && (
+              <div className="space-y-4 pl-4 border-l-2 border-muted">
+                <div className="space-y-2">
+                  <Label htmlFor="customerDisplayMessage">Idle Screen Message</Label>
+                  <Input
+                    id="customerDisplayMessage"
+                    value={settings.customerDisplayMessage || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, customerDisplayMessage: e.target.value }))}
+                    placeholder="Welcome! Thank you for shopping."
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="customerDisplayShowLogo">Show Logo on Idle</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Display business logo on the idle screen
+                    </p>
+                  </div>
+                  <Switch
+                    id="customerDisplayShowLogo"
+                    checked={settings.customerDisplayShowLogo !== false}
+                    onCheckedChange={(checked) => setSettings(prev => ({ ...prev, customerDisplayShowLogo: checked }))}
+                  />
+                </div>
+
+                <div className="pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open('/pos/customer-display', 'customer-display', 'width=1024,height=768,menubar=no,toolbar=no,location=no,status=no')}
+                  >
+                    <Monitor className="h-4 w-4 mr-2" />
+                    Open Customer Display Window
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

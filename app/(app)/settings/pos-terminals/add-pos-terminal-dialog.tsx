@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -150,6 +151,7 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>New Pos Terminal</DialogTitle>
+          <DialogDescription className="sr-only">Add a new POS terminal with its configuration details</DialogDescription>
         </DialogHeader>
 
         <div className="py-4">

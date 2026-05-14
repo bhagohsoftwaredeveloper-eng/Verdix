@@ -42,6 +42,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -419,7 +420,7 @@ export default function SalesAnalysisPage() {
       {/* Advanced Filters Dialog */}
       <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader><DialogTitle>Filter Options</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Filter Options</DialogTitle><DialogDescription className="sr-only">Filter sales analysis by date interval and terminal</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right">Interval</Label>

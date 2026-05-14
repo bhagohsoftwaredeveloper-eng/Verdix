@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -49,6 +50,7 @@ export function SuspendNoteDialog({
             <DialogTitle className="text-2xl font-extrabold text-center text-slate-800">
               Suspend Transaction
             </DialogTitle>
+            <DialogDescription className="sr-only">Add a note to identify this suspended transaction later</DialogDescription>
             <p className="text-sm text-slate-500 text-center px-4">
               Add a note or description to identify this transaction later.
             </p>

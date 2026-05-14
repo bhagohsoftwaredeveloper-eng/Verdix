@@ -162,6 +162,49 @@ export async function GET(request: NextRequest) {
         }
       }
     }
+    // ── Enrich missing barcode / SKU in item arrays ───────────────────────
+    const itemProductIdSet = new Set<string>();
+
+    for (const item of enrichedItems) {
+      const d = item.transaction_data as any;
+      if (!d) continue;
+      for (const arr of [d.items, d.receivedItems]) {
+        if (!Array.isArray(arr)) continue;
+        for (const it of arr) {
+          if (!it || typeof it !== 'object') continue;
+          // Normalise legacy field names first (barcode → productBarcode, sku → productSku)
+          if (!it.productBarcode && it.barcode) it.productBarcode = it.barcode;
+          if (!it.productSku    && it.sku)     it.productSku    = it.sku;
+          // Queue for DB lookup if still missing
+          if (it.productId && (!it.productBarcode || !it.productSku)) {
+            itemProductIdSet.add(it.productId);
+          }
+        }
+      }
+    }
+
+    const productInfoMap: Record<string, { barcode: string | null; sku: string | null }> = {};
+    if (itemProductIdSet.size > 0) {
+      const piRows: any[] = await query(
+        'SELECT id, barcode, sku FROM products WHERE id IN (?)',
+        [[...itemProductIdSet]]
+      );
+      for (const r of piRows) productInfoMap[r.id] = { barcode: r.barcode || null, sku: r.sku || null };
+    }
+
+    for (const item of enrichedItems) {
+      const d = item.transaction_data as any;
+      if (!d) continue;
+      for (const arr of [d.items, d.receivedItems]) {
+        if (!Array.isArray(arr)) continue;
+        for (const it of arr) {
+          if (!it?.productId || !productInfoMap[it.productId]) continue;
+          const pi = productInfoMap[it.productId];
+          if (!it.productBarcode && pi.barcode) it.productBarcode = pi.barcode;
+          if (!it.productSku    && pi.sku)     it.productSku    = pi.sku;
+        }
+      }
+    }
     // ──────────────────────────────────────────────────────────────────────
 
     return NextResponse.json({

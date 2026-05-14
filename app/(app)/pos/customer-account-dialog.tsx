@@ -34,7 +34,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
-import { User, Loader2, Search, Plus, CreditCard, Printer } from 'lucide-react';
+import { User, Loader2, Search, Plus, CreditCard, Printer, Hash, StickyNote, BadgeDollarSign, Phone, MapPin, Tag, Wallet, TrendingUp, Landmark } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -415,38 +415,39 @@ export function CustomerAccountDialog({
             </DialogDescription>
             <div className="flex justify-between items-start">
               <div className="space-y-4 w-full">
-                {/* RFID / Loyalty Card Search */}
-                <div>
-                  <p className="text-sm font-medium mb-1">Search by RFID / Loyalty Card</p>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      ref={rfidInputRef}
-                      placeholder="Scan or type RFID / Loyalty card number..."
-                      value={rfidInput}
-                      onChange={(e) => { setRfidInput(e.target.value); setRfidError(''); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleRfidSearch(); }}
-                      className="w-full sm:w-[320px]"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 shrink-0"
-                      onClick={handleRfidSearch}
-                      disabled={isRfidSearching || !rfidInput.trim()}
-                      title="Search by RFID"
-                    >
-                      {isRfidSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    </Button>
+                <div className="flex items-end gap-3">
+                  {/* RFID / Loyalty Card Search */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium mb-1">RFID / Loyalty Card</p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        ref={rfidInputRef}
+                        placeholder="Scan or type RFID / card number..."
+                        value={rfidInput}
+                        onChange={(e) => { setRfidInput(e.target.value); setRfidError(''); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRfidSearch(); }}
+                        className="w-full"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 shrink-0"
+                        onClick={handleRfidSearch}
+                        disabled={isRfidSearching || !rfidInput.trim()}
+                        title="Search by RFID"
+                      >
+                        {isRfidSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {rfidError && <p className="text-xs text-destructive mt-1">{rfidError}</p>}
                   </div>
-                  {rfidError && <p className="text-xs text-destructive mt-1">{rfidError}</p>}
-                </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="flex-grow">
+                  {/* Customer Selection */}
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium mb-1">Customer</p>
                     <div className="flex items-center gap-2">
-                       <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                        <SelectTrigger className="w-full sm:w-[300px]">
+                      <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select Customer" />
                         </SelectTrigger>
                         <SelectContent>
@@ -458,10 +459,10 @@ export function CustomerAccountDialog({
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        className="h-10 w-10 shrink-0" 
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 shrink-0"
                         onClick={() => setIsAddCustomerOpen(true)}
                         title="Add New Customer"
                       >
@@ -469,24 +470,72 @@ export function CustomerAccountDialog({
                       </Button>
                     </div>
                   </div>
+
                   {selectedCustomerId !== 'walk-in' && (
-                    <Avatar className="h-24 w-24">
-                      <AvatarFallback className="text-2xl bg-muted">{getInitials(customerDetails?.name || '')}</AvatarFallback>
+                    <Avatar className="h-16 w-16 shrink-0">
+                      <AvatarFallback className="text-xl bg-muted">{getInitials(customerDetails?.name || '')}</AvatarFallback>
                     </Avatar>
                   )}
                 </div>
 
                 {selectedCustomerId !== 'walk-in' && customerDetails && (
-                  <div className="flex justify-between items-end">
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm flex-grow">
-                      <p><span className="font-semibold text-muted-foreground mr-2">Code:</span> {customerDetails.id}</p>
-                      <p><span className="font-semibold text-muted-foreground mr-2">Credit Limit:</span> {formatCurrency(customerDetails.credit_limit || 0)}</p>
-                      <p><span className="font-semibold text-muted-foreground mr-2">Full Name:</span> {customerDetails.name}</p>
-                      <p><span className="font-semibold text-muted-foreground mr-2">Credit Sales:</span> {formatCurrency(customerDetails.credit_sales || 0)}</p>
-                      <p><span className="font-semibold text-muted-foreground mr-2">Contact:</span> {customerDetails.contact_number}</p>
-                      <p><span className="font-semibold text-muted-foreground mr-2">Total Payment:</span> {formatCurrency(customerDetails.total_payment || 0)}</p>
-                      <p><span className="font-semibold text-muted-foreground mr-2">Address:</span> {customerDetails.address || 'N/A'}</p>
-                      <p><span className="font-semibold text-muted-foreground mr-2">Current Balance:</span> <span className="text-cyan-500 font-bold">{formatCurrency(customerDetails.balance || 0)}</span></p>
+                  <div className="flex gap-4">
+                    {/* Profile info */}
+                    <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-3">
+                      {[
+                        { icon: Tag,    label: 'Code',      value: customerDetails.id },
+                        { icon: User,   label: 'Full Name', value: customerDetails.name },
+                        { icon: Phone,  label: 'Contact',   value: customerDetails.contact_number || 'N/A' },
+                        { icon: MapPin, label: 'Address',   value: customerDetails.address || 'N/A' },
+                      ].map(({ icon: Icon, label, value }) => (
+                        <div key={label} className="flex items-start gap-2 min-w-0">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5">{label}</p>
+                            <p className="text-sm font-medium truncate">{value}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Financial stat cards */}
+                    <div className="grid grid-cols-2 gap-2 shrink-0">
+                      <Card className="border bg-muted/40">
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <Landmark className="h-3 w-3 text-muted-foreground" />
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Credit Limit</p>
+                          </div>
+                          <p className="text-sm font-bold">{formatCurrency(customerDetails.credit_limit || 0)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border bg-muted/40">
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <TrendingUp className="h-3 w-3 text-muted-foreground" />
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Credit Sales</p>
+                          </div>
+                          <p className="text-sm font-bold">{formatCurrency(customerDetails.credit_sales || 0)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border bg-muted/40">
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <Wallet className="h-3 w-3 text-muted-foreground" />
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Total Payment</p>
+                          </div>
+                          <p className="text-sm font-bold">{formatCurrency(customerDetails.total_payment || 0)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200 dark:border-cyan-800">
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <CreditCard className="h-3 w-3 text-cyan-500" />
+                            <p className="text-[10px] text-cyan-600 dark:text-cyan-400 uppercase tracking-wide">Balance</p>
+                          </div>
+                          <p className="text-sm font-bold text-cyan-600 dark:text-cyan-400">{formatCurrency(customerDetails.balance || 0)}</p>
+                        </CardContent>
+                      </Card>
                     </div>
                   </div>
                 )}
@@ -792,22 +841,25 @@ export function CustomerAccountDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">Amount</Label>
-              <Input
-                id="amount"
-                type="number"
-                placeholder="0.00"
-                className="col-span-3"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                autoFocus
-              />
+            <div className="grid gap-1.5">
+              <Label htmlFor="amount" className="text-sm font-medium">Amount</Label>
+              <div className="relative">
+                <BadgeDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="0.00"
+                  className="pl-9"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  autoFocus
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="type" className="text-right">Type</Label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="type" className="text-sm font-medium">Payment Type</Label>
               <Select value={paymentType} onValueChange={setPaymentType}>
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger id="type">
                   <SelectValue placeholder="Payment Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -819,25 +871,31 @@ export function CustomerAccountDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="ref" className="text-right">Ref #</Label>
-              <Input
-                id="ref"
-                placeholder="Check # or Ref #"
-                className="col-span-3"
-                value={paymentReference}
-                onChange={(e) => setPaymentReference(e.target.value)}
-              />
+            <div className="grid gap-1.5">
+              <Label htmlFor="ref" className="text-sm font-medium">Reference #</Label>
+              <div className="relative">
+                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="ref"
+                  placeholder="Check # or Ref #"
+                  className="pl-9"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="notes" className="text-right">Notes</Label>
-              <Input
-                id="notes"
-                placeholder="Optional notes"
-                className="col-span-3"
-                value={paymentNote}
-                onChange={(e) => setPaymentNote(e.target.value)}
-              />
+            <div className="grid gap-1.5">
+              <Label htmlFor="notes" className="text-sm font-medium">Notes</Label>
+              <div className="relative">
+                <StickyNote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="notes"
+                  placeholder="Optional notes"
+                  className="pl-9"
+                  value={paymentNote}
+                  onChange={(e) => setPaymentNote(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

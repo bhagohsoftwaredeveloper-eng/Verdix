@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -193,6 +194,7 @@ export function TerminalSettingsDialog({ onTerminalChanged, currentTerminalId }:
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Configure This Terminal</DialogTitle>
+            <DialogDescription className="sr-only">Select or create a POS terminal for this browser session</DialogDescription>
           </DialogHeader>
 
           {isCreating ? (

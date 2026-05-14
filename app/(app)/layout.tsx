@@ -139,12 +139,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isUserLoading, setIsUserLoading] = useState(true);
   const [businessName, setBusinessName] = useState<string>('Stockpilot');
 
-  const isPOSPage = pathname === '/pos';
+  const isPOSPage = pathname === '/pos' || pathname === '/pos/customer-display';
 
   useEffect(() => {
-    // Skip global auth enforcement if landing directly on the POS page.
-    // The POS page completely handles its own auth via `PosLoginForm`.
-    if (pathname === '/pos') {
+    // Skip global auth enforcement if landing directly on the POS page or customer display.
+    if (pathname === '/pos' || pathname === '/pos/customer-display') {
       setIsUserLoading(false);
       return;
     }

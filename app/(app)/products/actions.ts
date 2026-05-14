@@ -1662,7 +1662,7 @@ export async function updateSupplier(id: string, data: any) {
 
 export async function getPaymentTerms() {
   try {
-    return await query('SELECT * FROM payment_terms ORDER BY name');
+    return await query('SELECT * FROM payment_terms ORDER BY description');
   } catch (error) {
     console.error('Error fetching payment terms:', error);
     return [];

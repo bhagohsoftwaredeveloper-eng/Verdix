@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -56,6 +57,7 @@ export function PriceEditDialog({
             <DialogTitle className="text-2xl font-extrabold text-center text-slate-800">
               Edit Unit Price
             </DialogTitle>
+            <DialogDescription className="sr-only">Enter a temporary price override for the selected item</DialogDescription>
             <p className="text-sm text-slate-500 text-center px-4">
               Enter a temporary price for <span className="font-bold text-slate-700">{item.name}</span>
             </p>

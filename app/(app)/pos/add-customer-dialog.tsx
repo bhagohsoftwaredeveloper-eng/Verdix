@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Loader2, User, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
 
@@ -104,24 +104,34 @@ export function AddCustomerDialog({ isOpen, onOpenChange, onCustomerAdded }: Add
             Enter the details of the new customer here. Click save when you're done.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. John Doe"
-            />
+        <div className="grid gap-5 py-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="name" className="text-sm font-medium">
+              Full Name <span className="text-destructive">*</span>
+            </Label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. John Doe"
+                className="pl-9"
+              />
+            </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="contactNumber">Contact Number</Label>
-            <Input
-              id="contactNumber"
-              value={contactNumber}
-              onChange={(e) => setContactNumber(e.target.value)}
-              placeholder="e.g. 09123456789"
-            />
+          <div className="grid gap-1.5">
+            <Label htmlFor="contactNumber" className="text-sm font-medium">Contact Number</Label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                id="contactNumber"
+                value={contactNumber}
+                onChange={(e) => setContactNumber(e.target.value)}
+                placeholder="e.g. 09123456789"
+                className="pl-9"
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>

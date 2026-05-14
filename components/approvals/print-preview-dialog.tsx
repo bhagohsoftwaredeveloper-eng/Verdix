@@ -4,6 +4,7 @@ import React, { useRef } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -112,6 +113,7 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
             <Printer className="h-5 w-5 text-primary" />
             Print Preview
           </DialogTitle>
+          <DialogDescription className="sr-only">Preview and print the approval transaction document</DialogDescription>
           <div className="flex items-center gap-2 pr-6">
             <Button variant="outline" size="sm" onClick={handlePrint} className="gap-2 font-bold border-primary/20 text-primary hover:bg-primary/5">
               <Printer className="h-4 w-4" />
@@ -419,6 +421,12 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                         {item.transaction_data.reference || item.transaction_data.referenceNumber || 'N/A'}
                       </td>
                     </tr>
+                    <tr>
+                      <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Warehouse</td>
+                      <td className="value font-bold py-1">
+                        {item.transaction_data.warehouseName || item.transaction_data.receiveToWarehouseName || 'N/A'}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
                 <table className="data-table w-full border-collapse mb-5">
@@ -464,6 +472,12 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                       <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">PO Reference</td>
                       <td className="value font-mono font-bold py-1">
                         {item.transaction_data.referenceNumber || item.transaction_data.id || item.transaction_data.purchaseOrderId}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="label font-semibold text-[9pt] text-zinc-500 uppercase w-[130px] py-1 pl-2">Warehouse</td>
+                      <td className="value font-bold py-1">
+                        {item.transaction_data.warehouseName || item.transaction_data.receiveToWarehouseName || 'N/A'}
                       </td>
                     </tr>
                   </tbody>
