@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '050_create_bad_orders_table',
@@ -14,23 +14,25 @@ const migration: Migration = {
         supplier_id VARCHAR(50) NOT NULL,
         supplier_name VARCHAR(255) NOT NULL,
         reported_by VARCHAR(255),
-        report_date DATETIME NOT NULL,
-        status ENUM('Reported', 'Return Requested', 'Replaced', 'Credited', 'Resolved') DEFAULT 'Reported',
+        report_date TIMESTAMP NOT NULL,
+        status VARCHAR(50) DEFAULT 'Reported',
         total_affected_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         notes TEXT,
         resolution_notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
-        INDEX idx_purchase_order_id (purchase_order_id),
-        INDEX idx_supplier_id (supplier_id),
-        INDEX idx_report_date (report_date),
-        INDEX idx_status (status)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT bad_orders_purchase_order_id_fkey FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+        CONSTRAINT bad_orders_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
       )
     `;
 
-    await query(createBadOrdersTable);
+    await db.$executeRawUnsafe(createBadOrdersTable);
+    
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_bad_orders_purchase_order_id ON bad_orders (purchase_order_id)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_bad_orders_supplier_id ON bad_orders (supplier_id)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_bad_orders_report_date ON bad_orders (report_date)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_bad_orders_status ON bad_orders (status)`);
+    
     console.log('✅ Bad orders table created');
 
     // Create bad_order_items table
@@ -42,25 +44,27 @@ const migration: Migration = {
         product_name VARCHAR(255) NOT NULL,
         quantity DECIMAL(10,2) NOT NULL,
         cost DECIMAL(10,2) NOT NULL,
-        reason ENUM('Damaged', 'Defective', 'Expired', 'Wrong Item', 'Missing', 'Other') NOT NULL,
+        reason VARCHAR(50) NOT NULL,
         description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (bad_order_id) REFERENCES bad_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-        INDEX idx_bad_order_id (bad_order_id),
-        INDEX idx_product_id (product_id),
-        INDEX idx_reason (reason)
+        CONSTRAINT bad_order_items_bad_order_id_fkey FOREIGN KEY (bad_order_id) REFERENCES bad_orders(id) ON DELETE CASCADE,
+        CONSTRAINT bad_order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )
     `;
 
-    await query(createBadOrderItemsTable);
+    await db.$executeRawUnsafe(createBadOrderItemsTable);
+    
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_bad_order_items_bad_order_id ON bad_order_items (bad_order_id)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_bad_order_items_product_id ON bad_order_items (product_id)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_bad_order_items_reason ON bad_order_items (reason)`);
+    
     console.log('✅ Bad order items table created');
   },
 
   async down(): Promise<void> {
     // Drop tables in reverse order due to foreign key constraints
-    await query('DROP TABLE IF EXISTS bad_order_items');
-    await query('DROP TABLE IF EXISTS bad_orders');
+    await db.$executeRawUnsafe('DROP TABLE IF EXISTS bad_order_items');
+    await db.$executeRawUnsafe('DROP TABLE IF EXISTS bad_orders');
     console.log('✅ Bad orders tables dropped');
   }
 };

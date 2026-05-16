@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '019_create_point_history_table',
@@ -11,26 +11,26 @@ const migration: Migration = {
       CREATE TABLE IF NOT EXISTS point_history (
         id VARCHAR(50) PRIMARY KEY,
         customer_loyalty_id VARCHAR(50) NOT NULL,
-        transaction_type ENUM('add', 'remove', 'purchase', 'redemption', 'expiration', 'adjustment') NOT NULL,
+        transaction_type VARCHAR(50) NOT NULL,
         points INT NOT NULL,
         reason VARCHAR(255),
-        transaction_reference VARCHAR(100), -- Can reference sales transaction ID, etc.
-        created_by VARCHAR(50), -- User who performed the action
+        transaction_reference VARCHAR(100),
+        created_by VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (customer_loyalty_id) REFERENCES customer_loyalty(id) ON DELETE CASCADE,
-        INDEX idx_customer_loyalty_id (customer_loyalty_id),
-        INDEX idx_transaction_type (transaction_type),
-        INDEX idx_created_at (created_at)
+        CONSTRAINT fk_point_history_loyalty FOREIGN KEY (customer_loyalty_id) REFERENCES customer_loyalty(id) ON DELETE CASCADE
       )
     `;
 
-    await query(createPointHistoryTable);
+    await db.$executeRawUnsafe(createPointHistoryTable);
+    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_point_history_customer_loyalty_id ON point_history(customer_loyalty_id)');
+    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_point_history_transaction_type ON point_history(transaction_type)');
+    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_point_history_created_at ON point_history(created_at)');
     console.log('✅ Point history table created');
   },
 
   async down(): Promise<void> {
     // Drop the table
-    await query('DROP TABLE IF EXISTS point_history');
+    await db.$executeRawUnsafe('DROP TABLE IF EXISTS point_history');
     console.log('✅ Point history table dropped');
   }
 };

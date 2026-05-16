@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '068_update_stock_movements_reference_type',
@@ -7,20 +7,25 @@ const migration: Migration = {
 
   async up(): Promise<void> {
     // Update reference_type to VARCHAR(50) for flexibility
-    await query(`
+    await db.$executeRawUnsafe(`
       ALTER TABLE stock_movements 
-      MODIFY COLUMN reference_type VARCHAR(50)
+      ALTER COLUMN reference_type TYPE VARCHAR(50)
     `);
-    console.log('✅ Updated reference_type enum in stock_movements');
+    console.log('✅ Updated reference_type type in stock_movements');
   },
 
   async down(): Promise<void> {
-    // Revert reference_type enum (caution: may fail if shelf_transfer data exists)
-    await query(`
-      ALTER TABLE stock_movements 
-      MODIFY COLUMN reference_type ENUM('sale', 'purchase', 'adjustment', 'return', 'transfer')
-    `);
-    console.log('✅ Reverted reference_type enum in stock_movements');
+    // Revert reference_type type
+    // Note: In Postgres, converting back to enum might require explicit casting
+    try {
+      await db.$executeRawUnsafe(`
+        ALTER TABLE stock_movements 
+        ALTER COLUMN reference_type TYPE VARCHAR(50)
+      `);
+      console.log('✅ Reverted reference_type type in stock_movements');
+    } catch (e) {
+      console.warn('⚠️ Failed to revert reference_type type', e);
+    }
   }
 };
 

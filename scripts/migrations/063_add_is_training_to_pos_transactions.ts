@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 export const migration: Migration = {
   name: '063_add_is_training_to_pos_transactions',
@@ -9,10 +9,10 @@ export const migration: Migration = {
     console.log('Running migration: 063_add_is_training_to_pos_transactions');
     
     try {
-      await query(`ALTER TABLE pos_transactions ADD COLUMN is_training BOOLEAN DEFAULT FALSE`);
+      await db.$executeRawUnsafe(`ALTER TABLE pos_transactions ADD COLUMN is_training BOOLEAN DEFAULT FALSE`);
       console.log(`✅ Added is_training to pos_transactions`);
     } catch (e: any) {
-      if (e.code === 'ER_DUP_COLUMN_NAME' || e.errno === 1060) {
+      if (e.code === '42701') {
         console.log(`⚠️ Column is_training already exists in pos_transactions`);
       } else {
         throw e;
@@ -23,10 +23,14 @@ export const migration: Migration = {
   async down() {
     console.log('Rolling back migration: 063_add_is_training_to_pos_transactions');
     
-    await query(`
-      ALTER TABLE pos_transactions
-      DROP COLUMN is_training
-    `);
+    try {
+      await db.$executeRawUnsafe(`
+        ALTER TABLE pos_transactions
+        DROP COLUMN IF EXISTS is_training
+      `);
+    } catch (e) {
+      console.warn('⚠️ Failed to drop column is_training from pos_transactions', e);
+    }
   }
 };
 

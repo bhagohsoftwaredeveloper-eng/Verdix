@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 export const migration: Migration = {
   name: '037_alter_pos_settings_add_contact_fields',
@@ -9,32 +9,36 @@ export const migration: Migration = {
     console.log('Running migration: 037_alter_pos_settings_add_contact_fields');
     
     // Add new columns to pos_settings table
-    const alterTableSQL = `
-      ALTER TABLE pos_settings
-      ADD COLUMN address TEXT,
-      ADD COLUMN contact_number VARCHAR(50),
-      ADD COLUMN tin VARCHAR(50),
-      ADD COLUMN email VARCHAR(255)
-    `;
-    
-    await query(alterTableSQL);
-    console.log('✅ pos_settings table altered: added address, contact_number, tin, email');
+    try {
+      await db.$executeRawUnsafe(`
+        ALTER TABLE pos_settings
+        ADD COLUMN IF NOT EXISTS address TEXT,
+        ADD COLUMN IF NOT EXISTS contact_number VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS tin VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS email VARCHAR(255)
+      `);
+      console.log('✅ pos_settings table altered: added address, contact_number, tin, email');
+    } catch (error: any) {
+      console.log('ℹ️ Could not add columns to pos_settings:', error.message);
+    }
   },
   
   async down() {
     console.log('Rolling back migration: 037_alter_pos_settings_add_contact_fields');
     
     // Remove columns
-    const alterTableSQL = `
-      ALTER TABLE pos_settings
-      DROP COLUMN address,
-      DROP COLUMN contact_number,
-      DROP COLUMN tin,
-      DROP COLUMN email
-    `;
-    
-    await query(alterTableSQL);
-    console.log('✅ pos_settings table altered: dropped address, contact_number, tin, email');
+    try {
+      await db.$executeRawUnsafe(`
+        ALTER TABLE pos_settings
+        DROP COLUMN IF EXISTS address,
+        DROP COLUMN IF EXISTS contact_number,
+        DROP COLUMN IF EXISTS tin,
+        DROP COLUMN IF EXISTS email
+      `);
+      console.log('✅ pos_settings table altered: dropped address, contact_number, tin, email');
+    } catch (error: any) {
+      console.log('ℹ️ Could not drop columns from pos_settings:', error.message);
+    }
   }
 };
 

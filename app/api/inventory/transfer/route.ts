@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
-import { MySqlInventoryTransferRepository } from '../../../../src/infrastructure/repositories/MySqlInventoryTransferRepository';
-import { TransferStockService } from '../../../../src/infrastructure/services/TransferStockService';
-import { TransferStockUseCase } from '../../../../src/core/inventory/application/TransferStockUseCase';
-
-// Initialize dependencies
-const transferRepository = new MySqlInventoryTransferRepository();
-const transferService = new TransferStockService();
-const transferStockUseCase = new TransferStockUseCase(transferRepository, transferService);
+import { db } from '@/lib/db';
+import { processTransferStock } from '@/lib/transfer-actions';
+import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
 
 export async function GET() {
   try {
-    const transfers = await transferRepository.findAll();
+    const transfers = await db.inventoryTransfer.findMany({
+      include: {
+        items: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
     return NextResponse.json({
       success: true,
       data: transfers,
@@ -26,9 +28,6 @@ export async function GET() {
   }
 }
 
-import { processTransferStock } from '@/lib/transfer-actions';
-import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -38,19 +37,28 @@ export async function POST(request: NextRequest) {
 
     if (isApprovalRequired) {
       // Fetch names for enrichment
-      const [productRes, sourceRes, targetRes]: any = await Promise.all([
-        query(`SELECT name, sku, barcode FROM products WHERE id = ?`, [body.productId]),
-        query(`SELECT name FROM warehouses WHERE id = ?`, [body.fromWarehouseId || body.warehouseId || body.sourceWarehouseId]),
-        query(`SELECT name FROM warehouses WHERE id = ?`, [body.toWarehouseId || body.targetWarehouseId])
+      const [product, sourceWh, targetWh] = await Promise.all([
+        db.product.findUnique({
+          where: { id: body.productId },
+          select: { name: true, sku: true, barcode: true }
+        }),
+        db.warehouse.findUnique({
+          where: { id: body.fromWarehouseId || body.warehouseId || body.sourceWarehouseId },
+          select: { name: true }
+        }),
+        db.warehouse.findUnique({
+          where: { id: body.toWarehouseId || body.targetWarehouseId },
+          select: { name: true }
+        })
       ]);
 
       const enrichedData = {
         ...body,
-        productName: productRes[0]?.name || 'Unknown Product',
-        productSku: productRes[0]?.sku || '',
-        productBarcode: productRes[0]?.barcode || '',
-        fromWarehouseName: sourceRes[0]?.name || 'Unknown Warehouse',
-        toWarehouseName: targetRes[0]?.name || 'Unknown Warehouse'
+        productName: product?.name || 'Unknown Product',
+        productSku: product?.sku || '',
+        productBarcode: product?.barcode || '',
+        fromWarehouseName: sourceWh?.name || 'Unknown Warehouse',
+        toWarehouseName: targetWh?.name || 'Unknown Warehouse'
       };
 
       // Use system or user ID if available in body
@@ -71,7 +79,7 @@ export async function POST(request: NextRequest) {
     // Direct execution
     const transferPayload = {
       ...body,
-      transferDate: body.transferDate || new Date().toISOString().slice(0, 19).replace('T', ' ')
+      transferDate: body.transferDate || new Date().toISOString()
     };
     const result = await processTransferStock(transferPayload);
 

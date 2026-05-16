@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction, query } from '@/lib/mysql';
+import { db } from '@/lib/db';
+import { withTransaction } from '@/lib/db-helpers';
 import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
 import { deductFamilyStock, addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
+import { updateStockAndRecordMovement } from '@/lib/stock-movements';
 
 /**
  * Bulk Stock Adjustment API
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
     const queuedItems: any[] = [];
 
     // 2. Process each adjustment
-    await withTransaction(async (connection) => {
+    await withTransaction(async (tx) => {
       for (const adj of adjustments) {
         const { productId, quantity, reason, targetProductId: itemTargetProductId } = adj;
 
@@ -41,17 +43,16 @@ export async function POST(request: NextRequest) {
         if (quantity === 0) continue;
 
         // Fetch product info
-        const [productResult]: any = await connection.query(
-          'SELECT stock, name, sku, barcode, unit_of_measure FROM products WHERE id = ?',
-          [productId]
-        );
+        const product = await tx.product.findUnique({
+          where: { id: productId },
+          select: { stock: true, name: true, sku: true, barcode: true, unitOfMeasure: true }
+        });
 
-        if (!productResult || productResult.length === 0) {
+        if (!product) {
           throw new Error(`Product not found: ${productId}`);
         }
 
-        const product = productResult[0];
-        const currentStock = parseInt(product.stock);
+        const currentStock = Number(product.stock);
         const finalReason = reason || batchNotes || (adjustmentType === 'transfer' ? 'Bulk Transfer' : 'Bulk Adjustment');
 
         const isTransfer = adjustmentType === 'transfer';
@@ -63,8 +64,11 @@ export async function POST(request: NextRequest) {
           // Resolve warehouse name if warehouseId is provided
           let resolvedWarehouseName: string | null = null;
           if (warehouseId) {
-            const [whRow]: any = await connection.query('SELECT name FROM warehouses WHERE id = ?', [warehouseId]);
-            resolvedWarehouseName = whRow?.[0]?.name || null;
+            const wh = await tx.warehouse.findUnique({
+              where: { id: warehouseId },
+              select: { name: true }
+            });
+            resolvedWarehouseName = wh?.name || null;
           }
 
           // Submit to approval queue with enriched metadata
@@ -87,28 +91,24 @@ export async function POST(request: NextRequest) {
             // Match TransferStockRequest structure for compatibility
             approvalData.sourceWarehouseId = warehouseId;
             approvalData.targetWarehouseId = targetWarehouseId;
-            approvalData.transferDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+            approvalData.transferDate = new Date().toISOString();
             approvalData.reference = referenceNo;
             approvalData.notes = finalReason;
             approvalData.items = [{
               productId,
               productName: product.name,
               quantity: Math.abs(quantity), // Transfers use positive quantities for the item list
-              unitOfMeasure: product.unit_of_measure
+              unitOfMeasure: product.unitOfMeasure
             }];
 
             // Add warehouse names for better UI in Approval Center
-            const [sourceResult, targetResult]: any = await Promise.all([
-              connection.query(`SELECT name FROM warehouses WHERE id = ?`, [warehouseId]),
-              connection.query(`SELECT name FROM warehouses WHERE id = ?`, [targetWarehouseId])
+            const [sourceWh, targetWh] = await Promise.all([
+              tx.warehouse.findUnique({ where: { id: warehouseId }, select: { name: true } }),
+              tx.warehouse.findUnique({ where: { id: targetWarehouseId }, select: { name: true } })
             ]);
             
-            // connection.query returns [rows, fields]
-            const sourceRows = sourceResult[0];
-            const targetRows = targetResult[0];
-            
-            approvalData.fromWarehouseName = sourceRows[0]?.name || 'Unknown';
-            approvalData.toWarehouseName = targetRows[0]?.name || 'Unknown';
+            approvalData.fromWarehouseName = sourceWh?.name || 'Unknown';
+            approvalData.toWarehouseName = targetWh?.name || 'Unknown';
           }
 
           const { queueId, pendingApproval } = await submitToApprovalQueue(approvalType, approvalData, userId);
@@ -129,55 +129,54 @@ export async function POST(request: NextRequest) {
         // For transfers, we need to find the target product
         let destId = itemTargetProductId;
         if (isTransfer && !destId && targetWarehouseId) {
-          const [targetProduct]: any = await connection.query(
-            'SELECT id, name FROM products WHERE sku = ? AND warehouse_id = ?',
-            [product.sku, targetWarehouseId]
-          );
-          if (targetProduct && targetProduct.length > 0) {
-            destId = targetProduct[0].id;
+          const targetProduct = await tx.product.findFirst({
+            where: { sku: product.sku, warehouseId: targetWarehouseId },
+            select: { id: true, name: true }
+          });
+          if (targetProduct) {
+            destId = targetProduct.id;
           } else {
             throw new Error(`Product ${product.name} (SKU: ${product.sku}) not found in target warehouse.`);
           }
         }
 
-        const adjustmentId = `adj_bulk_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-
         // Create adjustment record with new metadata
-        await connection.query(
-          `INSERT INTO stock_adjustments 
-            (id, product_id, quantity, reason, new_stock, warehouse_id, target_warehouse_id, reference_no, supplier_id, note, adj_type) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            adjustmentId, 
-            productId, 
-            finalQuantity, 
-            finalReason, 
-            newStock, 
-            warehouseId || null, 
-            targetWarehouseId || null, 
-            referenceNo || null, 
-            supplierId || null, 
-            batchNotes || null, 
-            adjustmentType
-          ]
-        );
+        const adjustment = await tx.stockAdjustment.create({
+          data: {
+            productId,
+            quantity: finalQuantity,
+            reason: finalReason,
+            newStock,
+            warehouseId: warehouseId || null,
+            targetWarehouseId: targetWarehouseId || null,
+            referenceNo: referenceNo || null,
+            supplierId: supplierId || null,
+            note: batchNotes || null,
+            adjType: adjustmentType as any
+          }
+        });
 
         // Handle Transfer Logic (Increase Target Stock)
         if (isTransfer && destId) {
-          await connection.query(
-            'UPDATE products SET stock = stock + ? WHERE id = ?',
-            [Math.abs(quantity), destId]
+          await updateStockAndRecordMovement(
+            destId,
+            Math.abs(quantity),
+            'transfer',
+            adjustment.id,
+            'adjustment',
+            `Bulk Transfer IN from ${warehouseId}`,
+            tx
           );
         }
 
         // Sync family stock
-        const { rootId, factorToRoot } = await findUltimateRoot(productId, connection);
+        const { rootId, factorToRoot } = await findUltimateRoot(productId, tx);
 
         const syncQty = Math.abs(finalQuantity) / factorToRoot;
         if (finalQuantity < 0) {
-          await deductFamilyStock(rootId, syncQty, adjustmentId, 'adjustment', finalReason, connection);
+          await deductFamilyStock(rootId, syncQty, adjustment.id, 'adjustment', finalReason, tx);
         } else {
-          await addFamilyStock(rootId, syncQty, adjustmentId, 'adjustment', finalReason, connection);
+          await addFamilyStock(rootId, syncQty, adjustment.id, 'adjustment', finalReason, tx);
         }
 
         results.push({ productId, productName: product.name, newStock });

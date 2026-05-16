@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '051_create_cash_transfers_table',
@@ -13,28 +13,30 @@ const migration: Migration = {
         terminal_id VARCHAR(50),
         user_id VARCHAR(255) NOT NULL,
         amount DECIMAL(10,2) NOT NULL,
-        type ENUM('deposit', 'pickup') NOT NULL,
+        type VARCHAR(50) NOT NULL,
         reason TEXT,
         transaction_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL,
-        FOREIGN KEY (terminal_id) REFERENCES pos_terminals(id) ON DELETE SET NULL,
-        FOREIGN KEY (user_id) REFERENCES users(uid) ON DELETE CASCADE,
-        INDEX idx_shift_id (shift_id),
-        INDEX idx_terminal_id (terminal_id),
-        INDEX idx_user_id (user_id),
-        INDEX idx_transaction_time (transaction_time),
-        INDEX idx_type (type)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT cash_transfers_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL,
+        CONSTRAINT cash_transfers_terminal_id_fkey FOREIGN KEY (terminal_id) REFERENCES pos_terminals(id) ON DELETE SET NULL,
+        CONSTRAINT cash_transfers_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(uid) ON DELETE CASCADE
       )
     `;
 
-    await query(createCashTransfersTable);
+    await db.$executeRawUnsafe(createCashTransfersTable);
+    
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cash_transfers_shift_id ON cash_transfers (shift_id)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cash_transfers_terminal_id ON cash_transfers (terminal_id)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cash_transfers_user_id ON cash_transfers (user_id)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cash_transfers_transaction_time ON cash_transfers (transaction_time)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cash_transfers_type ON cash_transfers (type)`);
+    
     console.log('✅ Cash transfers table created');
   },
 
   async down(): Promise<void> {
-    await query('DROP TABLE IF EXISTS cash_transfers');
+    await db.$executeRawUnsafe('DROP TABLE IF EXISTS cash_transfers');
     console.log('✅ Cash transfers table dropped');
   }
 };

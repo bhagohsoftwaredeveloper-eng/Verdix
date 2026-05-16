@@ -1,7 +1,6 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { query, withTransaction } from '@/lib/mysql';
-import { v4 as uuidv4 } from 'uuid';
+import { db } from '@/lib/db';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,70 +14,60 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const offset = (page - 1) * limit;
 
-    let sql = `
-      SELECT
-        cp.id,
-        cp.customer_id,
-        c.name as customer_name,
-        cp.payment_type,
-        cp.payment_date,
-        cp.amount,
-        cp.reference,
-        cp.note,
-        cp.created_at
-      FROM customer_payments cp
-      LEFT JOIN customers c ON cp.customer_id = c.id
-      WHERE 1=1
-    `;
-
-    const params: any[] = [];
+    // Build where clause
+    const where: any = {};
 
     if (search) {
-      sql += ' AND (c.name LIKE ? OR cp.reference LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      where.OR = [
+        { customer: { name: { contains: search, mode: 'insensitive' } } },
+        { reference: { contains: search, mode: 'insensitive' } }
+      ];
     }
 
     if (fromDate) {
-        sql += ' AND cp.payment_date >= ?';
-        params.push(fromDate);
+      where.paymentDate = { gte: new Date(fromDate) };
     }
 
     if (toDate) {
-        sql += ' AND cp.payment_date <= ?';
-        params.push(toDate);
+      if (!where.paymentDate) where.paymentDate = {};
+      where.paymentDate = { ...where.paymentDate, lte: new Date(toDate) };
     }
 
     if (paymentType && paymentType !== 'All') {
-        sql += ' AND cp.payment_type = ?';
-        params.push(paymentType);
+      where.paymentType = paymentType;
     }
 
     if (customerId) {
-        sql += ' AND cp.customer_id = ?';
-        params.push(customerId);
+      where.customerId = customerId;
     }
 
-    // Get total count for pagination
-    const countSql = `SELECT COUNT(*) as total FROM (${sql}) as sub`;
-    const countResult = await query(countSql, params);
-    const total = countResult[0]?.total || 0;
-
-    sql += ' ORDER BY cp.payment_date DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-
-    const payments = await query(sql, params);
+    // Fetch payments with pagination
+    const [payments, total] = await Promise.all([
+      db.customerPayment.findMany({
+        where,
+        include: {
+          customer: {
+            select: { name: true }
+          }
+        },
+        orderBy: { paymentDate: 'desc' },
+        skip: offset,
+        take: limit
+      }),
+      db.customerPayment.count({ where })
+    ]);
 
     // Format for frontend
-    const formattedPayments = payments.map((row: any) => ({
-      id: row.id,
-      customerName: row.customer_name || 'Unknown Customer',
-      amount: parseFloat(row.amount),
-      allocated: parseFloat(row.amount), // Placeholder: assuming full allocation for now as we don't have allocation tracking yet
-      leftToAllocate: 0, // Placeholder
-      paymentType: row.payment_type,
-      paymentDate: row.payment_date,
-      reference: row.reference,
-      note: row.note,
+    const formattedPayments = payments.map((payment) => ({
+      id: payment.id,
+      customerName: payment.customer?.name || 'Unknown Customer',
+      amount: Number(payment.amount),
+      allocated: Number(payment.amount),
+      leftToAllocate: 0,
+      paymentType: payment.paymentType,
+      paymentDate: payment.paymentDate,
+      reference: payment.reference,
+      note: payment.note
     }));
 
     return NextResponse.json({
@@ -105,6 +94,7 @@ export async function POST(request: NextRequest) {
     const data = await request.json();
     const { customerId, amount, paymentType, paymentDate, reference, note, invoiceNo } = data;
 
+    // Validate required fields
     if (!customerId || !amount || !paymentType) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
@@ -112,54 +102,72 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const id = uuidv4();
+    // Generate reference if not provided
     const finalReference = reference || `PAY-${Date.now()}`;
-    const formattedDate = paymentDate ? new Date(paymentDate).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const paymentDateTime = paymentDate ? new Date(paymentDate) : new Date();
 
-    return await withTransaction(async (connection) => {
+    // Use transaction to ensure atomicity
+    const payment = await db.$transaction(async (tx) => {
       // 1. Record the payment
-      const insertSql = `
-        INSERT INTO customer_payments (id, customer_id, payment_type, payment_date, amount, reference, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `;
-      await connection.query(insertSql, [id, customerId, paymentType, formattedDate, amount, finalReference, note || null]);
+      const newPayment = await tx.customerPayment.create({
+        data: {
+          customerId,
+          paymentType,
+          paymentDate: paymentDateTime,
+          amount: new Decimal(amount),
+          reference: finalReference,
+          note: note || null
+        }
+      });
 
       // 2. If it's for a specific invoice, update that invoice's paid amount and status
       if (invoiceNo) {
-        // Update sales_invoices amount_paid and status in one go if possible, 
-        // but since we need to compare amount_paid and total, doing it in steps is safer.
-        
-        // Step A: Update amount_paid
-        await connection.query(`
-          UPDATE sales_invoices 
-          SET amount_paid = COALESCE(amount_paid, 0) + ?,
-              updated_at = NOW()
-          WHERE reference = ?
-        `, [amount, invoiceNo]);
+        const invoice = await tx.salesInvoice.findUnique({
+          where: { reference: invoiceNo }
+        });
 
-        // Step B: Update status based on total
-        await connection.query(`
-          UPDATE sales_invoices 
-          SET status = CASE WHEN amount_paid >= total THEN 'Paid' ELSE 'Partial' END,
-              updated_at = NOW()
-          WHERE reference = ?
-        `, [invoiceNo]);
+        if (invoice) {
+          const newAmountPaid = (invoice.amountPaid || new Decimal(0)).plus(new Decimal(amount));
+          const newStatus = newAmountPaid.gte(invoice.total) ? 'Paid' : 'PartiallyPaid';
 
-        // Step C: Sync to sales_transactions
-        await connection.query(`
-          UPDATE sales_transactions st
-          JOIN sales_invoices si ON st.reference = si.reference
-          SET st.status = si.status,
-              st.updated_at = NOW()
-          WHERE st.reference = ?
-        `, [invoiceNo]);
+          // Update invoice
+          await tx.salesInvoice.update({
+            where: { id: invoice.id },
+            data: {
+              amountPaid: newAmountPaid,
+              status: newStatus as any
+            }
+          });
+
+          // Sync status to sales_transactions
+          const transaction = await tx.salesTransaction.findUnique({
+            where: { reference: invoiceNo }
+          });
+
+          if (transaction) {
+            await tx.salesTransaction.update({
+              where: { id: transaction.id },
+              data: { status: newStatus as any }
+            });
+          }
+        }
       }
 
-      return NextResponse.json({
-        success: true,
-        message: 'Payment recorded successfully',
-        data: { id, customerId, amount, paymentType, paymentDate: formattedDate, reference: finalReference, note }
-      });
+      return newPayment;
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Payment recorded successfully',
+      data: {
+        id: payment.id,
+        customerId: payment.customerId,
+        amount: Number(payment.amount),
+        paymentType: payment.paymentType,
+        paymentDate: payment.paymentDate,
+        reference: payment.reference,
+        note: payment.note
+      }
     });
   } catch (error: any) {
     console.error('Error creating customer payment:', error);

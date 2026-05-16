@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '006_create_suppliers_table',
@@ -16,44 +16,44 @@ const migration: Migration = {
         payment_terms VARCHAR(100),
         markup_percentage DECIMAL(5,2),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
 
-    await query(createSuppliersTable);
+    await db.$executeRawUnsafe(createSuppliersTable);
     console.log('✅ Suppliers table created');
 
-    // Check if supplier_id column exists before adding
-    const result = await query(`
-      SELECT COLUMN_NAME
-      FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'products'
-        AND COLUMN_NAME = 'supplier_id'
-    `);
-    if (result.length === 0) {
-      // Add supplier_id column to products table
-      const alterProductsTable = `
-        ALTER TABLE products
-        ADD COLUMN supplier_id VARCHAR(50),
-        ADD FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
-      `;
+    // Add supplier_id column to products table if it doesn't exist
+    const addColumnQuery = `
+      ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS supplier_id VARCHAR(50)
+    `;
+    await db.$executeRawUnsafe(addColumnQuery);
 
-      await query(alterProductsTable);
-      console.log('✅ Added supplier_id column to products table');
-    } else {
-      console.log('ℹ️  supplier_id column already exists, skipping add');
+    // Add foreign key constraint
+    const addFKQuery = `
+      ALTER TABLE products
+      ADD CONSTRAINT fk_products_supplier
+      FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+      ON DELETE SET NULL
+    `;
+    // We use a try-catch for adding constraint as PG doesn't have ADD CONSTRAINT IF NOT EXISTS
+    try {
+      await db.$executeRawUnsafe(addFKQuery);
+      console.log('✅ Added foreign key constraint to products table');
+    } catch (e) {
+      console.log('ℹ️ Foreign key constraint might already exist, skipping');
     }
   },
 
   async down(): Promise<void> {
     // Remove foreign key and column from products table
-    await query('ALTER TABLE products DROP FOREIGN KEY products_ibfk_supplier');
-    await query('ALTER TABLE products DROP COLUMN supplier_id');
+    await db.$executeRawUnsafe('ALTER TABLE products DROP CONSTRAINT IF EXISTS fk_products_supplier');
+    await db.$executeRawUnsafe('ALTER TABLE products DROP COLUMN IF EXISTS supplier_id');
     console.log('✅ Removed supplier_id column from products table');
 
     // Drop suppliers table
-    await query('DROP TABLE IF EXISTS suppliers');
+    await db.$executeRawUnsafe('DROP TABLE IF EXISTS suppliers');
     console.log('✅ Suppliers table dropped');
   }
 };

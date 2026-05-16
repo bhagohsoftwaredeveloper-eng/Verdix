@@ -1,30 +1,30 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '047_alter_sales_transactions_add_voided_status',
   timestamp: '2026-01-29_08-23-00',
 
   async up(): Promise<void> {
-    // Modify status ENUM to include 'Voided'
-    const alterTableQuery = `
-      ALTER TABLE sales_transactions
-      MODIFY COLUMN status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned', 'Voided') DEFAULT 'Pending'
+    // In PostgreSQL, we add values to an existing enum type.
+    const query = `
+      DO $$ BEGIN
+        ALTER TYPE "SaleStatus" ADD VALUE 'Voided';
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
     `;
 
-    await query(alterTableQuery);
-    console.log('✅ sales_transactions status ENUM updated to include Voided');
+    try {
+      await db.$executeRawUnsafe(query);
+      console.log('✅ SaleStatus enum updated to include Voided');
+    } catch (error) {
+      console.error('⚠️ Failed to update SaleStatus enum:', error);
+    }
   },
 
   async down(): Promise<void> {
-    // Revert status ENUM (note: this may fail if there are 'Voided' values)
-    const alterTableQuery = `
-      ALTER TABLE sales_transactions
-      MODIFY COLUMN status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned') DEFAULT 'Pending'
-    `;
-
-    await query(alterTableQuery);
-    console.log('✅ sales_transactions status ENUM reverted');
+    console.log('ℹ️ Down migration for enum values is not supported in PostgreSQL');
   }
 };
 

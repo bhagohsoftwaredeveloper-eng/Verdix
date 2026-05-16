@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       ORDER BY pt.transaction_time DESC
     `;
 
-    const transactions = await query(baseSql, params);
+    const transactions = await db.$queryRawUnsafe(baseSql, params);
 
     if (transactions.length === 0) {
       return NextResponse.json({ success: true, data: [] });
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       FROM payment_details
       WHERE transaction_id IN (${placeholders})
     `;
-    const payments = await query(paymentsSql, transactionIds);
+    const payments = await db.$queryRawUnsafe(paymentsSql, transactionIds);
 
     // Fetch items for these transactions
     const itemsSql = `
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       FROM pos_transaction_items
       WHERE pos_transaction_id IN (${placeholders})
     `;
-    const items = await query(itemsSql, transactionIds);
+    const items = await db.$queryRawUnsafe(itemsSql, transactionIds);
 
     // Grouping
     const paymentsByTrans: Record<string, any[]> = {};

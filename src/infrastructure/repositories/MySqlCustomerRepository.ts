@@ -1,126 +1,174 @@
-import { query } from '../../../lib/mysql';
+import { db } from '@/lib/db';
 import { CustomerRepository, GetCustomersFilters } from '../../core/customers/domain/ICustomerRepository';
 import { CustomerEntity } from '../../core/customers/domain/Customer';
 import { isLoyaltyCardExpired } from '../../../lib/loyalty-utils';
 
 export class MySqlCustomerRepository implements CustomerRepository {
   async findAll(limit: number, offset: number, filters: GetCustomersFilters): Promise<CustomerEntity[]> {
-    let sql = `
-      SELECT
-        c.id,
-        c.name,
-        c.contact_number AS contactNumber,
-        c.active,
-        c.sales_person AS salesPerson,
-        c.sales_area AS salesArea,
-        c.sales_group AS salesGroup,
-        COALESCE(cl.current_points, c.loyalty_points) AS loyaltyPoints,
-        cl.current_points AS current_points,
-        cl.expiry_date AS expiryDate,
-        c.payment_terms AS paymentTerms,
-        c.address,
-        c.billing_address AS billingAddress,
-        c.discount,
-        c.credit_limit AS creditLimit,
-        c.price_level_id AS priceLevelId,
-        c.created_at AS createdAt,
-        c.updated_at AS updatedAt,
-        (SELECT COALESCE(SUM(total - COALESCE(amount_paid, 0)), 0) FROM sales_invoices WHERE customer_id = c.id AND status != 'Paid') AS balance
-      FROM customers c
-      LEFT JOIN customer_loyalty cl ON c.id = cl.customer_id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    const where = filters.search ? {
+      OR: [
+        { name: { contains: filters.search, mode: 'insensitive' as const } },
+        { contactNumber: { contains: filters.search, mode: 'insensitive' as const } },
+      ],
+    } : {};
 
-    if (filters.search) {
-      sql += ' AND (c.name LIKE ? OR c.contact_number LIKE ?)';
-      params.push(`%${filters.search}%`, `%${filters.search}%`);
-    }
+    const customers = await db.customer.findMany({
+      where,
+      include: {
+        loyalty: true,
+        salesInvoices: {
+          where: {
+            status: { not: 'Paid' }
+          },
+          select: {
+            total: true,
+            amountPaid: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: limit,
+      skip: offset,
+    });
 
-    sql += ' ORDER BY c.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    return customers.map(c => {
+      const balance = c.salesInvoices.reduce((acc, inv) => {
+        return acc + (Number(inv.total) - (Number(inv.amountPaid) || 0));
+      }, 0);
 
-    const customersRaw: any[] = await query(sql, params);
-
-    return customersRaw.map(c => ({
-      ...c,
-      isExpired: isLoyaltyCardExpired(c.expiryDate)
-    }));
+      return {
+        id: c.id,
+        name: c.name,
+        contactNumber: c.contactNumber || '',
+        active: c.active,
+        salesPerson: c.salesPerson || undefined,
+        salesArea: c.salesArea || undefined,
+        salesGroup: c.salesGroup || undefined,
+        loyaltyPoints: c.loyalty ? Number(c.loyalty.currentPoints) : Number(c.loyaltyPoints),
+        currentPoints: c.loyalty ? Number(c.loyalty.currentPoints) : undefined,
+        expiryDate: c.loyalty?.expiryDate?.toISOString() || undefined,
+        paymentTerms: c.paymentTerms || undefined,
+        address: c.address || undefined,
+        billingAddress: c.billingAddress || undefined,
+        discount: Number(c.discount),
+        creditLimit: Number(c.creditLimit),
+        priceLevelId: c.priceLevelId || undefined,
+        balance,
+        isExpired: isLoyaltyCardExpired(c.loyalty?.expiryDate?.toISOString() || undefined),
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
+      };
+    });
   }
 
   async countAll(filters: GetCustomersFilters): Promise<number> {
-    let countSql = 'SELECT COUNT(*) as total FROM customers WHERE 1=1';
-    const countParams: any[] = [];
+    const where = filters.search ? {
+      OR: [
+        { name: { contains: filters.search, mode: 'insensitive' as const } },
+        { contactNumber: { contains: filters.search, mode: 'insensitive' as const } },
+      ],
+    } : {};
 
-    if (filters.search) {
-      countSql += ' AND (name LIKE ? OR contact_number LIKE ?)';
-      countParams.push(`%${filters.search}%`, `%${filters.search}%`);
-    }
-
-    const countResult = await query(countSql, countParams);
-    return countResult[0]?.total || 0;
+    return await db.customer.count({ where });
   }
 
   async findById(id: string): Promise<CustomerEntity | null> {
-    const results = await this.findAll(1, 0, { search: id }); // Should ideally be a specific by-id query
-    // Simplified for now, similar to how I did products
-    return results[0] || null;
+    const customer = await db.customer.findUnique({
+      where: { id },
+      include: {
+        loyalty: true,
+        salesInvoices: {
+          where: {
+            status: { not: 'Paid' }
+          },
+          select: {
+            total: true,
+            amountPaid: true
+          }
+        }
+      }
+    });
+
+    if (!customer) return null;
+
+    const balance = customer.salesInvoices.reduce((acc, inv) => {
+      return acc + (Number(inv.total) - (Number(inv.amountPaid) || 0));
+    }, 0);
+
+    return {
+      id: customer.id,
+      name: customer.name,
+      contactNumber: customer.contactNumber || '',
+      active: customer.active,
+      salesPerson: customer.salesPerson || undefined,
+      salesArea: customer.salesArea || undefined,
+      salesGroup: customer.salesGroup || undefined,
+      loyaltyPoints: customer.loyalty ? Number(customer.loyalty.currentPoints) : Number(customer.loyaltyPoints),
+      currentPoints: customer.loyalty ? Number(customer.loyalty.currentPoints) : undefined,
+      expiryDate: customer.loyalty?.expiryDate?.toISOString() || undefined,
+      paymentTerms: customer.paymentTerms || undefined,
+      address: customer.address || undefined,
+      billingAddress: customer.billingAddress || undefined,
+      discount: Number(customer.discount),
+      creditLimit: Number(customer.creditLimit),
+      priceLevelId: customer.priceLevelId || undefined,
+      balance,
+      isExpired: isLoyaltyCardExpired(customer.loyalty?.expiryDate?.toISOString() || undefined),
+      createdAt: customer.createdAt.toISOString(),
+      updatedAt: customer.updatedAt.toISOString(),
+    };
   }
 
   async create(customer: Partial<CustomerEntity>): Promise<string> {
-    const sql = `
-      INSERT INTO customers (
-        id, name, contact_number, active, sales_person, sales_area, sales_group,
-        loyalty_points, payment_terms, address, billing_address, discount, credit_limit, price_level_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+    const data: any = {
+      name: customer.name!,
+      contactNumber: customer.contactNumber,
+      active: customer.active ?? true,
+      salesPerson: customer.salesPerson,
+      salesArea: customer.salesArea,
+      salesGroup: customer.salesGroup,
+      loyaltyPoints: customer.loyaltyPoints || 0,
+      paymentTerms: customer.paymentTerms,
+      address: customer.address,
+      billingAddress: customer.billingAddress,
+      discount: customer.discount || 0,
+      creditLimit: customer.creditLimit || 0,
+      priceLevelId: customer.priceLevelId,
+    };
 
-    await query(sql, [
-      customer.id, customer.name, customer.contactNumber, customer.active ?? true, 
-      customer.salesPerson || null, customer.salesArea || null, customer.salesGroup || null,
-      customer.loyaltyPoints || 0, customer.paymentTerms || null, customer.address || null, 
-      customer.billingAddress || null, customer.discount || 0, customer.creditLimit || 0, customer.priceLevelId || null
-    ]);
+    if (customer.id) {
+      data.id = customer.id;
+    }
 
-    return customer.id as string;
+    const created = await db.customer.create({ data });
+    return created.id;
   }
 
   async update(id: string, customer: Partial<CustomerEntity>): Promise<void> {
-    const updates: string[] = [];
-    const params: any[] = [];
-    
-    // Manual mapping for now
-    const fieldMapping: Record<string, string> = {
-      name: 'name',
-      contactNumber: 'contact_number',
-      active: 'active',
-      salesPerson: 'sales_person',
-      salesArea: 'sales_area',
-      salesGroup: 'sales_group',
-      loyaltyPoints: 'loyalty_points',
-      paymentTerms: 'payment_terms',
-      address: 'address',
-      billingAddress: 'billing_address',
-      discount: 'discount',
-      creditLimit: 'credit_limit',
-      priceLevelId: 'price_level_id'
-    };
+    const data: any = {};
+    if (customer.name !== undefined) data.name = customer.name;
+    if (customer.contactNumber !== undefined) data.contactNumber = customer.contactNumber;
+    if (customer.active !== undefined) data.active = customer.active;
+    if (customer.salesPerson !== undefined) data.salesPerson = customer.salesPerson;
+    if (customer.salesArea !== undefined) data.salesArea = customer.salesArea;
+    if (customer.salesGroup !== undefined) data.salesGroup = customer.salesGroup;
+    if (customer.loyaltyPoints !== undefined) data.loyaltyPoints = customer.loyaltyPoints;
+    if (customer.paymentTerms !== undefined) data.paymentTerms = customer.paymentTerms;
+    if (customer.address !== undefined) data.address = customer.address;
+    if (customer.billingAddress !== undefined) data.billingAddress = customer.billingAddress;
+    if (customer.discount !== undefined) data.discount = customer.discount;
+    if (customer.creditLimit !== undefined) data.creditLimit = customer.creditLimit;
+    if (customer.priceLevelId !== undefined) data.priceLevelId = customer.priceLevelId;
 
-    Object.entries(customer).forEach(([key, value]) => {
-      if (fieldMapping[key]) {
-        updates.push(`${fieldMapping[key]} = ?`);
-        params.push(value);
-      }
+    await db.customer.update({
+      where: { id },
+      data
     });
-    
-    if (updates.length > 0) {
-      const sql = `UPDATE customers SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`;
-      params.push(id);
-      await query(sql, params);
-    }
   }
 
   async delete(id: string): Promise<void> {
-    await query(`DELETE FROM customers WHERE id = ?`, [id]);
+    await db.customer.delete({ where: { id } });
   }
 }

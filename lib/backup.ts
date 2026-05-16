@@ -39,7 +39,7 @@ export async function performBackup(): Promise<string> {
   }
 
   const dbHost = process.env.DB_HOST || 'localhost';
-  const dbUser = process.env.DB_USER || 'root';
+  const dbUser = process.env.DB_USER || 'postgres';
   const dbPass = process.env.DB_PASSWORD || '';
   const dbName = process.env.DB_NAME || 'stock_pilot';
   
@@ -47,17 +47,16 @@ export async function performBackup(): Promise<string> {
   const filename = `backup-${dbName}-${timestamp}.sql`;
   const filePath = path.join(BACKUP_DIR, filename);
 
-  // Note: Using --column-statistics=0 to avoid issues with some MySQL versions
-  // Also using password directly in command line (not ideal, but common for local/dev tools)
-  const passwordArg = dbPass ? `-p${dbPass}` : '';
-  const command = `mysqldump -h ${dbHost} -u ${dbUser} ${passwordArg} ${dbName} --column-statistics=0 > "${filePath}"`;
+  // Note: For PostgreSQL, we typically use pg_dump
+  // We use PGPASSWORD environment variable to avoid interactive password prompt
+  const command = `set PGPASSWORD=${dbPass} && pg_dump -h ${dbHost} -U ${dbUser} -d ${dbName} -F p > "${filePath}"`;
 
   try {
     await execPromise(command);
     return filename;
   } catch (error) {
     console.error('Backup command failed:', error);
-    throw new Error('Failed to execute mysqldump');
+    throw new Error('Failed to execute pg_dump. Make sure PostgreSQL client tools are installed.');
   }
 }
 
@@ -69,18 +68,17 @@ export async function restoreBackup(filename: string): Promise<void> {
   }
 
   const dbHost = process.env.DB_HOST || 'localhost';
-  const dbUser = process.env.DB_USER || 'root';
+  const dbUser = process.env.DB_USER || 'postgres';
   const dbPass = process.env.DB_PASSWORD || '';
   const dbName = process.env.DB_NAME || 'stock_pilot';
 
-  const passwordArg = dbPass ? `-p${dbPass}` : '';
-  // Note: Using < to direct the SQL file into mysql command
-  const command = `mysql -h ${dbHost} -u ${dbUser} ${passwordArg} ${dbName} < "${filePath}"`;
+  // For PostgreSQL restore, we use psql
+  const command = `set PGPASSWORD=${dbPass} && psql -h ${dbHost} -U ${dbUser} -d ${dbName} < "${filePath}"`;
 
   try {
     await execPromise(command);
   } catch (error) {
     console.error('Restore command failed:', error);
-    throw new Error('Failed to execute mysql restore');
+    throw new Error('Failed to execute psql restore. Make sure PostgreSQL client tools are installed.');
   }
 }

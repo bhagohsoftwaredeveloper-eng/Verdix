@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../../lib/mysql';
+import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,167 +9,236 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '100');
 
     // Fetch Sales Orders
-    const salesOrdersQuery = `
-      SELECT 
-        'Sales Order' as transaction_type,
-        reference as reference_number,
-        id,
-        order_date as transaction_date,
-        total as amount,
-        status,
-        customer_id
-      FROM sales_orders
-      WHERE reference IS NOT NULL AND reference != ''
-      ${search ? `AND reference LIKE ?` : ''}
-      ORDER BY order_date DESC
-      LIMIT ?
-    `;
-    const salesOrdersParams = search ? [`%${search}%`, limit] : [limit];
-    const salesOrders = type && type !== 'sales_order' ? [] : await query(salesOrdersQuery, salesOrdersParams);
+    const salesOrders = (type && type !== 'sales_order') ? [] : await db.salesOrder.findMany({
+      where: {
+        reference: {
+          not: null,
+          not: '',
+          contains: search || undefined,
+          mode: 'insensitive'
+        }
+      },
+      take: limit,
+      orderBy: { orderDate: 'desc' },
+      select: {
+        id: true,
+        reference: true,
+        orderDate: true,
+        total: true,
+        status: true,
+        customerId: true
+      }
+    });
 
     // Fetch Sales Invoices
-    const salesInvoicesQuery = `
-      SELECT 
-        'Sales Invoice' as transaction_type,
-        reference as reference_number,
-        id,
-        invoice_date as transaction_date,
-        total as amount,
-        status,
-        customer_id
-      FROM sales_invoices
-      WHERE reference IS NOT NULL AND reference != ''
-      ${search ? `AND reference LIKE ?` : ''}
-      ORDER BY invoice_date DESC
-      LIMIT ?
-    `;
-    const salesInvoicesParams = search ? [`%${search}%`, limit] : [limit];
-    const salesInvoices = type && type !== 'sales_invoice' ? [] : await query(salesInvoicesQuery, salesInvoicesParams);
+    const salesInvoices = (type && type !== 'sales_invoice') ? [] : await db.salesInvoice.findMany({
+      where: {
+        reference: {
+          not: null,
+          not: '',
+          contains: search || undefined,
+          mode: 'insensitive'
+        }
+      },
+      take: limit,
+      orderBy: { invoiceDate: 'desc' },
+      select: {
+        id: true,
+        reference: true,
+        invoiceDate: true,
+        total: true,
+        status: true,
+        customerId: true
+      }
+    });
 
     // Fetch Purchase Orders
-    const purchaseOrdersQuery = `
-      SELECT 
-        'Purchase Order' as transaction_type,
-        reference as reference_number,
-        id,
-        order_date as transaction_date,
-        total as amount,
-        status,
-        supplier_id
-      FROM purchase_orders
-      WHERE reference IS NOT NULL AND reference != ''
-      ${search ? `AND reference LIKE ?` : ''}
-      ORDER BY order_date DESC
-      LIMIT ?
-    `;
-    const purchaseOrdersParams = search ? [`%${search}%`, limit] : [limit];
-    const purchaseOrders = type && type !== 'purchase_order' ? [] : await query(purchaseOrdersQuery, purchaseOrdersParams);
+    const purchaseOrders = (type && type !== 'purchase_order') ? [] : await db.purchaseOrder.findMany({
+      where: {
+        referenceNumber: {
+          not: null,
+          not: '',
+          contains: search || undefined,
+          mode: 'insensitive'
+        }
+      },
+      take: limit,
+      orderBy: { date: 'desc' },
+      select: {
+        id: true,
+        referenceNumber: true,
+        date: true,
+        total: true,
+        status: true,
+        supplierId: true
+      }
+    });
 
     // Fetch Customer Payments
-    const customerPaymentsQuery = `
-      SELECT 
-        'Customer Payment' as transaction_type,
-        reference as reference_number,
-        id,
-        payment_date as transaction_date,
-        amount,
-        'Completed' as status,
-        customer_id
-      FROM customer_payments
-      WHERE reference IS NOT NULL AND reference != ''
-      ${search ? `AND reference LIKE ?` : ''}
-      ORDER BY payment_date DESC
-      LIMIT ?
-    `;
-    const customerPaymentsParams = search ? [`%${search}%`, limit] : [limit];
-    const customerPayments = type && type !== 'customer_payment' ? [] : await query(customerPaymentsQuery, customerPaymentsParams);
+    const customerPayments = (type && type !== 'customer_payment') ? [] : await db.customerPayment.findMany({
+      where: {
+        reference: {
+          not: null,
+          not: '',
+          contains: search || undefined,
+          mode: 'insensitive'
+        }
+      },
+      take: limit,
+      orderBy: { paymentDate: 'desc' },
+      select: {
+        id: true,
+        reference: true,
+        paymentDate: true,
+        amount: true,
+        customerId: true
+      }
+    });
 
     // Fetch Stock Adjustments
-    const stockAdjustmentsQuery = `
-      SELECT 
-        'Stock Adjustment' as transaction_type,
-        reference as reference_number,
-        id,
-        adjustment_date as transaction_date,
-        0 as amount,
-        'Completed' as status,
-        NULL as customer_id
-      FROM stock_adjustments
-      WHERE reference IS NOT NULL AND reference != ''
-      ${search ? `AND reference LIKE ?` : ''}
-      ORDER BY adjustment_date DESC
-      LIMIT ?
-    `;
-    const stockAdjustmentsParams = search ? [`%${search}%`, limit] : [limit];
-    const stockAdjustments = type && type !== 'stock_adjustment' ? [] : await query(stockAdjustmentsQuery, stockAdjustmentsParams);
+    const stockAdjustments = (type && type !== 'stock_adjustment') ? [] : await db.stockAdjustment.findMany({
+      where: {
+        referenceNo: {
+          not: null,
+          not: '',
+          contains: search || undefined,
+          mode: 'insensitive'
+        }
+      },
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        referenceNo: true,
+        createdAt: true,
+        adjType: true
+      }
+    });
 
     // Fetch Sales Transactions (POS)
-    const salesTransactionsQuery = `
-      SELECT 
-        'Sales Transaction' as transaction_type,
-        id as reference_number,
-        id,
-        date as transaction_date,
-        total as amount,
-        status,
-        customer_id
-      FROM sales_transactions
-      ${search ? `WHERE id LIKE ?` : ''}
-      ORDER BY date DESC
-      LIMIT ?
-    `;
-    const salesTransactionsParams = search ? [`%${search}%`, limit] : [limit];
-    const salesTransactions = type && type !== 'sales_transaction' ? [] : await query(salesTransactionsQuery, salesTransactionsParams);
+    const salesTransactions = (type && type !== 'sales_transaction') ? [] : await db.salesTransaction.findMany({
+      where: search ? {
+        id: {
+          contains: search,
+          mode: 'insensitive'
+        }
+      } : {},
+      take: limit,
+      orderBy: { date: 'desc' },
+      select: {
+        id: true,
+        date: true,
+        total: true,
+        status: true,
+        customerId: true
+      }
+    });
 
     // Fetch POS Transactions
-    const posTransactionsQuery = `
-      SELECT 
-        'POS Transaction' as transaction_type,
-        id as reference_number,
-        id,
-        transaction_time as transaction_date,
-        total_amount as amount,
-        transaction_type as status,
-        NULL as customer_id
-      FROM pos_transactions
-      ${search ? `WHERE id LIKE ?` : ''}
-      ORDER BY transaction_time DESC
-      LIMIT ?
-    `;
-    const posTransactionsParams = search ? [`%${search}%`, limit] : [limit];
-    const posTransactions = type && type !== 'pos_transaction' ? [] : await query(posTransactionsQuery, posTransactionsParams);
+    const posTransactions = (type && type !== 'pos_transaction') ? [] : await db.posTransaction.findMany({
+      where: search ? {
+        id: {
+          contains: search,
+          mode: 'insensitive'
+        }
+      } : {},
+      take: limit,
+      orderBy: { transactionTime: 'desc' },
+      select: {
+        id: true,
+        transactionTime: true,
+        totalAmount: true,
+        transactionType: true
+      }
+    });
 
-    // Combine all transactions
-    const allTransactions = [
-      ...salesOrders,
-      ...salesInvoices,
-      ...purchaseOrders,
-      ...customerPayments,
-      ...stockAdjustments,
-      ...salesTransactions,
-      ...posTransactions
+    // Combine and format all transactions
+    const allTransactions: any[] = [
+      ...salesOrders.map(txn => ({
+        transactionType: 'Sales Order',
+        referenceNumber: txn.reference,
+        id: txn.id,
+        transactionDate: txn.orderDate,
+        amount: txn.total,
+        status: txn.status,
+        customerId: txn.customerId
+      })),
+      ...salesInvoices.map(txn => ({
+        transactionType: 'Sales Invoice',
+        referenceNumber: txn.reference,
+        id: txn.id,
+        transactionDate: txn.invoiceDate,
+        amount: txn.total,
+        status: txn.status,
+        customerId: txn.customerId
+      })),
+      ...purchaseOrders.map(txn => ({
+        transactionType: 'Purchase Order',
+        referenceNumber: txn.referenceNumber,
+        id: txn.id,
+        transactionDate: txn.date,
+        amount: txn.total,
+        status: txn.status,
+        customerId: txn.supplierId
+      })),
+      ...customerPayments.map(txn => ({
+        transactionType: 'Customer Payment',
+        referenceNumber: txn.reference,
+        id: txn.id,
+        transactionDate: txn.paymentDate,
+        amount: txn.amount,
+        status: 'Completed',
+        customerId: txn.customerId
+      })),
+      ...stockAdjustments.map(txn => ({
+        transactionType: 'Stock Adjustment',
+        referenceNumber: txn.referenceNo,
+        id: txn.id,
+        transactionDate: txn.createdAt,
+        amount: 0,
+        status: 'Completed',
+        customerId: null
+      })),
+      ...salesTransactions.map(txn => ({
+        transactionType: 'Sales Transaction',
+        referenceNumber: txn.id,
+        id: txn.id,
+        transactionDate: txn.date,
+        amount: txn.total,
+        status: txn.status,
+        customerId: txn.customerId
+      })),
+      ...posTransactions.map(txn => ({
+        transactionType: 'POS Transaction',
+        referenceNumber: txn.id,
+        id: txn.id,
+        transactionDate: txn.transactionTime,
+        amount: txn.totalAmount,
+        status: txn.transactionType,
+        customerId: null
+      }))
     ];
 
     // Sort by date (most recent first)
     allTransactions.sort((a: any, b: any) => {
-      const dateA = new Date(a.transaction_date || 0).getTime();
-      const dateB = new Date(b.transaction_date || 0).getTime();
+      const dateA = new Date(a.transactionDate || 0).getTime();
+      const dateB = new Date(b.transactionDate || 0).getTime();
       return dateB - dateA;
     });
 
     // Format the data
     const formattedTransactions = allTransactions.slice(0, limit).map((txn: any) => ({
-      transactionType: txn.transaction_type,
-      referenceNumber: txn.reference_number,
+      transactionType: txn.transactionType,
+      referenceNumber: txn.referenceNumber,
       id: txn.id,
-      date: txn.transaction_date,
-      amount: parseFloat(txn.amount || 0),
-      formattedAmount: `₱${parseFloat(txn.amount || 0).toLocaleString('en-PH', { 
+      date: txn.transactionDate,
+      amount: Number(txn.amount || 0),
+      formattedAmount: `₱${Number(txn.amount || 0).toLocaleString('en-PH', { 
         minimumFractionDigits: 2, 
         maximumFractionDigits: 2 
       })}`,
       status: txn.status,
-      customerId: txn.customer_id || txn.supplier_id
+      customerId: txn.customerId
     }));
 
     // Get transaction counts by type

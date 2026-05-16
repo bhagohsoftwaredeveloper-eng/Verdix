@@ -1,76 +1,103 @@
 'use server';
 
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
+import { withTransaction } from '@/lib/db-helpers';
 import { recordAdjustmentMovement } from '@/lib/stock-movements';
 import type { StockAdjustment } from '@/lib/types';
+import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
+import { deductFamilyStock, addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 
 export async function getStockAdjustments(limit?: number, offset?: number) {
   try {
     // 1. Fetch completed adjustments
-    let adjSql = `
-      SELECT
-        sa.*,
-        'Completed' as status,
-        p.name as product_name,
-        p.sku as product_sku,
-        p.category,
-        p.brand
-      FROM stock_adjustments sa
-      LEFT JOIN products p ON sa.product_id = p.id
-    `;
-    const params: any[] = [];
-    const completedAdjustments = await query(adjSql);
+    const completedAdjustments = await db.stockAdjustment.findMany({
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            category: true,
+            brand: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: limit,
+      skip: offset
+    });
 
     // 2. Fetch pending adjustments from approval queue
-    let queueSql = `
-      SELECT 
-        aq.*,
-        p.name as product_name,
-        p.sku as product_sku,
-        p.category,
-        p.brand
-      FROM approval_queue aq
-      LEFT JOIN products p ON JSON_UNQUOTE(JSON_EXTRACT(aq.transaction_data, '$.productId')) = p.id
-      WHERE aq.transaction_type = 'STOCK_ADJUSTMENT' AND aq.status = 'Pending'
-    `;
-    const pendingQueue = await query(queueSql);
+    const pendingQueue = await db.approvalQueue.findMany({
+      where: {
+        transactionType: 'STOCK_ADJUSTMENT',
+        status: 'Pending',
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Extract product IDs from pending queue to enrich data
+    const productIds = pendingQueue.map(item => {
+      const data = item.transactionData as any;
+      return data.productId;
+    }).filter(Boolean);
+
+    const products = await db.product.findMany({
+      where: {
+        id: { in: productIds }
+      },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        category: true,
+        brand: true,
+      }
+    });
+
+    const productMap = new Map(products.map(p => [p.id, p]));
 
     // 3. Combine and sort
-    const mappedCompleted = (completedAdjustments || []).map((adj: any) => ({
+    const mappedCompleted = (completedAdjustments || []).map((adj) => ({
       id: adj.id,
-      productId: adj.product_id,
-      productName: adj.product_name,
-      quantity: parseInt(adj.quantity),
+      productId: adj.productId,
+      productName: adj.product?.name || 'Unknown Product',
+      quantity: Number(adj.quantity),
       reason: adj.reason,
-      date: adj.created_at,
-      newStock: parseInt(adj.new_stock),
+      date: adj.createdAt,
+      newStock: Number(adj.newStock),
       status: 'Completed',
-      product: adj.product_name ? {
-        id: adj.product_id,
-        name: adj.product_name,
-        sku: adj.product_sku,
-        category: adj.category,
-        brand: adj.brand
+      product: adj.product ? {
+        id: adj.productId,
+        name: adj.product.name,
+        sku: adj.product.sku,
+        category: adj.product.category,
+        brand: adj.product.brand
       } : undefined
     }));
 
-    const mappedPending = (pendingQueue || []).map((item: any) => {
-      const txData = typeof item.transaction_data === 'string' ? JSON.parse(item.transaction_data) : item.transaction_data;
+    const mappedPending = (pendingQueue || []).map((item) => {
+      const txData = item.transactionData as any;
+      const product = productMap.get(txData.productId);
       return {
         id: item.id,
         productId: txData.productId,
-        productName: item.product_name || 'Unknown Product',
-        quantity: parseInt(txData.quantity),
+        productName: product?.name || 'Unknown Product',
+        quantity: Number(txData.quantity),
         reason: txData.reason,
-        date: item.created_at,
+        date: item.createdAt,
         newStock: 0, // Not finalized yet
         status: 'Pending',
-        product: item.product_name ? {
+        product: product ? {
             id: txData.productId,
-            name: item.product_name,
-            sku: item.product_sku,
-            category: item.category,
-            brand: item.brand
+            name: product.name,
+            sku: product.sku,
+            category: product.category,
+            brand: product.brand
         } : undefined
       };
     });
@@ -79,8 +106,12 @@ export async function getStockAdjustments(limit?: number, offset?: number) {
         new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
+    // If limit/offset were already applied to findMany, we might not need to slice again
+    // but since we combined two sources, we should slice the final result if they were not applied earlier.
+    // However, for combined results, we'd need to fetch all and then slice.
+    
     if (limit !== undefined && offset !== undefined) {
-      return allAdjustments.slice(offset, offset + limit) as StockAdjustment[];
+      return allAdjustments.slice(0, limit) as StockAdjustment[];
     }
 
     return allAdjustments as StockAdjustment[];
@@ -92,9 +123,7 @@ export async function getStockAdjustments(limit?: number, offset?: number) {
 
 export async function getStockAdjustmentsCount() {
   try {
-    const sql = `SELECT COUNT(*) as count FROM stock_adjustments`;
-    const result = await query(sql);
-    return result[0].count;
+    return await db.stockAdjustment.count();
   } catch (error) {
     console.error('Error fetching stock adjustments count:', error);
     return 0;
@@ -105,17 +134,22 @@ export async function createStockAdjustment(productId: string, quantity: number,
   try {
     const adjustmentId = `adj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    const sql = `
-      INSERT INTO stock_adjustments (id, product_id, quantity, reason, new_stock)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-
-    await query(sql, [adjustmentId, productId, quantity, reason, newStock]);
+    await db.stockAdjustment.create({
+      data: {
+        id: adjustmentId,
+        productId,
+        quantity,
+        reason,
+        newStock,
+      }
+    });
 
     // Get product name for recording movement
-    const getProductSql = `SELECT name FROM products WHERE id = ?`;
-    const productResult = await query(getProductSql, [productId]);
-    const productName = productResult[0]?.name || 'Unknown Product';
+    const product = await db.product.findUnique({
+      where: { id: productId },
+      select: { name: true }
+    });
+    const productName = product?.name || 'Unknown Product';
 
     // Record the adjustment in stock movements
     await recordAdjustmentMovement(adjustmentId, productId, productName, quantity, reason);
@@ -129,38 +163,35 @@ export async function createStockAdjustment(productId: string, quantity: number,
 
 export async function getStockAdjustmentsByProduct(productId: string, limit?: number) {
   try {
-    let sql = `
-      SELECT
-        sa.*,
-        p.name as product_name,
-        p.sku as product_sku
-      FROM stock_adjustments sa
-      LEFT JOIN products p ON sa.product_id = p.id
-      WHERE sa.product_id = ?
-      ORDER BY sa.created_at DESC
-    `;
+    const adjustments = await db.stockAdjustment.findMany({
+      where: { productId },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            sku: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: limit
+    });
 
-    const params: any[] = [productId];
-
-    if (limit !== undefined) {
-      sql += ` LIMIT ?`;
-      params.push(limit);
-    }
-
-    const adjustments = await query(sql, params);
-
-    return adjustments.map((adj: any) => ({
+    return adjustments.map((adj) => ({
       id: adj.id,
-      productId: adj.product_id,
-      productName: adj.product_name,
-      quantity: parseInt(adj.quantity),
+      productId: adj.productId,
+      productName: adj.product?.name,
+      quantity: Number(adj.quantity),
       reason: adj.reason,
-      date: adj.created_at,
-      newStock: parseInt(adj.new_stock),
-      product: adj.product_name ? {
-        id: adj.product_id,
-        name: adj.product_name,
-        sku: adj.product_sku
+      date: adj.createdAt,
+      newStock: Number(adj.newStock),
+      product: adj.product ? {
+        id: adj.productId,
+        name: adj.product.name,
+        sku: adj.product.sku
       } : undefined
     })) as StockAdjustment[];
   } catch (error) {
@@ -172,28 +203,33 @@ export async function getStockAdjustmentsByProduct(productId: string, limit?: nu
 export async function migrateAdjustmentsToMovements() {
   try {
     // Get all stock adjustments that don't have corresponding movements
-    const sql = `
-      SELECT sa.*, p.name as product_name
-      FROM stock_adjustments sa
-      LEFT JOIN products p ON sa.product_id = p.id
-      LEFT JOIN stock_movements sm ON sa.id = sm.reference_id AND sm.reference_type = 'adjustment'
-      WHERE sm.id IS NULL
-    `;
+    // Prisma doesn't support anti-joins directly easily without raw queries or two steps
+    // Let's use a two-step approach or a findMany with NOT in
+    
+    const adjustmentsWithMovements = await db.stockMovement.findMany({
+      where: { referenceType: 'adjustment' },
+      select: { referenceId: true }
+    });
+    const adjustmentIdsWithMovements = adjustmentsWithMovements.map(m => m.referenceId).filter(Boolean) as string[];
 
-    const adjustments = await query(sql);
+    const adjustmentsMissingMovements = await db.stockAdjustment.findMany({
+      where: {
+        id: { notIn: adjustmentIdsWithMovements }
+      },
+      include: {
+        product: { select: { name: true } }
+      }
+    });
 
     let migratedCount = 0;
 
-    for (const adj of adjustments) {
+    for (const adj of adjustmentsMissingMovements) {
       try {
-        // Calculate previous stock: new_stock - quantity
-        const previousStock = adj.new_stock - adj.quantity;
-
         await recordAdjustmentMovement(
           adj.id,
-          adj.product_id,
-          adj.product_name || 'Unknown Product',
-          adj.quantity,
+          adj.productId,
+          adj.product?.name || 'Unknown Product',
+          Number(adj.quantity),
           adj.reason
         );
 
@@ -210,10 +246,6 @@ export async function migrateAdjustmentsToMovements() {
   }
 }
 
-import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
-import { withTransaction } from '@/lib/mysql';
-import { deductFamilyStock, addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
-
 export async function adjustStock(productId: string, quantity: number, reason: string, userId: string = 'system', isInternalFinalization: boolean = false) {
   try {
     // 1. Check if multi-level approval is required
@@ -221,14 +253,21 @@ export async function adjustStock(productId: string, quantity: number, reason: s
     
     if (isApprovalRequired) {
       // Get product info for enrichment
-      const productInfoRes: any = await query(`
-        SELECT p.name, p.stock, p.sku, p.barcode, w.name as warehouse_name, s.name as shelf_name
-        FROM products p
-        LEFT JOIN warehouses w ON p.warehouse_id = w.id
-        LEFT JOIN shelf_locations s ON p.shelf_location_id = s.id
-        WHERE p.id = ?
-      `, [productId]);
-      const productInfo = productInfoRes[0] || { name: 'Unknown', stock: 0, sku: '', barcode: '', warehouse_name: null, shelf_name: null };
+      const productInfo = await db.product.findUnique({
+        where: { id: productId },
+        include: {
+          // Note: In your schema, shelfLocationId is a String, but you also have productShelves relation.
+          // The SQL used LEFT JOIN warehouses and shelf_locations.
+        }
+      });
+
+      if (!productInfo) {
+        return { success: false, error: 'Product not found' };
+      }
+
+      // Enrichment: Get warehouse and shelf names
+      const warehouse = productInfo.warehouseId ? await db.warehouse.findUnique({ where: { id: productInfo.warehouseId } }) : null;
+      const shelf = productInfo.shelfLocationId ? await db.shelfLocation.findUnique({ where: { id: productInfo.shelfLocationId } }) : null;
 
       // Submit to approval queue instead of executing
       console.log('Stock adjustment submitted for approval:', { productId, quantity, reason });
@@ -239,27 +278,28 @@ export async function adjustStock(productId: string, quantity: number, reason: s
         productName: productInfo.name,
         productSku: productInfo.sku,
         productBarcode: productInfo.barcode,
-        warehouseName: productInfo.warehouse_name,
-        shelfName: productInfo.shelf_name,
-        currentStock: parseInt(productInfo.stock || 0)
+        warehouseName: warehouse?.name,
+        shelfName: shelf?.name,
+        currentStock: Number(productInfo.stock || 0)
       }, userId);
       
       if (pendingApproval) {
         return { success: true, pendingApproval: true, queueId };
       }
-      // If not pending (all steps auto-skipped), fall through to immediate execution
     }
 
     // Get current stock and product info
-    const productResult = await query('SELECT stock, name, parent_id FROM products WHERE id = ?', [productId]);
+    const product = await db.product.findUnique({
+      where: { id: productId },
+      select: { stock: true, name: true, parentId: true }
+    });
 
-    if (productResult.length === 0) {
+    if (!product) {
       return { success: false, error: 'Product not found' };
     }
 
-    const currentStock = parseInt(productResult[0].stock);
-    const productName = productResult[0].name;
-    const parentId = productResult[0].parent_id;
+    const currentStock = Number(product.stock);
+    const productName = product.name;
     const newStock = currentStock + quantity;
 
     // Validate new stock is not negative
@@ -270,41 +310,42 @@ export async function adjustStock(productId: string, quantity: number, reason: s
     // Create stock adjustment record ID (used as the reference for movements)
     const adjustmentId = `adj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Create stock adjustment record for the main product (before we update stock)
-    const createAdjustmentSql = `
-      INSERT INTO stock_adjustments (id, product_id, quantity, reason, new_stock)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    await query(createAdjustmentSql, [adjustmentId, productId, quantity, reason, newStock]);
-
     // Use recursive family sync within a transaction so all levels update atomically
-    const result = await withTransaction(async (connection) => {
+    return await withTransaction(async (tx) => {
+      // Create stock adjustment record
+      await tx.stockAdjustment.create({
+        data: {
+          id: adjustmentId,
+          productId,
+          quantity,
+          reason,
+          newStock,
+        }
+      });
+
       // Walk the FULL ancestor chain (handles grandchildren, any depth)
-      const { rootId, factorToRoot } = await findUltimateRoot(productId, connection);
+      const { rootId, factorToRoot } = await findUltimateRoot(productId, tx);
 
       if (factorToRoot > 1 || rootId !== productId) {
         // This product is NOT the root — convert to root units and sync from root
         const rootQty = Math.abs(quantity) / factorToRoot;
         if (quantity < 0) {
-          await deductFamilyStock(rootId, rootQty, adjustmentId, 'adjustment', reason, connection);
+          await deductFamilyStock(rootId, rootQty, adjustmentId, 'adjustment', reason, tx);
         } else {
-          await addFamilyStock(rootId, rootQty, adjustmentId, 'adjustment', reason, connection);
+          await addFamilyStock(rootId, rootQty, adjustmentId, 'adjustment', reason, tx);
         }
       } else {
         // This IS the root — propagate down through all descendants
         if (quantity < 0) {
-          await deductFamilyStock(productId, Math.abs(quantity), adjustmentId, 'adjustment', reason, connection);
+          await deductFamilyStock(productId, Math.abs(quantity), adjustmentId, 'adjustment', reason, tx);
         } else {
-          await addFamilyStock(productId, quantity, adjustmentId, 'adjustment', reason, connection);
+          await addFamilyStock(productId, quantity, adjustmentId, 'adjustment', reason, tx);
         }
       }
       return { success: true, adjustmentId, newStock };
     });
-
-    return result;
   } catch (error) {
     console.error('Error adjusting stock:', error);
     return { success: false, error: 'Failed to adjust stock' };
   }
 }
-

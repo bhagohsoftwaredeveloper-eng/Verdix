@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 
 export async function PUT(
   request: NextRequest,
@@ -17,18 +17,15 @@ export async function PUT(
       );
     }
 
-    const sql = `
-      UPDATE shelf_locations
-      SET name = ?, description = ?, is_active = ?
-      WHERE id = ?
-    `;
-
-    await query(sql, [name, description, isActive, id]);
+    await db.shelfLocation.update({
+      where: { id },
+      data: { name, description, isActive },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Failed to update shelf location:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === 'P2002') {
        return NextResponse.json(
         { success: false, error: 'A shelf location with this name already exists' },
         { status: 400 }
@@ -49,18 +46,20 @@ export async function DELETE(
     const { id } = params;
     
     // Check if the shelf location is in use
-    const checkSql = 'SELECT COUNT(*) as count FROM products WHERE shelf_location_id = ?';
-    const checkResult = await query(checkSql, [id]);
+    const count = await db.product.count({
+      where: { shelfLocationId: id }
+    });
     
-    if (checkResult[0].count > 0) {
+    if (count > 0) {
         return NextResponse.json(
           { success: false, error: 'Cannot delete shelf location because it contains products.' },
           { status: 400 }
         );
     }
 
-    const sql = 'DELETE FROM shelf_locations WHERE id = ?';
-    await query(sql, [id]);
+    await db.shelfLocation.delete({
+      where: { id }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

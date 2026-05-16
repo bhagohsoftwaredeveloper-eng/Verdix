@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 export const migration: Migration = {
   name: '049_alter_pos_settings_add_recent_sales_auth',
@@ -17,10 +17,10 @@ export const migration: Migration = {
     `;
 
     try {
-      await query(alterTableSQL);
+      await db.$executeRawUnsafe(alterTableSQL);
       console.log('Successfully added recent sales auth columns to pos_settings');
     } catch (error: any) {
-      if (error.code === 'ER_DUP_FIELDNAME') {
+      if (error.message && (error.message.includes('already exists') || error.message.includes('42701'))) {
         console.log('Columns already exist in pos_settings, skipping...');
       } else {
         throw error;
@@ -40,11 +40,10 @@ export const migration: Migration = {
     `;
     
     try {
-      await query(dropColumnsSQL);
+      await db.$executeRawUnsafe(dropColumnsSQL);
       console.log('Successfully removed recent sales auth columns from pos_settings');
     } catch (error) {
       console.error('Error removing columns:', error);
-      // Don't throw error on down migration failure to avoid breaking other things
     }
   }
 };

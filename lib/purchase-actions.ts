@@ -1,8 +1,10 @@
-import { withTransaction } from './mysql';
+import { db } from './db';
+import { withTransaction } from './db-helpers';
 import { generateBatchId } from './batch-utils';
 import { calculatePurchaseCosts } from './purchase-utils';
 import { toSafeNumber } from './utils';
 import { findUltimateRoot, addFamilyStock } from './family-sync';
+import { PurchaseOrderStatus, StockMovementType } from '@prisma/client';
 
 export async function processPurchaseOrderCreation(body: any, userId: string = 'system') {
   const {
@@ -11,15 +13,9 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
     supplierName,
     date,
     items,
-    total,
-    paymentMethod,
-    status,
-    reference,
     shipping,
     purchaseType,
     orderedBy,
-    vatAmount,
-    isInternalFinalization,
     receiveToWarehouse,
     receiveToWarehouseName
   } = body;
@@ -28,53 +24,40 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
   const finalTotal = calculations.grandTotal;
   const finalVatAmount = calculations.vatAmount;
   const orderId = id || `po_${Date.now()}`;
-  const formattedDate = new Date(date || new Date()).toISOString().slice(0, 19).replace('T', ' ');
 
-  return await withTransaction(async (connection) => {
-    // 1. Insert or Update order
-    // Using ON DUPLICATE KEY UPDATE to allow the same process to be used for initial (Pending) 
-    // and final (Approved) states without duplicate entries.
-    const insertOrderQuery = `
-      INSERT INTO purchase_orders (
-        id, supplier_id, supplier_name, date, total, payment_method, status, 
-        reference_number, shipping_fee, ordered_by, vat_amount, warehouse_id, warehouse_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE 
-        status = VALUES(status),
-        updated_at = NOW()
-    `;
+  return await withTransaction(async (tx) => {
+    // 1. Upsert order
+    const status = (purchaseType === 'Receive') ? 'Received' : 'Pending';
+    
+    const purchaseOrder = await tx.purchaseOrder.upsert({
+      where: { id: orderId },
+      update: {
+        status: status as PurchaseOrderStatus,
+        updatedAt: new Date()
+      },
+      create: {
+        id: orderId,
+        supplierId,
+        supplierName,
+        date: new Date(date || new Date()),
+        total: finalTotal,
+        paymentMethod: body.paymentMethod || '',
+        status: status as PurchaseOrderStatus,
+        referenceNumber: body.reference || null,
+        shippingFee: toSafeNumber(shipping),
+        orderedBy: orderedBy || userId,
+        vatAmount: finalVatAmount,
+        warehouseId: receiveToWarehouse || null,
+        warehouseName: receiveToWarehouseName || null
+      }
+    });
 
-    await connection.query(insertOrderQuery, [
-      orderId,
-      supplierId,
-      supplierName,
-      formattedDate,
-      finalTotal,
-      paymentMethod || '',
-      (purchaseType === 'Receive' && (isInternalFinalization || status !== 'Pending')) ? 'Received' : (isInternalFinalization ? 'Approved' : (status || 'Pending')),
-      reference || null,
-      toSafeNumber(shipping),
-      orderedBy || userId,
-      finalVatAmount,
-      receiveToWarehouse || null,
-      receiveToWarehouseName || null
-    ]);
-
-    // 2. Insert items
-    // First clear existing items if we are updating (id provided)
-    if (id) {
-        await connection.query('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [orderId]);
-    }
-
-    const insertItemQuery = `
-      INSERT INTO purchase_order_items (
-        id, purchase_order_id, product_id, product_name, quantity, cost,
-        selling_price, discount, discount_type, vat_subject, subtotal
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+    // 2. Insert items (Full Replace)
+    await tx.purchaseOrderItem.deleteMany({
+      where: { purchaseOrderId: orderId }
+    });
 
     for (const item of items) {
-      const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const quantity = toSafeNumber(item.quantity);
       const cost = toSafeNumber(item.cost);
       const discount = toSafeNumber(item.discount);
@@ -87,38 +70,39 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
         itemSubtotal = itemSubtotal - discount;
       }
 
-      await connection.query(insertItemQuery, [
-        itemId,
-        orderId,
-        item.productId,
-        item.productName,
-        quantity,
-        cost,
-        item.sellingPrice ? toSafeNumber(item.sellingPrice) : null,
-        discount,
-        discountType,
-        item.vatSubject ? 1 : 0,
-        itemSubtotal
-      ]);
+      await tx.purchaseOrderItem.create({
+        data: {
+          purchaseOrderId: orderId,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: Math.floor(quantity),
+          cost: cost,
+          sellingPrice: item.sellingPrice ? toSafeNumber(item.sellingPrice) : null,
+          discount: discount,
+          discountType: discountType,
+          vatSubject: !!item.vatSubject,
+          subtotal: itemSubtotal
+        }
+      });
     }
 
     // 3. Auto-Receive Logic
-    if (purchaseType === 'Receive' && (isInternalFinalization || status !== 'Pending')) {
+    if (purchaseType === 'Receive') {
         const receiptData = {
             id: orderId,
             receivedItems: items,
             receivedTotal: finalTotal,
-            allocationStrategy: 'equal' // Default for new creation
+            allocationStrategy: 'equal'
         };
-        await processPurchaseOrderReceipt(orderId, receiptData, userId, connection);
+        await processPurchaseOrderReceipt(orderId, receiptData, userId, tx);
     }
 
-    return { success: true, orderId };
+    return { success: true, orderId: purchaseOrder.id };
   });
 }
 
-export async function processPurchaseOrderReceipt(orderId: string, receiptData: any, userId: string = 'system', existingConnection?: any) {
-  const executeLogic = async (connection: any) => {
+export async function processPurchaseOrderReceipt(orderId: string, receiptData: any, userId: string = 'system', tx?: any) {
+  const executeLogic = async (transaction: typeof db) => {
     const receivedItems = receiptData.receivedItems || receiptData.items;
     const receivedTotal = receiptData.receivedTotal || receiptData.total;
     const allocationStrategy = receiptData.allocationStrategy || 'equal';
@@ -127,29 +111,39 @@ export async function processPurchaseOrderReceipt(orderId: string, receiptData: 
       throw new Error('No items provided for receipt');
     }
 
-    // 1. Get PO details and items for landed cost calculation if not provided
-    const [poRows]: any = await connection.query('SELECT shipping_fee, supplier_id FROM purchase_orders WHERE id = ?', [orderId]);
-    if (!poRows || poRows.length === 0) throw new Error('Purchase order not found');
+    // 1. Get PO details
+    const po = await transaction.purchaseOrder.findUnique({
+      where: { id: orderId }
+    });
+    if (!po) throw new Error('Purchase order not found');
     
-    const shipping = toSafeNumber(poRows[0].shipping_fee);
-    const supplierId = poRows[0].supplier_id;
+    const shipping = po.shippingFee.toNumber();
 
-    // 2. We need items to calculate correct landed cost distribution
-    const [itemRows]: any = await connection.query(
-      'SELECT product_id as productId, product_name as productName, quantity, cost, selling_price as sellingPrice, discount, discount_type as discountType, vat_subject as vatSubject FROM purchase_order_items WHERE purchase_order_id = ?',
-      [orderId]
-    );
+    // 2. Get items
+    const poItems = await transaction.purchaseOrderItem.findMany({
+      where: { purchaseOrderId: orderId }
+    });
 
     // 3. Calculate landed costs
     const calculations = calculatePurchaseCosts(
-      itemRows.map((i: any) => ({ ...i, vatSubject: i.vatSubject === 1 })),
+      poItems.map((i: any) => ({ 
+        productId: i.productId,
+        productName: i.productName,
+        quantity: i.quantity,
+        cost: i.cost.toNumber(),
+        discount: i.discount.toNumber(),
+        discountType: i.discountType,
+        vatSubject: i.vatSubject 
+      })),
       shipping,
       12,
       allocationStrategy || 'equal'
     );
 
-    const [defaultLevelResult]: any = await connection.query('SELECT id FROM price_levels WHERE is_default = 1 LIMIT 1');
-    const defaultLevelId = defaultLevelResult[0]?.id;
+    const defaultLevel = await transaction.priceLevel.findFirst({
+      where: { isDefault: true }
+    });
+    const defaultLevelId = defaultLevel?.id;
 
     // 4. Process each received item
     for (const receivedItem of receivedItems) {
@@ -160,42 +154,45 @@ export async function processPurchaseOrderReceipt(orderId: string, receiptData: 
       if (quantityAdded <= 0) continue;
 
       const landedCost = toSafeNumber(calculatedItem.landedCostPerUnit);
-      const sellingPrice = toSafeNumber(receivedItem.sellingPrice || itemRows.find((i: any) => i.productId === receivedItem.productId)?.sellingPrice);
+      const sellingPrice = toSafeNumber(receivedItem.sellingPrice || poItems.find((i: any) => i.productId === receivedItem.productId)?.sellingPrice);
 
-      // "Highest cost wins" rule:
-      // Fetch the product's current cost from the DB. If the new landed cost is lower
-      // than the previously recorded cost (e.g. supplier gave a cheaper price this time),
-      // keep the higher cost so the product cost never drops unexpectedly.
-      const [existingProductRows]: any = await connection.query(
-        'SELECT cost FROM products WHERE id = ?',
-        [receivedItem.productId]
-      );
-      const existingCost = toSafeNumber(existingProductRows?.[0]?.cost ?? 0);
+      // "Highest cost wins" rule
+      const existingProduct = await transaction.product.findUnique({
+        where: { id: receivedItem.productId },
+        select: { cost: true }
+      });
+      const existingCost = toSafeNumber(existingProduct?.cost?.toNumber() ?? 0);
       const finalCost = Math.max(existingCost, landedCost);
 
-      // Update cost and price for the specific product received
-      await connection.query(
-        'UPDATE products SET cost = ?, price = ?, expiration_date = ?, updated_at = NOW() WHERE id = ?',
-        [finalCost, sellingPrice, receivedItem.expirationDate ? new Date(receivedItem.expirationDate).toISOString().slice(0, 10) : null, receivedItem.productId]
-      );
+      // Update cost and price
+      await transaction.product.update({
+        where: { id: receivedItem.productId },
+        data: {
+          cost: finalCost,
+          price: sellingPrice,
+          expirationDate: receivedItem.expirationDate ? new Date(receivedItem.expirationDate) : null,
+          updatedAt: new Date()
+        }
+      });
 
-      // --- BATCH COSTING: Record this delivery as a new inventory batch ---
-      try {
-        const batchId = generateBatchId();
-        await connection.query(
-          `INSERT INTO inventory_batches
-             (id, product_id, purchase_order_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type)
-           VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?, 'purchase')`,
-          [batchId, receivedItem.productId, orderId, quantityAdded, quantityAdded, landedCost, sellingPrice]
-        );
-      } catch (batchErr) {
-        // Non-fatal: batch table may not exist yet (pre-migration). Log and continue.
-        console.warn('[BatchCosting] Could not insert inventory_batch (migration pending?):', batchErr);
-      }
-      // --- END BATCH COSTING ---
+      // --- BATCH COSTING ---
+      const batchId = generateBatchId();
+      await transaction.inventoryBatch.create({
+        data: {
+          id: batchId,
+          productId: receivedItem.productId,
+          purchaseOrderId: orderId,
+          receivedDate: new Date(),
+          quantityIn: quantityAdded,
+          quantityRemaining: quantityAdded,
+          unitCost: landedCost,
+          sellingPrice: sellingPrice,
+          sourceType: 'purchase'
+        }
+      });
 
-      // Sync stock across the entire product family
-      const { rootId, factorToRoot } = await findUltimateRoot(receivedItem.productId, connection);
+      // Sync stock
+      const { rootId, factorToRoot } = await findUltimateRoot(receivedItem.productId, transaction);
       const quantityInRootUnits = quantityAdded / factorToRoot;
 
       await addFamilyStock(
@@ -204,30 +201,43 @@ export async function processPurchaseOrderReceipt(orderId: string, receiptData: 
         orderId,
         'purchase',
         `Received Purchase: ${orderId}`,
-        connection
+        transaction
       );
 
       // Update default price level
       if (defaultLevelId && sellingPrice > 0) {
-        await connection.query(`
-          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
-          VALUES (?, ?, ?, 0) 
-          ON DUPLICATE KEY UPDATE price = VALUES(price)
-        `, [receivedItem.productId, defaultLevelId, sellingPrice]);
+        await transaction.productPriceLevel.upsert({
+          where: {
+            productId_priceLevelId: {
+              productId: receivedItem.productId,
+              priceLevelId: defaultLevelId
+            }
+          },
+          update: { price: sellingPrice },
+          create: {
+            productId: receivedItem.productId,
+            priceLevelId: defaultLevelId,
+            price: sellingPrice
+          }
+        });
       }
     }
 
     // 5. Update PO status and received total
-    await connection.query(
-      'UPDATE purchase_orders SET status = ?, received_total = ?, updated_at = NOW() WHERE id = ?',
-      ['Received', toSafeNumber(receivedTotal), orderId]
-    );
+    await transaction.purchaseOrder.update({
+      where: { id: orderId },
+      data: {
+        status: 'Received',
+        receivedTotal: toSafeNumber(receivedTotal),
+        updatedAt: new Date()
+      }
+    });
 
     return { success: true };
   };
 
-  if (existingConnection) {
-    return await executeLogic(existingConnection);
+  if (tx) {
+    return await executeLogic(tx);
   } else {
     return await withTransaction(executeLogic);
   }

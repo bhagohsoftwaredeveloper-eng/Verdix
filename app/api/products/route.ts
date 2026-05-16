@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
+
     const productId = await createProductUseCase.execute(body);
 
     return NextResponse.json({
@@ -73,11 +73,12 @@ export async function POST(request: NextRequest) {
       data: { id: productId, ...body },
       timestamp: new Date().toISOString()
     });
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create product';
     console.error('Error creating product:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create product' },
-      { status: error.message === 'Name and price are required' ? 400 : 500 }
+      { success: false, error: errorMessage },
+      { status: errorMessage === 'Name and price are required' ? 400 : 500 }
     );
   }
 }

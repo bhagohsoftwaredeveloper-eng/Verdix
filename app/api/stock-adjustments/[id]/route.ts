@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../../lib/mysql';
+import { db } from '@/lib/db';
 
 // GET endpoint to fetch a single stock adjustment by ID
 export async function GET(
@@ -9,24 +9,18 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const sql = `
-      SELECT
-        sa.id,
-        sa.product_id AS productId,
-        p.name AS productName,
-        sa.quantity,
-        sa.reason,
-        sa.new_stock AS newStock,
-        sa.created_at AS createdAt,
-        sa.updated_at AS updatedAt
-      FROM stock_adjustments sa
-      LEFT JOIN products p ON sa.product_id = p.id
-      WHERE sa.id = ?
-    `;
+    const adjustment = await db.stockAdjustment.findUnique({
+      where: { id },
+      include: {
+        product: {
+          select: {
+            name: true
+          }
+        }
+      }
+    });
 
-    const adjustments = await query(sql, [id]);
-
-    if (!adjustments || adjustments.length === 0) {
+    if (!adjustment) {
       return NextResponse.json(
         { success: false, error: 'Stock adjustment not found' },
         { status: 404 }
@@ -35,7 +29,10 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: adjustments[0],
+      data: {
+        ...adjustment,
+        productName: adjustment.product.name
+      },
       timestamp: new Date().toISOString()
     });
   } catch (error) {

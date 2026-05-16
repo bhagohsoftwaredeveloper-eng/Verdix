@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 import { processPurchaseOrderCreation } from '@/lib/purchase-actions';
 
 export async function POST(request: Request) {
@@ -20,26 +20,17 @@ export async function POST(request: Request) {
     const transactionId = payload.invoiceId || payload.orderId || payload.paymentId || payload.supplierId;
 
     // 1. Log receipt as pending
-    const insertQuery = `
-      INSERT INTO external_api_logs (
-        id, transaction_type, transaction_id, endpoint, payload,
-        response, status, error_message, retry_count, next_retry_at, last_retry_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    await query(insertQuery, [
-      logId,
-      payload.transactionType,
-      transactionId,
-      '/api/sync/push',
-      JSON.stringify(payload),
-      null,
-      'pending',
-      null,
-      0,
-      null,
-      null
-    ]);
+    await db.externalApiLog.create({
+      data: {
+        id: logId,
+        transactionType: payload.transactionType,
+        transactionId: transactionId,
+        endpoint: '/api/sync/push',
+        payload: JSON.stringify(payload),
+        status: 'pending',
+        retryCount: 0,
+      }
+    });
 
     // 2. Process transaction based on type
     let processingResult: any = { success: true };
@@ -77,16 +68,13 @@ export async function POST(request: Request) {
     }
 
     // 3. Update log to success
-    const updateQuery = `
-      UPDATE external_api_logs
-      SET status = 'success', response = ?, updated_at = NOW()
-      WHERE id = ?
-    `;
-    
-    await query(updateQuery, [
-      JSON.stringify({ success: true, message: 'Processed successfully', result: processingResult }),
-      logId
-    ]);
+    await db.externalApiLog.update({
+      where: { id: logId },
+      data: {
+        status: 'success',
+        response: JSON.stringify({ success: true, message: 'Processed successfully', result: processingResult }),
+      }
+    });
 
     return NextResponse.json({
       success: true,
@@ -101,12 +89,13 @@ export async function POST(request: Request) {
     // Update log to failed if logId exists and payload was parsed
     if (logId && payload) {
       try {
-        const updateQuery = `
-          UPDATE external_api_logs
-          SET status = 'failed', error_message = ?, updated_at = NOW()
-          WHERE id = ?
-        `;
-        await query(updateQuery, [error.message || 'Unknown error', logId]);
+        await db.externalApiLog.update({
+          where: { id: logId },
+          data: {
+            status: 'failed',
+            errorMessage: error.message || 'Unknown error',
+          }
+        });
       } catch (logErr) {
         console.error('Failed to update log to failed:', logErr);
       }
@@ -118,4 +107,3 @@ export async function POST(request: Request) {
     }, { status: 500 });
   }
 }
-

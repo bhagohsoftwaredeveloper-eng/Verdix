@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../lib/mysql';
+import { db } from '@/lib/db';
 import { isLoyaltyCardExpired } from '../../../lib/loyalty-utils';
 
 // GET endpoint to fetch customer loyalty data
@@ -11,60 +11,46 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const search = searchParams.get('search');
 
-    let sql = `
-      SELECT
-        cl.id,
-        cl.customer_id,
-        c.name,
-        c.contact_number,
-        c.payment_terms,
-        cl.rfid_code,
-        cl.expiry_date,
-        cl.point_setting,
-        cl.current_points as loyaltyPoints,
-        cl.last_transaction,
-        cl.created_at,
-        cl.updated_at
-      FROM customer_loyalty cl
-      LEFT JOIN customers c ON cl.customer_id = c.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-
+    const where: any = {};
     if (search) {
-      sql += ' AND (c.name LIKE ? OR c.contact_number LIKE ? OR cl.rfid_code LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      where.OR = [
+        { customer: { name: { contains: search, mode: 'insensitive' } } },
+        { customer: { contactNumber: { contains: search, mode: 'insensitive' } } },
+        { rfidCode: { contains: search, mode: 'insensitive' } }
+      ];
     }
 
-    sql += ' ORDER BY cl.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    const customersRaw = await db.customerLoyalty.findMany({
+      where,
+      include: {
+        customer: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      skip: offset,
+      take: limit
+    });
 
-    console.log('Executing query:', sql, params);
-    const customersRaw: any[] = await query(sql, params);
-    console.log('Query result:', customersRaw);
-
-    // Add isExpired flag
-    const customers = customersRaw.map(c => ({
-      ...c,
-      isExpired: isLoyaltyCardExpired(c.expiry_date)
+    // Add isExpired flag and flatten the structure to match original output
+    const customers = customersRaw.map(cl => ({
+      id: cl.id,
+      customer_id: cl.customerId,
+      name: cl.customer.name,
+      contact_number: cl.customer.contactNumber,
+      payment_terms: cl.customer.paymentTerms,
+      rfid_code: cl.rfidCode,
+      expiry_date: cl.expiryDate,
+      point_setting: cl.pointSetting,
+      loyaltyPoints: cl.currentPoints,
+      last_transaction: cl.lastTransaction,
+      created_at: cl.createdAt,
+      updated_at: cl.updatedAt,
+      isExpired: isLoyaltyCardExpired(cl.expiryDate)
     }));
 
     // Get total count for pagination
-    let countSql = `
-      SELECT COUNT(*) as total
-      FROM customer_loyalty cl
-      LEFT JOIN customers c ON cl.customer_id = c.id
-      WHERE 1=1
-    `;
-    const countParams: any[] = [];
-
-    if (search) {
-      countSql += ' AND (c.name LIKE ? OR c.contact_number LIKE ? OR cl.rfid_code LIKE ?)';
-      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
-
-    const countResult = await query(countSql, countParams);
-    const total = countResult[0]?.total || 0;
+    const total = await db.customerLoyalty.count({ where });
 
     console.log('Returning success response with', customers.length, 'records');
     return NextResponse.json({
@@ -107,8 +93,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if customer exists
-    const customerCheck = await query('SELECT id FROM customers WHERE id = ?', [customerId]);
-    if (customerCheck.length === 0) {
+    const customer = await db.customer.findUnique({
+      where: { id: customerId }
+    });
+    
+    if (!customer) {
       return NextResponse.json(
         { success: false, error: 'Customer not found' },
         { status: 404 }
@@ -117,18 +106,21 @@ export async function POST(request: NextRequest) {
 
     // Check if RFID code is already assigned to another customer
     if (rfidCode) {
-      const rfidCheckSql = `
-        SELECT cl.id, c.name 
-        FROM customer_loyalty cl
-        JOIN customers c ON cl.customer_id = c.id
-        WHERE cl.rfid_code = ? AND cl.customer_id != ?
-      `;
-      const rfidCheck = await query(rfidCheckSql, [rfidCode, customerId]);
-      if (rfidCheck.length > 0) {
+      const rfidCheck = await db.customerLoyalty.findFirst({
+        where: {
+          rfidCode: rfidCode,
+          customerId: { not: customerId }
+        },
+        include: {
+          customer: true
+        }
+      });
+      
+      if (rfidCheck) {
         return NextResponse.json(
           { 
             success: false, 
-            error: `RFID card ${rfidCode} is already assigned to customer ${rfidCheck[0].name}.` 
+            error: `RFID card ${rfidCode} is already assigned to customer ${rfidCheck.customer.name}.` 
           },
           { status: 400 }
         );
@@ -136,16 +128,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if loyalty record already exists
-    const existingLoyalty = await query('SELECT id FROM customer_loyalty WHERE customer_id = ?', [customerId]);
+    const existingLoyalty = await db.customerLoyalty.findUnique({
+      where: { customerId }
+    });
 
-    if (existingLoyalty.length > 0) {
+    if (existingLoyalty) {
       // Update existing record
-      const updateSql = `
-        UPDATE customer_loyalty
-        SET rfid_code = ?, expiry_date = ?, point_setting = ?, current_points = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE customer_id = ?
-      `;
-      await query(updateSql, [rfidCode || null, expiryDate || null, pointSetting || null, initialPoints, customerId]);
+      await db.customerLoyalty.update({
+        where: { customerId },
+        data: {
+          rfidCode: rfidCode || null,
+          expiryDate: expiryDate ? new Date(expiryDate) : null,
+          pointSetting: pointSetting || null,
+          currentPoints: initialPoints
+        }
+      });
 
       return NextResponse.json({
         success: true,
@@ -155,18 +152,20 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Create new record
-      const loyaltyId = `LOY-${Date.now()}`;
-      const insertSql = `
-        INSERT INTO customer_loyalty (
-          id, customer_id, rfid_code, expiry_date, point_setting, current_points
-        ) VALUES (?, ?, ?, ?, ?, ?)
-      `;
-      await query(insertSql, [loyaltyId, customerId, rfidCode || null, expiryDate || null, pointSetting || null, initialPoints]);
+      await db.customerLoyalty.create({
+        data: {
+          customerId,
+          rfidCode: rfidCode || null,
+          expiryDate: expiryDate ? new Date(expiryDate) : null,
+          pointSetting: pointSetting || null,
+          currentPoints: initialPoints
+        }
+      });
 
       return NextResponse.json({
         success: true,
         message: 'Customer loyalty created successfully',
-        data: { id: loyaltyId, customerId },
+        data: { customerId },
         timestamp: new Date().toISOString()
       });
     }
@@ -178,5 +177,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-

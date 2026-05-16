@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
-import { query } from '../../../../lib/mysql';
+import { db } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,12 +56,21 @@ export async function POST(request: NextRequest) {
     const publicPath = `/uploads/business/${filename}`;
 
     // Update pos_settings with new logo path
-    const updateSQL = `
-      UPDATE pos_settings
-      SET logo_path = ?
-      WHERE id = 'pos_settings_1'
-    `;
-    await query(updateSQL, [publicPath]);
+    const settings = await db.posSettings.findFirst();
+    if (settings) {
+      await db.posSettings.update({
+        where: { id: settings.id },
+        data: { logoPath: publicPath }
+      });
+    } else {
+      // Create if doesn't exist
+      await db.posSettings.create({
+        data: {
+          businessName: 'Stock Pilot', // Default or from config
+          logoPath: publicPath
+        }
+      });
+    }
 
     return NextResponse.json({
       success: true,

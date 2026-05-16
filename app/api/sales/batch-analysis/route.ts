@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../../lib/mysql';
+import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/sales/batch-analysis
@@ -26,51 +27,48 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch sale_items with batch_source JSON for the date range
-    let params: any[] = [startDate, endDate];
-    let productFilter = '';
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    const where: any = {
+      sale: {
+        createdAt: {
+          gte: start,
+          lte: end
+        }
+      },
+      batchSource: {
+        not: Prisma.JsonNull
+      }
+    };
+
     if (productId) {
-      productFilter = 'AND si.product_id = ?';
-      params.push(productId);
+      where.productId = productId;
     }
 
-    const sql = `
-      SELECT
-        si.id         AS saleItemId,
-        si.product_id AS productId,
-        p.name        AS productName,
-        p.sku,
-        p.barcode,
-        p.category,
-        si.quantity   AS qtySold,
-        si.price      AS sellingPrice,
-        si.cost_at_sale AS costAtSale,
-        si.batch_source AS batchSource,
-        st.created_at   AS saleDate,
-        st.reference    AS reference
-      FROM sale_items si
-      JOIN sales_transactions st ON si.sale_id = st.id
-      JOIN products p ON si.product_id = p.id
-      WHERE DATE(st.created_at) BETWEEN ? AND ?
-        AND si.batch_source IS NOT NULL
-        ${productFilter}
-      ORDER BY p.name ASC, st.created_at ASC
-    `;
-
-    const rows: any[] = await query(sql, params);
+    const saleItems = await db.saleItem.findMany({
+      where,
+      include: {
+        sale: true,
+        product: true
+      },
+      orderBy: [
+        { product: { name: 'asc' } },
+        { sale: { createdAt: 'asc' } }
+      ]
+    });
 
     // Expand batch_source JSON into individual rows for the analysis table
     const analysis: any[] = [];
 
-    for (const row of rows) {
+    for (const item of saleItems) {
       let splits: any[] = [];
       try {
-        splits = typeof row.batchSource === 'string'
-          ? JSON.parse(row.batchSource)
-          : row.batchSource || [];
+        splits = Array.isArray(item.batchSource) ? item.batchSource : [];
       } catch { splits = []; }
 
-      const sellingPrice = parseFloat(row.sellingPrice) || 0;
+      const sellingPrice = Number(item.price) || 0;
 
       for (const split of splits) {
         const qty = parseFloat(split.qty) || 0;
@@ -85,30 +83,29 @@ export async function GET(request: NextRequest) {
         let poReference: string | null = null;
 
         if (split.batchId && split.batchId !== 'fallback') {
-          try {
-            const batchRows: any[] = await query(
-              'SELECT received_date, purchase_order_id FROM inventory_batches WHERE id = ?',
-              [split.batchId]
-            );
-            if (batchRows.length > 0) {
-              batchDate = batchRows[0].received_date
-                ? new Date(batchRows[0].received_date).toISOString().split('T')[0]
-                : null;
-              poReference = batchRows[0].purchase_order_id;
-            }
-          } catch { /* batch table might not exist pre-migration */ }
+          const batch = await db.inventoryBatch.findUnique({
+            where: { id: split.batchId },
+            select: { receivedDate: true, purchaseOrderId: true }
+          });
+          
+          if (batch) {
+            batchDate = batch.receivedDate
+              ? batch.receivedDate.toISOString().split('T')[0]
+              : null;
+            poReference = batch.purchaseOrderId;
+          }
         }
 
         analysis.push({
-          saleDate: row.saleDate
-            ? new Date(row.saleDate).toISOString().split('T')[0]
+          saleDate: item.sale.createdAt
+            ? item.sale.createdAt.toISOString().split('T')[0]
             : null,
-          saleReference: row.reference,
-          productId: row.productId,
-          productName: row.productName,
-          sku: row.sku,
-          barcode: row.barcode,
-          category: row.category,
+          saleReference: item.sale.reference,
+          productId: item.productId,
+          productName: item.product.name,
+          sku: item.product.sku,
+          barcode: item.product.barcode,
+          category: item.product.category,
           batchId: split.batchId,
           batchReceivedDate: batchDate,
           poReference,

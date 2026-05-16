@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const sql = `
+    const rows = await db.$queryRaw<any[]>`
       SELECT
         COALESCE(p.category, 'Uncategorized') as category,
         SUM(sii.quantity * sii.price) as total_sales
@@ -18,8 +18,6 @@ export async function GET(request: NextRequest) {
       GROUP BY p.category
       ORDER BY total_sales DESC
     `;
-
-    const rows = await query(sql);
 
     const data = rows.map((row: any, index: number) => ({
       category: row.category,

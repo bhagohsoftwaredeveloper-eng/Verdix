@@ -1,4 +1,4 @@
-import { query } from '../../lib/mysql';
+import { db } from '../../lib/db';
 
 export interface Migration {
   name: string;
@@ -16,30 +16,35 @@ export function registerMigration(migration: Migration) {
 export async function createMigrationsTable(): Promise<void> {
   const sql = `
     CREATE TABLE IF NOT EXISTS migrations (
-      id INT AUTO_INCREMENT PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       name VARCHAR(255) NOT NULL UNIQUE,
       timestamp VARCHAR(50) NOT NULL,
       executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `;
-  await query(sql);
+  await db.$executeRawUnsafe(sql);
 }
 
 export async function getExecutedMigrations(): Promise<Set<string>> {
-  const result = await query('SELECT name FROM migrations');
-  return new Set(result.map((row: any) => row.name));
+  try {
+    const result: any[] = await db.$queryRawUnsafe('SELECT name FROM migrations');
+    return new Set(result.map((row: any) => row.name));
+  } catch (error) {
+    // If table doesn't exist yet, return empty set
+    return new Set();
+  }
 }
 
 export async function recordMigration(name: string, timestamp: string): Promise<void> {
-  await query('INSERT INTO migrations (name, timestamp) VALUES (?, ?)', [name, timestamp]);
+  await db.$executeRawUnsafe('INSERT INTO migrations (name, timestamp) VALUES ($1, $2)', name, timestamp);
 }
 
 export async function removeMigration(name: string): Promise<void> {
-  await query('DELETE FROM migrations WHERE name = ?', [name]);
+  await db.$executeRawUnsafe('DELETE FROM migrations WHERE name = $1', name);
 }
 
 export async function migrateUp(): Promise<void> {
-  console.log('🔄 Starting database migration...');
+  console.log('🔄 Starting database migration (PostgreSQL)...');
 
   try {
     await createMigrationsTable();

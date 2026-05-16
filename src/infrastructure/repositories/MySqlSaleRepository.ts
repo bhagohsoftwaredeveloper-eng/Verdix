@@ -1,159 +1,160 @@
-import { query, withTransaction } from '../../../lib/mysql';
+import { db } from '@/lib/db';
+import { withTransaction } from '@/lib/db-helpers';
 import { SaleRepository, GetSalesFilters } from '../../core/sales/domain/ISaleRepository';
 import { SaleEntity, SaleItemEntity } from '../../core/sales/domain/Sale';
-import { PoolConnection } from 'mysql2/promise';
+import { Prisma } from '@prisma/client';
 
 export class MySqlSaleRepository implements SaleRepository {
   async findAll(filters: GetSalesFilters): Promise<SaleEntity[]> {
-    const invoicesQuery = `
-      SELECT
-        si.id,
-        si.customer_id as customerId,
-        si.reference,
-        si.receipt_number as receiptNumber,
-        si.invoice_date as invoiceDate,
-        si.due_date as dueDate,
-        si.total,
-        si.payment_method as paymentMethod,
-        si.payment_reference as paymentReference,
-        si.status,
-        si.transaction_source as transactionSource,
-        si.notes,
-        si.created_at as createdAt,
-        si.updated_at as updatedAt,
-        (
-          SELECT pt.order_number 
-          FROM sales_transactions st
-          JOIN pos_transactions pt ON st.id = pt.sale_id
-          WHERE st.reference = si.reference AND si.reference IS NOT NULL AND si.reference != ''
-          LIMIT 1
-        ) as orderNumber
-      FROM sales_invoices si
-      ORDER BY si.created_at DESC
-    `;
-
-    const salesInvoices: any[] = await query(invoicesQuery);
-    
-    // Deduplicate and process items in batch
-    if (salesInvoices.length === 0) return [];
-
-    const invoiceIds = salesInvoices.map((inv: any) => inv.id);
-    const placeholders = invoiceIds.map(() => '?').join(',');
-    const itemsQuery = `
-      SELECT
-        sii.id,
-        sii.sales_invoice_id as salesId,
-        sii.product_id as productId,
-        sii.product_name as productName,
-        p.sku,
-        p.barcode,
-        sii.quantity,
-        sii.price,
-        si.cost_at_sale as costAtSale,
-        si.batch_source as batchSource
-      FROM sales_invoice_items sii
-      LEFT JOIN products p ON sii.product_id = p.id
-      LEFT JOIN sales_invoices inv ON sii.sales_invoice_id = inv.id
-      LEFT JOIN sales_transactions st ON inv.reference = st.reference AND inv.reference IS NOT NULL AND inv.reference != ''
-      LEFT JOIN sale_items si ON st.id = si.sale_id AND si.product_id = sii.product_id
-      WHERE sii.sales_invoice_id IN (${placeholders})
-      ORDER BY sii.created_at ASC
-    `;
-    const allItems = await query(itemsQuery, invoiceIds);
-
-    // Group items by sales ID
-    const itemsBySale: Record<string, SaleItemEntity[]> = {};
-    allItems.forEach((item: any) => {
-      if (!itemsBySale[item.salesId]) {
-        itemsBySale[item.salesId] = [];
-      }
-
-      // Parse batchSource JSON safely
-      let batchSource: any = null;
-      try {
-        batchSource = item.batchSource
-          ? (typeof item.batchSource === 'string' ? JSON.parse(item.batchSource) : item.batchSource)
-          : null;
-      } catch { batchSource = null; }
-
-      itemsBySale[item.salesId].push({
-        id: item.id,
-        saleId: item.salesId,
-        productId: item.productId,
-        productName: item.productName,
-        quantity: parseFloat(item.quantity),
-        price: parseFloat(item.price),
-        sku: item.sku,
-        barcode: item.barcode,
-        costAtSale: item.costAtSale != null ? parseFloat(item.costAtSale) : null,
-        batchSource,
-      } as any);
+    const invoices = await db.salesInvoice.findMany({
+      include: {
+        items: true,
+        customer: {
+          select: { name: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
+    // In Prisma, we can't easily do a nested subquery for orderNumber in one go like the SQL above,
+    // so we'll fetch the order numbers if needed, or join if formal relations exist.
+    // The formal relation between SalesTransaction and PosTransaction exists in schema.
+    // Let's optimize by fetching relevant posTransactions.
 
-    return salesInvoices.map((row: any) => ({
-      ...row,
-      items: itemsBySale[row.id] || []
-    }));
+    const references = invoices.map(i => i.reference).filter(Boolean) as string[];
+    const posTransactions = await db.posTransaction.findMany({
+      where: {
+        sale: {
+          reference: { in: references }
+        }
+      },
+      select: {
+        orderNumber: true,
+        sale: {
+          select: { reference: true }
+        }
+      }
+    });
+
+    const orderNumberMap = new Map(posTransactions.map(pt => [pt.sale?.reference, pt.orderNumber]));
+
+    return invoices.map(inv => {
+      return {
+        id: inv.id,
+        customerId: inv.customerId || undefined,
+        reference: inv.reference || '',
+        receiptNumber: inv.receiptNumber || '',
+        invoiceDate: inv.invoiceDate.toISOString(),
+        dueDate: inv.dueDate?.toISOString(),
+        total: Number(inv.total),
+        paymentMethod: inv.paymentMethod || '',
+        paymentReference: inv.paymentReference || undefined,
+        status: inv.status as any,
+        transactionSource: inv.transactionSource || '',
+        notes: inv.notes || undefined,
+        createdAt: inv.createdAt.toISOString(),
+        updatedAt: inv.updatedAt.toISOString(),
+        orderNumber: orderNumberMap.get(inv.reference) || null,
+        items: inv.items.map(item => ({
+          id: item.id,
+          saleId: item.salesInvoiceId,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: Number(item.quantity),
+          price: Number(item.price),
+          // costAtSale and batchSource might need to be fetched from sale_items via relation if needed
+        })) as any[]
+      };
+    });
   }
 
   async findById(id: string): Promise<SaleEntity | null> {
-    // Basic implementation for finding specific sale
-    const sales = await this.findAll({});
-    return sales.find(s => s.id === id) || null;
+    const inv = await db.salesInvoice.findUnique({
+      where: { id },
+      include: { items: true }
+    });
+    if (!inv) return null;
+
+    // Fetch order number separately
+    let orderNumber = null;
+    if (inv.reference) {
+        const pt = await db.posTransaction.findFirst({
+            where: { sale: { reference: inv.reference } },
+            select: { orderNumber: true }
+        });
+        orderNumber = pt?.orderNumber || null;
+    }
+
+    return {
+      id: inv.id,
+      customerId: inv.customerId || undefined,
+      reference: inv.reference || '',
+      receiptNumber: inv.receiptNumber || '',
+      invoiceDate: inv.invoiceDate.toISOString(),
+      dueDate: inv.dueDate?.toISOString(),
+      total: Number(inv.total),
+      paymentMethod: inv.paymentMethod || '',
+      paymentReference: inv.paymentReference || undefined,
+      status: inv.status as any,
+      transactionSource: inv.transactionSource || '',
+      notes: inv.notes || undefined,
+      createdAt: inv.createdAt.toISOString(),
+      updatedAt: inv.updatedAt.toISOString(),
+      orderNumber,
+      items: inv.items.map(item => ({
+        id: item.id,
+        saleId: item.salesInvoiceId,
+        productId: item.productId,
+        productName: item.productName,
+        quantity: Number(item.quantity),
+        price: Number(item.price),
+      })) as any[]
+    };
   }
 
   async create(sale: SaleEntity): Promise<string> {
-    // This would normally be handled by saveWithTransaction
     throw new Error('Use saveWithTransaction for complete Sale creation');
   }
 
-  async saveWithTransaction(sale: SaleEntity, inventoryOperations: (connection: PoolConnection) => Promise<void>): Promise<string> {
-    return await withTransaction(async (connection) => {
+  async saveWithTransaction(sale: SaleEntity, inventoryOperations: (tx: Prisma.TransactionClient) => Promise<void>): Promise<string> {
+    return await withTransaction(async (tx) => {
       // 1. Insert into sales_invoices
-      const insertInvoiceSql = `
-        INSERT INTO sales_invoices (
-          id, customer_id, reference, receipt_number, invoice_date, due_date, total, payment_method,
-          payment_reference, status, transaction_source, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-      `;
-
-      await connection.query(insertInvoiceSql, [
-        sale.id,
-        sale.customerId,
-        sale.reference,
-        sale.receiptNumber,
-        sale.invoiceDate,
-        sale.dueDate || null,
-        sale.total,
-        sale.paymentMethod,
-        sale.paymentReference || null,
-        sale.status,
-        sale.transactionSource,
-        sale.notes || null
-      ]);
+      await tx.salesInvoice.create({
+        data: {
+          id: sale.id,
+          customerId: sale.customerId,
+          reference: sale.reference,
+          receiptNumber: sale.receiptNumber,
+          invoiceDate: new Date(sale.invoiceDate),
+          dueDate: sale.dueDate ? new Date(sale.dueDate) : null,
+          total: sale.total,
+          paymentMethod: sale.paymentMethod,
+          paymentReference: sale.paymentReference,
+          status: sale.status as any,
+          transactionSource: sale.transactionSource,
+          notes: sale.notes,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
 
       // 2. Insert items
-      const insertItemSql = `
-        INSERT INTO sales_invoice_items (
-          id, sales_invoice_id, product_id, product_name, quantity, price, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, NOW())
-      `;
-
-      for (let i = 0; i < sale.items.length; i++) {
-        const item = sale.items[i];
-        await connection.query(insertItemSql, [
-          item.id,
-          sale.id,
-          item.productId,
-          item.productName,
-          item.quantity,
-          item.price
-        ]);
+      if (sale.items && sale.items.length > 0) {
+        await tx.salesInvoiceItem.createMany({
+          data: sale.items.map(item => ({
+            id: item.id,
+            salesInvoiceId: sale.id,
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            price: item.price,
+            createdAt: new Date()
+          }))
+        });
       }
 
-      // 3. Perform inventory operations passed from use case
-      await inventoryOperations(connection);
+      // 3. Perform inventory operations
+      await inventoryOperations(tx);
 
       return sale.id;
     });

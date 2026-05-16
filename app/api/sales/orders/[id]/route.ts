@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction } from '../../../../../lib/mysql';
-import { addFamilyStock, deductFamilyStock, findUltimateRoot } from '../../../../../lib/family-sync';
-
-// Helper function to format ISO date strings to MySQL format
-function formatDateForMySQL(dateValue: string | null | undefined): string | null {
-    if (!dateValue) return null;
-    try {
-        const date = new Date(dateValue);
-        if (isNaN(date.getTime())) return null;
-        // Format as YYYY-MM-DD HH:MM:SS
-        return date.toISOString().slice(0, 19).replace('T', ' ');
-    } catch {
-        return null;
-    }
-}
+import { db } from '@/lib/db';
+import { withTransaction } from '@/lib/db-helpers';
+import { addFamilyStock, deductFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 
 export async function DELETE(
     request: NextRequest,
@@ -23,32 +11,39 @@ export async function DELETE(
     const orderId = resolvedParams.id;
 
     try {
-        return await withTransaction(async (connection) => {
+        return await withTransaction(async (tx) => {
             // 1. Fetch items to reverse stock
-            const [items]: any = await connection.query('SELECT product_id, quantity FROM sales_order_items WHERE sales_order_id = ?', [orderId]);
+            const items = await tx.salesOrderItem.findMany({
+                where: { salesOrderId: orderId },
+                select: { productId: true, quantity: true }
+            });
 
             if (items && items.length > 0) {
                 for (const item of items) {
                     // --- Inventory Addition (Reversal) using recursive family sync ---
-                    const { rootId, factorToRoot } = await findUltimateRoot(item.product_id, connection as any);
+                    const { rootId, factorToRoot } = await findUltimateRoot(item.productId, tx as any);
                     const quantityToAddInRootUnits = item.quantity / factorToRoot;
-                    
+
                     await addFamilyStock(
-                        rootId, 
-                        quantityToAddInRootUnits, 
-                        orderId, 
-                        'adjustment', 
-                        `Reversal of Sales Order: ${orderId}`, 
-                        connection as any
+                        rootId,
+                        quantityToAddInRootUnits,
+                        orderId,
+                        'adjustment',
+                        `Reversal of Sales Order: ${orderId}`,
+                        tx as any
                     );
                 }
             }
 
             // 2. Delete items
-            await connection.query('DELETE FROM sales_order_items WHERE sales_order_id = ?', [orderId]);
+            await tx.salesOrderItem.deleteMany({
+                where: { salesOrderId: orderId }
+            });
 
             // 3. Delete order
-            await connection.query('DELETE FROM sales_orders WHERE id = ?', [orderId]);
+            await tx.salesOrder.delete({
+                where: { id: orderId }
+            });
 
             return NextResponse.json({
                 success: true,
@@ -80,81 +75,83 @@ export async function PUT(
             reference,
             deliveryAddress,
             paymentMethod,
-            paymentReference,
             status,
-            shipping,
-            warehouse,
-            salesPerson,
-            note,
             items
         } = body;
 
-        return await withTransaction(async (connection) => {
-            // --- STEP 1: Inventory Reversal for Existing Items (Logic reused from DELETE) ---
-            const [oldItems]: any = await connection.query('SELECT product_id, quantity FROM sales_order_items WHERE sales_order_id = ?', [orderId]);
+        return await withTransaction(async (tx) => {
+            // --- STEP 1: Inventory Reversal for Existing Items ---
+            const oldItems = await tx.salesOrderItem.findMany({
+                where: { salesOrderId: orderId },
+                select: { productId: true, quantity: true }
+            });
 
             if (oldItems && oldItems.length > 0) {
                 for (const item of oldItems) {
-                    const { rootId, factorToRoot } = await findUltimateRoot(item.product_id, connection as any);
+                    const { rootId, factorToRoot } = await findUltimateRoot(item.productId, tx as any);
                     const quantityToAddInRootUnits = item.quantity / factorToRoot;
-                    
+
                     await addFamilyStock(
-                        rootId, 
-                        quantityToAddInRootUnits, 
-                        orderId, 
-                        'adjustment', 
-                        `Update Reversal: ${orderId}`, 
-                        connection as any
+                        rootId,
+                        quantityToAddInRootUnits,
+                        orderId,
+                        'adjustment',
+                        `Update Reversal: ${orderId}`,
+                        tx as any
                     );
                 }
             }
 
             // --- STEP 2: Delete Old Items ---
-            await connection.query('DELETE FROM sales_order_items WHERE sales_order_id = ?', [orderId]);
+            await tx.salesOrderItem.deleteMany({
+                where: { salesOrderId: orderId }
+            });
 
             // --- STEP 3: Update Order Details ---
             const total = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
-            
-            const updateOrderQuery = `
-                UPDATE sales_orders SET
-                    customer_id = ?, order_date = ?, delivery_date = ?, reference = ?,
-                    delivery_address = ?, total = ?, payment_method = ?, payment_reference = ?, status = ?,
-                    shipping = ?, warehouse_id = ?, sales_person_id = ?, note = ?, updated_at = NOW()
-                WHERE id = ?
-            `;
-            await connection.query(updateOrderQuery, [
-                customer.id, formatDateForMySQL(orderDate), formatDateForMySQL(deliveryDate), reference || null,
-                deliveryAddress || null, total, paymentMethod, paymentReference || null, status || 'Pending',
-                shipping || 0, warehouse || null, salesPerson || null, note || null, 
-                orderId
-            ]);
 
-            // --- STEP 4: Insert New Items & Deduct Stock (Reuse POST logic) ---
-             const insertItemQuery = `
-                INSERT INTO sales_order_items (
-                  id, sales_order_id, product_id, product_name, quantity, price
-                ) VALUES (?, ?, ?, ?, ?, ?)
-              `;
+            await tx.salesOrder.update({
+                where: { id: orderId },
+                data: {
+                    customerId: customer.id,
+                    orderDate: new Date(orderDate),
+                    deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
+                    reference: reference || null,
+                    deliveryAddress: deliveryAddress || null,
+                    total,
+                    paymentMethod: paymentMethod || null,
+                    status: (status || 'Pending') as any,
+                    notes: null
+                }
+            });
 
-              for (let i = 0; i < items.length; i++) {
+            // --- STEP 4: Insert New Items & Deduct Stock ---
+            for (let i = 0; i < items.length; i++) {
                 const item = items[i];
-                const itemId = `SOI-${Date.now()}-${i + 1}-${Math.random().toString(36).substr(2, 5)}`;
 
-                await connection.query(insertItemQuery, [itemId, orderId, item.product.id, item.product.name, item.quantity, item.price]);
+                await tx.salesOrderItem.create({
+                    data: {
+                        salesOrderId: orderId,
+                        productId: item.product.id,
+                        productName: item.product.name,
+                        quantity: item.quantity,
+                        price: item.price
+                    }
+                });
 
                 // Inventory Deduction using recursive family sync
-                const { rootId, factorToRoot } = await findUltimateRoot(item.product.id, connection as any);
+                const { rootId, factorToRoot } = await findUltimateRoot(item.product.id, tx as any);
                 const quantityToDeductInRootUnits = item.quantity / factorToRoot;
-                
+
                 await deductFamilyStock(
-                    rootId, 
-                    quantityToDeductInRootUnits, 
-                    orderId, 
-                    'sale', 
-                    `Update Deduction: ${orderId}`, 
-                    connection as any
+                    rootId,
+                    quantityToDeductInRootUnits,
+                    orderId,
+                    'sale',
+                    `Update Deduction: ${orderId}`,
+                    tx as any
                 );
-              }
+            }
 
             return NextResponse.json({
                 success: true,
