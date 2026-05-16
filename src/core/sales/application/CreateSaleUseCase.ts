@@ -1,9 +1,9 @@
 import { SaleRepository } from '../domain/ISaleRepository';
 import { SaleEntity, SaleItemEntity } from '../domain/Sale';
 import { InventorySyncService } from '../../../infrastructure/services/InventorySyncService';
-import { getNextReference, getNextReceiptNumber } from '../../../../lib/db-helpers';
+import { getNextReference, getNextReceiptNumber } from '../../../../lib/mysql';
+import { PoolConnection } from 'mysql2/promise';
 import { deductFromBatches, getBatchCostingSettings } from '../../../../lib/batch-deduction';
-import { Prisma } from '@prisma/client';
 
 export interface CreateSaleRequest {
   customer: { id: string; name: string };
@@ -34,7 +34,7 @@ export class CreateSaleUseCase {
     // Generate reference if needed
     let finalReference = request.reference;
     if (!finalReference || finalReference.trim() === '') {
-      const nextVal = await getNextReference('salesInvoice');
+      const nextVal = await getNextReference('sales_invoice');
       finalReference = `INV-${nextVal.toString().padStart(6, '0')}`;
     }
 
@@ -64,9 +64,9 @@ export class CreateSaleUseCase {
     };
 
     // Execute within repository transaction
-    await this.saleRepository.saveWithTransaction(saleEntity, async (tx: Prisma.TransactionClient) => {
+    await this.saleRepository.saveWithTransaction(saleEntity, async (connection: PoolConnection) => {
       // Get batch costing settings
-      const { oversellBlock } = await getBatchCostingSettings(tx);
+      const { oversellBlock } = await getBatchCostingSettings(connection);
 
       // 1. Check and deduct inventory for each item
       for (let i = 0; i < request.items.length; i++) {
@@ -75,18 +75,17 @@ export class CreateSaleUseCase {
         const qty = item.quantity;
         const saleItemId = `${saleId}_item_${i + 1}`;
 
-        await this.inventoryService.checkStockAvailability(productId, qty, tx);
+        await this.inventoryService.checkStockAvailability(productId, qty, connection);
         
         // --- BATCH COSTING: FIFO Deduction ---
-        const deduction = await deductFromBatches(productId, qty, oversellBlock, tx);
+        const deduction = await deductFromBatches(productId, qty, oversellBlock, connection);
         
         // Update the specific sale_item with cost info and batch splits
-        // Note: Using raw SQL as cost_at_sale/batch_source might not be in the Prisma model yet
-        await tx.$executeRawUnsafe(
+        await connection.query(
           `UPDATE sale_items 
-           SET cost_at_sale = $1, batch_source = $2 
-           WHERE id = $3`,
-          deduction.weightedAvgCost, JSON.stringify(deduction.splits), saleItemId
+           SET cost_at_sale = ?, batch_source = ? 
+           WHERE id = ?`,
+          [deduction.weightedAvgCost, JSON.stringify(deduction.splits), saleItemId]
         );
         // --- END BATCH COSTING ---
 
@@ -94,7 +93,7 @@ export class CreateSaleUseCase {
           { productId: productId, quantity: qty },
           saleId,
           `Sales Invoice: ${finalReference} (Sync from Anchor: ${item.product.name})`,
-          tx
+          connection
         );
       }
     });

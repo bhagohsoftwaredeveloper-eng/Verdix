@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { query, withTransaction } from '@/lib/mysql';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(request: NextRequest) {
@@ -8,25 +7,29 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const txType = searchParams.get('txType');
 
-    const where: any = {};
+    let sql = `
+      SELECT aw.*, ut.name as role_name 
+      FROM approval_workflows aw 
+      JOIN user_types ut ON aw.user_type_id = ut.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
     if (txType) {
-      where.transactionType = txType;
+      sql += ' AND aw.transaction_type = ?';
+      params.push(txType);
     }
 
-    const workflows = await db.approvalWorkflow.findMany({
-      where,
-      orderBy: [
-        { transactionType: 'asc' },
-        { stepOrder: 'asc' }
-      ]
-    });
+    sql += ' ORDER BY aw.transaction_type, aw.step_order';
+
+    const workflows = await query(sql, params);
 
     // Group by transaction_type
     const groupedWorkflows = workflows.reduce((acc: any, curr: any) => {
-      if (!acc[curr.transactionType]) {
-        acc[curr.transactionType] = [];
+      if (!acc[curr.transaction_type]) {
+        acc[curr.transaction_type] = [];
       }
-      acc[curr.transactionType].push(curr);
+      acc[curr.transaction_type].push(curr);
       return acc;
     }, {});
 
@@ -49,29 +52,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    await withTransaction(async (tx) => {
+    await withTransaction(async (connection) => {
       // 1. Delete existing steps for this transaction type
-      await tx.approvalWorkflow.deleteMany({
-        where: { transactionType }
-      });
+      await connection.query(
+        'DELETE FROM approval_workflows WHERE transaction_type = ?',
+        [transactionType]
+      );
 
-      // 2. Create new steps
+      // 2. Insert new steps
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
-        await tx.approvalWorkflow.create({
-          data: {
-            id: uuidv4(),
-            transactionType,
-            stepOrder: i + 1,
-            userTypeId: step.user_type_id
-          }
-        });
+        await connection.query(
+          'INSERT INTO approval_workflows (id, transaction_type, step_order, user_type_id) VALUES (?, ?, ?, ?)',
+          [uuidv4(), transactionType, i + 1, step.user_type_id]
+        );
       }
     });
 
-    return NextResponse.json({
-      success: true,
-      message: `Workflow for ${transactionType} updated successfully`
+    return NextResponse.json({ 
+      success: true, 
+      message: `Workflow for ${transactionType} updated successfully` 
     });
   } catch (error: any) {
     console.error('Error updating workflow:', error);

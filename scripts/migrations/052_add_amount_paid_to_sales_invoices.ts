@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '052_add_amount_paid_to_sales_invoices',
@@ -8,12 +8,12 @@ const migration: Migration = {
   async up(): Promise<void> {
     const alterTableQuery = `
       ALTER TABLE sales_invoices
-      ADD COLUMN amount_paid DECIMAL(10, 2) DEFAULT 0.00;
+      ADD COLUMN amount_paid DECIMAL(10, 2) DEFAULT 0.00 AFTER total;
     `;
     
     // Check if column exists first to be safe
     try {
-      await db.$executeRawUnsafe(alterTableQuery);
+      await query(alterTableQuery);
       console.log('✅ Added amount_paid column to sales_invoices');
       
       // We should also calculate the initial amount_paid based on existing paid invoices
@@ -22,11 +22,11 @@ const migration: Migration = {
         SET amount_paid = total
         WHERE status = 'Paid';
       `;
-      await db.$executeRawUnsafe(updatePaidInvoicesQuery);
+      await query(updatePaidInvoicesQuery);
       console.log('✅ Updated amount_paid for existing paid invoices');
       
     } catch (e: any) {
-      if (e.message && (e.message.includes('already exists') || e.message.includes('42701'))) {
+      if (e.message && e.message.includes('Duplicate column name')) {
         console.log('Column amount_paid already exists. Skipping...');
       } else {
         throw e;
@@ -39,7 +39,7 @@ const migration: Migration = {
       ALTER TABLE sales_invoices
       DROP COLUMN amount_paid;
     `;
-    await db.$executeRawUnsafe(alterTableQuery);
+    await query(alterTableQuery);
     console.log('✅ Dropped amount_paid column from sales_invoices');
   }
 };

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../lib/mysql';
 
 // PUT endpoint to update customer loyalty record by loyalty ID
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -21,11 +21,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     } = body;
 
     // Check if loyalty record exists
-    const existingLoyalty = await db.customerLoyalty.findUnique({
-      where: { id: loyaltyId }
-    });
-    
-    if (!existingLoyalty) {
+    const existingLoyalty = await query('SELECT id FROM customer_loyalty WHERE id = ?', [loyaltyId]);
+    if (existingLoyalty.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Loyalty record not found' },
         { status: 404 }
@@ -33,14 +30,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Update the loyalty record
-    await db.customerLoyalty.update({
-      where: { id: loyaltyId },
-      data: {
-        rfidCode: rfidCode || null,
-        expiryDate: expiryDate ? new Date(expiryDate) : null,
-        pointSetting: pointSetting || null,
-      }
-    });
+    const updateSql = `
+      UPDATE customer_loyalty
+      SET rfid_code = ?, expiry_date = ?, point_setting = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `;
+    await query(updateSql, [rfidCode || null, expiryDate || null, pointSetting || null, loyaltyId]);
 
     return NextResponse.json({
       success: true,
@@ -69,24 +64,25 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       );
     }
 
-    // Check if loyalty record exists and if it has history
-    const existingLoyalty = await db.customerLoyalty.findUnique({
-      where: { id: loyaltyId },
-      include: {
-        _count: {
-          select: { pointHistory: true }
-        }
-      }
-    });
-
-    if (!existingLoyalty) {
+    // Check if loyalty record exists
+    const existingLoyalty = await query('SELECT id FROM customer_loyalty WHERE id = ?', [loyaltyId]);
+    if (existingLoyalty.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Loyalty record not found' },
         { status: 404 }
       );
     }
 
-    if (existingLoyalty._count.pointHistory > 0) {
+    // Check for transaction-related history
+    // We block deletion if there's ANY history associated with this loyalty card
+    const historyCheckSql = `
+      SELECT COUNT(*) as count 
+      FROM point_history 
+      WHERE customer_loyalty_id = ?
+    `;
+    const historyRows: any = await query(historyCheckSql, [loyaltyId]);
+    
+    if (historyRows && historyRows.length > 0 && historyRows[0].count > 0) {
       return NextResponse.json(
         { 
           success: false, 
@@ -96,10 +92,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       );
     }
 
-    // Delete the loyalty record (Point history deleted first by Cascade if we wanted to allow it, but we block above)
-    await db.customerLoyalty.delete({
-      where: { id: loyaltyId }
-    });
+    // Delete point history first (due to foreign key constraints)
+    await query('DELETE FROM point_history WHERE customer_loyalty_id = ?', [loyaltyId]);
+
+    // Delete the loyalty record
+    await query('DELETE FROM customer_loyalty WHERE id = ?', [loyaltyId]);
 
     return NextResponse.json({
       success: true,

@@ -1,11 +1,20 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { db } from '../lib/db';
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_PASSWORD:', process.env.DB_PASSWORD);
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_PORT:', process.env.DB_PORT);
+
+import { query } from '../lib/mysql';
 
 async function createTables() {
   try {
-    console.log('Starting database setup for PostgreSQL...');
+    // Create database if it doesn't exist
+    await query('CREATE DATABASE IF NOT EXISTS stock_pilot');
+
+    // Use the database
+    await query('USE stock_pilot');
 
     // Create products table
     const createProductsTable = `
@@ -17,8 +26,8 @@ async function createTables() {
         category VARCHAR(100),
         brand VARCHAR(100),
         subcategory VARCHAR(100),
-        stock DECIMAL(15,4) DEFAULT 0,
-        reorder_point DECIMAL(15,4) DEFAULT 0,
+        stock INT DEFAULT 0,
+        reorder_point INT DEFAULT 0,
         avg_daily_sales DECIMAL(10,2) DEFAULT 0,
         price DECIMAL(10,2) NOT NULL,
         cost DECIMAL(10,2),
@@ -31,12 +40,12 @@ async function createTables() {
         parent_id VARCHAR(50),
         conversion_factor DECIMAL(10,2),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_products_parent FOREIGN KEY (parent_id) REFERENCES products(id)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_id) REFERENCES products(id)
       )
     `;
 
-    await db.$executeRawUnsafe(createProductsTable);
+    await query(createProductsTable);
     console.log('✅ Products table created successfully');
 
     // Create brands table
@@ -48,7 +57,7 @@ async function createTables() {
       )
     `;
 
-    await db.$executeRawUnsafe(createBrandsTable);
+    await query(createBrandsTable);
     console.log('✅ Brands table created successfully');
 
     // Create categories table
@@ -60,7 +69,7 @@ async function createTables() {
       )
     `;
 
-    await db.$executeRawUnsafe(createCategoriesTable);
+    await query(createCategoriesTable);
     console.log('✅ Categories table created successfully');
 
     // Create subcategories table
@@ -72,7 +81,7 @@ async function createTables() {
       )
     `;
 
-    await db.$executeRawUnsafe(createSubcategoriesTable);
+    await query(createSubcategoriesTable);
     console.log('✅ Subcategories table created successfully');
 
     // Create units of measure table
@@ -86,7 +95,7 @@ async function createTables() {
       )
     `;
 
-    await db.$executeRawUnsafe(createUnitsTable);
+    await query(createUnitsTable);
     console.log('✅ Units of measure table created successfully');
 
     // Create users table
@@ -103,7 +112,7 @@ async function createTables() {
       )
     `;
 
-    await db.$executeRawUnsafe(createUsersTable);
+    await query(createUsersTable);
     console.log('✅ Users table created successfully');
 
     // Create user_permissions table
@@ -113,11 +122,11 @@ async function createTables() {
         user_uid VARCHAR(50),
         permission VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_user_permissions_user FOREIGN KEY (user_uid) REFERENCES users(uid) ON DELETE CASCADE
+        FOREIGN KEY (user_uid) REFERENCES users(uid) ON DELETE CASCADE
       )
     `;
 
-    await db.$executeRawUnsafe(createUserPermissionsTable);
+    await query(createUserPermissionsTable);
     console.log('✅ User permissions table created successfully');
 
     console.log('🎉 Database setup completed successfully!');
@@ -125,8 +134,6 @@ async function createTables() {
   } catch (error) {
     console.error('❌ Error setting up database:', error);
     throw error;
-  } finally {
-    await db.$disconnect();
   }
 }
 

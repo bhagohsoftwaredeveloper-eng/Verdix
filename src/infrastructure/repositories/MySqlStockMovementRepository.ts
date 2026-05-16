@@ -1,81 +1,98 @@
-import { db } from '@/lib/db';
+import { query } from '../../../lib/mysql';
 import { StockMovementRepository, GetStockMovementsFilters } from '../../core/inventory/domain/IStockMovementRepository';
 import { StockMovementEntity } from '../../core/inventory/domain/StockMovement';
-import { Prisma } from '@prisma/client';
 
 export class MySqlStockMovementRepository implements StockMovementRepository {
   async findAll(filters: GetStockMovementsFilters): Promise<StockMovementEntity[]> {
-    const where: Prisma.StockMovementWhereInput = {};
+    let sql = `
+      SELECT 
+        id, product_id as productId, product_name as productName, movement_type as movementType, 
+        quantity_change as quantityChange, previous_stock as previousStock, new_stock as newStock, 
+        reference_id as referenceId, reference_type as referenceType, notes, user_name as userName, 
+        warehouse_id as warehouseId, created_at as createdAt, updated_at as updatedAt 
+      FROM stock_movements 
+      WHERE 1=1
+    `;
+    const params: any[] = [];
 
-    if (filters.productId) where.productId = filters.productId;
-    // if (filters.warehouseId) where.warehouseId = filters.warehouseId; // check if schema has warehouseId
-    
-    if (filters.startDate || filters.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
-      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
+    if (filters.productId) {
+      sql += ' AND product_id = ?';
+      params.push(filters.productId);
+    }
+    if (filters.warehouseId) {
+      sql += ' AND warehouse_id = ?';
+      params.push(filters.warehouseId);
+    }
+    if (filters.startDate) {
+      sql += ' AND created_at >= ?';
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      sql += ' AND created_at <= ?';
+      params.push(filters.endDate);
     }
 
-    const movements = await db.stockMovement.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: filters.limit,
-      skip: filters.offset
-    });
+    sql += ' ORDER BY created_at DESC';
 
+    if (filters.limit !== undefined) {
+      sql += ' LIMIT ?';
+      params.push(filters.limit);
+      if (filters.offset !== undefined) {
+        sql += ' OFFSET ?';
+        params.push(filters.offset);
+      }
+    }
+
+    const movements: any[] = await query(sql, params);
     return movements.map(m => ({
-      id: m.id,
-      productId: m.productId,
-      productName: m.productName,
-      movementType: m.movementType as any,
-      quantityChange: Number(m.quantityChange),
-      previousStock: Number(m.previousStock),
-      newStock: Number(m.newStock),
-      referenceId: m.referenceId || undefined,
-      referenceType: m.referenceType || undefined,
-      notes: m.notes || undefined,
-      userName: m.userName || undefined,
-      warehouseId: m.warehouseId || undefined,
-      createdAt: m.createdAt.toISOString(),
-      updatedAt: m.updatedAt.toISOString()
+      ...m,
+      quantityChange: parseFloat(m.quantityChange),
+      previousStock: parseFloat(m.previousStock),
+      newStock: parseFloat(m.newStock)
     }));
   }
 
   async countAll(filters: GetStockMovementsFilters): Promise<number> {
-    const where: Prisma.StockMovementWhereInput = {};
+    let sql = 'SELECT COUNT(*) as total FROM stock_movements WHERE 1=1';
+    const params: any[] = [];
 
-    if (filters.productId) where.productId = filters.productId;
-    if (filters.startDate || filters.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
-      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
+    if (filters.productId) {
+      sql += ' AND product_id = ?';
+      params.push(filters.productId);
+    }
+    if (filters.warehouseId) {
+      sql += ' AND warehouse_id = ?';
+      params.push(filters.warehouseId);
+    }
+    if (filters.startDate) {
+      sql += ' AND created_at >= ?';
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      sql += ' AND created_at <= ?';
+      params.push(filters.endDate);
     }
 
-    return await db.stockMovement.count({ where });
+    const result = await query(sql, params);
+    return result[0]?.total || 0;
   }
 
   async create(movement: Partial<StockMovementEntity>): Promise<string> {
+    const sql = `
+      INSERT INTO stock_movements (
+        id, product_id, product_name, movement_type, quantity_change, previous_stock, new_stock, 
+        reference_id, reference_type, notes, user_name, warehouse_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    `;
     const id = movement.id || `mov_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     
-    const created = await db.stockMovement.create({
-      data: {
-        id,
-        productId: movement.productId!,
-        productName: movement.productName!,
-        movementType: movement.movementType as any,
-        quantityChange: Number(movement.quantityChange),
-        previousStock: Number(movement.previousStock),
-        newStock: Number(movement.newStock),
-        referenceId: movement.referenceId || null,
-        referenceType: movement.referenceType || null,
-        notes: movement.notes || null,
-        userName: movement.userName || null,
-        warehouseId: movement.warehouseId || null,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    });
+    await query(sql, [
+      id, movement.productId, movement.productName, movement.movementType, 
+      movement.quantityChange, movement.previousStock, movement.newStock, 
+      movement.referenceId || null, movement.referenceType || null, 
+      movement.notes || null, movement.userName || null, movement.warehouseId || null
+    ]);
 
-    return created.id;
+    return id;
   }
 }

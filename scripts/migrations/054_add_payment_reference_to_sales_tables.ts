@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 export const migration: Migration = {
   name: '054_add_payment_reference_to_sales_tables',
@@ -12,17 +12,17 @@ export const migration: Migration = {
     const checkOrdersSql = `
       SELECT COUNT(*) as count 
       FROM information_schema.COLUMNS 
-      WHERE table_name = 'sales_orders' 
-      AND column_name = 'payment_reference'
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'sales_orders' 
+      AND COLUMN_NAME = 'payment_reference'
     `;
     
-    const ordersResult: any = await db.$queryRawUnsafe(checkOrdersSql);
-    const ordersCount = Number(ordersResult[0].count);
+    const ordersResult = await query(checkOrdersSql);
     
-    if (ordersCount === 0) {
-      await db.$executeRawUnsafe(`
+    if (ordersResult[0].count === 0) {
+      await query(`
         ALTER TABLE sales_orders
-        ADD COLUMN payment_reference VARCHAR(255) DEFAULT NULL
+        ADD COLUMN payment_reference VARCHAR(255) DEFAULT NULL AFTER payment_method
       `);
       console.log('✅ Added payment_reference column to sales_orders');
     } else {
@@ -33,17 +33,17 @@ export const migration: Migration = {
     const checkInvoicesSql = `
       SELECT COUNT(*) as count 
       FROM information_schema.COLUMNS 
-      WHERE table_name = 'sales_invoices' 
-      AND column_name = 'payment_reference'
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'sales_invoices' 
+      AND COLUMN_NAME = 'payment_reference'
     `;
     
-    const invoicesResult: any = await db.$queryRawUnsafe(checkInvoicesSql);
-    const invoicesCount = Number(invoicesResult[0].count);
+    const invoicesResult = await query(checkInvoicesSql);
     
-    if (invoicesCount === 0) {
-      await db.$executeRawUnsafe(`
+    if (invoicesResult[0].count === 0) {
+      await query(`
         ALTER TABLE sales_invoices
-        ADD COLUMN payment_reference VARCHAR(255) DEFAULT NULL
+        ADD COLUMN payment_reference VARCHAR(255) DEFAULT NULL AFTER payment_method
       `);
       console.log('✅ Added payment_reference column to sales_invoices');
     } else {
@@ -55,17 +55,17 @@ export const migration: Migration = {
     console.log('Rolling back migration: 054_add_payment_reference_to_sales_tables');
     
     try {
-      await db.$executeRawUnsafe('ALTER TABLE sales_orders DROP COLUMN IF EXISTS payment_reference');
+      await query('ALTER TABLE sales_orders DROP COLUMN payment_reference');
       console.log('✅ Dropped payment_reference column from sales_orders');
     } catch (e) {
-      console.log('⚠️ Failed to drop column from sales_orders');
+      console.log('⚠️ Failed to drop column from sales_orders or it did not exist');
     }
 
     try {
-      await db.$executeRawUnsafe('ALTER TABLE sales_invoices DROP COLUMN IF EXISTS payment_reference');
+      await query('ALTER TABLE sales_invoices DROP COLUMN payment_reference');
       console.log('✅ Dropped payment_reference column from sales_invoices');
     } catch (e) {
-      console.log('⚠️ Failed to drop column from sales_invoices');
+      console.log('⚠️ Failed to drop column from sales_invoices or it did not exist');
     }
   }
 };

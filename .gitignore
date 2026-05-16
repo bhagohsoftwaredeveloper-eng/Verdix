@@ -54,11 +54,3 @@ firestore-debug.log
 /scratch/
 *.log
 DB_BACK_UP5112026.sql
-
-# Agent / Tooling
-.claude/
-.agent/
-.idx/
-
-# Database / Prisma
-/prisma/migrations/

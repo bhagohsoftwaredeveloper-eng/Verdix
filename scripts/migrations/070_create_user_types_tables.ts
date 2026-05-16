@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 import { v4 as uuidv4 } from 'uuid';
 
 const migration: Migration = {
@@ -14,10 +14,10 @@ const migration: Migration = {
         name VARCHAR(100) NOT NULL UNIQUE,
         description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `;
-    await db.$executeRawUnsafe(createUserTypesTable);
+    await query(createUserTypesTable);
 
     // Create user_type_permissions table
     const createUserTypePermissionsTable = `
@@ -26,14 +26,12 @@ const migration: Migration = {
         user_type_id VARCHAR(50) NOT NULL,
         permission VARCHAR(100) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT unique_user_type_permission UNIQUE (user_type_id, permission),
-        CONSTRAINT fk_user_type FOREIGN KEY (user_type_id) REFERENCES user_types(id) ON DELETE CASCADE
+        INDEX idx_user_type_id (user_type_id),
+        UNIQUE KEY unique_user_type_permission (user_type_id, permission),
+        FOREIGN KEY (user_type_id) REFERENCES user_types(id) ON DELETE CASCADE
       )
     `;
-    await db.$executeRawUnsafe(createUserTypePermissionsTable);
-    
-    // Create index separately for Postgres
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_user_type_id ON user_type_permissions (user_type_id)');
+    await query(createUserTypePermissionsTable);
 
     // Initial user types and their permissions
     const initialTypes = [
@@ -73,15 +71,15 @@ const migration: Migration = {
 
     for (const type of initialTypes) {
       const typeId = uuidv4();
-      await db.$executeRawUnsafe(
-        'INSERT INTO user_types (id, name, description) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING',
-        typeId, type.name, `Initial ${type.name} role`
+      await query(
+        'INSERT INTO user_types (id, name, description) VALUES (?, ?, ?)',
+        [typeId, type.name, `Initial ${type.name} role`]
       );
 
       for (const permission of type.permissions) {
-        await db.$executeRawUnsafe(
-          'INSERT INTO user_type_permissions (id, user_type_id, permission) VALUES ($1, $2, $3) ON CONFLICT (user_type_id, permission) DO NOTHING',
-          uuidv4(), typeId, permission
+        await query(
+          'INSERT INTO user_type_permissions (id, user_type_id, permission) VALUES (?, ?, ?)',
+          [uuidv4(), typeId, permission]
         );
       }
     }
@@ -90,8 +88,8 @@ const migration: Migration = {
   },
 
   async down(): Promise<void> {
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS user_type_permissions');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS user_types');
+    await query('DROP TABLE IF EXISTS user_type_permissions');
+    await query('DROP TABLE IF EXISTS user_types');
     console.log('✅ User types and permissions tables dropped');
   }
 };

@@ -1,16 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../lib/mysql';
+
+// Helper function to ensure payment_term_types table exists
+async function ensurePaymentTermTypesTable() {
+  try {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS payment_term_types (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_is_active (is_active)
+      )
+    `;
+    
+    await query(createTableSQL);
+
+    // Insert default types if table is empty
+    const checkData = await query('SELECT COUNT(*) as count FROM payment_term_types');
+    if (checkData[0].count === 0) {
+      const defaultTypes = ['Cash', 'Credit', 'Net 30', 'Net 60', 'COD'];
+      for (const type of defaultTypes) {
+        const id = `ptt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await query('INSERT INTO payment_term_types (id, name) VALUES (?, ?)', [id, type]);
+      }
+    }
+  } catch (error) {
+    console.error('Error ensuring payment_term_types table:', error);
+    throw error;
+  }
+}
 
 // GET endpoint to fetch payment term types
 export async function GET(request: NextRequest) {
   try {
+    await ensurePaymentTermTypesTable();
+
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    const types = await db.paymentTermType.findMany({
-      where: activeOnly ? { isActive: true } : {},
-      orderBy: { name: 'asc' },
-    });
+    let sql = `
+      SELECT
+        id,
+        name,
+        is_active AS isActive,
+        created_at AS createdAt
+      FROM payment_term_types
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (activeOnly) {
+      sql += ' AND is_active = ?';
+      params.push(true);
+    }
+
+    sql += ' ORDER BY name ASC';
+
+    const types = await query(sql, params);
 
     return NextResponse.json({
       success: true,
@@ -29,8 +78,10 @@ export async function GET(request: NextRequest) {
 // POST endpoint to create a new payment term type
 export async function POST(request: NextRequest) {
   try {
+    await ensurePaymentTermTypesTable();
+
     const body = await request.json();
-    const { name, isActive = true, description = null } = body;
+    const { name, isActive = true } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json(
@@ -39,29 +90,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const newType = await db.paymentTermType.create({
-      data: {
-        name: name.trim(),
-        isActive,
-        description,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Payment term type created successfully',
-      data: newType,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error: any) {
-    console.error('Error creating payment term type:', error);
-
-    if (error.code === 'P2002') {
+    // Check for duplicate
+    const existing = await query('SELECT id FROM payment_term_types WHERE name = ?', [name.trim()]);
+    if (existing.length > 0) {
       return NextResponse.json(
         { success: false, error: 'Type name already exists' },
         { status: 409 }
       );
     }
+
+    // Generate ID
+    const id = `ptt_${Date.now()}`;
+
+    const sql = `
+      INSERT INTO payment_term_types (id, name, is_active)
+      VALUES (?, ?, ?)
+    `;
+
+    await query(sql, [id, name.trim(), isActive]);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Payment term type created successfully',
+      data: { id, name: name.trim(), isActive },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Error creating payment term type:', error);
 
     return NextResponse.json(
       { success: false, error: 'Failed to create payment term type' },
@@ -84,9 +139,18 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await db.paymentTermType.deleteMany({
-      where: id ? { id } : { name: name as string },
-    });
+    let sql = 'DELETE FROM payment_term_types WHERE ';
+    const params: any[] = [];
+
+    if (id) {
+      sql += 'id = ?';
+      params.push(id);
+    } else {
+      sql += 'name = ?';
+      params.push(name);
+    }
+
+    await query(sql, params);
 
     return NextResponse.json({
       success: true,

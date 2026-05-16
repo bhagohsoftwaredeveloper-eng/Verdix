@@ -1,50 +1,35 @@
-import { db } from './db';
+import { query } from './mysql';
 import { v4 as uuidv4 } from 'uuid';
-import { ApprovalStatus, ApprovalAction } from '@prisma/client';
 
 export async function checkApprovalRequired(txType: string): Promise<boolean> {
   try {
     // 1. Check if the master switch is ON in pos_settings
-    const settings = await db.posSettings.findFirst();
-    
-    let isMasterSwitchOn = true;
-    if (settings) {
-      switch (txType) {
-        case 'STOCK_ADJUSTMENT':
-          isMasterSwitchOn = !!settings.requireAdjustmentConfirmation;
-          break;
-        case 'STOCK_TRANSFER':
-          isMasterSwitchOn = !!settings.requireTransferConfirmation;
-          break;
-        case 'PURCHASE_ORDER':
-          isMasterSwitchOn = !!settings.requirePurchaseOrderConfirmation;
-          break;
-        case 'RECEIVE_PO':
-          isMasterSwitchOn = !!settings.requireReceiveConfirmation;
-          break;
-        case 'BAD_ORDER':
-          isMasterSwitchOn = !!settings.requireBadOrderConfirmation;
-          break;
-        case 'STOCK_COUNT':
-          isMasterSwitchOn = !!settings.requireStockCountApproval;
-          break;
-        case 'REPACKAGING':
-        case 'SHELF_TRANSFER':
-          // These are not in the schema currently, default to false
-          return false; 
+    const settingsMap: Record<string, string> = {
+      'STOCK_ADJUSTMENT': 'require_adjustment_confirmation',
+      'STOCK_TRANSFER': 'require_transfer_confirmation',
+      'PURCHASE_ORDER': 'require_po_confirmation',
+      'RECEIVE_PO': 'require_receive_confirmation',
+      'BAD_ORDER': 'require_bad_order_confirmation',
+      'STOCK_COUNT': 'require_stock_count_approval',
+      'REPACKAGING': 'require_repackaging_confirmation',
+      'SHELF_TRANSFER': 'require_shelf_transfer_confirmation'
+    };
+
+    const settingColumn = settingsMap[txType];
+    if (settingColumn) {
+      const settings: any = await query(`SELECT ${settingColumn} FROM pos_settings LIMIT 1`);
+      if (!settings || settings.length === 0 || !settings[0][settingColumn]) {
+        // Master switch is OFF, skip multi-level approval
+        return false;
       }
     }
 
-    if (!isMasterSwitchOn) {
-      // Master switch is OFF, skip multi-level approval
-      return false;
-    }
-
     // 2. Check if a workflow is defined
-    const workflows = await db.approvalWorkflow.findMany({
-      where: { transactionType: txType }
-    });
-    return workflows.length > 0;
+    const workflows = await query(
+      'SELECT id FROM approval_workflows WHERE transaction_type = ?',
+      [txType]
+    );
+    return workflows && workflows.length > 0;
   } catch (error) {
     console.error('Error checking approval requirement:', error);
     return false;
@@ -55,42 +40,33 @@ export async function submitToApprovalQueue(txType: string, txData: any, userId:
   try {
     const queueId = uuidv4();
     
-    // 1. Get creator's role UUID
-    const user = await db.user.findUnique({
-      where: { uid: userId }
-    });
-    
-    let creatorRoleId: string | undefined;
-    if (user && user.userType) {
-      const userType = await db.userType.findFirst({
-        where: {
-          OR: [
-            { id: user.userType },
-            { name: user.userType }
-          ]
-        }
-      });
-      creatorRoleId = userType?.id;
-    }
+    // 1. Get creator's role UUID (resolve from name if necessary)
+    const userRoleRes: any = await query(`
+      SELECT ut.id 
+      FROM users u 
+      LEFT JOIN user_types ut ON u.user_type = ut.id OR u.user_type = ut.name
+      WHERE u.uid = ?
+    `, [userId]);
+    const creatorRoleId = userRoleRes[0]?.id;
 
     // 2. Get workflow steps
-    const steps = await db.approvalWorkflow.findMany({
-      where: { transactionType: txType },
-      orderBy: { stepOrder: 'asc' }
-    });
+    const steps: any = await query(
+      'SELECT aw.*, ut.name as roleName FROM approval_workflows aw LEFT JOIN user_types ut ON aw.user_type_id = ut.id WHERE aw.transaction_type = ? ORDER BY aw.step_order ASC',
+      [txType]
+    );
 
     if (!steps || steps.length === 0) {
       return { queueId: null, pendingApproval: false };
     }
 
     let currentStep = 1;
-    let skippedSteps: typeof steps = [];
+    let skippedSteps: any[] = [];
 
     // 3. Determine how many steps to skip (Auto-approval for creator)
     for (const step of steps) {
-      if (step.userTypeId === creatorRoleId) {
+      if (step.user_type_id === creatorRoleId) {
         skippedSteps.push(step);
-        currentStep = step.stepOrder + 1;
+        currentStep = step.step_order + 1;
       } else {
         // Stop at first step that creator CANNOT approve
         break;
@@ -103,29 +79,19 @@ export async function submitToApprovalQueue(txType: string, txData: any, userId:
     }
 
     // 5. Insert into queue starting at the correct next step
-    await db.approvalQueue.create({
-      data: {
-        id: queueId,
-        transactionType: txType,
-        transactionData: txData,
-        createdById: userId,
-        status: ApprovalStatus.Pending,
-        currentStep: currentStep
-      }
-    });
+    const nextStepInfo = steps.find((s: any) => s.step_order === currentStep);
+    
+    await query(
+      'INSERT INTO approval_queue (id, transaction_type, transaction_data, created_by, status, current_step) VALUES (?, ?, ?, ?, ?, ?)',
+      [queueId, txType, JSON.stringify(txData), userId, 'Pending', currentStep]
+    );
 
     // 6. Record history for skipped steps
-    if (skippedSteps.length > 0) {
-      await db.approvalHistory.createMany({
-        data: skippedSteps.map(step => ({
-          id: uuidv4(),
-          approvalQueueId: queueId,
-          userId: userId,
-          action: ApprovalAction.Approve,
-          notes: 'Auto-approved by initiator',
-          stepNumber: step.stepOrder
-        }))
-      });
+    for (const step of skippedSteps) {
+      await query(
+        'INSERT INTO approval_history (id, approval_queue_id, user_id, action, notes, step_number) VALUES (?, ?, ?, ?, ?, ?)',
+        [uuidv4(), queueId, userId, 'Approve', 'Auto-approved by initiator', step.step_order]
+      );
     }
 
     return { queueId, pendingApproval: true };
@@ -136,19 +102,8 @@ export async function submitToApprovalQueue(txType: string, txData: any, userId:
 }
 
 export async function getApprovalWorkflow(txType: string) {
-  const steps = await db.approvalWorkflow.findMany({
-    where: { transactionType: txType },
-    orderBy: { stepOrder: 'asc' }
-  });
-  
-  const userTypeIds = steps.map(s => s.userTypeId);
-  const userTypes = await db.userType.findMany({
-    where: { id: { in: userTypeIds } }
-  });
-  const userTypeMap = new Map(userTypes.map(ut => [ut.id, ut.name]));
-
-  return steps.map(s => ({
-    ...s,
-    roleName: userTypeMap.get(s.userTypeId) || null
-  }));
+  return await query(
+    'SELECT aw.*, ut.name as roleName FROM approval_workflows aw LEFT JOIN user_types ut ON aw.user_type_id = ut.id WHERE aw.transaction_type = ? ORDER BY aw.step_order ASC',
+    [txType]
+  );
 }

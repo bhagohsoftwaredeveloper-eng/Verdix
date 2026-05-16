@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,66 +10,62 @@ export async function GET(request: NextRequest) {
     const company = searchParams.get('company');
     const hasBalance = searchParams.get('hasBalance') === 'true';
 
-    const where: any = {};
+    let sql = `
+      SELECT 
+        s.*,
+        COALESCE(SUM(po.total), 0) as total_purchases,
+        COALESCE(SUM(sp.amount), 0) as total_payments,
+        (COALESCE(SUM(po.total), 0) - COALESCE(SUM(sp.amount), 0)) as balance
+      FROM suppliers s
+      LEFT JOIN purchase_orders po ON s.id = po.supplier_id AND po.status != 'Cancelled'
+      LEFT JOIN supplier_payments sp ON s.id = sp.supplier_id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
 
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { contactNumber: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
-      ];
+      sql += ' AND (s.name LIKE ? OR s.contact_number LIKE ? OR s.email LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     if (paymentTerms && paymentTerms !== 'all') {
-      where.paymentTerms = paymentTerms;
+      sql += ' AND s.payment_terms = ?';
+      params.push(paymentTerms);
     }
 
     if (orderSchedule) {
-      where.orderSchedule = { contains: orderSchedule, mode: 'insensitive' };
+      sql += ' AND s.order_schedule LIKE ?';
+      params.push(`%${orderSchedule}%`);
     }
 
     if (company) {
-      where.company = { contains: company, mode: 'insensitive' };
+      sql += ' AND s.company LIKE ?';
+      params.push(`%${company}%`);
     }
 
-    const suppliers = await db.supplier.findMany({
-      where,
-      include: {
-        purchaseOrders: {
-          select: {
-            total: true,
-            status: true
-          }
-        },
-        payments: {
-          select: {
-            amount: true
-          }
-        }
-      },
-      orderBy: { name: 'asc' }
-    });
+    sql += ' GROUP BY s.id';
 
-    const mappedSuppliers = suppliers.map((s: any) => {
-      const totalPurchases = s.purchaseOrders.reduce((acc: number, po: any) => acc + Number(po.total || 0), 0);
-      const totalPayments = s.payments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-      const balance = totalPurchases - totalPayments;
+    if (hasBalance) {
+      sql += ' HAVING (total_purchases - total_payments) > 0.01';
+    }
 
-      return {
-        ...s,
-        totalPurchases,
-        totalPayments,
-        balance
-      };
-    });
+    sql += ' ORDER BY s.name ASC';
 
-    const filteredSuppliers = hasBalance 
-      ? mappedSuppliers.filter((s: any) => s.balance > 0.01)
-      : mappedSuppliers;
+    const suppliers = await query(sql, params);
 
     return NextResponse.json({
       success: true,
-      data: filteredSuppliers,
+      data: suppliers.map((s: any) => ({
+        ...s,
+        contactNumber: s.contact_number,
+        mobilePhone: s.mobile_phone,
+        paymentTerms: s.payment_terms,
+        orderSchedule: s.order_schedule,
+        markupPercentage: s.markup_percentage ? parseFloat(s.markup_percentage) : 0,
+        totalPurchases: parseFloat(s.total_purchases || 0),
+        totalPayments: parseFloat(s.total_payments || 0),
+        balance: parseFloat(s.balance || 0)
+      })),
       timestamp: new Date().toISOString()
     });
   } catch (error) {

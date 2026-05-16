@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../lib/mysql';
 
 /**
  * GET /api/migrate/batch-costing
  *
- * Runs the batch costing migration safely for PostgreSQL.
+ * Runs the batch costing migration safely.
+ * Uses IF NOT EXISTS / ADD COLUMN IF NOT EXISTS to be idempotent.
+ * Safe to run multiple times.
  */
 export async function GET(request: NextRequest) {
   const results: { step: string; status: string; error?: string }[] = [];
 
   // Step 1: Create inventory_batches table
   try {
-    await db.$executeRawUnsafe(`
+    await query(`
       CREATE TABLE IF NOT EXISTS inventory_batches (
         id                  VARCHAR(50) PRIMARY KEY,
         product_id          VARCHAR(50) NOT NULL,
@@ -24,27 +26,23 @@ export async function GET(request: NextRequest) {
         source_type         VARCHAR(30) DEFAULT 'purchase',
         notes               VARCHAR(255) DEFAULT NULL,
         created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_ib_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+        updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_ib_product (product_id),
+        INDEX idx_ib_po      (purchase_order_id),
+        INDEX idx_ib_date    (received_date),
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )
     `);
-    
-    // Create indexes if they don't exist (PG doesn't have CREATE INDEX IF NOT EXISTS on older versions, but 9.5+ has it)
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_ib_product ON inventory_batches(product_id)`);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_ib_po ON inventory_batches(purchase_order_id)`);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_ib_date ON inventory_batches(received_date)`);
-    
     results.push({ step: 'CREATE inventory_batches', status: 'OK' });
   } catch (e: any) {
     results.push({ step: 'CREATE inventory_batches', status: 'ERROR', error: e.message });
   }
 
-  // Step 2: Add cost_at_sale to sale_items
+  // Step 2: Add cost_at_sale to sale_items (IF NOT EXISTS workaround)
   const saleItemCols = await safeGetColumns('sale_items');
   if (!saleItemCols.includes('cost_at_sale')) {
     try {
-      await db.$executeRawUnsafe(`ALTER TABLE sale_items ADD COLUMN cost_at_sale DECIMAL(14,4) DEFAULT NULL`);
-      await db.$executeRawUnsafe(`COMMENT ON COLUMN sale_items.cost_at_sale IS 'Weighted avg cost from batch sources'`);
+      await query(`ALTER TABLE sale_items ADD COLUMN cost_at_sale DECIMAL(14,4) DEFAULT NULL COMMENT 'Weighted avg cost from batch sources'`);
       results.push({ step: 'ADD sale_items.cost_at_sale', status: 'OK' });
     } catch (e: any) {
       results.push({ step: 'ADD sale_items.cost_at_sale', status: 'ERROR', error: e.message });
@@ -56,8 +54,7 @@ export async function GET(request: NextRequest) {
   // Step 3: Add batch_source to sale_items
   if (!saleItemCols.includes('batch_source')) {
     try {
-      await db.$executeRawUnsafe(`ALTER TABLE sale_items ADD COLUMN batch_source JSONB DEFAULT NULL`);
-      await db.$executeRawUnsafe(`COMMENT ON COLUMN sale_items.batch_source IS 'Array of batch splits'`);
+      await query(`ALTER TABLE sale_items ADD COLUMN batch_source JSON DEFAULT NULL COMMENT 'Array of batch splits'`);
       results.push({ step: 'ADD sale_items.batch_source', status: 'OK' });
     } catch (e: any) {
       results.push({ step: 'ADD sale_items.batch_source', status: 'ERROR', error: e.message });
@@ -70,8 +67,7 @@ export async function GET(request: NextRequest) {
   const posSettingsCols = await safeGetColumns('pos_settings');
   if (!posSettingsCols.includes('batch_costing_repack_inherit')) {
     try {
-      await db.$executeRawUnsafe(`ALTER TABLE pos_settings ADD COLUMN batch_costing_repack_inherit BOOLEAN DEFAULT TRUE`);
-      await db.$executeRawUnsafe(`COMMENT ON COLUMN pos_settings.batch_costing_repack_inherit IS 'Child repack batches inherit parent cost'`);
+      await query(`ALTER TABLE pos_settings ADD COLUMN batch_costing_repack_inherit TINYINT(1) DEFAULT 1 COMMENT 'Child repack batches inherit parent cost'`);
       results.push({ step: 'ADD pos_settings.batch_costing_repack_inherit', status: 'OK' });
     } catch (e: any) {
       results.push({ step: 'ADD pos_settings.batch_costing_repack_inherit', status: 'ERROR', error: e.message });
@@ -83,8 +79,7 @@ export async function GET(request: NextRequest) {
   // Step 5: Add batch_costing_oversell_block to pos_settings
   if (!posSettingsCols.includes('batch_costing_oversell_block')) {
     try {
-      await db.$executeRawUnsafe(`ALTER TABLE pos_settings ADD COLUMN batch_costing_oversell_block BOOLEAN DEFAULT FALSE`);
-      await db.$executeRawUnsafe(`COMMENT ON COLUMN pos_settings.batch_costing_oversell_block IS 'Block sale when batch qty exhausted'`);
+      await query(`ALTER TABLE pos_settings ADD COLUMN batch_costing_oversell_block TINYINT(1) DEFAULT 0 COMMENT 'Block sale when batch qty exhausted'`);
       results.push({ step: 'ADD pos_settings.batch_costing_oversell_block', status: 'OK' });
     } catch (e: any) {
       results.push({ step: 'ADD pos_settings.batch_costing_oversell_block', status: 'ERROR', error: e.message });
@@ -103,11 +98,11 @@ export async function GET(request: NextRequest) {
 
 async function safeGetColumns(tableName: string): Promise<string[]> {
   try {
-    const cols: any[] = await db.$queryRawUnsafe(
-      `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public'`,
-      tableName
+    const cols: any[] = await query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND TABLE_SCHEMA = DATABASE()`,
+      [tableName]
     );
-    return cols.map((c: any) => c.column_name);
+    return cols.map((c: any) => c.COLUMN_NAME);
   } catch {
     return [];
   }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 import { getExternalApiConfig } from '@/lib/external-api-config';
 import { 
   syncPurchaseTransaction, 
@@ -19,17 +19,15 @@ export async function POST(
     const logId = params.id;
 
     // Fetch the log entry
-    const log = await db.externalApiLog.findUnique({
-      where: { id: logId }
-    });
-
-    if (!log) {
+    const logResult = await query('SELECT * FROM external_api_logs WHERE id = ?', [logId]);
+    if (logResult.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Log entry not found' },
         { status: 404 }
       );
     }
 
+    const log = logResult[0];
     const apiConfig = await getExternalApiConfig();
     
     if (!apiConfig.enabled) {
@@ -43,32 +41,30 @@ export async function POST(
     const payload = JSON.parse(log.payload);
 
     // Determine what to retry based on transaction type
-    switch (log.transactionType) {
+    switch (log.transaction_type) {
       case 'PURCHASE_ORDER':
-        syncResult = await syncPurchaseTransaction(log.transactionId, payload, apiConfig);
+        syncResult = await syncPurchaseTransaction(log.transaction_id, payload, apiConfig);
         break;
       case 'SUPPLIER_PAYMENT':
-        syncResult = await syncPaymentTransaction(log.transactionId, payload, apiConfig);
+        syncResult = await syncPaymentTransaction(log.transaction_id, payload, apiConfig);
         break;
       case 'ACCOUNTS_PAYABLE':
-        syncResult = await syncAccountsPayable(log.transactionId, apiConfig);
+        // For accounts payable, we sync current balance, not old payload usually
+        // but for a strict 'retry' of a specific attempt, we could use payload.
+        // However, it's better to sync latest state.
+        syncResult = await syncAccountsPayable(log.transaction_id, apiConfig);
         break;
       default:
         return NextResponse.json(
-          { success: false, error: `Unsupported transaction type: ${log.transactionType}` },
+          { success: false, error: `Unsupported transaction type: ${log.transaction_type}` },
           { status: 400 }
         );
     }
 
     if (syncResult.success) {
       // Mark original log as resolved or just update it?
-      await db.externalApiLog.update({
-        where: { id: logId },
-        data: {
-          status: 'success',
-          errorMessage: null
-        }
-      });
+      // Usually better to keep history and just mark this one as succeeded now
+      await query('UPDATE external_api_logs SET status = "success", error_message = NULL WHERE id = ?', [logId]);
       
       return NextResponse.json({
         success: true,

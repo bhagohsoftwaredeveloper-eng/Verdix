@@ -1,7 +1,6 @@
-import { db } from './db';
+import { query, withTransaction } from './mysql';
 import { v4 as uuidv4 } from 'uuid';
 import { findUltimateRoot, deductFamilyStock } from './family-sync';
-import { BadOrderStatus, BadOrderItemReason } from '@prisma/client';
 
 export async function processBadOrderCreation(body: any, userId: string) {
   try {
@@ -14,7 +13,11 @@ export async function processBadOrderCreation(body: any, userId: string) {
       status,
       items,
       notes,
-      // warehouseId, warehouseName, shelfId, shelfName // Omitted as they are not in the current schema
+      warehouseId,
+      warehouseName,
+      shelfId,
+      shelfName,
+      isInternalFinalization = false
     } = body;
 
     if (!items || items.length === 0) {
@@ -22,44 +25,68 @@ export async function processBadOrderCreation(body: any, userId: string) {
     }
 
     // Process creation
-    const result = await db.$transaction(async (tx) => {
+    return await withTransaction(async (connection) => {
         // Generate bad order ID
         const badOrderId = `bo_${Date.now()}`;
 
         // Calculate total affected value
         const totalAffectedValue = items.reduce((acc: number, item: any) => {
-            return acc + (Number(item.cost) * (Number(item.quantity) || 0));
+            return acc + (item.cost * (item.quantity || 0));
         }, 0);
 
-        // Insert bad order and items
-        await tx.badOrder.create({
-            data: {
-                id: badOrderId,
-                purchaseOrderId: purchaseOrderId,
-                supplierId: supplierId,
-                supplierName: supplierName,
-                reportedBy: reportedBy || userId,
-                reportDate: reportDate ? new Date(reportDate) : new Date(),
-                status: (status as BadOrderStatus) || BadOrderStatus.Reported,
-                totalAffectedValue: totalAffectedValue,
-                notes: notes || null,
-                items: {
-                    create: items.map((item: any) => ({
-                        id: `boi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                        productId: item.productId,
-                        productName: item.productName,
-                        quantity: Number(item.quantity),
-                        cost: Number(item.cost),
-                        reason: (item.reason as BadOrderItemReason),
-                        description: item.description || null,
-                    }))
-                }
-            }
-        });
+        // Format date for MySQL
+        const formattedDate = reportDate 
+            ? new Date(reportDate).toISOString().slice(0, 19).replace('T', ' ')
+            : new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-        // Sync stock deduction across the entire product family
+        // Insert bad order
+        const insertOrderQuery = `
+            INSERT INTO bad_orders (
+                id, purchase_order_id, supplier_id, supplier_name, reported_by,
+                report_date, status, total_affected_value, notes,
+                warehouse_id, warehouse_name, shelf_id, shelf_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        await connection.query(insertOrderQuery, [
+            badOrderId,
+            purchaseOrderId || null,
+            supplierId || null,
+            supplierName || null,
+            reportedBy || userId || null,
+            formattedDate,
+            status || 'Reported',
+            totalAffectedValue,
+            notes || null,
+            warehouseId || null,
+            warehouseName || null,
+            shelfId || null,
+            shelfName || null,
+        ]);
+
+        // Insert bad order items
+        const insertItemQuery = `
+            INSERT INTO bad_order_items (
+                id, bad_order_id, product_id, product_name, quantity, cost, reason, description
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
         for (const item of items) {
-            const { rootId, factorToRoot } = await findUltimateRoot(item.productId, tx);
+            const itemId = `boi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            
+            await connection.query(insertItemQuery, [
+                itemId,
+                badOrderId,
+                item.productId,
+                item.productName,
+                item.quantity,
+                item.cost,
+                item.reason,
+                item.description || null,
+            ]);
+
+            // Sync stock deduction across the entire product family
+            const { rootId, factorToRoot } = await findUltimateRoot(item.productId, connection);
             const quantityAdded = parseFloat(item.quantity) || 0;
             const quantityInRootUnits = quantityAdded / factorToRoot;
 
@@ -70,15 +97,13 @@ export async function processBadOrderCreation(body: any, userId: string) {
                     badOrderId,
                     'adjustment', // Using adjustment as the movement type for bad orders
                     `Bad Order: ${item.reason || 'Not specified'} (${badOrderId})`,
-                    tx
+                    connection
                 );
             }
         }
 
         return { success: true, badOrderId };
     });
-
-    return result;
   } catch (error: any) {
     console.error('Error in processBadOrderCreation:', error);
     return { success: false, error: error.message };

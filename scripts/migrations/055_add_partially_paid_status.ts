@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '055_add_partially_paid_status',
@@ -7,45 +7,56 @@ const migration: Migration = {
 
   async up(): Promise<void> {
     console.log('Adding "Partially Paid" status to purchase_orders...');
-    // In PostgreSQL, we'll ensure the column is VARCHAR to allow adding new statuses easily in migrations
-    // If it was already an ENUM type, we would need ALTER TYPE, but for these migrations we prefer VARCHAR
-    try {
-      await db.$executeRawUnsafe(`
-        ALTER TABLE purchase_orders 
-        ALTER COLUMN status TYPE VARCHAR(50),
-        ALTER COLUMN status SET DEFAULT 'Pending'
-      `);
-    } catch (e) {
-      console.log('Note: Could not modify status column in purchase_orders, it might already be correct.');
-    }
+    // Add "Partially Paid" to purchase_orders status enum
+    // In MySQL, we can use ALTER TABLE to modify the ENUM
+    await query(`
+      ALTER TABLE purchase_orders 
+      MODIFY COLUMN status ENUM('Pending', 'Approved', 'Paid', 'Shipped', 'Received', 'Failed', 'Cancelled', 'Partially Paid') 
+      DEFAULT 'Pending'
+    `);
 
     console.log('Adding "Partially Paid" status to sales_invoices...');
-    try {
-      await db.$executeRawUnsafe(`
-        ALTER TABLE sales_invoices 
-        ALTER COLUMN status TYPE VARCHAR(50),
-        ALTER COLUMN status SET DEFAULT 'Pending'
-      `);
-    } catch (e) {
-      console.log('Note: Could not modify status column in sales_invoices, it might already be correct.');
-    }
+    // Add "Partially Paid" to sales_invoices status enum
+    await query(`
+      ALTER TABLE sales_invoices 
+      MODIFY COLUMN status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned', 'Partially Paid') 
+      DEFAULT 'Pending'
+    `);
 
     console.log('Adding "Partially Paid" status to sales_transactions...');
-    try {
-      await db.$executeRawUnsafe(`
-        ALTER TABLE sales_transactions 
-        ALTER COLUMN status TYPE VARCHAR(50),
-        ALTER COLUMN status SET DEFAULT 'Pending'
-      `);
-    } catch (e) {
-      console.log('Note: Could not modify status column in sales_transactions, it might already be correct.');
-    }
+    // Add "Partially Paid" to sales_transactions status enum
+    // Note: 'Voided' was found in existing data, so we must include it
+    await query(`
+      ALTER TABLE sales_transactions 
+      MODIFY COLUMN status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned', 'Partially Paid', 'Voided') 
+      DEFAULT 'Pending'
+    `);
 
-    console.log('✅ "Partially Paid" status support ensured in all relevant tables');
+    console.log('✅ "Partially Paid" status added to all relevant tables');
   },
 
   async down(): Promise<void> {
-    console.warn('Down migration for 055_add_partially_paid_status is a no-op in PostgreSQL refactor.');
+    // Reverse changes - this is tricky because we might lose data if someone already used "Partially Paid"
+    // For safety, we'll just log that down migration is limited
+    console.warn('Down migration for 055_add_partially_paid_status: Status "Partially Paid" will be removed. Rows with this status might be affected.');
+
+    await query(`
+      ALTER TABLE purchase_orders 
+      MODIFY COLUMN status ENUM('Pending', 'Approved', 'Paid', 'Shipped', 'Received', 'Failed', 'Cancelled') 
+      DEFAULT 'Pending'
+    `);
+
+    await query(`
+      ALTER TABLE sales_invoices 
+      MODIFY COLUMN status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned') 
+      DEFAULT 'Pending'
+    `);
+
+    await query(`
+      ALTER TABLE sales_transactions 
+      MODIFY COLUMN status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned') 
+      DEFAULT 'Pending'
+    `);
   }
 };
 

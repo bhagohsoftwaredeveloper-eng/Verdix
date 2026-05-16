@@ -1,166 +1,119 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate');
+    const startDate = searchParams.get('startDate'); // Default to last 30 days
     const endDate = searchParams.get('endDate');
-    const type = searchParams.get('type'); // 'fast', 'slow', or 'none'
+    const type = searchParams.get('type'); // 'fast' or 'slow'
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
 
-    let totalItems = 0;
+    let baseSql = '';
+    const params: any[] = [];
+    let sqlSelect = '';
 
     if (type === 'none') {
-      // Get products with no sales
-      const dateFilter: any = {};
+      const subConditions = ["st.status != 'voided'", "st.status != 'returned'"];
       if (startDate) {
-        dateFilter.gte = new Date(startDate);
+        subConditions.push('DATE(st.created_at) >= ?');
+        params.push(startDate);
       }
       if (endDate) {
-        const endDateObj = new Date(endDate);
-        endDateObj.setHours(23, 59, 59, 999);
-        dateFilter.lte = endDateObj;
+        subConditions.push('DATE(st.created_at) <= ?');
+        params.push(endDate);
       }
-
-      const productIdsWithSales = await db.saleItem.findMany({
-        distinct: ['productId'],
-        where: Object.keys(dateFilter).length > 0 ? {
-          sale: {
-            status: { notIn: ['Voided', 'Returned'] },
-            createdAt: dateFilter
-          }
-        } : {
-          sale: {
-            status: { notIn: ['Voided', 'Returned'] }
-          }
-        },
-        select: { productId: true }
-      });
-
-      const idsSet = new Set(productIdsWithSales.map(p => p.productId));
-
-      // Get all products except those with sales
-      const allProducts = await db.product.findMany({
-        select: {
-          id: true,
-          name: true,
-          sku: true,
-          barcode: true,
-          category: true,
-          stock: true
-        }
-      });
-
-      const noSalesProducts = allProducts.filter(p => !idsSet.has(p.id));
-      totalItems = noSalesProducts.length;
-
-      const products = noSalesProducts
-        .slice(offset, offset + limit)
-        .map(p => ({
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-          barcode: p.barcode,
-          category: p.category,
-          stock: p.stock.toNumber ? p.stock.toNumber() : Number(p.stock),
-          totalSold: 0,
-          totalRevenue: 0
-        }));
-
-      const totalPages = Math.ceil(totalItems / limit);
-
-      return NextResponse.json({
-        success: true,
-        data: products,
-        pagination: {
-          page,
-          limit,
-          totalItems,
-          totalPages
-        }
-      });
+      baseSql = `
+        FROM products p
+        WHERE p.id NOT IN (
+          SELECT si.product_id
+          FROM sale_items si
+          JOIN sales_transactions st ON si.sale_id = st.id
+          WHERE ${subConditions.join(' AND ')}
+        )
+      `;
+      sqlSelect = `
+        SELECT 
+          p.id,
+          p.name,
+          p.sku,
+          p.barcode,
+          p.category,
+          p.stock,
+          0 as total_sold,
+          0 as total_revenue
+      `;
     } else {
-      // Get products with sales, aggregated
-      const dateFilter: any = {};
+      baseSql = `
+        FROM products p
+        LEFT JOIN sale_items si ON p.id = si.product_id
+        LEFT JOIN sales_transactions st ON si.sale_id = st.id
+      `;
+      const conditions = [];
+      conditions.push("st.status != 'voided'");
+      conditions.push("st.status != 'returned'");
       if (startDate) {
-        dateFilter.gte = new Date(startDate);
+        conditions.push('DATE(st.created_at) >= ?');
+        params.push(startDate);
       }
       if (endDate) {
-        const endDateObj = new Date(endDate);
-        endDateObj.setHours(23, 59, 59, 999);
-        dateFilter.lte = endDateObj;
+        conditions.push('DATE(st.created_at) <= ?');
+        params.push(endDate);
       }
-
-      const salesData = await db.saleItem.groupBy({
-        by: ['productId'],
-        where: Object.keys(dateFilter).length > 0 ? {
-          sale: {
-            status: { notIn: ['Voided', 'Returned'] },
-            createdAt: dateFilter
-          }
-        } : {
-          sale: {
-            status: { notIn: ['Voided', 'Returned'] }
-          }
-        },
-        _sum: {
-          quantity: true,
-          price: true
-        },
-        orderBy: type === 'slow' ? { _sum: { quantity: 'asc' } } : { _sum: { quantity: 'desc' } }
-      });
-
-      totalItems = salesData.length;
-      const totalPages = Math.ceil(totalItems / limit);
-
-      const paginatedData = salesData.slice(offset, offset + limit);
-      const productIds = paginatedData.map(d => d.productId);
-
-      const products = await db.product.findMany({
-        where: { id: { in: productIds } },
-        select: {
-          id: true,
-          name: true,
-          sku: true,
-          barcode: true,
-          category: true,
-          stock: true
-        }
-      });
-
-      const productMap = new Map(products.map(p => [p.id, p]));
-
-      const enrichedData = paginatedData.map(d => {
-        const product = productMap.get(d.productId);
-        const totalSold = d._sum.quantity?.toNumber ? d._sum.quantity.toNumber() : Number(d._sum.quantity || 0);
-        const totalRevenue = d._sum.price?.toNumber ? d._sum.price.toNumber() : Number(d._sum.price || 0);
-
-        return {
-          id: d.productId,
-          name: product?.name,
-          sku: product?.sku,
-          barcode: product?.barcode,
-          category: product?.category,
-          stock: product ? (product.stock.toNumber ? product.stock.toNumber() : Number(product.stock)) : 0,
-          totalSold,
-          totalRevenue
-        };
-      });
-
-      return NextResponse.json({
-        success: true,
-        data: enrichedData,
-        pagination: {
-          page,
-          limit,
-          totalItems,
-          totalPages
-        }
-      });
+      if (conditions.length > 0) {
+        baseSql += ' WHERE ' + conditions.join(' AND ');
+      }
+      sqlSelect = `
+        SELECT 
+          p.id,
+          p.name,
+          p.sku,
+          p.barcode,
+          p.category,
+          p.stock,
+          COALESCE(SUM(si.quantity), 0) as total_sold,
+          COALESCE(SUM(si.quantity * si.price), 0) as total_revenue
+      `;
     }
+
+    const countSql = `SELECT COUNT(DISTINCT p.id) as total ${baseSql}`;
+    const [countResult] = await query(countSql, params);
+    const totalItems = countResult.total;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    let sql = `
+      ${sqlSelect}
+      ${baseSql}
+      GROUP BY p.id, p.name, p.sku, p.barcode, p.category, p.stock
+    `;
+
+    // Sort based on type
+    if (type === 'none') {
+      sql += ' ORDER BY p.name ASC';
+    } else if (type === 'slow') {
+      sql += ' ORDER BY total_sold ASC';
+    } else {
+      // Default fast
+      sql += ' ORDER BY total_sold DESC';
+    }
+
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const products = await query(sql, params);
+
+    return NextResponse.json({
+      success: true,
+      data: products,
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages
+      }
+    });
 
   } catch (error: any) {
     console.error('Error fetching velocity report:', error);

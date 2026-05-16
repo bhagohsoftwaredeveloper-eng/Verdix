@@ -1,40 +1,29 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     console.log("API ROUTE HIT GET /api/inventory/stock-counts/[id]. Received ID:", id);
 
-    // Fetch the main count details with items and product details
-    const count = await db.stockCount.findUnique({
-      where: { id },
-      include: {
-        items: {
-          include: {
-            product: {
-              select: {
-                name: true,
-                sku: true,
-                barcode: true
-              }
-            }
-          }
-        }
-      }
-    });
+    // Fetch the main count details
+    const countSql = `SELECT * FROM stock_counts WHERE id = ?`;
+    const countResult: any = await query(countSql, [id]);
 
-    if (!count) {
+    if (!countResult || countResult.length === 0) {
       return NextResponse.json({ error: 'Stock count not found' }, { status: 404 });
     }
 
-    // Format the items to match the expected structure
-    const items = count.items.map(item => ({
-      ...item,
-      product_name: item.product.name,
-      product_sku: item.product.sku,
-      product_barcode: item.product.barcode
-    }));
+    const count = countResult[0];
+
+    // Fetch the items associated with this count
+    const itemsSql = `
+      SELECT sci.*, p.name as product_name, p.sku as product_sku, p.barcode as product_barcode
+      FROM stock_count_items sci
+      JOIN products p ON sci.product_id = p.id
+      WHERE sci.stock_count_id = ?
+    `;
+    const items = await query(itemsSql, [id]);
 
     return NextResponse.json({
       success: true,
@@ -56,13 +45,10 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     const body = await request.json();
     const { name, notes } = body;
 
-    await db.stockCount.update({
-      where: { id },
-      data: {
-        name: name !== undefined ? name : undefined,
-        notes: notes !== undefined ? notes : undefined
-      }
-    });
+    await query(
+      `UPDATE stock_counts SET name = coalesce(?, name), notes = coalesce(?, notes) WHERE id = ?`,
+      [name, notes, id]
+    );
 
     return NextResponse.json({ message: 'Stock count updated successfully' });
   } catch (error) {
@@ -75,25 +61,20 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   try {
     const { id } = await context.params;
     
-    // Check if the stock count exists and its status
-    const count = await db.stockCount.findUnique({
-      where: { id },
-      select: { status: true }
-    });
+    // We shouldn't delete completed counts generally, maybe just mark as cancelled. 
+    // If it's in_progress we can just let it be deleted easily.
+    const countResult: any = await query(`SELECT status FROM stock_counts WHERE id = ?`, [id]);
     
-    if (!count) {
+    if (!countResult || countResult.length === 0) {
       return NextResponse.json({ error: 'Stock count not found' }, { status: 404 });
     }
 
-    if (count.status === 'completed') {
+    if (countResult[0].status === 'completed') {
        return NextResponse.json({ error: 'Cannot delete a completed stock count' }, { status: 400 });
     }
 
-    // Deleting the stock count (cascade delete should handle items if configured in Prisma schema)
-    // The schema has onDelete: Cascade for StockCountItem -> StockCount
-    await db.stockCount.delete({
-      where: { id }
-    });
+    // Since we have ON DELETE CASCADE on stock_count_items, deleting the parent is enough
+    await query(`DELETE FROM stock_counts WHERE id = ?`, [id]);
 
     return NextResponse.json({ message: 'Stock count deleted successfully' });
   } catch (error) {

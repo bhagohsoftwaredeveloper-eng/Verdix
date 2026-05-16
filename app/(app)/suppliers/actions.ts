@@ -1,7 +1,6 @@
 'use server';
 
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { query } from '@/lib/mysql';
 import { revalidatePath } from 'next/cache';
 
 export type SupplierWithBalance = {
@@ -19,7 +18,7 @@ export type SupplierWithBalance = {
   totalPurchases: number;
   totalPayments: number;
   balance: number;
-  oldestInvoiceDate?: Date;
+  oldestInvoiceDate?: string;
   orderSchedule?: string;
 };
 
@@ -34,95 +33,94 @@ export type SupplierFilters = {
 
 export async function getSuppliersWithBalance(search?: string, filters?: SupplierFilters): Promise<SupplierWithBalance[]> {
   try {
-    const suppliers = await db.supplier.findMany({
-      where: {
-        AND: [
-          search ? {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { company: { contains: search, mode: 'insensitive' } },
-            ]
-          } : {},
-          filters?.paymentTerms ? { paymentTerms: filters.paymentTerms } : {},
-          filters?.orderSchedule ? { orderSchedule: { contains: filters.orderSchedule, mode: 'insensitive' } } : {},
-          filters?.company ? { company: { contains: filters.company, mode: 'insensitive' } } : {},
-        ]
-      },
-      orderBy: { name: 'asc' }
-    });
-
-    const purchases = await db.purchaseOrder.groupBy({
-      by: ['supplierId'],
-      _sum: { total: true },
-      where: { status: { not: 'Cancelled' as any } }
-    });
-
-    const payments = await db.supplierPayment.groupBy({
-      by: ['supplierId'],
-      _sum: { amount: true }
-    });
-
-    const oldestInvoices = await db.purchaseOrder.findMany({
-      where: {
-        status: { notIn: ['Paid' as any, 'Cancelled' as any] },
-      },
-      select: { supplierId: true, date: true, total: true, paidAmount: true },
-      orderBy: { date: 'asc' }
-    });
-
-    const purchaseMap = new Map(purchases.map(p => [p.supplierId, Number(p._sum.total || 0)]));
-    const paymentMap = new Map(payments.map(p => [p.supplierId, Number(p._sum.amount || 0)]));
+    let sql = `
+      SELECT 
+        s.*,
+        COALESCE(SUM(po.total), 0) as total_purchases,
+        COALESCE(pay.total_payments, 0) as total_payments,
+        MIN(CASE WHEN po.status != 'Paid' AND po.total > COALESCE(po.paid_amount, 0) THEN po.date END) as oldest_invoice_date
+      FROM suppliers s
+      LEFT JOIN purchase_orders po ON s.id = po.supplier_id AND po.status != 'Cancelled'
+      LEFT JOIN (
+        SELECT supplier_id, SUM(amount) as total_payments
+        FROM supplier_payments
+        GROUP BY supplier_id
+      ) pay ON s.id = pay.supplier_id
+      WHERE 1=1
+    `;
     
-    // Group oldest invoices by supplier
-    const oldestInvoiceMap = new Map<string, Date>();
-    for (const inv of oldestInvoices) {
-      if (!oldestInvoiceMap.has(inv.supplierId)) {
-        if (Number(inv.total) > Number(inv.paidAmount || 0)) {
-          oldestInvoiceMap.set(inv.supplierId, inv.date);
-        }
-      }
+    const params: any[] = [];
+
+    if (search) {
+      sql += ` AND (s.name LIKE ? OR s.company LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`);
     }
 
-    let result = suppliers.map((s) => {
-      const totalPurchases = purchaseMap.get(s.id) || 0;
-      const totalPayments = paymentMap.get(s.id) || 0;
+    if (filters?.paymentTerms) {
+      sql += ` AND s.payment_terms = ?`;
+      params.push(filters.paymentTerms);
+    }
+
+    if (filters?.orderSchedule) {
+      sql += ` AND s.order_schedule LIKE ?`;
+      params.push(`%${filters.orderSchedule}%`);
+    }
+
+    if (filters?.company) {
+      sql += ` AND s.company LIKE ?`;
+      params.push(`%${filters.company}%`);
+    }
+
+    sql += ` GROUP BY s.id`;
+
+    // Filter by balance if requested
+    if (filters?.hasBalance || filters?.minBalance !== undefined || filters?.maxBalance !== undefined) {
+        sql = `SELECT * FROM (${sql}) as t WHERE 1=1`;
+        if (filters.hasBalance) {
+            sql += ` AND (total_purchases - total_payments) > 0`;
+        }
+        if (filters.minBalance !== undefined) {
+            sql += ` AND (total_purchases - total_payments) >= ?`;
+            params.push(filters.minBalance);
+        }
+        if (filters.maxBalance !== undefined) {
+            sql += ` AND (total_purchases - total_payments) <= ?`;
+            params.push(filters.maxBalance);
+        }
+    }
+
+    sql += ` ORDER BY name ASC`;
+
+    const rows = await query(sql, params);
+
+    return rows.map((row: any) => {
+      const totalPurchases = parseFloat(row.total_purchases);
+      const totalPayments = parseFloat(row.total_payments);
       return {
-        id: s.id,
-        name: s.name,
-        contactNumber: s.contactNumber || undefined,
-        telephone: s.telephone || undefined,
-        mobilePhone: s.mobilePhone || undefined,
-        email: s.email || undefined,
-        address: s.address || undefined,
-        company: s.company || undefined,
-        tin: s.tin || undefined,
-        paymentTerms: s.paymentTerms || undefined,
-        markupPercentage: s.markupPercentage ? Number(s.markupPercentage) : undefined,
-        totalPurchases,
-        totalPayments,
+        id: row.id,
+        name: row.name,
+        contactNumber: row.contact_number,
+        telephone: row.telephone,
+        mobilePhone: row.mobile_phone,
+        email: row.email,
+        address: row.address,
+        company: row.company,
+        tin: row.tin,
+        paymentTerms: row.payment_terms,
+        markupPercentage: row.markup_percentage ? parseFloat(row.markup_percentage) : undefined,
+        totalPurchases: totalPurchases,
+        totalPayments: totalPayments,
         balance: totalPurchases - totalPayments,
-        oldestInvoiceDate: oldestInvoiceMap.get(s.id),
-        orderSchedule: s.orderSchedule || undefined
+        oldestInvoiceDate: row.oldest_invoice_date,
+        orderSchedule: row.order_schedule
       };
     });
-
-    // Apply balance filters
-    if (filters?.hasBalance) {
-      result = result.filter(r => r.balance > 0);
-    }
-    if (filters?.minBalance !== undefined) {
-      result = result.filter(r => r.balance >= filters.minBalance!);
-    }
-    if (filters?.maxBalance !== undefined) {
-      result = result.filter(r => r.balance <= filters.maxBalance!);
-    }
-
-    return result;
   } catch (error) {
     console.error('Error fetching suppliers with balance:', error);
     return [];
   }
 }
+
 
 export async function addSupplierPayment(data: {
   supplierId: string;
@@ -136,70 +134,70 @@ export async function addSupplierPayment(data: {
   try {
     const paymentId = `sp_${Date.now()}`;
     
-    await withTransaction(async (tx) => {
-      await tx.supplierPayment.create({
-        data: {
-          id: paymentId,
-          supplierId: data.supplierId,
-          amount: data.amount,
-          date: new Date(data.date),
-          paymentMethod: data.paymentMethod,
-          reference: data.reference || null,
-          notes: data.notes || null,
-        }
-      });
+    // Start transaction for atomic updates
+    await query('START TRANSACTION', []);
+
+    try {
+      const sql = `
+        INSERT INTO supplier_payments (
+          id, supplier_id, amount, date, payment_method, reference, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      await query(sql, [
+        paymentId,
+        data.supplierId,
+        data.amount,
+        data.date,
+        data.paymentMethod,
+        data.reference || null,
+        data.notes || null,
+      ]);
 
       // Handle allocations if any
       if (data.allocations && data.allocations.length > 0) {
         for (const allocation of data.allocations) {
           const allocId = `spa_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
           
-          // Link payment to PO (using raw since it's missing from schema)
-          await tx.$executeRaw`
+          // Link payment to PO
+          await query(`
             INSERT INTO purchase_order_payments (id, supplier_payment_id, purchase_order_id, amount)
-            VALUES (${allocId}, ${paymentId}, ${allocation.purchaseOrderId}, ${allocation.amount})
-          `;
+            VALUES (?, ?, ?, ?)
+          `, [allocId, paymentId, allocation.purchaseOrderId, allocation.amount]);
 
           // Update PO paid_amount and status
-          const po = await tx.purchaseOrder.findUnique({
-            where: { id: allocation.purchaseOrderId },
-            select: { total: true, paidAmount: true }
-          });
+          await query(`
+            UPDATE purchase_orders 
+            SET paid_amount = paid_amount + ?
+            WHERE id = ?
+          `, [allocation.amount, allocation.purchaseOrderId]);
 
-          if (po) {
-            const newPaidAmount = Number(po.paidAmount) + allocation.amount;
-            let newStatus = po.status;
-            
-            if (newPaidAmount >= Number(po.total)) {
-              newStatus = 'Paid' as any;
-            } else if (newPaidAmount > 0) {
-              newStatus = 'PartiallyPaid' as any;
-            }
-
-            await tx.purchaseOrder.update({
-              where: { id: allocation.purchaseOrderId },
-              data: { 
-                paidAmount: newPaidAmount,
-                status: newStatus
-              }
-            });
+          // Check if fully paid and update status
+          const [po]: any = await query(`SELECT total, paid_amount FROM purchase_orders WHERE id = ?`, [allocation.purchaseOrderId]);
+          if (po && po.paid_amount >= po.total) {
+            await query(`UPDATE purchase_orders SET status = 'Paid' WHERE id = ?`, [allocation.purchaseOrderId]);
+          } else if (po && po.paid_amount > 0) {
+            await query(`UPDATE purchase_orders SET status = 'Partially Paid' WHERE id = ?`, [allocation.purchaseOrderId]);
           }
         }
       }
-    });
 
-    // Sync to external accounting API (non-blocking)
+      await query('COMMIT', []);
+    } catch (err) {
+      await query('ROLLBACK', []);
+      throw err;
+    }
+
+    // Sync to external accounting API (non-blocking) - simplified for brevity here
+    // ... preserved existing sync logic ...
     try {
       const { getExternalApiConfig } = await import('@/lib/external-api-config');
       const { syncPaymentTransaction, syncAccountsPayable } = await import('@/lib/services/external-accounting-api');
       
       const apiConfig = await getExternalApiConfig();
       if (apiConfig.enabled) {
-        const supplier = await db.supplier.findUnique({
-          where: { id: data.supplierId },
-          select: { name: true }
-        });
-        const supplierName = supplier?.name || '';
+        const supplierQuery = await query('SELECT name FROM suppliers WHERE id = ?', [data.supplierId]);
+        const supplierName = supplierQuery[0]?.name || '';
 
         const paymentData = {
           id: paymentId,
@@ -236,25 +234,33 @@ export async function addSupplierPayment(data: {
 
 export async function getUnpaidPurchaseOrders(supplierId: string) {
   try {
-    const pos = await db.purchaseOrder.findMany({
-      where: {
-        supplierId,
-        status: { notIn: ['Cancelled' as any, 'Paid' as any] },
-      },
-      orderBy: { date: 'asc' }
-    });
-
-    return pos
-      .filter(po => Number(po.total) > Number(po.paidAmount || 0))
-      .map((row) => ({
-        id: row.id,
-        date: row.date,
-        total: Number(row.total),
-        paidAmount: Number(row.paidAmount || 0),
-        balance: Number(row.total) - Number(row.paidAmount || 0),
-        status: row.status,
-        referenceNumber: row.referenceNumber
-      }));
+    const sql = `
+      SELECT 
+        id, 
+        date, 
+        total, 
+        COALESCE(paid_amount, 0) as paid_amount,
+        (total - COALESCE(paid_amount, 0)) as balance,
+        status,
+        reference_number
+      FROM purchase_orders
+      WHERE supplier_id = ? 
+      AND status != 'Cancelled' 
+      AND status != 'Paid'
+      AND total > COALESCE(paid_amount, 0)
+      ORDER BY date ASC
+    `;
+    
+    const rows = await query(sql, [supplierId]);
+    return rows.map((row: any) => ({
+      id: row.id,
+      date: row.date,
+      total: parseFloat(row.total),
+      paidAmount: parseFloat(row.paid_amount),
+      balance: parseFloat(row.balance),
+      status: row.status,
+      referenceNumber: row.reference_number
+    }));
   } catch (error) {
     console.error('Error fetching unpaid POs:', error);
     return [];
@@ -271,45 +277,59 @@ export async function getSupplierPayments(options: {
 } = {}) {
   try {
     const { searchTerm, page = 1, limit = 10, from, to, paymentMethod } = options;
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    const where: any = {
-      AND: [
-        searchTerm ? {
-          OR: [
-            { supplier: { name: { contains: searchTerm, mode: 'insensitive' } } },
-            { reference: { contains: searchTerm, mode: 'insensitive' } },
-          ]
-        } : {},
-        from ? { date: { gte: new Date(from) } } : {},
-        to ? { date: { lte: new Date(to) } } : {},
-        (paymentMethod && paymentMethod !== 'All') ? { paymentMethod } : {},
-      ]
-    };
+    let sql = `
+      SELECT 
+        sp.*,
+        s.name as supplier_name
+      FROM supplier_payments sp
+      JOIN suppliers s ON sp.supplier_id = s.id
+      WHERE 1=1
+    `;
+    
+    const params: any[] = [];
 
-    const total = await db.supplierPayment.count({ where });
+    if (searchTerm) {
+      sql += ` AND (s.name LIKE ? OR sp.reference LIKE ?)`;
+      params.push(`%${searchTerm}%`, `%${searchTerm}%`);
+    }
 
-    const payments = await db.supplierPayment.findMany({
-      where,
-      include: { supplier: { select: { name: true } } },
-      orderBy: [
-        { date: 'desc' },
-        { createdAt: 'desc' }
-      ],
-      take: limit,
-      skip: skip
-    });
+    if (from) {
+      sql += ` AND sp.date >= ?`;
+      params.push(from);
+    }
 
-    const data = payments.map((p) => ({
+    if (to) {
+      sql += ` AND sp.date <= ?`;
+      params.push(to);
+    }
+
+    if (paymentMethod && paymentMethod !== 'All') {
+      sql += ` AND sp.payment_method = ?`;
+      params.push(paymentMethod);
+    }
+
+    // Get total count
+    const countSql = `SELECT COUNT(*) as total FROM (${sql}) as sub`;
+    const countResult: any = await query(countSql, params);
+    const total = countResult[0]?.total || 0;
+
+    sql += ` ORDER BY sp.date DESC, sp.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const payments = await query(sql, params);
+
+    const data = payments.map((p: any) => ({
       id: p.id,
-      supplierId: p.supplierId,
-      supplierName: p.supplier?.name,
-      amount: Number(p.amount),
+      supplierId: p.supplier_id,
+      supplierName: p.supplier_name,
+      amount: parseFloat(p.amount),
       date: p.date,
-      paymentMethod: p.paymentMethod,
+      paymentMethod: p.payment_method,
       reference: p.reference,
       notes: p.notes,
-      createdAt: p.createdAt
+      createdAt: p.created_at
     }));
 
     return {
@@ -331,7 +351,7 @@ export async function getSupplierPayments(options: {
 export type SupplierTransaction = {
   id: string;
   type: 'PURCHASE' | 'PAYMENT';
-  date: Date;
+  date: string;
   reference?: string;
   description: string;
   amount: number;
@@ -340,7 +360,7 @@ export type SupplierTransaction = {
   balance?: number;
   payments?: {
     id: string;
-    date: Date;
+    date: string;
     amount: number;
     reference?: string;
     paymentMethod: string;
@@ -350,17 +370,22 @@ export type SupplierTransaction = {
 export async function getSupplierTransactions(supplierId: string): Promise<SupplierTransaction[]> {
   try {
     // 1. Fetch all Purchase Orders for this supplier
-    const purchases = await db.purchaseOrder.findMany({
-      where: {
-        supplierId,
-        status: { not: 'Cancelled' as any }
-      },
-      orderBy: { date: 'desc' }
-    });
+    const purchasesSql = `
+      SELECT 
+        id, 
+        date, 
+        total as amount, 
+        paid_amount,
+        status,
+        reference_number
+      FROM purchase_orders 
+      WHERE supplier_id = ? AND status != 'Cancelled'
+      ORDER BY date DESC
+    `;
+    const purchases = await query(purchasesSql, [supplierId]);
 
     // 2. Fetch all payment allocations for these POs
-    // Using raw since purchase_order_payments is missing from schema
-    const allocations: any[] = await db.$queryRaw`
+    const allocationsSql = `
       SELECT 
         pop.purchase_order_id,
         sp.id,
@@ -370,24 +395,33 @@ export async function getSupplierTransactions(supplierId: string): Promise<Suppl
         sp.payment_method
       FROM purchase_order_payments pop
       JOIN supplier_payments sp ON pop.supplier_payment_id = sp.id
-      WHERE sp.supplier_id = ${supplierId}
+      WHERE sp.supplier_id = ?
       ORDER BY sp.date DESC
     `;
+    const allocations = await query(allocationsSql, [supplierId]);
 
     // 3. Fetch all payments to find unallocated ones
-    const allPayments = await db.supplierPayment.findMany({
-      where: { supplierId },
-      orderBy: { date: 'desc' }
-    });
+    const allPaymentsSql = `
+      SELECT 
+        id, 
+        date, 
+        amount, 
+        payment_method,
+        reference
+      FROM supplier_payments 
+      WHERE supplier_id = ?
+      ORDER BY date DESC
+    `;
+    const allPayments = await query(allPaymentsSql, [supplierId]);
 
     // Map allocations to POs
-    const transactions: SupplierTransaction[] = purchases.map((po) => {
+    const transactions: SupplierTransaction[] = purchases.map((po: any) => {
       const poAllocations = allocations
         .filter((alloc: any) => alloc.purchase_order_id === po.id)
         .map((alloc: any) => ({
           id: alloc.id,
-          date: new Date(alloc.date),
-          amount: Number(alloc.amount),
+          date: alloc.date,
+          amount: parseFloat(alloc.amount),
           reference: alloc.reference,
           paymentMethod: alloc.payment_method
         }));
@@ -396,49 +430,54 @@ export async function getSupplierTransactions(supplierId: string): Promise<Suppl
         id: po.id,
         type: 'PURCHASE' as const,
         date: po.date,
-        amount: Number(po.total),
-        description: po.referenceNumber ? `PO #${po.referenceNumber}` : 'Purchase Order',
+        amount: parseFloat(po.amount),
+        description: po.reference_number ? `PO #${po.reference_number}` : 'Purchase Order',
         status: po.status,
-        reference: po.referenceNumber || po.id,
-        paidAmount: Number(po.paidAmount || 0),
-        balance: Number(po.total) - Number(po.paidAmount || 0),
+        reference: po.reference_number || po.id,
+        paidAmount: parseFloat(po.paid_amount),
+        balance: parseFloat(po.amount) - parseFloat(po.paid_amount),
         payments: poAllocations
       };
     });
 
-    // 4. Find payments that are NOT fully allocated
+    // 4. Find payments that are NOT fully allocated or even partially (though usually they should be)
+    // Actually, let's just find payments where the sum of allocations < payment amount
     const unallocatedPayments: SupplierTransaction[] = [];
     
     for (const payment of allPayments) {
       const paymentAllocations = allocations.filter((alloc: any) => alloc.id === payment.id);
-      const allocatedTotal = paymentAllocations.reduce((sum: number, alloc: any) => sum + Number(alloc.amount), 0);
-      const unallocatedAmount = Number(payment.amount) - allocatedTotal;
+      const allocatedTotal = paymentAllocations.reduce((sum: number, alloc: any) => sum + parseFloat(alloc.amount), 0);
+      const unallocatedAmount = parseFloat(payment.amount) - allocatedTotal;
 
-      if (unallocatedAmount > 0.01) {
+      if (unallocatedAmount > 0.01) { // Floating point safety
         unallocatedPayments.push({
           id: payment.id,
           type: 'PAYMENT' as const,
           date: payment.date,
-          amount: Number(payment.amount),
-          description: `Payment - ${payment.paymentMethod} (Unallocated: ₱${unallocatedAmount.toLocaleString()})`,
-          reference: payment.reference || undefined,
+          amount: parseFloat(payment.amount),
+          description: `Payment - ${payment.payment_method} (Unallocated: ₱${unallocatedAmount.toLocaleString()})`,
+          reference: payment.reference,
           paidAmount: allocatedTotal,
           balance: unallocatedAmount
         });
       } else if (paymentAllocations.length === 0) {
+        // Payment with NO allocations at all
         unallocatedPayments.push({
           id: payment.id,
           type: 'PAYMENT' as const,
           date: payment.date,
-          amount: Number(payment.amount),
-          description: `Payment - ${payment.paymentMethod} (Unallocated)`,
-          reference: payment.reference || undefined,
-          balance: Number(payment.amount)
+          amount: parseFloat(payment.amount),
+          description: `Payment - ${payment.payment_method} (Unallocated)`,
+          reference: payment.reference,
+          balance: parseFloat(payment.amount)
         });
       }
     }
 
+    // Combine POs and Unallocated Payments
     const result = [...transactions, ...unallocatedPayments];
+
+    // Sort by date descending
     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   } catch (error) {

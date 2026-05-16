@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../lib/mysql';
 import { isLoyaltyCardExpired } from '../../../../lib/loyalty-utils';
-import { PointTransactionType } from '@prisma/client';
 
 // POST endpoint to adjust customer loyalty points
 export async function POST(request: NextRequest) {
@@ -39,25 +38,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if customer loyalty record exists
-    const loyaltyRecord = await db.customerLoyalty.findUnique({
-      where: { customerId }
-    });
+    const loyaltyCheck = await query(
+      'SELECT id, current_points, expiry_date FROM customer_loyalty WHERE customer_id = ?',
+      [customerId]
+    );
 
-    if (!loyaltyRecord) {
+    if (loyaltyCheck.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Customer loyalty record not found. Please create a loyalty card first.' },
         { status: 404 }
       );
     }
 
+    const loyaltyRecord = loyaltyCheck[0];
+
     // Check for expiration
-    if (isLoyaltyCardExpired(loyaltyRecord.expiryDate)) {
+    if (isLoyaltyCardExpired(loyaltyRecord.expiry_date)) {
       return NextResponse.json(
         { success: false, error: 'Loyalty card is expired. Points cannot be adjusted.' },
         { status: 400 }
       );
     }
-    const currentPoints = Number(loyaltyRecord.currentPoints || 0);
+    const currentPoints = Number(loyaltyRecord.current_points || 0);
     const adjustmentPoints = adjustmentType === 'add' ? points : -points;
     const newPoints = currentPoints + adjustmentPoints;
 
@@ -69,24 +71,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update customer loyalty points and history in a transaction
-    await db.$transaction([
-      db.customerLoyalty.update({
-        where: { id: loyaltyRecord.id },
-        data: {
-          currentPoints: newPoints,
-          lastTransaction: new Date(),
-        }
-      }),
-      db.pointHistory.create({
-        data: {
-          customerLoyaltyId: loyaltyRecord.id,
-          transactionType: adjustmentType as PointTransactionType,
-          points: points,
-          reason: reason.trim(),
-        }
-      })
-    ]);
+    // Update customer loyalty points
+    await query(
+      'UPDATE customer_loyalty SET current_points = ?, last_transaction = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [newPoints, loyaltyRecord.id]
+    );
+
+    // Insert point history record
+    const historyId = `PH-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await query(
+      `INSERT INTO point_history (
+        id, customer_loyalty_id, transaction_type, points, reason, created_at
+      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [historyId, loyaltyRecord.id, adjustmentType, points, reason.trim()]
+    );
 
     return NextResponse.json({
       success: true,

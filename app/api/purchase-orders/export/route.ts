@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { PurchaseOrderStatus } from '@prisma/client';
+import { query } from '../../../../lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,55 +10,61 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const where: any = {};
+    let sql = `
+      SELECT
+        po.id,
+        po.reference_number as referenceNumber,
+        po.supplier_name as supplierName,
+        po.date,
+        po.total,
+        po.status,
+        po.ordered_by as orderedBy,
+        po.shipping_fee as shippingFee,
+        po.vat_amount as vatAmount,
+        po.received_total as receivedTotal,
+        po.delivery_date as deliveryDate
+      FROM purchase_orders po
+      WHERE 1=1
+    `;
+    const params: any[] = [];
 
     if (status && status !== 'all') {
-      where.status = status as PurchaseOrderStatus;
+      sql += ' AND po.status = ?';
+      params.push(status);
     }
 
     if (supplierId && supplierId !== 'all') {
-      where.supplierId = supplierId;
+      sql += ' AND po.supplier_id = ?';
+      params.push(supplierId);
     }
 
     if (search) {
-      where.OR = [
-        { id: { contains: search, mode: 'insensitive' } },
-        { supplierName: { contains: search, mode: 'insensitive' } },
-        { referenceNumber: { contains: search, mode: 'insensitive' } }
-      ];
+      sql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ? OR po.reference_number LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        where.date.gte = new Date(startDate);
-      }
-      if (endDate) {
-        where.date.lte = new Date(`${endDate}T23:59:59.999Z`);
-      }
+    if (startDate) {
+      sql += ' AND po.date >= ?';
+      params.push(startDate);
     }
 
-    const purchaseOrders = await db.purchaseOrder.findMany({
-      where,
-      orderBy: {
-        date: 'desc'
-      }
-    });
+    if (endDate) {
+      sql += ' AND po.date <= ?';
+      params.push(`${endDate} 23:59:59`);
+    }
+
+    sql += ' ORDER BY po.date DESC';
+
+    const purchaseOrders = await query(sql, params);
 
     return NextResponse.json({
       success: true,
-      data: purchaseOrders.map((po) => ({
-        id: po.id,
-        referenceNumber: po.referenceNumber,
-        supplierName: po.supplierName,
-        date: po.date,
-        total: po.total.toNumber(),
-        status: po.status,
-        orderedBy: po.orderedBy,
-        shippingFee: po.shippingFee.toNumber(),
-        vatAmount: po.vatAmount.toNumber(),
-        receivedTotal: po.receivedTotal.toNumber(),
-        deliveryDate: po.deliveryDate
+      data: purchaseOrders.map((row: any) => ({
+        ...row,
+        total: parseFloat(row.total),
+        shippingFee: parseFloat(row.shippingFee || '0'),
+        vatAmount: parseFloat(row.vatAmount || '0'),
+        receivedTotal: parseFloat(row.receivedTotal || '0'),
       })),
       timestamp: new Date().toISOString()
     });

@@ -1,12 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/db-helpers';
+import { withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
 import { deductFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 import { deductFromBatches, getBatchCostingSettings } from '@/lib/batch-deduction';
-import { v4 as uuidv4 } from 'uuid';
+import { query } from '@/lib/mysql';
+
+async function ensurePosTransactionItemsSchema() {
+  try {
+    const currentColumnsResult = await query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'pos_transaction_items' AND TABLE_SCHEMA = DATABASE()"
+    ) as any[];
+    const existingColumns = new Set(currentColumnsResult.map((c: any) => c.COLUMN_NAME));
+
+    if (!existingColumns.has('discount_type')) {
+      await query("ALTER TABLE pos_transaction_items ADD COLUMN discount_type VARCHAR(50) DEFAULT 'percent'");
+      console.log('✅ Added discount_type column to pos_transaction_items');
+    }
+    if (!existingColumns.has('tax_type')) {
+      await query("ALTER TABLE pos_transaction_items ADD COLUMN tax_type VARCHAR(50) DEFAULT 'VAT'");
+      console.log('✅ Added tax_type column to pos_transaction_items');
+    }
+  } catch (error) {
+    console.error('Error ensuring pos_transaction_items schema:', error);
+  }
+}
+
 
 export async function POST(request: NextRequest) {
   try {
+    await ensurePosTransactionItemsSchema();
     const body = await request.json();
 
     const {
@@ -18,13 +39,14 @@ export async function POST(request: NextRequest) {
       shiftId,
       terminalId,
       notes,
+      // Payment-specific data
       paymentDetails,
       amountTendered,
-      change,
-      payments
+      change
     } = body;
     
-    console.log('[POS Checkout] Processing sale:', { itemsCount: items?.length, totalDue, paymentMethod });
+    console.log('[POS Checkout] Processing sale:', { itemsCount: items.length, totalDue, paymentMethod });
+    items.forEach((it: any) => console.log(`  - Item: ${it.name}, Qty: ${it.quantity}, ID: ${it.id}`));
 
     if (!items || items.length === 0) {
       return NextResponse.json({ success: false, error: 'No items in transaction' }, { status: 400 });
@@ -44,31 +66,29 @@ export async function POST(request: NextRequest) {
     const paymentDetailsId = `PD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const auditLogId = `PAL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-    return await withTransaction(async (tx) => {
+    return await withTransaction(async (connection) => {
       // Fetch Loyalty & Training Mode Settings
-      const loyaltySettings = await tx.loyaltyPointsSetting.findMany({ take: 1 });
-      const posSettings = await tx.posSettings.findFirst();
+      const [loyaltyRows]: any = await connection.query(
+        'SELECT * FROM loyalty_points_settings LIMIT 1'
+      );
+      const [posSettingsRows]: any = await connection.query(
+        'SELECT is_training_mode FROM pos_settings LIMIT 1'
+      );
       
-      const isTrainingMode = posSettings?.isTrainingMode || false;
+      const loyaltySettings = loyaltyRows || [];
+      const isTrainingMode = posSettingsRows?.[0]?.is_training_mode || false;
       let eligiblePointsAmount = 0;
 
       // Log payment initiation
-      await tx.paymentAuditLog.create({
-        data: {
-          id: auditLogId,
-          transactionId: posTransId,
-          paymentMethod: paymentMethod || 'Unknown',
-          action: 'initiated',
-          status: 'pending',
-          amount: totalDue,
-          userId: userId,
-          createdAt: new Date()
-        }
-      });
 
+      await connection.query(`
+        INSERT INTO payment_audit_log (
+          id, transaction_id, payment_method, action, status, amount, user_id, created_at
+        ) VALUES (?, ?, ?, 'initiated', 'pending', ?, ?, NOW())
+      `, [auditLogId, posTransId, paymentMethod, totalDue, userId]);
       // Generate sequential reference (INV-XXXXXX)
-      const nextRefVal = await getNextReference('salesInvoice');
-      const sequentialRef = `INV-${nextRefVal}`;
+      const nextRefVal = await getNextReference('sales_invoice');
+      const sequentialRef = `INV-${nextRefVal.toString().padStart(6, '0')}`;
       
       // Get terminal specific receipt (OR)
       const receiptNo = await getNextReceiptNumber(terminalId);
@@ -78,184 +98,208 @@ export async function POST(request: NextRequest) {
       const posPaymentStatus = isCharge ? 'pending' : 'completed';
 
       // 1. Insert into sales_transactions
-      await tx.salesTransaction.create({
-        data: {
-          id: saleId,
-          reference: sequentialRef,
-          receiptNumber: receiptNo,
-          customerId: (customer && customer.id !== 'walk-in') ? customer.id : null,
-          invoiceDate: new Date(),
-          date: new Date(),
-          total: totalDue,
-          paymentMethod,
-          status: invoiceStatus as any,
-          transactionSource: 'POS',
-          notes: notes || 'POS Sale',
-          isTraining: isTrainingMode,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
+      const insertSaleSql = `
+        INSERT INTO sales_transactions (
+          id, reference, receipt_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, is_training, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, ?, 'POS', ?, ?, NOW(), NOW())
+      `;
+      await connection.query(insertSaleSql, [
+        saleId,
+        sequentialRef,
+        receiptNo,
+        (customer && customer.id !== 'walk-in') ? customer.id : null,
+        totalDue,
+        paymentMethod,
+        invoiceStatus,
+        notes || 'POS Sale',
+        isTrainingMode
+      ]);
 
-      // 2a. Fetch batch costing settings
-      const bcs = await getBatchCostingSettings(tx);
+      // 2a. Fetch batch costing settings once (do it once before the loop for efficiency)
+      // We'll store it in a variable accessible inside the loop.
+      let _batchSettings: { repackInherit: boolean; oversellBlock: boolean } | null = null;
+      const getBCS = async () => {
+        if (!_batchSettings) _batchSettings = await getBatchCostingSettings(connection as any);
+        return _batchSettings;
+      };
 
       // 2. Insert into sale_items and update stock
+      const insertItemSql = `
+        INSERT INTO sale_items (
+          id, sale_id, product_id, product_name, quantity, price, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+      `;
+
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const itemId = `${saleId}-ITEM-${i + 1}`;
 
-        const saleItem = await tx.saleItem.create({
-          data: {
-            id: itemId,
-            saleId: saleId,
-            productId: item.id,
-            productName: item.name,
-            quantity: item.quantity,
-            price: item.price * (1 - (item.discount || 0) / 100),
-            createdAt: new Date()
-          }
-        });
+        await connection.query(insertItemSql, [
+          itemId,
+          saleId,
+          item.id,
+          item.name,
+          item.quantity,
+          item.price * (1 - (item.discount || 0) / 100)
+        ]);
 
         // --- BATCH COSTING: FIFO deduction & cost recording ---
         try {
+          const bcs = await getBCS();
           const deduction = await deductFromBatches(
             item.id,
             item.quantity,
             bcs.oversellBlock,
-            tx
+            connection as any
           );
-          
-          await tx.saleItem.update({
-            where: { id: itemId },
-            data: {
-              costAtSale: deduction.weightedAvgCost,
-              batchSource: deduction.splits as any
-            }
-          });
+          // Update the sale_items row with batch source data
+          await connection.query(
+            'UPDATE sale_items SET cost_at_sale = ?, batch_source = ? WHERE id = ?',
+            [deduction.weightedAvgCost, JSON.stringify(deduction.splits), itemId]
+          );
         } catch (batchErr: any) {
+          // If oversell_block is ON, rethrow to abort the transaction
           if (batchErr.message && batchErr.message.startsWith('Batch stock exhausted')) {
             throw batchErr;
           }
-          console.warn('[BatchCosting] Could not deduct batch:', batchErr.message);
+          // Otherwise non-fatal (e.g. migration not yet run) — log and continue
+          console.warn('[BatchCosting] Could not deduct batch (migration pending?):', batchErr.message);
         }
+        // --- END BATCH COSTING ---
 
         // --- Stock Deduction with Full Hierarchy Sync & Loyalty Calculation ---
-        const product = await tx.product.findUnique({
-          where: { id: item.id },
-          include: {
-            // category might be a string in Prisma or a relation, checking schema...
-            // In schema, category is String? @db.VarChar(100)
-          }
-        });
+        const [soldProdResult]: any = await connection.query(`
+          SELECT 
+            p.id, p.parent_id, p.unit_of_measure, p.name, p.stock, 
+            c.markup_percentage, p.category, p.earns_points 
+          FROM products p
+          LEFT JOIN categories c ON p.category = c.name
+          WHERE p.id = ?
+        `, [item.id]);
 
-        if (product) {
-          // Find markup percentage from category table
-          let markupPercentage = 0;
-          if (product.category) {
-            const cat = await tx.category.findUnique({
-              where: { name: product.category }
-            });
-            markupPercentage = Number(cat?.markupPercentage || 0);
-          }
+        if (soldProdResult && soldProdResult.length > 0) {
+          const soldProd = soldProdResult[0];
 
           // Loyalty Points Calculation
-          const hasFivePercentMarkup = Math.abs(markupPercentage - 5) < 0.01;
-          const earnsPointsEnabled = product.earnsPoints !== false;
+          const hasFivePercentMarkup = Math.abs((soldProd.markup_percentage || 0) - 5) < 0.01;
+          const earnsPointsEnabled = soldProd.earns_points !== 0 && soldProd.earns_points !== false;
           const isExcluded = hasFivePercentMarkup || !earnsPointsEnabled;
           if (!isExcluded) {
              eligiblePointsAmount += item.price * item.quantity;
+          } else {
+             console.log(`Item ${item.name} excluded from points. Markup: ${soldProd.markup_percentage}, Earns: ${soldProd.earns_points}`);
           }
 
-          const { rootId, factorToRoot } = await findUltimateRoot(product.id, tx);
+          // Walk the FULL ancestor chain to find the ultimate root and the
+          // cumulative factor (handles grandchildren, great-grandchildren, etc.)
+          //
+          // Example — selling Sugar 500g (grandchild):
+          //   findUltimateRoot(Sugar500g)
+          //     → rootId = Sugar25kg, factorToRoot = 50
+          //   rootQty = 10 Sugar500g / 50 = 0.2 Sugar25kg
+          //   deductFamilyStock(Sugar25kg, 0.2) then cascades:
+          //     → deduct 0.2 from Sugar25kg
+          //     → find Sugar1kg (factor 25) → deduct 5 from Sugar1kg
+          //         → find Sugar500g (factor 2) → deduct 10 from Sugar500g ✓
+          const { rootId, factorToRoot } = await findUltimateRoot(soldProd.id, connection);
 
-          if (factorToRoot > 1 || rootId !== product.id) {
+          if (factorToRoot > 1 || rootId !== soldProd.id) {
+            // Sold item is NOT the root — convert qty to root units and deduct from root down
             const rootQty = item.quantity / factorToRoot;
             await deductFamilyStock(
               rootId,
               rootQty,
               saleId,
               'sale',
-              `POS Sale: ${saleId} (sold: ${product.name}, syncing full tree)`,
-              tx
+              `POS Sale: ${saleId} (sold: ${soldProd.name}, syncing full tree)`,
+              connection
             );
           } else {
+            // Sold item IS the root — deduct and propagate to all descendants
             await deductFamilyStock(
-              product.id,
+              soldProd.id,
               item.quantity,
               saleId,
               'sale',
               `POS Sale: ${saleId}`,
-              tx
+              connection
             );
           }
         }
+
       }
 
-      // 3. Insert into sales_invoices
+      // 3. Insert into sales_invoices (to show up in /sales reports)
       const invoiceId = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      let dueDate = new Date();
+      
+      let dueDateQuery = 'CURDATE()';
       
       if (isCharge && customer && customer.id !== 'walk-in') {
-          const cust = await tx.customer.findUnique({
-            where: { id: customer.id },
-            select: { paymentTerms: true }
-          });
+          // Fetch customer's payment terms
+          const [custTermResult]: any = await connection.query(
+               'SELECT payment_terms FROM customers WHERE id = ?', 
+               [customer.id]
+          );
           
-          if (cust?.paymentTerms) {
-              const match = cust.paymentTerms.match(/(\d+)/);
-              if (match && match[1]) {
-                  const days = parseInt(match[1]);
-                  dueDate.setDate(dueDate.getDate() + days);
+          if (custTermResult && custTermResult.length > 0) {
+              const terms = custTermResult[0].payment_terms; // e.g., '15 Days', '30 Days', 'Cash'
+              
+              if (terms && typeof terms === 'string') {
+                  const match = terms.match(/(\d+)/);
+                  if (match && match[1]) {
+                      const days = parseInt(match[1]);
+                      dueDateQuery = `DATE_ADD(CURDATE(), INTERVAL ${days} DAY)`;
+                  }
               }
           }
       }
       
-      await tx.salesInvoice.create({
-        data: {
-          id: invoiceId,
-          reference: sequentialRef,
-          receiptNumber: receiptNo,
-          customerId: (customer && customer.id !== 'walk-in') ? customer.id : null,
-          invoiceDate: new Date(),
-          dueDate: dueDate,
-          total: totalDue,
-          paymentMethod,
-          status: invoiceStatus as any,
-          transactionSource: 'POS',
-          notes: notes || 'POS Sale',
-          isTraining: isTrainingMode,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
+      const insertInvoiceSql = `
+        INSERT INTO sales_invoices (
+          id, reference, receipt_number, customer_id, invoice_date, due_date, total, payment_method,
+          status, transaction_source, notes, is_training, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), ${dueDateQuery}, ?, ?, ?, 'POS', ?, ?, NOW(), NOW())
+      `;
+      await connection.query(insertInvoiceSql, [
+        invoiceId,
+        sequentialRef,
+        receiptNo,
+        (customer && customer.id !== 'walk-in') ? customer.id : null,
+        totalDue,
+        paymentMethod,
+        invoiceStatus,
+        notes || 'POS Sale',
+        isTrainingMode
+      ]);
 
-      // 4. Insert into pos_transactions
-      const posNotes = `Tendered: ₱${(amountTendered || totalDue).toFixed(2)}, Change: ₱${(change || 0).toFixed(2)}${notes ? ' - ' + notes : ''}`;
+      // 4. Insert into pos_transactions with payment details reference
+      const insertPosTransSql = `
+        INSERT INTO pos_transactions (
+          id, sale_id, shift_id, user_id, terminal_id, transaction_type,
+          subtotal, tax_amount, discount_amount, total_amount, payment_method, 
+          payment_status, payment_details_id, payment_validated_at,
+          notes, is_training, transaction_time, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, NOW(), NOW(), NOW())
+      `;
       
-      await tx.posTransaction.create({
-        data: {
-          id: posTransId,
-          saleId: saleId,
-          shiftId: shiftId || null,
-          userId: userId,
-          terminalId: terminalId || null,
-          transactionType: 'sale',
-          subtotal: body.subtotal || totalDue,
-          taxAmount: body.taxAmount || 0,
-          discountAmount: body.discountAmount || 0,
-          totalAmount: totalDue,
-          paymentMethod,
-          paymentStatus: posPaymentStatus,
-          paymentDetailsId,
-          paymentValidatedAt: new Date(),
-          notes: posNotes,
-          isTraining: isTrainingMode,
-          transactionTime: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
+      const posNotes = `Tendered: ₱${(body.amountTendered || totalDue).toFixed(2)}, Change: ₱${(body.change || 0).toFixed(2)}${notes ? ' - ' + notes : ''}`;
+      
+      await connection.query(insertPosTransSql, [
+        posTransId,
+        saleId,
+        shiftId || null,
+        userId,
+        terminalId || null,
+        body.subtotal || totalDue,
+        body.taxAmount || 0,
+        body.discountAmount || 0,
+        totalDue,
+        paymentMethod,
+        posPaymentStatus,
+        paymentDetailsId,
+        posNotes,
+        isTrainingMode
+      ]);
 
       // 5. Insert items into sales_invoice_items and pos_transaction_items
       for (let i = 0; i < items.length; i++) {
@@ -264,116 +308,108 @@ export async function POST(request: NextRequest) {
         const invoiceItemId = `${invoiceId}-ITEM-${i + 1}`;
         const posItemId = `${posTransId}-DETAIL-${i + 1}`;
 
-        await tx.salesInvoiceItem.create({
-          data: {
-            id: invoiceItemId,
-            salesInvoiceId: invoiceId,
-            productId: item.id,
-            productName: item.name,
-            quantity: item.quantity,
-            price: item.price * (1 - (item.discount || 0) / 100),
-            createdAt: new Date()
-          }
-        });
+        // Insert into sales_invoice_items
+        await connection.query(`
+          INSERT INTO sales_invoice_items (
+            id, sales_invoice_id, product_id, product_name, quantity, price, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+        `, [invoiceItemId, invoiceId, item.id, item.name, item.quantity, item.price * (1 - (item.discount || 0) / 100)]);
 
+        // Insert into pos_transaction_items (POS Details)
         const originalPrice = item.price;
         const discountPercent = item.discount || 0;
         const discAmount = (originalPrice * item.quantity) * (discountPercent / 100);
         const lTotal = (originalPrice * item.quantity) - discAmount;
 
-        await tx.posTransactionItem.create({
-          data: {
-            id: posItemId, 
-            posTransactionId: posTransId, 
-            saleItemId: itemId, 
-            productId: item.id, 
-            productName: item.name, 
-            quantity: item.quantity, 
-            unitPrice: originalPrice,
-            discountPercentage: discountPercent,
-            discountAmount: discAmount,
-            discountType: item.discountType || 'percent',
-            taxType: item.taxType || 'VAT',
-            lineTotal: lTotal,
-            createdAt: new Date()
-          }
-        });
+        await connection.query(`
+          INSERT INTO pos_transaction_items (
+            id, pos_transaction_id, sale_item_id, product_id, product_name, 
+            quantity, unit_price, discount_percentage, discount_amount, 
+            discount_type, tax_type, line_total, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `, [
+          posItemId, 
+          posTransId, 
+          itemId, 
+          item.id, 
+          item.name, 
+          item.quantity, 
+          originalPrice,
+          discountPercent,
+          discAmount,
+          item.discountType || 'percent',
+          item.taxType || 'VAT',
+          lTotal
+        ]);
+
       }
 
       // 6. Insert payment details
       const pointsUsedValue = paymentDetails?.pointsUsed ? parseFloat(paymentDetails.pointsUsed) : 0;
-      const allPayments = payments ? [...payments] : [];
+      const allPayments = body.payments ? [...body.payments] : [];
 
       if (allPayments.length === 0) {
-          await tx.paymentDetails.create({
-            data: {
-              id: paymentDetailsId,
-              transactionId: posTransId,
-              paymentMethod: paymentMethod || 'Unknown',
-              cardType: paymentDetails?.cardType || null,
-              cardLastFour: paymentDetails?.cardLastFour || null,
-              authCode: paymentDetails?.authCode || null,
-              gatewayReference: paymentDetails?.gatewayReference || null,
-              walletProvider: paymentDetails?.walletProvider || null,
-              walletReference: paymentDetails?.walletReference || null,
-              giftCheckNumber: paymentDetails?.giftCheckNumber || null,
-              giftCheckBalanceBefore: paymentDetails?.giftCheckBalanceBefore ? Number(paymentDetails.giftCheckBalanceBefore) : null,
-              giftCheckBalanceAfter: paymentDetails?.giftCheckBalanceAfter ? Number(paymentDetails.giftCheckBalanceAfter) : null,
-              pointsUsed: pointsUsedValue || null,
-              pointsRemaining: paymentDetails?.pointsRemaining ? Number(paymentDetails.pointsRemaining) : null,
-              pointsConversionRate: paymentDetails?.pointsConversionRate ? Number(paymentDetails.pointsConversionRate) : null,
-              amountTendered: amountTendered || totalDue,
-              changeGiven: change || 0,
-              notes: paymentDetails?.notes || null,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }
-          });
+          // Fallback if no payments array (e.g. 100% points or legacy)
+          await connection.query(`
+            INSERT INTO payment_details (
+              id, transaction_id, payment_method,
+              card_type, card_last_four, auth_code, gateway_reference,
+              wallet_provider, wallet_reference,
+              gift_check_number, gift_check_balance_before, gift_check_balance_after,
+              points_used, points_remaining, points_conversion_rate,
+              amount_tendered, change_given, notes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          `, [
+            paymentDetailsId,
+            posTransId,
+            paymentMethod,
+            paymentDetails?.cardType || null,
+            paymentDetails?.cardLastFour || null,
+            paymentDetails?.authCode || null,
+            paymentDetails?.gatewayReference || null,
+            paymentDetails?.walletProvider || null,
+            paymentDetails?.walletReference || null,
+            paymentDetails?.giftCheckNumber || null,
+            paymentDetails?.giftCheckBalanceBefore || null,
+            paymentDetails?.giftCheckBalanceAfter || null,
+            paymentDetails?.pointsUsed || null,
+            paymentDetails?.pointsRemaining || null,
+            paymentDetails?.pointsConversionRate || null,
+            amountTendered || totalDue,
+            change || 0,
+            paymentDetails?.notes || null
+          ]);
       } else {
           for (let i = 0; i < allPayments.length; i++) {
               const p = allPayments[i];
               const detailId = i === 0 ? paymentDetailsId : `PD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
               
-              const pUsed = i === 0 ? pointsUsedValue || null : null;
-              const pRem = i === 0 ? (paymentDetails?.pointsRemaining ? Number(paymentDetails.pointsRemaining) : null) : null;
-              const pRate = i === 0 ? (paymentDetails?.pointsConversionRate ? Number(paymentDetails.pointsConversionRate) : null) : null;
-              const cGiven = i === allPayments.length - 1 ? (change || 0) : 0;
+              // Attach points info to the first row only
+              const pUsed = i === 0 ? paymentDetails?.pointsUsed || null : null;
+              const pRem = i === 0 ? paymentDetails?.pointsRemaining || null : null;
+              const pRate = i === 0 ? paymentDetails?.pointsConversionRate || null : null;
+              const cGiven = i === allPayments.length - 1 ? (change || 0) : 0; // change on last row
 
-              await tx.paymentDetails.create({
-                data: {
-                  id: detailId,
-                  transactionId: posTransId,
-                  paymentMethod: p.method,
-                  gatewayReference: p.reference || null,
-                  pointsUsed: pUsed,
-                  pointsRemaining: pRem,
-                  pointsConversionRate: pRate,
-                  amountTendered: p.amount,
-                  changeGiven: cGiven,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                }
-              });
+              await connection.query(`
+                INSERT INTO payment_details (
+                  id, transaction_id, payment_method, gateway_reference, points_used, points_remaining, points_conversion_rate, amount_tendered, change_given, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+              `, [
+                detailId, posTransId, p.method, p.reference || null,
+                pUsed, pRem, pRate, p.amount, cGiven
+              ]);
           }
       }
 
-      // 6.5 Record in customer_payments
+      // 6.5 Record in customer_payments if customer exists
       if (customer && customer.id !== 'walk-in') {
           const insertCustomerPayment = async (method: string, amt: number, ref: string, note: string) => {
               const cPaymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-              await tx.customerPayment.create({
-                data: {
-                  id: cPaymentId,
-                  customerId: customer.id,
-                  paymentType: method,
-                  paymentDate: new Date(),
-                  amount: amt,
-                  reference: ref,
-                  note: note,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                }
-              });
+              await connection.query(`
+                INSERT INTO customer_payments (
+                  id, customer_id, payment_type, payment_date, amount, reference, note, created_at, updated_at
+                ) VALUES (?, ?, ?, CURDATE(), ?, ?, ?, NOW(), NOW())
+              `, [cPaymentId, customer.id, method, amt, ref, note]);
           };
 
           if (allPayments.length > 0) {
@@ -390,138 +426,156 @@ export async function POST(request: NextRequest) {
       if (customer && customer.id !== 'walk-in' && pointsUsedValue > 0) {
           const pointsToDeduct = pointsUsedValue;
           
-          let loyalty = await tx.customerLoyalty.findUnique({
-            where: { customerId: customer.id }
-          });
+          // Verify balance again & get loyalty ID
+          const [custRows]: any = await connection.query(
+             'SELECT id, current_points FROM customer_loyalty WHERE customer_id = ? LIMIT 1', 
+             [customer.id]
+          );
           
-          if (!loyalty) {
-              const cust = await tx.customer.findUnique({
-                where: { id: customer.id },
-                select: { loyaltyPoints: true }
-              });
-              const currentPoints = Number(cust?.loyaltyPoints || 0);
+          let loyaltyId;
+          let currentPoints = 0;
+
+          if (!custRows || custRows.length === 0) {
+              loyaltyId = `LOY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+              
+              // Fetch legacy points if the loyalty record doesn't exist yet
+              const [legacyRows]: any = await connection.query(
+                  'SELECT loyalty_points FROM customers WHERE id = ?', [customer.id]
+              );
+              currentPoints = legacyRows && legacyRows.length > 0 ? parseFloat(legacyRows[0].loyalty_points) || 0 : 0;
               
               if (currentPoints < pointsToDeduct) {
                  throw new Error(`Insufficient points. Available: ${currentPoints}, Required: ${pointsToDeduct}`);
               }
               
-              loyalty = await tx.customerLoyalty.create({
-                data: {
-                  id: `LOY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                  customerId: customer.id,
-                  currentPoints: currentPoints,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
-                }
-              });
+              // Create the missing loyalty record initialized with their legacy points
+              await connection.query(
+                  'INSERT INTO customer_loyalty (id, customer_id, current_points, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+                  [loyaltyId, customer.id, currentPoints]
+              );
           } else {
-              const currentPoints = Number(loyalty.currentPoints);
+              loyaltyId = custRows[0].id;
+              currentPoints = parseFloat(custRows[0].current_points) || 0;
+              
               if (currentPoints < pointsToDeduct) {
                  throw new Error(`Insufficient points. Available: ${currentPoints}, Required: ${pointsToDeduct}`);
               }
           }
           
-          await tx.customerLoyalty.update({
-            where: { id: loyalty.id },
-            data: { currentPoints: { decrement: pointsToDeduct } }
-          });
+          // Deduct
+          await connection.query(
+             'UPDATE customer_loyalty SET current_points = current_points - ? WHERE id = ?',
+             [pointsToDeduct, loyaltyId]
+          );
           
-          await tx.pointHistory.create({
-            data: {
-              id: `PH-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-              customerLoyaltyId: loyalty.id,
-              transactionType: 'redemption',
-              points: pointsToDeduct,
-              reason: 'Point Redemption at POS',
-              transactionReference: posTransId,
-              createdAt: new Date()
-            }
-          });
+          // Log History (Redemption)
+          const historyId = `PH-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+          await connection.query(
+             'INSERT INTO point_history (id, customer_loyalty_id, transaction_type, points, reason, transaction_reference, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+             [historyId, loyaltyId, 'redemption', pointsToDeduct, 'Point Redemption at POS', posTransId]
+          );
       }
 
-      // 8. Loyalty Points Awarding
+      // 8. Loyalty Points Awarding - ONLY if no points were redeemed
       let totalPointsEarned = 0;
       if (
         loyaltySettings && 
         loyaltySettings.length > 0 && 
         customer && 
         customer.id !== 'walk-in' &&
-        pointsUsedValue === 0
+        pointsUsedValue === 0 // Skip if points were redeemed
       ) {
-          if (eligiblePointsAmount > 0) {
+          // Adjust eligible amount
+          const finalEligibleAmount = eligiblePointsAmount;
+          
+          if (finalEligibleAmount > 0) {
               const settings = loyaltySettings[0];
-              const threshold = Number(settings.amount) || 0;
-              const equivalent = Number(settings.equivalent) || 0;
-              
-              if (threshold > 0 && equivalent > 0) {
-                  const pointsEarned = Math.floor(eligiblePointsAmount / threshold) * equivalent;
+          // Calculate points: (Eligible Amount / Amount Threshold) * Equivalent Points
+          // Defaulting to 0 if settings are missing to avoid NaN
+          const threshold = parseFloat(settings.amount) || 0;
+          const equivalent = parseFloat(settings.equivalent) || 0;
+          
+          console.log('Loyalty Debug:', { eligiblePointsAmount, threshold, equivalent, settings });
 
-                  if (pointsEarned > 0) {
-                      totalPointsEarned = pointsEarned;
-                      
-                      let loyaltyRecord = await tx.customerLoyalty.findUnique({
-                        where: { customerId: customer.id }
-                      });
+          if (threshold > 0 && equivalent > 0) {
+              const pointsEarned = Math.floor(finalEligibleAmount / threshold) * equivalent;
+              console.log('Points Earned Calculated:', pointsEarned, 'on basis:', finalEligibleAmount);
 
-                      if (loyaltyRecord) {
-                           await tx.customerLoyalty.update({
-                               where: { id: loyaltyRecord.id },
-                               data: { currentPoints: { increment: pointsEarned }, updatedAt: new Date() }
-                           });
-                      } else {
-                           loyaltyRecord = await tx.customerLoyalty.create({
-                               data: {
-                                   id: `LOY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                                   customerId: customer.id,
-                                   currentPoints: pointsEarned,
-                                   createdAt: new Date(),
-                                   updatedAt: new Date()
-                               }
-                           });
-                      }
+              if (pointsEarned > 0) {
+                  totalPointsEarned = pointsEarned;
+                  // Check for existing loyalty record
+                  const [loyaltyRecord]: any = await connection.query(
+                      'SELECT id, current_points FROM customer_loyalty WHERE customer_id = ? LIMIT 1',
+                      [customer.id]
+                  );
 
-                      await tx.pointHistory.create({
-                          data: {
-                              id: `PH-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                              customerLoyaltyId: loyaltyRecord.id,
-                              transactionType: 'purchase',
-                              points: pointsEarned,
-                              reason: `Earned from Sale ${saleId}`,
-                              transactionReference: saleId,
-                              createdAt: new Date()
-                          }
-                      });
+                  let loyaltyId = '';
+                  let previousPoints = 0;
+
+                  if (loyaltyRecord && loyaltyRecord.length > 0) {
+                       loyaltyId = loyaltyRecord[0].id;
+                       previousPoints = loyaltyRecord[0].current_points;
+                       
+                       // Update existing
+                       await connection.query(
+                           'UPDATE customer_loyalty SET current_points = current_points + ?, updated_at = NOW() WHERE id = ?',
+                           [pointsEarned, loyaltyId]
+                       );
+                  } else {
+                       // Create new
+                       loyaltyId = `LOY-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                       await connection.query(
+                           'INSERT INTO customer_loyalty (id, customer_id, current_points, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+                           [loyaltyId, customer.id, pointsEarned]
+                       );
                   }
+
+                  // Record history
+                  const historyId = `PH-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                  await connection.query(`
+                      INSERT INTO point_history (
+                          id, customer_loyalty_id, transaction_type, points, 
+                          reason, transaction_reference, created_at
+                      ) VALUES (?, ?, 'purchase', ?, ?, ?, NOW())
+                  `, [
+                      historyId,
+                      loyaltyId,
+                      pointsEarned,
+                      `Earned from Sale ${saleId}`,
+                      saleId
+                  ]);
+                  
+                  // Log debug
+                  console.log(`Awarded ${pointsEarned} points to customer ${customer.id} for sale ${saleId}`);
               }
           }
       }
+  }
 
-      // Log successful payment
-      await tx.paymentAuditLog.create({
-        data: {
-          id: `PAL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          transactionId: posTransId,
-          paymentMethod: paymentMethod || 'Unknown',
-          action: 'processed',
-          status: 'success',
-          amount: totalDue,
-          details: JSON.stringify({ saleId, invoiceId, paymentDetailsId }),
-          userId: userId,
-          createdAt: new Date()
-        }
-      });
+      // 8. Log successful payment
+      await connection.query(`
+        INSERT INTO payment_audit_log (
+          id, transaction_id, payment_method, action, status, amount, 
+          details, user_id, created_at
+        ) VALUES (?, ?, ?, 'processed', 'success', ?, ?, ?, NOW())
+      `, [
+        `PAL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        posTransId,
+        paymentMethod,
+        totalDue,
+        JSON.stringify({ saleId, invoiceId, paymentDetailsId }),
+        userId
+      ]);
 
-      const updatedPosTrans = await tx.posTransaction.findUnique({
-        where: { id: posTransId },
-        select: { orderNumber: true }
-      });
-      const orderNumber = updatedPosTrans?.orderNumber;
+      // Fetch the auto-generated order number
+      const [orderResult]: any = await connection.query('SELECT order_number FROM pos_transactions WHERE id = ?', [posTransId]);
+      const orderNumber = orderResult[0]?.order_number;
 
-      const updatedLoyalty = await tx.customerLoyalty.findUnique({
-        where: { customerId: customer.id },
-        select: { currentPoints: true }
-      });
-      const pointsRemaining = Number(updatedLoyalty?.currentPoints || 0);
+      const [updatedLoyalty]: any = await connection.query(
+        'SELECT current_points FROM customer_loyalty WHERE customer_id = ? LIMIT 1',
+        [customer.id]
+      );
+      const pointsRemaining = updatedLoyalty && updatedLoyalty.length > 0 ? updatedLoyalty[0].current_points : 0;
 
       return NextResponse.json({
         success: true,
@@ -533,20 +587,22 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Error during checkout:', error);
     
+    // Log failed payment attempt
     try {
-      await db.paymentAuditLog.create({
-        data: {
-          id: `PAL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          transactionId: 'unknown',
-          paymentMethod: 'unknown',
-          action: 'processed',
-          status: 'failed',
-          amount: 0,
-          errorMessage: error.message,
-          userId: 'unknown',
-          createdAt: new Date()
-        }
-      });
+      const { query } = await import('@/lib/mysql');
+      await query(`
+        INSERT INTO payment_audit_log (
+          id, transaction_id, payment_method, action, status, amount, 
+          error_message, user_id, created_at
+        ) VALUES (?, ?, ?, 'processed', 'failed', ?, ?, ?, NOW())
+      `, [
+        `PAL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        'unknown',
+        'unknown',
+        0,
+        error.message,
+        'unknown'
+      ]);
     } catch (logError) {
       console.error('Failed to log payment error:', logError);
     }

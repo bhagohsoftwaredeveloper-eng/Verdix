@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export interface PaymentValidationRequest {
   paymentMethod: string;
@@ -166,12 +166,55 @@ async function validateGiftCheckPayment(
   amount: number
 ): Promise<PaymentValidationResponse> {
   try {
-    // Note: Gift checks table does not exist in Prisma schema yet.
+    // Query gift check balance from database
+    // Note: You'll need to create a gift_checks table for this to work
+    const result: any = await query(
+      'SELECT balance, is_active FROM gift_checks WHERE check_number = ?',
+      [giftCheckNumber]
+    );
+
+    if (!result || result.length === 0) {
+      return {
+        valid: false,
+        message: 'Gift check not found. Please verify the check number.'
+      };
+    }
+
+    const giftCheck = result[0];
+
+    if (!giftCheck.is_active) {
+      return {
+        valid: false,
+        message: 'This gift check has been deactivated.'
+      };
+    }
+
+    if (giftCheck.balance < amount) {
+      return {
+        valid: false,
+        message: `Insufficient gift check balance. Available: ₱${giftCheck.balance.toFixed(2)}, Required: ₱${amount.toFixed(2)}`,
+        details: { availableBalance: giftCheck.balance, requiredAmount: amount }
+      };
+    }
+
     return {
-      valid: false,
-      message: 'Gift check system is not yet configured. Please use alternative payment method.'
+      valid: true,
+      message: 'Gift check validated',
+      details: { 
+        checkNumber: giftCheckNumber,
+        currentBalance: giftCheck.balance,
+        remainingAfterPayment: giftCheck.balance - amount
+      }
     };
+
   } catch (error: any) {
+    // If table doesn't exist yet, return a helpful message
+    if (error.message.includes('doesn\'t exist')) {
+      return {
+        valid: false,
+        message: 'Gift check system is not yet configured. Please use alternative payment method.'
+      };
+    }
     throw error;
   }
 }
@@ -182,43 +225,43 @@ async function validatePointsPayment(
 ): Promise<PaymentValidationResponse> {
   try {
     // Query customer loyalty points
-    const loyalty = await db.customerLoyalty.findUnique({
-      where: { customerId }
-    });
+    const result: any = await query(
+      'SELECT points_balance FROM customer_loyalty WHERE customer_id = ?',
+      [customerId]
+    );
 
-    if (!loyalty) {
+    if (!result || result.length === 0) {
       return {
         valid: false,
         message: 'Customer loyalty account not found.'
       };
     }
 
-    // Get points conversion rate from settings
-    const settings = await db.loyaltyPointsSetting.findFirst();
+    const loyalty = result[0];
 
-    if (!settings) {
+    // Get points conversion rate from settings
+    const settingsResult: any = await query(
+      'SELECT points_per_peso, peso_per_point FROM loyalty_points_settings LIMIT 1'
+    );
+
+    if (!settingsResult || settingsResult.length === 0) {
       return {
         valid: false,
         message: 'Loyalty points system is not configured.'
       };
     }
 
-    // Assuming equivalent / amount represents points per peso
-    const pointsPerPeso = settings.equivalent && settings.amount 
-      ? Number(settings.equivalent) / Number(settings.amount) 
-      : 1;
+    const settings = settingsResult[0];
+    const pointsRequired = amount * (settings.points_per_peso || 1);
 
-    const pointsRequired = amount * pointsPerPeso;
-    const currentPoints = Number(loyalty.currentPoints);
-
-    if (currentPoints < pointsRequired) {
+    if (loyalty.points_balance < pointsRequired) {
       return {
         valid: false,
-        message: `Insufficient loyalty points. Available: ${currentPoints.toFixed(0)} points, Required: ${pointsRequired.toFixed(0)} points`,
+        message: `Insufficient loyalty points. Available: ${loyalty.points_balance.toFixed(0)} points, Required: ${pointsRequired.toFixed(0)} points`,
         details: { 
-          availablePoints: currentPoints,
+          availablePoints: loyalty.points_balance,
           requiredPoints: pointsRequired,
-          conversionRate: pointsPerPeso
+          conversionRate: settings.points_per_peso
         }
       };
     }
@@ -227,10 +270,10 @@ async function validatePointsPayment(
       valid: true,
       message: 'Loyalty points validated',
       details: {
-        currentPoints: currentPoints,
+        currentPoints: loyalty.points_balance,
         pointsToUse: pointsRequired,
-        remainingPoints: currentPoints - pointsRequired,
-        conversionRate: pointsPerPeso
+        remainingPoints: loyalty.points_balance - pointsRequired,
+        conversionRate: settings.points_per_peso
       }
     };
 

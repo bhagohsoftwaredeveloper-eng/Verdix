@@ -3,7 +3,7 @@
  * Logs all external API sync operations for audit trail
  */
 
-import { db } from '../db';
+import { query } from '../mysql';
 
 export type ApiSyncLog = {
   id?: string;
@@ -27,22 +27,26 @@ export type ApiSyncLog = {
 export async function logApiSync(log: Omit<ApiSyncLog, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
   try {
     const logId = `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    await db.externalApiLog.create({
-      data: {
-        id: logId,
-        transactionType: log.transactionType,
-        transactionId: log.transactionId,
-        endpoint: log.endpoint,
-        payload: log.payload,
-        response: log.response,
-        status: log.status,
-        errorMessage: log.errorMessage || null,
-        retryCount: log.retryCount || 0,
-        nextRetryAt: log.nextRetryAt ? new Date(log.nextRetryAt) : null,
-        lastRetryAt: log.lastRetryAt ? new Date(log.lastRetryAt) : null,
-      }
-    });
+    const insertQuery = `
+      INSERT INTO external_api_logs (
+        id, transaction_type, transaction_id, endpoint, payload,
+        response, status, error_message, retry_count, next_retry_at, last_retry_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    await query(insertQuery, [
+      logId,
+      log.transactionType,
+      log.transactionId,
+      log.endpoint,
+      log.payload,
+      log.response,
+      log.status,
+      log.errorMessage || null,
+      log.retryCount || 0,
+      log.nextRetryAt || null,
+      log.lastRetryAt || null,
+    ]);
   } catch (error) {
     console.error('Failed to log API sync:', error);
     console.log('API Sync Log (Fallback):', log);
@@ -59,40 +63,40 @@ export async function getApiSyncLogs(filters?: {
   offset?: number;
 }): Promise<ApiSyncLog[]> {
   try {
-    const where: any = {};
+    let sql = `SELECT * FROM external_api_logs WHERE 1=1`;
+    const params: any[] = [];
+
     if (filters?.status) {
-      where.status = filters.status;
+      sql += ' AND status = ?';
+      params.push(filters.status);
     }
     if (filters?.transactionType) {
-      where.transactionType = filters.transactionType;
+      sql += ' AND transaction_type = ?';
+      params.push(filters.transactionType);
     }
 
     const limit = filters?.limit || 50;
     const offset = filters?.offset || 0;
     
-    const logs = await db.externalApiLog.findMany({
-      where,
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: limit,
-      skip: offset
-    });
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const logs: any = await query(sql, params);
     
-    return logs.map((log) => ({
+    return logs.map((log: any) => ({
       id: log.id,
-      transactionType: log.transactionType,
-      transactionId: log.transactionId,
+      transactionType: log.transaction_type,
+      transactionId: log.transaction_id,
       endpoint: log.endpoint,
       payload: log.payload,
       response: log.response,
-      status: log.status as any,
-      errorMessage: log.errorMessage || undefined,
-      retryCount: log.retryCount,
-      nextRetryAt: log.nextRetryAt?.toISOString() || null,
-      lastRetryAt: log.lastRetryAt?.toISOString() || null,
-      createdAt: log.createdAt.toISOString(),
-      updatedAt: log.updatedAt.toISOString()
+      status: log.status,
+      errorMessage: log.error_message,
+      retryCount: log.retry_count,
+      nextRetryAt: log.next_retry_at,
+      lastRetryAt: log.last_retry_at,
+      createdAt: log.created_at,
+      updatedAt: log.updated_at
     }));
   } catch (error) {
     console.error('Error fetching API sync logs:', error);

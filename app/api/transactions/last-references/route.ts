@@ -1,5 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../lib/mysql';
+
+async function getLastReference(tableName: string, orderByColumn: string = 'created_at'): Promise<string | null> {
+  try {
+    const result = await query(`
+      SELECT reference 
+      FROM ${tableName}
+      WHERE reference IS NOT NULL AND reference != ''
+      ORDER BY ${orderByColumn} DESC 
+      LIMIT 1
+    `);
+    return result[0]?.reference || null;
+  } catch (error) {
+    // Table might not exist or have reference column
+    console.log(`Could not fetch last reference from ${tableName}:`, error);
+    return null;
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,43 +28,23 @@ export async function GET(request: NextRequest) {
       lastCustomerPayment,
       lastStockAdjustment
     ] = await Promise.all([
-      db.salesOrder.findFirst({
-        where: { reference: { notIn: [null, ''] } },
-        orderBy: { orderDate: 'desc' },
-        select: { reference: true }
-      }),
-      db.salesInvoice.findFirst({
-        where: { reference: { notIn: [null, ''] } },
-        orderBy: { invoiceDate: 'desc' },
-        select: { reference: true }
-      }),
-      db.purchaseOrder.findFirst({
-        where: { referenceNumber: { notIn: [null, ''] } },
-        orderBy: { date: 'desc' },
-        select: { referenceNumber: true }
-      }),
-      db.customerPayment.findFirst({
-        where: { reference: { notIn: [null, ''] } },
-        orderBy: { paymentDate: 'desc' },
-        select: { reference: true }
-      }),
-      db.stockAdjustment.findFirst({
-        where: { referenceNo: { notIn: [null, ''] } },
-        orderBy: { date: { sort: 'desc', nulls: 'last' } },
-        select: { referenceNo: true }
-      }),
+      getLastReference('sales_orders'),
+      getLastReference('sales_invoices', 'invoice_date'),
+      getLastReference('purchase_orders', 'order_date'),
+      getLastReference('customer_payments', 'payment_date'),
+      getLastReference('stock_adjustments', 'adjustment_date'),
     ]);
 
     const lastReferences = {
-      salesOrder: lastSalesOrder?.reference || null,
-      purchaseOrder: lastPurchaseOrder?.referenceNumber || null,
-      salesDelivery: null, // Add when table exists in schema if needed
-      paymentToSupplier: null, // Add when table exists in schema if needed
-      salesInvoice: lastSalesInvoice?.reference || null,
-      customerPayment: lastCustomerPayment?.reference || null,
-      deliveryReceipt: null, // Add when table exists in schema if needed
-      stockAdjustment: lastStockAdjustment?.referenceNo || null,
-      salesHold: null, // Add when table exists in schema if needed
+      salesOrder: lastSalesOrder,
+      purchaseOrder: lastPurchaseOrder,
+      salesDelivery: null, // Add when table exists
+      paymentToSupplier: null, // Add when table exists
+      salesInvoice: lastSalesInvoice,
+      customerPayment: lastCustomerPayment,
+      deliveryReceipt: null, // Add when table exists
+      stockAdjustment: lastStockAdjustment,
+      salesHold: null, // Add when table exists
     };
 
     return NextResponse.json({

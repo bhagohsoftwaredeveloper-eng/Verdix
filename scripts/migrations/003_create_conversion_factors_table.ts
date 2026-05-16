@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '003_create_conversion_factors_table',
@@ -18,12 +18,12 @@ const migration: Migration = {
       )
     `;
 
-    await db.$executeRawUnsafe(createConversionFactorsTable);
+    await query(createConversionFactorsTable);
     console.log('✅ Conversion factors table created');
   },
 
   async down(): Promise<void> {
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS conversion_factors');
+    await query('DROP TABLE IF EXISTS conversion_factors');
     console.log('✅ Conversion factors table dropped');
   }
 };

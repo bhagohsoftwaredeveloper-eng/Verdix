@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { query } from '@/lib/mysql';
+
 import { getExternalApiConfig } from '@/lib/external-api-config';
 
 /**
@@ -42,13 +44,33 @@ export async function POST(request: NextRequest) {
       onErrorAction,
     } = body;
 
-    // Note: This external API configuration would require a dedicated table
-    // For now, this is handled via the getExternalApiConfig helper which checks environment variables
-    // If a database table is needed, add it to the schema and update this implementation
+    // Update each setting
+    const updateQuery = `
+      INSERT INTO external_api_settings (setting_key, setting_value)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+    `;
+
+    const updates = [
+      ['enabled', String(enabled ?? false)],
+      ['api_endpoint', apiEndpoint ?? ''],
+      ['auth_type', authType ?? 'api_key'],
+      ['api_key', apiKey ?? ''],
+      ['bearer_token', bearerToken ?? ''],
+      ['timeout', String(timeout ?? 30000)],
+      ['retry_attempts', String(retryAttempts ?? 3)],
+      ['retry_delay', String(retryDelay ?? 2000)],
+      ['sync_mode', syncMode ?? 'realtime'],
+      ['on_error_action', onErrorAction ?? 'log_only'],
+    ];
+
+    for (const [key, value] of updates) {
+      await query(updateQuery, [key, value]);
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Settings updated successfully (currently handled via environment variables)',
+      message: 'Settings updated successfully',
     });
   } catch (error) {
     console.error('Error updating external API settings:', error);

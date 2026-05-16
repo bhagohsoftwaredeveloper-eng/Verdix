@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../../lib/mysql';
 
 export async function GET(
   request: NextRequest,
@@ -9,24 +9,23 @@ export async function GET(
     const resolvedParams = await params;
     const customerId = resolvedParams.id;
 
-    // Count transactions for each type
-    const [
-      salesOrderCount,
-      salesInvoiceCount,
-      paymentCount,
-      transactionCount
-    ] = await Promise.all([
-      db.salesOrder.count({ where: { customerId } }),
-      db.salesInvoice.count({ where: { customerId } }),
-      db.customerPayment.count({ where: { customerId } }),
-      db.salesTransaction.count({ where: { customerId } })
-    ]);
+    const tablesToCheck = [
+      { table: 'sales_orders', desc: 'sales orders' },
+      { table: 'sales_invoices', desc: 'sales invoices' },
+      { table: 'customer_payments', desc: 'customer payments' },
+      { table: 'sales_transactions', desc: 'sales transactions' },
+    ];
 
     const results = [];
-    if (salesOrderCount > 0) results.push('sales orders');
-    if (salesInvoiceCount > 0) results.push('sales invoices');
-    if (paymentCount > 0) results.push('customer payments');
-    if (transactionCount > 0) results.push('sales transactions');
+
+    for (const check of tablesToCheck) {
+      const sql = `SELECT COUNT(*) as count FROM ${check.table} WHERE customer_id = ?`;
+      const rows = await query(sql, [customerId]);
+      const count = rows[0]?.count || 0;
+      if (count > 0) {
+        results.push(check.desc);
+      }
+    }
 
     return NextResponse.json({
       success: true,

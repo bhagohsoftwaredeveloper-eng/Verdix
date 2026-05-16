@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 export const migration: Migration = {
   name: '048_alter_pos_settings_add_return_auth',
@@ -16,7 +16,7 @@ export const migration: Migration = {
       ADD COLUMN return_auth_password VARCHAR(255)
     `;
     
-    await db.$executeRawUnsafe(alterTableSQL);
+    await query(alterTableSQL);
     console.log('✅ pos_settings table altered: added enable_return_auth, return_auth_username, return_auth_password');
   },
   
@@ -31,7 +31,7 @@ export const migration: Migration = {
       DROP COLUMN return_auth_password
     `;
     
-    await db.$executeRawUnsafe(alterTableSQL);
+    await query(alterTableSQL);
     console.log('✅ pos_settings table altered: dropped enable_return_auth, return_auth_username, return_auth_password');
   }
 };

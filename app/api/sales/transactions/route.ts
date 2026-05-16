@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+// Force rebuild: Fixed import path
+import { query, withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
 import { deductFromBatches, getBatchCostingSettings } from '@/lib/batch-deduction';
 
 export async function GET(request: NextRequest) {
@@ -15,193 +15,218 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
-    // Build where conditions
-    const whereConditions: any = {};
+    let baseSql = `
+      SELECT 
+        pt.id as pos_transaction_id,
+        pt.sale_id,
+        pt.order_number,
+        pt.transaction_type,
+        pt.subtotal,
+        pt.discount_amount,
+        pt.tax_amount,
+        pt.total_amount,
+        pt.payment_method,
+        pt.transaction_time,
+        pt.void_reason,
+        pt.notes,
+        pt.payment_status,
+        pt.user_id,
+        u.display_name as cashier_name,
+        pt.terminal_id,
+        term.name as terminal_name,
+        st.customer_id,
+        st.reference,
+        st.receipt_number,
+        st.transaction_source,
+        c.name as customer_name,
+        c.contact_number as customer_contact,
+        st.status as sale_status,
+        orig_pt.order_number as original_order_number,
+        orig_pt.transaction_time as original_transaction_time,
+        orig_u.display_name as original_cashier_name,
+        pd.gateway_reference as payment_reference
+      FROM pos_transactions pt
+      LEFT JOIN users u ON pt.user_id = u.uid
+      LEFT JOIN pos_terminals term ON pt.terminal_id = term.id
+      LEFT JOIN sales_transactions st ON pt.sale_id = st.id
+      LEFT JOIN customers c ON st.customer_id = c.id
+      LEFT JOIN pos_transactions orig_pt ON (pt.transaction_type = 'return' AND pt.sale_id = orig_pt.sale_id AND orig_pt.transaction_type = 'sale')
+      LEFT JOIN users orig_u ON orig_pt.user_id = orig_u.uid
+      LEFT JOIN payment_details pd ON pt.payment_details_id = pd.id
+      WHERE 1=1
+    `;
 
-    if (terminalId && terminalId !== 'all') {
-      whereConditions.terminalId = terminalId;
+    const params: any[] = [];
+    let whereClause = '';
+
+    if (productId) {
+      // If filtering by product, we need to join with pos_transaction_items to check existence
+      whereClause += ` AND EXISTS (SELECT 1 FROM pos_transaction_items pti WHERE pti.pos_transaction_id = pt.id AND pti.product_id = ?)`;
+      params.push(productId);
     }
 
     if (startDate) {
-      whereConditions.transactionTime = {
-        gte: new Date(`${startDate}T00:00:00`),
-      };
+      whereClause += ' AND DATE(pt.transaction_time) >= ?';
+      params.push(startDate);
     }
-
     if (endDate) {
-      if (whereConditions.transactionTime) {
-        whereConditions.transactionTime.lte = new Date(`${endDate}T23:59:59`);
-      } else {
-        whereConditions.transactionTime = {
-          lte: new Date(`${endDate}T23:59:59`),
-        };
-      }
+      whereClause += ' AND DATE(pt.transaction_time) <= ?';
+      params.push(endDate);
     }
-
+    if (terminalId && terminalId !== 'all') {
+      whereClause += ' AND pt.terminal_id = ?';
+      params.push(terminalId);
+    }
+    
+    // Status filter: tricky because pos_transactions has 'transaction_type' (sale, void, return)
+    // while sales_transactions has 'status' (Paid, Returned, Void).
+    // If user asks for 'Void', we look for transaction_type = 'void' OR sale_status = 'Void'
     if (status) {
       if (status === 'Voided') {
-        whereConditions.OR = [
-          { transactionType: 'void' },
-          { sale: { status: 'Voided' } }
-        ];
+         whereClause += " AND (pt.transaction_type = 'void' OR st.status = 'Voided')";
       } else if (status === 'Returned') {
-        whereConditions.OR = [
-          { transactionType: 'return' },
-          { sale: { status: 'Returned' } }
-        ];
+         whereClause += " AND (pt.transaction_type = 'return' OR st.status = 'Returned')";
       } else if (status === 'Paid') {
-        whereConditions.transactionType = 'sale';
-        whereConditions.sale = { status: 'Paid' };
+         whereClause += " AND (pt.transaction_type = 'sale' AND st.status = 'Paid')";
       } else {
-        whereConditions.sale = { status };
+         whereClause += ' AND st.status = ?';
+         params.push(status);
       }
     }
 
-    // Get total count
-    let totalRecords = 0;
-    if (productId) {
-      // Count with product filter
-      totalRecords = await db.posTransaction.count({
-        where: {
-          ...whereConditions,
-          items: {
-            some: {
-              productId,
-            },
-          },
-        },
-      });
-    } else {
-      totalRecords = await db.posTransaction.count({
-        where: whereConditions,
-      });
-    }
+    // 1. Get total count
+    const countSql = `SELECT COUNT(*) as total FROM pos_transactions pt 
+                      LEFT JOIN sales_transactions st ON pt.sale_id = st.id 
+                      WHERE 1=1 ${whereClause}`;
+    // Re-use params for count query, but we need to ensure joint tables are available if referenced in whereClause
+    // The simplified count query above assumes we only need joins if they are used in filtering.
+    // However, the WHERE clause uses 'st' alias, so we must include the JOINs in the count query too.
+    const fullCountSql = `
+      SELECT COUNT(*) as total
+      FROM pos_transactions pt
+      LEFT JOIN users u ON pt.user_id = u.uid
+      LEFT JOIN pos_terminals term ON pt.terminal_id = term.id
+      LEFT JOIN sales_transactions st ON pt.sale_id = st.id
+      LEFT JOIN customers c ON st.customer_id = c.id
+      WHERE 1=1 ${whereClause}
+    `;
+
+    const countResult = await query(fullCountSql, params);
+    const totalRecords = countResult[0]?.total || 0;
     const totalPages = Math.ceil(totalRecords / limit);
 
-    // Get paginated transactions
-    const whereForFetch = productId
-      ? {
-          ...whereConditions,
-          items: {
-            some: {
-              productId,
-            },
-          },
+    // 2. Get paginated data
+    const dataSql = baseSql + whereClause + ' ORDER BY pt.transaction_time DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const transactions = await query(dataSql, params);
+    
+    // Fetch items for these transactions
+    let transactionItems: any[] = [];
+    if (transactions.length > 0) {
+        const transactionIds = transactions.map((t: any) => t.pos_transaction_id);
+        const placeholders = transactionIds.map(() => '?').join(',');
+        
+        const itemsSql = `
+            SELECT 
+                pti.id,
+                pti.pos_transaction_id,
+                pti.product_id,
+                pti.product_name,
+                pti.quantity,
+                pti.unit_price,
+                pti.line_total,
+                pti.discount_percentage,
+                pti.discount_amount,
+                COALESCE(p.cost, 0) as product_cost,
+                p.description,
+                p.unit_of_measure
+            FROM pos_transaction_items pti
+            LEFT JOIN products p ON pti.product_id = p.id
+            WHERE pti.pos_transaction_id IN (${placeholders})
+        `;
+        
+        transactionItems = await query(itemsSql, transactionIds);
+    }
+
+    // Group items by transaction ID
+    const itemsByTransaction: Record<string, any[]> = {};
+    transactionItems.forEach((item: any) => {
+        if (!itemsByTransaction[item.pos_transaction_id]) {
+            itemsByTransaction[item.pos_transaction_id] = [];
         }
-      : whereConditions;
-
-    const transactions = await db.posTransaction.findMany({
-      where: whereForFetch,
-      include: {
-        user: {
-          select: {
-            displayName: true,
-          },
-        },
-        terminal: {
-          select: {
-            name: true,
-          },
-        },
-        sale: {
-          select: {
-            id: true,
-            reference: true,
-            receiptNumber: true,
-            transactionSource: true,
-            status: true,
-            customerId: true,
-            customer: {
-              select: {
-                name: true,
-                contactNumber: true,
-              },
-            },
-          },
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                cost: true,
-                description: true,
-                unitOfMeasure: true,
-              },
-            },
-          },
-        },
-        paymentDetails: {
-          select: {
-            gatewayReference: true,
-          },
-        },
-      },
-      orderBy: {
-        transactionTime: 'desc',
-      },
-      skip: offset,
-      take: limit,
+        itemsByTransaction[item.pos_transaction_id].push({
+            id: item.id,
+            productId: item.product_id,
+            productName: item.product_name,
+            description: item.description, // Added description
+            quantity: item.quantity,
+            price: parseFloat(item.unit_price) || 0,
+            total: parseFloat(item.line_total) || 0,
+            cost: parseFloat(item.product_cost) || 0,
+            discount: parseFloat(item.discount_amount) || 0,
+            unitOfMeasure: item.unit_of_measure
+        });
     });
-
-    // Transform data
-    const data = transactions.map((row) => {
-      const totalAmount = row.totalAmount.toNumber();
-      const taxAmount = row.taxAmount.toNumber();
-      const discountAmount = row.discountAmount.toNumber();
-      const subtotal = row.subtotal.toNumber() || totalAmount;
-
-      const items = row.items.map((item) => ({
-        id: item.id,
-        productId: item.productId,
-        productName: item.productName,
-        description: item.product?.description,
-        quantity: item.quantity.toNumber(),
-        price: item.unitPrice.toNumber(),
-        total: item.lineTotal.toNumber(),
-        cost: item.product?.cost?.toNumber() || 0,
-        discount: item.discountAmount.toNumber(),
-        unitOfMeasure: item.product?.unitOfMeasure,
-      }));
-
+    
+    // Transform logic if needed
+    const data = transactions.map((row: any) => {
+      const totalAmount = parseFloat(row.total_amount) || 0;
+      const taxAmount = parseFloat(row.tax_amount) || 0;
+      const discountAmount = parseFloat(row.discount_amount) || 0;
+      const subtotal = parseFloat(row.subtotal) || totalAmount;
+      
+      // Get items for this transaction
+      const items = itemsByTransaction[row.pos_transaction_id] || [];
+      
+      // Calculate total cost and profit based on items
       const calculatedCost = items.reduce((sum: number, item: any) => sum + (item.cost * item.quantity), 0);
-      const calculatedProfit = totalAmount - calculatedCost - taxAmount;
+      const calculatedProfit = totalAmount - calculatedCost - taxAmount; // Profit = Revenue - Cost - Tax
+
+      // Calculate vatable sales (total minus VAT)
       const vatableSales = totalAmount - taxAmount;
+      // For now, non-vat sales is 0 (all sales are VAT-inclusive)
+      const nonVatSales = 0;
+      
+      const balance = 0;
+      const amountPaid = totalAmount; // Assuming full payment for now as logic for partial isn't fully clear
 
       return {
-        id: row.sale?.id,
-        reference: row.sale?.reference,
-        transactionSource: row.sale?.transactionSource || 'POS',
-        orderNumber: row.orderNumber,
-        receiptNo: row.sale?.receiptNumber || row.orderNumber,
-        posTransactionId: row.id,
-        date: row.transactionTime,
+        id: row.sale_id,
+        reference: row.reference,
+        transactionSource: row.transaction_source || 'POS',
+        orderNumber: row.order_number,
+        receiptNo: row.receipt_number || row.order_number, // Fallback to order_number if receipt_number is null
+        posTransactionId: row.pos_transaction_id,
+        date: row.transaction_time,
         total: totalAmount,
         subtotal: subtotal,
         discount: discountAmount,
         taxAmount: taxAmount,
         vatableSales: vatableSales,
-        nonVatSales: 0,
-        amountPaid: totalAmount,
-        balance: 0,
+        nonVatSales: nonVatSales,
+        amountPaid: amountPaid,
+        balance: balance,
         cost: calculatedCost,
         profit: calculatedProfit,
         notes: row.notes || '',
-        paymentStatus: row.paymentStatus || 'completed',
-        status: row.sale?.status || (row.transactionType === 'sale' ? 'Paid' : row.transactionType === 'return' ? 'Returned' : 'Voided'),
-        transactionType: row.transactionType,
-        paymentMethod: row.paymentMethod,
-        paymentReference: row.paymentDetails?.gatewayReference,
+        paymentStatus: row.payment_status || 'completed',
+        status: row.sale_status || (row.transaction_type === 'sale' ? 'Paid' : row.transaction_type === 'return' ? 'Returned' : 'Voided'),
+        transactionType: row.transaction_type,
+        paymentMethod: row.payment_method,
+        paymentReference: row.payment_reference,
         customer: {
-          id: row.sale?.customerId,
-          name: row.sale?.customer?.name || 'Walk-in Customer',
-          contactNumber: row.sale?.customer?.contactNumber,
+          id: row.customer_id,
+          name: row.customer_name || 'Walk-in Customer',
+          contactNumber: row.customer_contact
         },
-        cashier: row.user?.displayName || 'N/A',
-        terminal: row.terminal?.name || 'N/A',
-        items,
-        originalOrderNumber: null,
-        originalTransactionTime: null,
-        originalCashierName: null,
+        cashier: row.cashier_name || 'N/A',
+        terminal: row.terminal_name || 'N/A',
+        items: items, // Attach items
+        // Original sale information (for returns)
+        originalOrderNumber: row.original_order_number || null,
+        originalTransactionTime: row.original_transaction_time || null,
+        originalCashierName: row.original_cashier_name || null
       };
     });
 
@@ -255,177 +280,176 @@ export async function POST(request: NextRequest) {
     const paymentDetailsId = `PD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const auditLogId = `PAL-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-    return await withTransaction(async (tx) => {
+    return await withTransaction(async (connection) => {
       // 1. Log payment initiation
-      await tx.paymentAuditLog.create({
-        data: {
-          id: auditLogId,
-          transactionId: posTransId,
-          paymentMethod,
-          action: 'initiated',
-          status: 'pending',
-          amount: new Prisma.Decimal(totalDue),
-          userId: finalUserId,
-        },
-      });
+      await connection.query(`
+        INSERT INTO payment_audit_log (
+          id, transaction_id, payment_method, action, status, amount, user_id, created_at
+        ) VALUES (?, ?, ?, 'initiated', 'pending', ?, ?, NOW())
+      `, [auditLogId, posTransId, paymentMethod, totalDue, finalUserId]);
 
       // Generate sequential reference (INV-XXXXXX)
-      // For now, using timestamp-based ID (in real scenario, use getNextReference helper)
-      const sequentialRef = `INV-${Date.now().toString().slice(-6)}`;
+      const nextRefVal = await getNextReference('sales_invoice');
+      const sequentialRef = `INV-${nextRefVal.toString().padStart(6, '0')}`;
+      
+      // Get terminal specific receipt (OR)
+      const receiptNo = await getNextReceiptNumber(terminalId);
 
-      // 2. Create sales transaction
-      const salesTransaction = await tx.salesTransaction.create({
-        data: {
-          id: saleId,
-          reference: sequentialRef,
-          receiptNumber: `REC-${Date.now()}`,
-          customerId: (customer && customer.id !== 'walk-in') ? customer.id : null,
-          invoiceDate: new Date(),
-          date: new Date(),
-          total: new Prisma.Decimal(totalDue),
-          paymentMethod,
-          status: 'Paid',
-          transactionSource: 'POS',
-          notes: notes || 'API Sale',
-        },
-      });
+      // 2. Insert into sales_transactions
+      const insertSaleSql = `
+        INSERT INTO sales_transactions (
+          id, reference, receipt_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', 'POS', ?, NOW(), NOW())
+      `;
+      await connection.query(insertSaleSql, [
+        saleId,
+        sequentialRef,
+        receiptNo,
+        (customer && customer.id !== 'walk-in') ? customer.id : null,
+        totalDue,
+        paymentMethod,
+        notes || 'API Sale'
+      ]);
 
-      // 3. Create sale items and update stock
-      const { oversellBlock } = await getBatchCostingSettings(db);
+      // 3. Insert into sale_items and update stock
+      const { oversellBlock } = await getBatchCostingSettings(connection);
+
+      const insertItemSql = `
+        INSERT INTO sale_items (
+          id, sale_id, product_id, product_name, quantity, price, cost_at_sale, batch_source, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      `;
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const itemId = `${saleId}-ITEM-${i + 1}`;
 
-        // BATCH COSTING: FIFO Deduction
-        const deduction = await deductFromBatches(item.id, item.quantity, oversellBlock, db);
+        // --- BATCH COSTING: FIFO Deduction ---
+        const deduction = await deductFromBatches(item.id, item.quantity, oversellBlock, connection);
 
-        await tx.saleItem.create({
-          data: {
-            id: itemId,
-            saleId,
-            productId: item.id,
-            productName: item.name,
-            quantity: item.quantity,
-            price: new Prisma.Decimal(item.price),
-            costAtSale: new Prisma.Decimal(deduction.weightedAvgCost),
-            batchSource: deduction.splits as any,
-          },
-        });
+        await connection.query(insertItemSql, [
+          itemId,
+          saleId,
+          item.id,
+          item.name,
+          item.quantity,
+          item.price,
+          deduction.weightedAvgCost,
+          JSON.stringify(deduction.splits)
+        ]);
+        // --- END BATCH COSTING ---
 
-        // Stock Deduction
-        const product = await tx.product.findUnique({
-          where: { id: item.id },
-          select: { stock: true, name: true },
-        });
+        // Stock Deduction Logic (Simplified for API - assumes standard product flow)
+        // Note: Full family sync logic from checkout is omitted for brevity unless critical.
+        // If critical, we should extract to a shared library. 
+        // For now, doing direct stock update for the specific product to ensure basic correctness.
+        
+        // Fetch current stock
+        const [prodResult]: any = await connection.query('SELECT stock FROM products WHERE id = ?', [item.id]);
+        if (prodResult && prodResult.length > 0) {
+            const currentStock = Number(prodResult[0].stock || 0);
+            const newStock = currentStock - item.quantity;
+            
+            // Record movement
+            const movementId = `MOV-${Date.now()}-${i}-${item.id.substring(Math.max(0, item.id.length - 4))}`;
+            await connection.query(`
+                INSERT INTO stock_movements (
+                    id, product_id, product_name, movement_type, 
+                    quantity_change, previous_stock, new_stock, 
+                    reference_id, reference_type, notes, created_at, updated_at
+                ) VALUES (?, ?, ?, 'sale', ?, ?, ?, ?, 'sale', ?, NOW(), NOW())
+            `, [movementId, item.id, item.name, -item.quantity, currentStock, newStock, saleId, 'API Sale']);
 
-        if (product) {
-          const currentStock = product.stock.toNumber();
-          const newStock = currentStock - item.quantity;
-
-          const movementId = `MOV-${Date.now()}-${i}`;
-          await tx.stockMovement.create({
-            data: {
-              id: movementId,
-              productId: item.id,
-              productName: product.name,
-              movementType: 'sale',
-              quantityChange: new Prisma.Decimal(-item.quantity),
-              previousStock: new Prisma.Decimal(currentStock),
-              newStock: new Prisma.Decimal(newStock),
-              referenceId: saleId,
-              referenceType: 'sale',
-              notes: 'API Sale',
-            },
-          });
-
-          await tx.product.update({
-            where: { id: item.id },
-            data: { stock: new Prisma.Decimal(newStock) },
-          });
+            // Update product
+            await connection.query('UPDATE products SET stock = ? WHERE id = ?', [newStock, item.id]);
         }
       }
 
-      // 4. Create sales invoice (legacy/reporting sync)
+      // 4. Insert into sales_invoices (Legacy/Reporting Sync)
       const invoiceId = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      
 
-      const salesInvoice = await tx.salesInvoice.create({
-        data: {
-          id: invoiceId,
-          reference: sequentialRef,
-          receiptNumber: `REC-${Date.now()}`,
-          customerId: (customer && customer.id !== 'walk-in') ? customer.id : '',
-          invoiceDate: new Date(),
-          dueDate: new Date(),
-          total: new Prisma.Decimal(totalDue),
-          paymentMethod,
-          status: 'Paid',
-          transactionSource: 'POS',
-          notes: notes || 'API Sale',
-        },
-      });
+      await connection.query(`
+        INSERT INTO sales_invoices (
+          id, reference, receipt_number, customer_id, invoice_date, due_date, total, payment_method,
+          status, transaction_source, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, 'Paid', 'POS', ?, NOW(), NOW())
+      `, [
+        invoiceId,
+        sequentialRef,
+        receiptNo,
+        (customer && customer.id !== 'walk-in') ? customer.id : null,
+        totalDue,
+        paymentMethod,
+        notes || 'API Sale'
+      ]);
 
-      // 5. Create POS transaction
+      // 5. Insert into pos_transactions
+      const insertPosTransSql = `
+        INSERT INTO pos_transactions (
+          id, sale_id, shift_id, user_id, terminal_id, transaction_type,
+          subtotal, tax_amount, discount_amount, total_amount, payment_method, 
+          payment_status, payment_details_id, payment_validated_at,
+          notes, transaction_time, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, 'completed', ?, NOW(), ?, NOW(), NOW(), NOW())
+      `;
+      
       const posNotes = `API Transaction. Tendered: ${amountTendered || totalDue}`;
+      
+      await connection.query(insertPosTransSql, [
+        posTransId,
+        saleId,
+        shiftId || null,
+        finalUserId,
+        terminalId || null,
+        totalDue, // assuming subtotal = total for simple API calls
+        0, // tax placeholder
+        0, // discount placeholder
+        totalDue,
+        paymentMethod,
+        paymentDetailsId,
+        posNotes
+      ]);
 
-      const posTransaction = await tx.posTransaction.create({
-        data: {
-          id: posTransId,
-          saleId,
-          shiftId: shiftId || null,
-          userId: finalUserId,
-          terminalId: terminalId || null,
-          transactionType: 'sale',
-          subtotal: new Prisma.Decimal(totalDue),
-          taxAmount: new Prisma.Decimal(0),
-          discountAmount: new Prisma.Decimal(0),
-          totalAmount: new Prisma.Decimal(totalDue),
-          paymentMethod,
-          paymentStatus: 'completed',
-          paymentDetailsId: null,
-          paymentValidatedAt: new Date(),
-          notes: posNotes,
-          transactionTime: new Date(),
-        },
-      });
-
-      // 6. Create items for sales invoice and POS transaction
-      for (let i = 0; i < items.length; i++) {
+      // 6. Insert items into sales_invoice_items and pos_transaction_items
+       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const invoiceItemId = `${invoiceId}-ITEM-${i + 1}`;
         const posItemId = `${posTransId}-DETAIL-${i + 1}`;
-        const saleItemId = `${saleId}-ITEM-${i + 1}`;
+        const saleItemId = `${saleId}-ITEM-${i + 1}`; // Match ID generated above logic
 
-        await tx.salesInvoiceItem.create({
-          data: {
-            id: invoiceItemId,
-            salesInvoiceId: invoiceId,
-            productId: item.id,
-            productName: item.name,
-            quantity: item.quantity,
-            price: new Prisma.Decimal(item.price),
-          },
-        });
+        // Sales Invoice Items
+        await connection.query(`
+          INSERT INTO sales_invoice_items (
+            id, sales_invoice_id, product_id, product_name, quantity, price, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+        `, [invoiceItemId, invoiceId, item.id, item.name, item.quantity, item.price]);
 
-        await tx.posTransactionItem.create({
-          data: {
-            id: posItemId,
-            posTransactionId: posTransId,
-            saleItemId,
-            productId: item.id,
-            productName: item.name,
-            quantity: new Prisma.Decimal(item.quantity),
-            unitPrice: new Prisma.Decimal(item.price),
-            discountPercentage: new Prisma.Decimal(0),
-            discountAmount: new Prisma.Decimal(0),
-            lineTotal: new Prisma.Decimal(item.quantity * item.price),
-          },
-        });
+        // POS Transaction Items
+        await connection.query(`
+          INSERT INTO pos_transaction_items (
+            id, pos_transaction_id, sale_item_id, product_id, product_name, 
+            quantity, unit_price, line_total, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `, [
+          posItemId, 
+          posTransId, 
+          saleItemId, 
+          item.id, 
+          item.name, 
+          item.quantity, 
+          item.price, 
+          item.quantity * item.price
+        ]);
       }
+
+      // Fetch order number
+      const [orderResult]: any = await connection.query('SELECT order_number FROM pos_transactions WHERE id = ?', [posTransId]);
+      const orderNumber = orderResult[0]?.order_number;
 
       return NextResponse.json({
         success: true,
-        data: { saleId, posTransId, orderNumber: null },
+        data: { saleId, posTransId, orderNumber },
         message: 'Transaction created successfully via API'
       });
     });

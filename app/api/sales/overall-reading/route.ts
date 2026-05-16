@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { query } from '@/lib/mysql';
+import { format, startOfDay } from 'date-fns';
 
-const safeNum = (val: any): number => {
+const safeParseFloat = (val: any): number => {
     if (val === null || val === undefined) return 0;
-    return Number(val);
+    const n = parseFloat(val);
+    return isNaN(n) ? 0 : n;
+}
+
+const safeInt = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'bigint') return Number(val);
+    const n = parseInt(val);
+    return isNaN(n) ? 0 : n;
 }
 
 export async function GET(request: NextRequest) {
@@ -17,288 +25,285 @@ export async function GET(request: NextRequest) {
     }
 
     const isAllTerminals = terminalId === 'all';
-    const shiftId = searchParams.get('shiftId');
+
+    // ─── OVERALL READING ─────────────────────────────────────────────────────
+    // Shows transactions for the selected date range or current day (midnight → now)
+    // for the selected terminal. This is a full reading regardless of Z-readings.
+    // ─────────────────────────────────────────────────────────────────────────
 
     const startDateParam = searchParams.get('startDate');
     const endDateParam = searchParams.get('endDate');
 
-    let start: Date;
-    let end: Date;
+    const startDate = startDateParam ? (startDateParam.includes(':') ? startDateParam : `${startDateParam} 00:00:00`) : format(startOfDay(new Date()), 'yyyy-MM-dd HH:mm:ss');
+    const endDate   = endDateParam ? (endDateParam.includes(':') ? endDateParam : `${endDateParam} 23:59:59`) : format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+
+    // Build terminal condition
+    let terminalCondition = '';
+    const terminalParams: any[] = [];
+    if (!isAllTerminals) {
+        terminalCondition = ' AND pt.terminal_id = ?';
+        terminalParams.push(terminalId);
+    }
+
+    const shiftId = searchParams.get('shiftId');
+    
+    // Date conditions or Shift condition
+    let dateCondition = ' AND st.created_at >= ? AND st.created_at <= ?';
+    let ptDateCondition = ' AND pt.created_at >= ? AND pt.created_at <= ?';
+    let dateParams = [startDate, endDate];
 
     if (shiftId) {
-        const shift = await db.shift.findUnique({ where: { id: shiftId } });
-        if (!shift) return NextResponse.json({ success: false, error: 'Shift not found' }, { status: 404 });
-        start = shift.startTime;
-        end = shift.endTime || new Date();
-    } else {
-        start = startDateParam ? startOfDay(parseISO(startDateParam)) : startOfDay(new Date());
-        end = endDateParam ? endOfDay(parseISO(endDateParam)) : endOfDay(new Date());
+        dateCondition = ' AND pt.shift_id = ?';
+        ptDateCondition = ' AND pt.shift_id = ?';
+        dateParams = [shiftId];
     }
 
-    const commonWhere: any = {
-        isTraining: false,
-        posTransaction: {
-            terminalId: isAllTerminals ? undefined : terminalId,
-            shiftId: shiftId || undefined,
-            transactionTime: {
-                gte: start,
-                lte: end
-            }
-        }
-    };
+    // Combined params for queries that join sales_transactions + pos_transactions
+    const allParams = [...terminalParams, ...dateParams];
 
-    // ── 1. Overall totals ────────────────────
-    const completedSalesWhere = {
-        ...commonWhere,
-        status: { notIn: ['Void', 'Voided', 'Cancelled', 'Returned'] }
-    };
-
-    const overallTotals = await db.salesTransaction.aggregate({
-        where: completedSalesWhere,
-        _sum: {
-            total: true
-        },
-        _count: {
-            id: true
-        }
-    });
-
-    const completedDiscounts = await db.posTransaction.aggregate({
-        where: {
-            shiftId: shiftId || undefined,
-            terminalId: isAllTerminals ? undefined : terminalId,
-            transactionTime: { gte: start, lte: end },
-            isTraining: false,
-            sale: { status: { notIn: ['Void', 'Voided', 'Cancelled', 'Returned'] } }
-        },
-        _sum: {
-            discountAmount: true
-        }
-    });
+    // ── 1. Overall totals (completed sales + adjustments) ────────────────────
+    const totalsSql = `
+        SELECT 
+            SUM(CASE WHEN st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned') THEN st.total ELSE 0 END) as net_sales,
+            COUNT(CASE WHEN st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned') THEN 1 ELSE NULL END) as transaction_count,
+            SUM(CASE WHEN st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned') THEN pt.discount_amount ELSE 0 END) as completed_discounts,
+            SUM(pt.discount_amount) as total_discounts_all
+        FROM sales_transactions st
+        JOIN pos_transactions pt ON st.id = pt.sale_id
+        WHERE pt.is_training = 0
+        ${terminalCondition}
+        ${dateCondition}
+    `;
+    const [overallTotals] = await query(totalsSql, allParams) as any[];
 
     // ── 2. Terminal breakdown ─────────────────────────────────────────────────
-    const terminalBreakdown = await db.posTransaction.groupBy({
-        by: ['terminalId'],
-        where: {
-            shiftId: shiftId || undefined,
-            terminalId: isAllTerminals ? undefined : terminalId,
-            transactionTime: { gte: start, lte: end },
-            isTraining: false,
-            sale: { status: { notIn: ['Void', 'Voided', 'Cancelled', 'Returned'] } }
-        },
-        _sum: {
-            totalAmount: true
-        },
-        _count: {
-            id: true
-        }
-    });
-
-    const terminalIds = terminalBreakdown.map(t => t.terminalId).filter(Boolean) as string[];
-    const terminalsList = await db.posTerminal.findMany({
-        where: { id: { in: terminalIds } }
-    });
-
-    const terminalResults = terminalBreakdown.map(tb => {
-        const terminal = terminalsList.find(t => t.id === tb.terminalId);
-        return {
-            terminal_id: tb.terminalId,
-            terminal_name: terminal?.name || tb.terminalId,
-            net_sales: tb._sum.totalAmount,
-            transaction_count: tb._count.id
-        };
-    });
-
-    // ── 3. Cashier breakdown ──────────────────────────────────────────────────
-    const cashierBreakdown = await db.posTransaction.groupBy({
-        by: ['userId'],
-        where: {
-            shiftId: shiftId || undefined,
-            terminalId: isAllTerminals ? undefined : terminalId,
-            transactionTime: { gte: start, lte: end },
-            isTraining: false,
-            sale: { status: { notIn: ['Void', 'Voided', 'Cancelled', 'Returned'] } }
-        },
-        _sum: {
-            totalAmount: true
-        },
-        _count: {
-            id: true
-        }
-    });
-
-    const userIds = cashierBreakdown.map(c => c.userId);
-    const usersList = await db.user.findMany({
-        where: { uid: { in: userIds } }
-    });
-
-    const cashiers = cashierBreakdown.map(cb => {
-        const user = usersList.find(u => u.uid === cb.userId);
-        return {
-            cashier_name: user?.displayName || 'Unknown',
-            cashier_id: cb.userId,
-            net_sales: cb._sum.totalAmount,
-            transaction_count: cb._count.id
-        };
-    });
-
-    // ── 4. Payment method breakdown ───────────────────────────────────────────
-    const paymentResults = await db.salesTransaction.groupBy({
-        by: ['paymentMethod'],
-        where: completedSalesWhere,
-        _sum: {
-            total: true
-        }
-    });
-
-    // ── 5. Discount summary ───────────────────────────────────────────────────
-    const discountSummaryResults = await db.posTransactionItem.groupBy({
-        by: ['discountType'],
-        where: {
-            posTransaction: {
-                shiftId: shiftId || undefined,
-                terminalId: isAllTerminals ? undefined : terminalId,
-                transactionTime: { gte: start, lte: end },
-                isTraining: false,
-                sale: { status: { notIn: ['Void', 'Voided', 'Cancelled', 'Returned'] } }
-            },
-            discountAmount: { gt: 0 }
-        },
-        _sum: {
-            discountAmount: true
-        },
-        _count: {
-            id: true,
-            posTransactionId: true
-        }
-    });
-
-    // ── 6. VAT breakdown ──────────────────────────────────────────────────────
-    const vatAdjustmentResults = await db.posTransactionItem.groupBy({
-        by: ['taxType'],
-        where: {
-            posTransaction: {
-                shiftId: shiftId || undefined,
-                terminalId: isAllTerminals ? undefined : terminalId,
-                transactionTime: { gte: start, lte: end },
-                isTraining: false,
-                sale: { status: { notIn: ['Void', 'Voided', 'Cancelled', 'Returned'] } }
-            }
-        },
-        _sum: {
-            lineTotal: true
-        }
-    });
-
-    // ── 7. Returns & Voids ────────────────────────────────────────────────────
-    const returnsResult = await db.salesTransaction.aggregate({
-        where: {
-            ...commonWhere,
-            status: 'Returned'
-        },
-        _sum: { total: true },
-        _count: { id: true }
-    });
-
-    const voidResult = await db.salesTransaction.aggregate({
-        where: {
-            ...commonWhere,
-            status: { in: ['Void', 'Voided', 'Cancelled'] }
-        },
-        _sum: { total: true },
-        _count: { id: true }
-    });
-
-    // ── 8. Starting cash ───────────────────────────
-    let shiftData: any;
+    let shiftCondition = '';
+    const breakdownParams = [...allParams];
     if (!isAllTerminals && !shiftId) {
-        // Latest shift for the terminal
-        shiftData = await db.shift.findFirst({
-            where: {
-                terminalId: terminalId,
-                startTime: { gte: start, lte: end }
-            },
-            orderBy: { startTime: 'desc' }
-        });
-    } else if (shiftId) {
-        shiftData = await db.shift.findUnique({ where: { id: shiftId } });
-    } else {
-        const aggregatedShifts = await db.shift.aggregate({
-            where: {
-                startTime: { gte: start, lte: end }
-            },
-            _sum: {
-                startingCash: true,
-                actualCash: true,
-                cashDifference: true
-            }
-        });
-        shiftData = {
-            startingCash: aggregatedShifts._sum.startingCash,
-            actualCash: aggregatedShifts._sum.actualCash,
-            cashDifference: aggregatedShifts._sum.cashDifference
-        };
+        shiftCondition = ` AND pt.shift_id = (SELECT id FROM shifts WHERE terminal_id = ? ORDER BY start_time DESC LIMIT 1)`;
+        breakdownParams.push(terminalId);
     }
 
-    const startingCash = safeNum(shiftData?.startingCash);
-    const actualCash   = safeNum(shiftData?.actualCash);
-    const cashVariance = safeNum(shiftData?.cashDifference);
+    const terminalBreakdownSql = `
+        SELECT 
+            pt.terminal_id,
+            t.name as terminal_name,
+            SUM(st.total) as net_sales,
+            COUNT(*) as transaction_count
+        FROM sales_transactions st
+        JOIN pos_transactions pt ON st.id = pt.sale_id
+        LEFT JOIN pos_terminals t ON pt.terminal_id = t.id
+        WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        AND pt.is_training = 0
+        ${terminalCondition}
+        ${dateCondition}
+        ${shiftCondition}
+        GROUP BY pt.terminal_id, t.name
+    `;
+    const terminalResults = await query(terminalBreakdownSql, breakdownParams) as any[];
+
+    // ── 3. Cashier breakdown ──────────────────────────────────────────────────
+    const cashierBreakdownSql = `
+        SELECT 
+            u.display_name as cashier_name,
+            u.uid as cashier_id,
+            SUM(st.total) as net_sales,
+            COUNT(*) as transaction_count
+        FROM sales_transactions st
+        JOIN pos_transactions pt ON st.id = pt.sale_id
+        LEFT JOIN users u ON pt.user_id = u.uid
+        WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        AND pt.is_training = 0
+        ${terminalCondition}
+        ${dateCondition}
+        ${shiftCondition}
+        GROUP BY u.uid, u.display_name
+    `;
+    const cashiers = await query(cashierBreakdownSql, breakdownParams) as any[];
+
+    // ── 4. Payment method breakdown ───────────────────────────────────────────
+    const paymentSql = `
+        SELECT 
+            st.payment_method,
+            SUM(st.total) as amount
+        FROM sales_transactions st
+        JOIN pos_transactions pt ON st.id = pt.sale_id
+        WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        AND pt.is_training = 0
+        ${terminalCondition}
+        ${dateCondition}
+        GROUP BY st.payment_method
+    `;
+    const paymentResults = await query(paymentSql, allParams) as any[];
+
+    // ── 5. Discount summary ───────────────────────────────────────────────────
+    // Only include rows that actually have a discount amount applied (> 0)
+    const discountSummarySql = `
+        SELECT 
+            COALESCE(pti.discount_type, 'percent') as discount_type,
+            SUM(pti.discount_amount) as total_amount,
+            COUNT(DISTINCT pt.id) as txn_count,
+            COUNT(pti.id) as item_count
+        FROM pos_transaction_items pti
+        JOIN pos_transactions pt ON pti.pos_transaction_id = pt.id
+        JOIN sales_transactions st ON pt.sale_id = st.id
+        WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        AND pt.is_training = 0
+        AND pti.discount_amount > 0
+        ${terminalCondition}
+        ${ptDateCondition}
+        GROUP BY pti.discount_type
+        HAVING SUM(pti.discount_amount) > 0
+        ORDER BY SUM(pti.discount_amount) DESC
+    `;
+    const discountSummaryResults = await query(discountSummarySql, allParams) as any[];
+
+    // ── 6. VAT breakdown ──────────────────────────────────────────────────────
+    const vatAdjustmentSql = `
+        SELECT 
+            COALESCE(pti.tax_type, 'VAT') as tax_type,
+            SUM(pti.line_total) as total_amount,
+            SUM(CASE 
+                WHEN COALESCE(pti.tax_type, 'VAT') = 'VAT' THEN pti.line_total - (pti.line_total / 1.12)
+                ELSE 0 
+            END) as vat_amount
+        FROM pos_transaction_items pti
+        JOIN pos_transactions pt ON pti.pos_transaction_id = pt.id
+        JOIN sales_transactions st ON pt.sale_id = st.id
+        WHERE st.status NOT IN ('Void', 'Voided', 'Cancelled', 'Returned')
+        AND pt.is_training = 0
+        ${terminalCondition}
+        ${ptDateCondition}
+        GROUP BY pti.tax_type
+    `;
+    const vatAdjustmentResults = await query(vatAdjustmentSql, allParams) as any[];
+
+    // ── 7. Returns & Voids ────────────────────────────────────────────────────
+    let returnsDateCondition = ' AND st.updated_at >= ? AND st.updated_at <= ?';
+    let returnsParams = [startDate, endDate];
+
+    if (shiftId) {
+        returnsDateCondition = ' AND pt.shift_id = ?';
+        returnsParams = [shiftId];
+    }
+
+    const returnsSql = `
+        SELECT SUM(st.total) as total_returns, COUNT(*) as return_count
+        FROM sales_transactions st
+        JOIN pos_transactions pt ON st.id = pt.sale_id
+        WHERE st.status = 'Returned'
+        AND pt.is_training = 0
+        ${terminalCondition}
+        ${returnsDateCondition}
+    `;
+    const [returnsResult] = await query(returnsSql, [...terminalParams, ...returnsParams]) as any[];
+
+    const voidSql = `
+        SELECT SUM(st.total) as total_void, COUNT(*) as void_count
+        FROM sales_transactions st
+        JOIN pos_transactions pt ON st.id = pt.sale_id
+        WHERE st.status IN ('Void', 'Voided', 'Cancelled')
+        AND pt.is_training = 0
+        ${terminalCondition}
+        ${returnsDateCondition}
+    `;
+    const [voidResult] = await query(voidSql, [...terminalParams, ...returnsParams]) as any[];
+
+    // ── 8. Starting cash (Latest Shift Only) ───────────────────────────
+    let shiftSql = `
+        SELECT 
+            s.starting_cash as total_starting_cash,
+            s.actual_cash as total_actual_cash,
+            s.cash_difference as total_cash_difference
+        FROM shifts s
+        WHERE s.start_time >= ? AND s.start_time <= ?
+    `;
+    const shiftParams: any[] = [startDate, endDate];
+    if (!isAllTerminals) {
+        shiftSql += ' AND s.terminal_id = ? ORDER BY s.start_time DESC LIMIT 1';
+        shiftParams.push(terminalId);
+    } else {
+        // If all terminals, just sum the latest shifts per terminal
+        shiftSql = `
+            SELECT 
+                SUM(starting_cash) as total_starting_cash,
+                SUM(actual_cash) as total_actual_cash,
+                SUM(cash_difference) as total_cash_difference
+            FROM shifts
+            WHERE start_time >= ? AND start_time <= ?
+        `;
+    }
+    const shiftResultArray = await query(shiftSql, shiftParams) as any[];
+    const shiftResult = shiftResultArray[0] || {};
+
+    // Sums for overall totals based on the shift query
+    const startingCash = safeParseFloat(shiftResult.total_starting_cash);
+    const actualCash   = safeParseFloat(shiftResult.total_actual_cash);
+    const cashVariance = safeParseFloat(shiftResult.total_cash_difference);
 
     // ── 9. Business settings & terminal info ─────────────────────────────────
-    const settingsResult = await db.posSettings.findFirst();
+    const [settingsResult] = await query(`SELECT business_name, address, tin, contact_number FROM pos_settings LIMIT 1`) as any[];
+
     let headerTerminalInfo = { min: '', sn: '' };
     if (!isAllTerminals) {
-        const termResult = await db.posTerminal.findUnique({ where: { id: terminalId } });
+        const [termResult] = await query(
+            `SELECT terminal_min, terminal_serial_number FROM pos_terminals WHERE id = ?`,
+            [terminalId]
+        ) as any[];
         headerTerminalInfo = {
-            min: termResult?.terminalMin || '',
-            sn: termResult?.terminalSerialNumber || ''
+            min: termResult?.terminal_min || '',
+            sn: termResult?.terminal_serial_number || ''
         };
     }
 
     // ── Computations ──────────────────────────────────────────────────────────
-    const netSales           = safeNum(overallTotals?._sum?.total);
-    const completedDiscountsVal = safeNum(completedDiscounts?._sum?.discountAmount);
-    const totalReturns       = safeNum(returnsResult?._sum?.total);
-    const totalVoid          = safeNum(voidResult?._sum?.total);
+    const netSales          = safeParseFloat(overallTotals?.net_sales);
+    const completedDiscounts = safeParseFloat(overallTotals?.completed_discounts);
+    const totalReturns      = safeParseFloat(returnsResult?.total_returns);
+    const totalVoid         = safeParseFloat(voidResult?.total_void);
     
-    const grossSales         = netSales + completedDiscountsVal + totalReturns + totalVoid;
+    // Gross Sales = (Final Net) + (Deductions from that Net)
+    // Actually, Gross should be the value BEFORE any adjustments.
+    // So Gross = Net + Discounts + Returns + Voids
+    const grossSales        = netSales + completedDiscounts + totalReturns + totalVoid;
 
-    const vatRow = vatAdjustmentResults.find((v: any) => (v.taxType || 'VAT') === 'VAT');
-    const vatTotalAmount = safeNum(vatRow?._sum?.lineTotal);
-    const vatAmount      = vatTotalAmount - (vatTotalAmount / 1.12);
+    // VAT Breakdown - Use actual sums from items for accuracy
+    const vatRow = vatAdjustmentResults.find((v: any) => v.tax_type === 'VAT');
+    const vatTotalAmount = safeParseFloat(vatRow?.total_amount);
+    const vatAmount      = safeParseFloat(vatRow?.vat_amount);
     const vatSales       = vatTotalAmount - vatAmount;
 
-    const vatExemptSales = safeNum(
-        vatAdjustmentResults.find((v: any) => v.taxType === 'VAT_EXEMPT')?._sum?.lineTotal
+    const vatExemptSales = safeParseFloat(
+        vatAdjustmentResults.find((v: any) => v.tax_type === 'VAT_EXEMPT')?.total_amount
     );
-    const zeroRatedSales = safeNum(
-        vatAdjustmentResults.find((v: any) => v.taxType === 'ZERO_RATED')?._sum?.lineTotal
+    const zeroRatedSales = safeParseFloat(
+        vatAdjustmentResults.find((v: any) => v.tax_type === 'ZERO_RATED')?.total_amount
     );
-    const nonVatSales = safeNum(
-        vatAdjustmentResults.find((v: any) => v.taxType === 'NON_VAT')?._sum?.lineTotal
+    const nonVatSales = safeParseFloat(
+        vatAdjustmentResults.find((v: any) => v.tax_type === 'NON_VAT')?.total_amount
     );
 
-    const cashSalesObj = paymentResults.find((p: any) => p.paymentMethod?.toUpperCase() === 'CASH');
-    const cashSales    = safeNum(cashSalesObj?._sum?.total);
+    const cashSalesObj = paymentResults.find((p: any) => p.payment_method?.toUpperCase() === 'CASH');
+    const cashSales    = safeParseFloat(cashSalesObj?.amount);
     const cashInDrawer = startingCash + cashSales;
 
     const data = {
         terminalId: isAllTerminals ? 'ALL TERMINALS' : terminalId,
-        startDate: format(start, 'yyyy-MM-dd HH:mm:ss'),
-        endDate: format(end, 'yyyy-MM-dd HH:mm:ss'),
+        startDate,
+        endDate,
         grossSales,
         netSales,
-        totalDiscounts: completedDiscountsVal,
-        transactionCount: safeNum(overallTotals?._count?.id),
+        totalDiscounts: completedDiscounts,
+        transactionCount: safeInt(overallTotals?.transaction_count),
         vatSales,
         vatAmount,
         vatExempt: vatExemptSales,
         zeroRated: zeroRatedSales,
         nonVat: nonVatSales,
         voidAmount: totalVoid,
-        voidCount: safeNum(voidResult?._count?.id),
+        voidCount: safeInt(voidResult?.void_count),
         returnAmount: totalReturns,
-        returnCount: safeNum(returnsResult?._count?.id),
+        returnCount: safeInt(returnsResult?.return_count),
         vatAdjustment: 0,
         startingCash,
         cashSales,
@@ -306,38 +311,47 @@ export async function GET(request: NextRequest) {
         actualCash,
         variance: cashVariance,
         paymentMethods: paymentResults.map((p: any) => ({
-            name: p.paymentMethod || 'Unknown',
-            amount: safeNum(p._sum.total)
+            name: p.payment_method || 'Unknown',
+            amount: safeParseFloat(p.amount)
         })),
         discountSummary: [
             ...discountSummaryResults.map((d: any) => ({
-                type: d.discountType,
-                amount: safeNum(d._sum.discountAmount),
-                count: safeNum(d._count.posTransactionId),
-                itemCount: safeNum(d._count.id)
-            }))
+                type: d.discount_type,
+                amount: safeParseFloat(d.total_amount),
+                count: safeInt(d.txn_count),
+                itemCount: safeInt(d.item_count)
+            })),
+            // Add transaction-level discounts if they exist
+            ...(completedDiscounts > discountSummaryResults.reduce((s: number, d: any) => s + safeParseFloat(d.total_amount), 0) + 0.01
+                ? [{
+                    type: 'transaction',
+                    amount: completedDiscounts - discountSummaryResults.reduce((s: number, d: any) => s + safeParseFloat(d.total_amount), 0),
+                    count: safeInt(overallTotals?.transaction_count), // Approximate
+                    itemCount: 0
+                }]
+                : [])
         ],
         salesAdjustment: {
-            void:   { count: safeNum(voidResult?._count?.id),    amount: totalVoid },
-            return: { count: safeNum(returnsResult?._count?.id), amount: totalReturns }
+            void:   { count: safeInt(voidResult?.void_count),    amount: totalVoid },
+            return: { count: safeInt(returnsResult?.return_count), amount: totalReturns }
         },
         terminals: terminalResults.map((t: any) => ({
             terminalId:       t.terminal_id,
-            terminalName:     t.terminal_name,
-            netSales:         safeNum(t.net_sales),
-            transactionCount: safeNum(t.transaction_count)
+            terminalName:     t.terminal_name || t.terminal_id,
+            netSales:         safeParseFloat(t.net_sales),
+            transactionCount: safeInt(t.transaction_count)
         })),
         cashiers: cashiers.map((c: any) => ({
-            cashierName:      c.cashier_name,
+            cashierName:      c.cashier_name || 'Unknown',
             cashierId:        c.cashier_id,
-            netSales:         safeNum(c.net_sales),
-            transactionCount: safeNum(c.transaction_count)
+            netSales:         safeParseFloat(c.net_sales),
+            transactionCount: safeInt(c.transaction_count)
         })),
         businessSettings: {
-            businessName:  settingsResult?.businessName || 'Business Name',
+            businessName:  settingsResult?.business_name || 'Business Name',
             address:       settingsResult?.address || '',
             tin:           settingsResult?.tin || '',
-            contactNumber: settingsResult?.contactNumber || ''
+            contactNumber: settingsResult?.contact_number || ''
         },
         terminalInfo: headerTerminalInfo
     };
@@ -346,8 +360,8 @@ export async function GET(request: NextRequest) {
       success: true, 
       data,
       debug: {
-        startDate: format(start, 'yyyy-MM-dd HH:mm:ss'),
-        endDate: format(end, 'yyyy-MM-dd HH:mm:ss'),
+        startDate,
+        endDate,
         terminalId: terminalId || 'all'
       }
     });

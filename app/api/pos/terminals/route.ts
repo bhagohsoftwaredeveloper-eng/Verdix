@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
-    const terminals = await db.posTerminal.findMany({
-      where: {
-        isActive: true
-      },
-      select: {
-        id: true,
-        name: true
-      },
-      orderBy: {
-        name: 'asc'
-      }
-    });
+    const terminals = await query(
+      'SELECT id, name FROM pos_terminals WHERE is_active = TRUE ORDER BY name ASC'
+    );
 
     return NextResponse.json({
       success: true,

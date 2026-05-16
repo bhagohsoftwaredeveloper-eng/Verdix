@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '013_create_sales_orders_table',
@@ -17,20 +17,20 @@ const migration: Migration = {
         delivery_address TEXT,
         total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         payment_method VARCHAR(100),
-        status VARCHAR(50) DEFAULT 'Pending',
+        status ENUM('Pending', 'Paid', 'Shipped', 'Delivered', 'Failed', 'Returned') DEFAULT 'Pending',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_sales_orders_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+        INDEX idx_customer_id (customer_id),
+        INDEX idx_order_date (order_date),
+        INDEX idx_delivery_date (delivery_date),
+        INDEX idx_status (status),
+        INDEX idx_reference (reference)
       )
     `;
 
-    await db.$executeRawUnsafe(createSalesOrdersTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_orders_customer_id ON sales_orders(customer_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_orders_order_date ON sales_orders(order_date)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_orders_delivery_date ON sales_orders(delivery_date)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_orders_status ON sales_orders(status)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_orders_reference ON sales_orders(reference)');
+    await query(createSalesOrdersTable);
     console.log('✅ Sales orders table created');
 
     // Create sales_order_items table
@@ -43,21 +43,21 @@ const migration: Migration = {
         quantity INT NOT NULL,
         price DECIMAL(10,2) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_sales_order_items_order FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
-        CONSTRAINT fk_sales_order_items_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        INDEX idx_sales_order_id (sales_order_id),
+        INDEX idx_product_id (product_id)
       )
     `;
 
-    await db.$executeRawUnsafe(createSalesOrderItemsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_order_items_order_id ON sales_order_items(sales_order_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_order_items_product_id ON sales_order_items(product_id)');
+    await query(createSalesOrderItemsTable);
     console.log('✅ Sales order items table created');
   },
 
   async down(): Promise<void> {
     // Drop tables in reverse order due to foreign key constraints
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS sales_order_items');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS sales_orders');
+    await query('DROP TABLE IF EXISTS sales_order_items');
+    await query('DROP TABLE IF EXISTS sales_orders');
     console.log('✅ Sales orders tables dropped');
   }
 };

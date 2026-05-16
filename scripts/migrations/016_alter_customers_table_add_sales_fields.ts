@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '016_alter_customers_table_add_sales_fields',
@@ -15,7 +15,13 @@ const migration: Migration = {
     ];
 
     for (const alterQuery of alterQueries) {
-      await db.$executeRawUnsafe(alterQuery);
+      try {
+        await query(alterQuery);
+        console.log('✅ Column added or already exists');
+      } catch (error) {
+        // Column might already exist, continue
+        console.log('ℹ️ Column may already exist, continuing...');
+      }
     }
 
     console.log('✅ Customers table sales fields updated');
@@ -31,7 +37,12 @@ const migration: Migration = {
     ];
 
     for (const dropQuery of dropQueries) {
-      await db.$executeRawUnsafe(dropQuery);
+      try {
+        await query(dropQuery);
+        console.log('✅ Column dropped');
+      } catch (error) {
+        console.log('ℹ️ Column may not exist, continuing...');
+      }
     }
 
     console.log('✅ Customers table sales fields reverted');

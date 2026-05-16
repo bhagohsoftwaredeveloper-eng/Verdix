@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '042_alter_purchase_order_items_new_fields',
@@ -8,25 +8,34 @@ const migration: Migration = {
   async up(): Promise<void> {
     const alterTable = `
       ALTER TABLE purchase_order_items
-      ADD COLUMN IF NOT EXISTS selling_price DECIMAL(10,2),
-      ADD COLUMN IF NOT EXISTS discount DECIMAL(10,2) DEFAULT 0.00,
-      ADD COLUMN IF NOT EXISTS discount_type VARCHAR(20) DEFAULT 'amount',
-      ADD COLUMN IF NOT EXISTS vat_subject BOOLEAN DEFAULT FALSE
+      ADD COLUMN selling_price DECIMAL(10,2),
+      ADD COLUMN discount DECIMAL(10,2) DEFAULT 0.00,
+      ADD COLUMN discount_type VARCHAR(20) DEFAULT 'amount',
+      ADD COLUMN vat_subject BOOLEAN DEFAULT FALSE
     `;
 
-    await db.$executeRawUnsafe(alterTable);
-    console.log('✅ Added new fields to purchase_order_items table');
+    try {
+        await query(alterTable);
+        console.log('✅ Added new fields to purchase_order_items table');
+    } catch (error: any) {
+        // Ignore if columns already exist (safe check mostly for local dev loops)
+        if (error.code === 'ER_DUP_FIELDNAME') {
+            console.log('⚠️ Columns already exist in purchase_order_items table');
+        } else {
+            throw error;
+        }
+    }
   },
 
   async down(): Promise<void> {
     const dropColumns = `
       ALTER TABLE purchase_order_items
-      DROP COLUMN IF EXISTS selling_price,
-      DROP COLUMN IF EXISTS discount,
-      DROP COLUMN IF EXISTS discount_type,
-      DROP COLUMN IF EXISTS vat_subject
+      DROP COLUMN selling_price,
+      DROP COLUMN discount,
+      DROP COLUMN discount_type,
+      DROP COLUMN vat_subject
     `;
-    await db.$executeRawUnsafe(dropColumns);
+    await query(dropColumns);
     console.log('✅ Dropped new fields from purchase_order_items table');
   }
 };

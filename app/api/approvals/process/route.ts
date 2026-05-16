@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { query, withTransaction } from '@/lib/mysql';
+import { v4 as uuidv4 } from 'uuid';
 import { adjustStock } from '@/app/(app)/inventory/history/actions';
 import { processPurchaseOrderCreation, processPurchaseOrderReceipt } from '@/lib/purchase-actions';
 import { processBadOrderCreation } from '@/lib/bad-order-actions';
@@ -15,86 +15,93 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    return await withTransaction(async (tx) => {
+    return await withTransaction(async (connection) => {
       // 1. Get the queue item
-      const item = await tx.approvalQueue.findUnique({
-        where: { id: queueId }
-      });
+      const [queueItems]: any = await connection.query(
+        'SELECT * FROM approval_queue WHERE id = ?',
+        [queueId]
+      );
 
-      if (!item) {
+      if (!queueItems || queueItems.length === 0) {
         throw new Error('Approval request not found');
       }
 
+      const item = queueItems[0];
       if (item.status !== 'Pending') {
         throw new Error('This request has already been processed');
       }
 
       // 2. Get the current workflow step
-      const workflowStep = await tx.approvalWorkflow.findFirst({
-        where: {
-          transactionType: item.transactionType,
-          stepOrder: item.currentStep
-        }
-      });
+      const [steps]: any = await connection.query(
+        'SELECT * FROM approval_workflows WHERE transaction_type = ? AND step_order = ?',
+        [item.transaction_type, item.current_step]
+      );
 
-      if (!workflowStep) {
+      if (!steps || steps.length === 0) {
         throw new Error('Workflow step configuration not found');
       }
 
-      // 3. Verify user exists
-      const user = await tx.user.findUnique({
-        where: { uid: userId }
-      });
+      const workflowStep = steps[0];
 
-      if (!user) {
+      // 3. Verify user has the required role
+      const [users]: any = await connection.query(`
+        SELECT u.username, ut.id as roleId, ut.name as roleName
+        FROM users u 
+        LEFT JOIN user_types ut ON u.user_type = ut.id OR u.user_type = ut.name
+        WHERE u.uid = ?
+      `, [userId]);
+
+      if (!users || users.length === 0) {
         throw new Error('User not found');
+      }
+      
+      const currentUserRole = users[0].roleId;
+      const isAdmin = users[0].username === 'admin' || users[0].roleName === 'Admin' || users[0].roleName === 'Super Admin';
+
+      if (!isAdmin && currentUserRole !== workflowStep.user_type_id) {
+        // Find role names for better error message
+        const [requiredRoles]: any = await connection.query('SELECT name FROM user_types WHERE id = ?', [workflowStep.user_type_id]);
+        const requiredRoleName = requiredRoles[0]?.name || 'Unknown';
+        throw new Error(`Permission denied. This step requires ${requiredRoleName} approval.`);
       }
 
       // 4. Record history
-      await tx.approvalHistory.create({
-        data: {
-          approvalQueueId: queueId,
-          userId,
-          action: action as any,
-          notes: notes || '',
-          stepNumber: item.currentStep
-        }
-      });
+      await connection.query(
+        'INSERT INTO approval_history (id, approval_queue_id, user_id, action, notes, step_number) VALUES (?, ?, ?, ?, ?, ?)',
+        [uuidv4(), queueId, userId, action, notes || '', item.current_step]
+      );
 
       if (action === 'Reject') {
-        await tx.approvalQueue.update({
-          where: { id: queueId },
-          data: { status: 'Rejected' }
-        });
+        await connection.query(
+          "UPDATE approval_queue SET status = 'Rejected' WHERE id = ?",
+          [queueId]
+        );
         return NextResponse.json({ success: true, status: 'Rejected' });
       }
 
       // 5. Handle Approval
       // Check if there are more steps
-      const nextStep = await tx.approvalWorkflow.findFirst({
-        where: {
-          transactionType: item.transactionType,
-          stepOrder: { gt: item.currentStep }
-        },
-        orderBy: { stepOrder: 'asc' }
-      });
+      const [nextSteps]: any = await connection.query(
+        'SELECT id FROM approval_workflows WHERE transaction_type = ? AND step_order > ? ORDER BY step_order ASC LIMIT 1',
+        [item.transaction_type, item.current_step]
+      );
 
-      if (nextStep) {
+      if (nextSteps && nextSteps.length > 0) {
         // Move to next step
-        await tx.approvalQueue.update({
-          where: { id: queueId },
-          data: { currentStep: item.currentStep + 1 }
-        });
-        return NextResponse.json({ success: true, status: 'Moved to next step', nextStep: item.currentStep + 1 });
+        await connection.query(
+          'UPDATE approval_queue SET current_step = current_step + 1 WHERE id = ?',
+          [queueId]
+        );
+        return NextResponse.json({ success: true, status: 'Moved to next step', nextStep: item.current_step + 1 });
       } else {
         // Final Approval! Execute the transaction.
-        const txData = item.transactionData;
-
-        console.log(`Final approval reached for ${item.transactionType}. Executing...`);
-
+        const txData = typeof item.transaction_data === 'string' ? JSON.parse(item.transaction_data) : item.transaction_data;
+        
+        console.log(`Final approval reached for ${item.transaction_type}. Executing...`);
+        
         let result = { success: false, error: 'Unknown transaction type' };
-
-        if (item.transactionType === 'STOCK_ADJUSTMENT') {
+        
+        if (item.transaction_type === 'STOCK_ADJUSTMENT') {
           // Check if this is a transfer handled within the adjustment flow (fallback)
           if (txData.adjustmentType === 'transfer' && (txData.targetWarehouseId || txData.toWarehouseId)) {
             const transferRequest = {
@@ -117,32 +124,32 @@ export async function POST(request: NextRequest) {
             if (txData.adjustmentType === 'remove' && adjQty > 0) {
               adjQty = -adjQty;
             }
-            const adjResult = await adjustStock(txData.productId, adjQty, txData.reason, item.createdById, true);
+            const adjResult = await adjustStock(txData.productId, adjQty, txData.reason, item.created_by, true);
             result = { success: adjResult.success, error: (adjResult as any).error || '' };
           }
-        } else if (item.transactionType === 'PURCHASE_ORDER') {
-          const poResult = await processPurchaseOrderCreation({ ...txData, isInternalFinalization: true }, item.createdById);
+        } else if (item.transaction_type === 'PURCHASE_ORDER') {
+          const poResult = await processPurchaseOrderCreation({ ...txData, isInternalFinalization: true }, item.created_by);
           result = { success: poResult.success, error: (poResult as any).error || '' };
-        } else if (item.transactionType === 'RECEIVE_PO') {
+        } else if (item.transaction_type === 'RECEIVE_PO') {
           if (txData.id) {
             // Receipt of existing PO
-            const rcptResult = await processPurchaseOrderReceipt(txData.id, txData, item.createdById);
+            const rcptResult = await processPurchaseOrderReceipt(txData.id, txData, item.created_by);
             result = { success: rcptResult.success, error: (rcptResult as any).error || '' };
           } else {
             // Direct receipt (creation + receipt)
-            const poResult = await processPurchaseOrderCreation({ ...txData, isInternalFinalization: true }, item.createdById);
+            const poResult = await processPurchaseOrderCreation({ ...txData, isInternalFinalization: true }, item.created_by);
             result = { success: poResult.success, error: (poResult as any).error || '' };
           }
-        } else if (item.transactionType === 'BAD_ORDER') {
-          const boResult = await processBadOrderCreation({ ...txData, isInternalFinalization: true }, item.createdById);
+        } else if (item.transaction_type === 'BAD_ORDER') {
+          const boResult = await processBadOrderCreation({ ...txData, isInternalFinalization: true }, item.created_by);
           result = { success: boResult.success, error: (boResult as any).error || '' };
-        } else if (item.transactionType === 'STOCK_TRANSFER') {
+        } else if (item.transaction_type === 'STOCK_TRANSFER') {
           const trfResult = await processTransferStock({ ...txData, isInternalFinalization: true });
           result = { success: trfResult.success, error: trfResult.error || '' };
-        } else if (item.transactionType === 'STOCK_COUNT') {
+        } else if (item.transaction_type === 'STOCK_COUNT') {
           const scResult = await processCompleteStockCount(txData.stockCountId);
           result = { success: scResult.success, error: scResult.error || '' };
-        } else if (item.transactionType === 'REPACKAGING') {
+        } else if (item.transaction_type === 'REPACKAGING') {
           const { breakPack, consolidatePack } = await import('@/app/(app)/products/actions');
           if (txData.direction === 'consolidate') {
             const cpResult = await consolidatePack(
@@ -151,7 +158,7 @@ export async function POST(request: NextRequest) {
               txData.packQtyUsed,
               txData.manualFactor,
               txData.newProductData,
-              item.createdById,
+              item.created_by,
               true // isInternalFinalization
             );
             result = { success: cpResult.success, error: (cpResult as any).message || '' };
@@ -162,16 +169,16 @@ export async function POST(request: NextRequest) {
               txData.quantityToBreak,
               txData.manualFactor,
               txData.newProductData,
-              item.createdById,
+              item.created_by,
               true // isInternalFinalization
             );
             result = { success: rpResult.success, error: (rpResult as any).message || '' };
           }
-        } else if (item.transactionType === 'SHELF_TRANSFER') {
+        } else if (item.transaction_type === 'SHELF_TRANSFER') {
           const { updateProductShelfLocations } = await import('@/app/(app)/products/actions');
           const stResult = await updateProductShelfLocations(
             txData.updates,
-            item.createdById,
+            item.created_by,
             true // isInternalFinalization
           );
           result = { success: stResult.success, error: (stResult as any).message || '' };
@@ -181,10 +188,10 @@ export async function POST(request: NextRequest) {
           throw new Error('Finalization failed: ' + (result as any).error);
         }
 
-        await tx.approvalQueue.update({
-          where: { id: queueId },
-          data: { status: 'Approved' }
-        });
+        await connection.query(
+          "UPDATE approval_queue SET status = 'Approved' WHERE id = ?",
+          [queueId]
+        );
 
         return NextResponse.json({ success: true, status: 'Finalized' });
       }

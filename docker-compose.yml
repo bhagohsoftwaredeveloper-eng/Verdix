@@ -7,26 +7,24 @@ services:
       - "3000:3000"
     environment:
       - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgrespassword
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=rootpassword
       - DB_NAME=stock_pilot
-      - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/stock_pilot
     depends_on:
       - db
     restart: always
 
   db:
-    image: postgres:15-alpine
+    image: mysql:8.0
     ports:
-      - "5432:5432"
+      - "3306:3306"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgrespassword
-      - POSTGRES_DB=stock_pilot
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=stock_pilot
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     restart: always
 
 volumes:
-  postgres_data:
+  mysql_data:

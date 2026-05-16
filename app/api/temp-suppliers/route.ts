@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../lib/mysql';
 
 export async function GET() {
   try {
-    const suppliers = await db.supplier.findMany({ take: 1 });
+    const suppliers = await query('SELECT * FROM suppliers LIMIT 1');
     return NextResponse.json({ success: true, data: suppliers });
   } catch (error) {
     return NextResponse.json({ success: false, error: 'Failed' }, { status: 500 });

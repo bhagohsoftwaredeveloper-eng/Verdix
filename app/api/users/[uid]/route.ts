@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { query, withTransaction } from '@/lib/mysql';
+import { v4 as uuidv4 } from 'uuid';
 import { hash } from 'bcryptjs';
 
 // PUT /api/users/[uid] - Update user details and permissions
@@ -20,41 +20,35 @@ export async function PUT(
       );
     }
 
-    await withTransaction(async (tx) => {
-      // Hash password if provided
-      let passwordHash = undefined;
-      if (password) {
-        passwordHash = await hash(password, 10);
-      }
-
+    await withTransaction(async (connection) => {
       // Update user basic info
-      const updateData: any = {
-        username,
-        displayName: displayName || username.split('@')[0]
-      };
+      let updateFields = ['username = ?', 'display_name = ?', 'user_type = ?'];
+      let queryParams = [username, displayName || username.split('@')[0], userType || 'User'];
 
-      if (passwordHash) {
-        updateData.passwordHash = passwordHash;
+      if (password) {
+        const hashedPassword = await hash(password, 10);
+        updateFields.push('password = ?');
+        queryParams.push(hashedPassword);
       }
 
-      await tx.user.update({
-        where: { uid },
-        data: updateData
-      });
+      queryParams.push(uid);
+      await connection.execute(
+        `UPDATE users SET ${updateFields.join(', ')} WHERE uid = ?`,
+        queryParams
+      );
 
-      // Update permissions - delete existing and create new ones
-      await tx.userPermission.deleteMany({
-        where: { userUid: uid }
-      });
+      // Update permissions
+      // Delete existing permissions for this user
+      await connection.execute('DELETE FROM user_permissions WHERE user_uid = ?', [uid]);
 
-      // Create new permissions
+      // Insert new permissions
       if (permissions && permissions.length > 0) {
-        await tx.userPermission.createMany({
-          data: permissions.map((permission: string) => ({
-            userUid: uid,
-            permission
-          }))
-        });
+        for (const permission of permissions) {
+          await connection.execute(
+            'INSERT INTO user_permissions (id, user_uid, permission) VALUES (?, ?, ?)',
+            [uuidv4(), uid, permission]
+          );
+        }
       }
     });
 

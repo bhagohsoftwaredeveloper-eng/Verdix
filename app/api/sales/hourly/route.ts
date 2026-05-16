@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { Prisma } from '@prisma/client';
+import { query } from '@/lib/mysql';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    // Optional: Allow filtering by a specific date. Defaults to CURDATE() in SQL.
+    // date format: YYYY-MM-DD
     const dateParam = searchParams.get('date');
 
-    const rows = await db.$queryRaw<any[]>`
+    let sql = `
       SELECT
         HOUR(created_at) as hour,
         SUM(total) as sales,
         COUNT(*) as count
       FROM sales_invoices
-      WHERE DATE(created_at) = ${dateParam ? new Date(dateParam) : Prisma.sql`CURDATE()`}
+      WHERE DATE(created_at) = ${dateParam ? '?' : 'CURDATE()'}
       GROUP BY HOUR(created_at)
       ORDER BY hour ASC
     `;
+
+    const params = dateParam ? [dateParam] : [];
+    const rows = await query(sql, params);
 
     // Fill in missing hours with 0
     const hours = Array.from({ length: 24 }, (_, i) => i);

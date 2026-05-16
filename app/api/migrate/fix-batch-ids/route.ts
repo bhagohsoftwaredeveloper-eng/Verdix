@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { query, withTransaction } from '@/lib/mysql';
 import { generateBatchId } from '@/lib/batch-utils';
 
 /**
@@ -14,14 +13,14 @@ export async function GET(request: NextRequest) {
   
   try {
     // 1. Find all batches that don't match the 6-digit pattern
-    // In PostgreSQL, we use the !~ operator for "does not match regex"
-    const nonConformantBatches = await db.$queryRaw<any[]>`
-      SELECT id, product_id as "productId"
+    // Note: We use a LIKE check or simple length/regexp if MySQL permits
+    const batches: any[] = await query(`
+      SELECT id, product_id 
       FROM inventory_batches 
-      WHERE id !~ '^[0-9]{6}$'
-    `;
+      WHERE id NOT REGEXP '^[0-9]{6}$'
+    `);
 
-    if (nonConformantBatches.length === 0) {
+    if (batches.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No non-conformant batch IDs found. Everything is already standardized.',
@@ -29,8 +28,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    await withTransaction(async (tx) => {
-      for (const batch of nonConformantBatches) {
+    await withTransaction(async (connection) => {
+      for (const batch of batches) {
         const oldId = batch.id;
         let newId = generateBatchId();
         
@@ -38,11 +37,8 @@ export async function GET(request: NextRequest) {
         let isUnique = false;
         let attempts = 0;
         while (!isUnique && attempts < 10) {
-          const existing = await tx.inventoryBatch.findUnique({
-            where: { id: newId },
-            select: { id: true }
-          });
-          if (!existing) {
+          const [existing]: any = await connection.query('SELECT id FROM inventory_batches WHERE id = ?', [newId]);
+          if (!existing || existing.length === 0) {
             isUnique = true;
           } else {
             newId = generateBatchId();
@@ -51,70 +47,51 @@ export async function GET(request: NextRequest) {
         }
 
         // A. Update inventory_batches.id (Primary Key)
-        // Prisma doesn't support updating the Primary Key in a single .update call if it's the ID.
-        // We use $executeRaw for this to bypass Prisma's standard update limitations on PKs.
-        await tx.$executeRaw`
-          UPDATE inventory_batches SET id = ${newId} WHERE id = ${oldId}
-        `;
+        // We use a temporary update to avoid PK constraint issues if we had complex RELATIONS, 
+        // but here it's straightforward.
+        await connection.query('UPDATE inventory_batches SET id = ? WHERE id = ?', [newId, oldId]);
 
         // B. Update sale_items.batch_source (JSON field)
         // We look for sale items that reference this old batch ID
-        // In PostgreSQL, we use @> for "contains" or search within JSONB
-        const saleItems = await tx.saleItem.findMany({
-          where: {
-            batchSource: {
-              path: [],
-              array_contains: { batchId: oldId }
-            } as any
-          }
-        });
-        
-        // If the above Prisma-fluent JSON filter doesn't work for your version, 
-        // fallback to queryRaw:
-        /*
-        const saleItems = await tx.$queryRaw<any[]>`
-          SELECT id, batch_source FROM sale_items 
-          WHERE batch_source::text LIKE ${`%"batchId":"${oldId}"%`}
-        `;
-        */
+        const [saleItems]: any = await connection.query(
+          'SELECT id, batch_source FROM sale_items WHERE batch_source LIKE ?',
+          [`%"batchId":"${oldId}"%`]
+        );
 
         let updatedSalesCount = 0;
         for (const item of saleItems) {
-            let source: any = item.batchSource;
+            let source = item.batch_source;
             if (typeof source === 'string') {
                 source = JSON.parse(source);
             }
             
-            if (Array.isArray(source)) {
-              const updatedSplits = source.map((split: any) => {
-                  if (split.batchId === oldId) {
-                      return { ...split, batchId: newId };
-                  }
-                  return split;
-              });
+            // source is an array of splits: [{batchId, qty, ...}]
+            const updatedSplits = source.map((split: any) => {
+                if (split.batchId === oldId) {
+                    return { ...split, batchId: newId };
+                }
+                return split;
+            });
 
-              await tx.saleItem.update({
-                  where: { id: item.id },
-                  data: {
-                      batchSource: updatedSplits
-                  }
-              });
-              updatedSalesCount++;
-            }
+            await connection.query(
+                'UPDATE sale_items SET batch_source = ? WHERE id = ?',
+                [JSON.stringify(updatedSplits), item.id]
+            );
+            updatedSalesCount++;
         }
 
         results.push({
           oldId,
           newId,
           updatedSalesCount,
-          productId: batch.productId
+          productId: batch.product_id
         });
       }
     });
 
     return NextResponse.json({
       success: true,
-      message: `Standardization complete. Converted ${nonConformantBatches.length} batches.`,
+      message: `Standardization complete. Converted ${batches.length} batches.`,
       results
     });
 

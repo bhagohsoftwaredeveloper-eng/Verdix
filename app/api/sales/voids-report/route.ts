@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     sql += ' ORDER BY st.updated_at DESC';
 
-    const results = await db.$queryRawUnsafe<any[]>(sql, ...params);
+    const results = await query(sql, params);
 
     // Transform results with profit calculation
     const data = (results as any[]).map((row: any) => {

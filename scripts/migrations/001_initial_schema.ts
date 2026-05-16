@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '001_initial_schema',
@@ -16,8 +16,8 @@ const migration: Migration = {
         category VARCHAR(100),
         brand VARCHAR(100),
         subcategory VARCHAR(100),
-        stock INTEGER DEFAULT 0,
-        reorder_point INTEGER DEFAULT 0,
+        stock INT DEFAULT 0,
+        reorder_point INT DEFAULT 0,
         avg_daily_sales DECIMAL(10,2) DEFAULT 0,
         price DECIMAL(10,2) NOT NULL,
         cost DECIMAL(10,2),
@@ -32,12 +32,12 @@ const migration: Migration = {
         income_account VARCHAR(50),
         expense_account VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (parent_id) REFERENCES products(id)
       )
     `;
 
-    await db.$executeRawUnsafe(createProductsTable);
+    await query(createProductsTable);
     console.log('✅ Products table created');
 
     // Create brands table
@@ -49,7 +49,7 @@ const migration: Migration = {
       )
     `;
 
-    await db.$executeRawUnsafe(createBrandsTable);
+    await query(createBrandsTable);
     console.log('✅ Brands table created');
 
     // Create categories table
@@ -61,7 +61,7 @@ const migration: Migration = {
       )
     `;
 
-    await db.$executeRawUnsafe(createCategoriesTable);
+    await query(createCategoriesTable);
     console.log('✅ Categories table created');
 
     // Create subcategories table
@@ -73,7 +73,7 @@ const migration: Migration = {
       )
     `;
 
-    await db.$executeRawUnsafe(createSubcategoriesTable);
+    await query(createSubcategoriesTable);
     console.log('✅ Subcategories table created');
 
     // Create units of measure table
@@ -87,7 +87,7 @@ const migration: Migration = {
       )
     `;
 
-    await db.$executeRawUnsafe(createUnitsTable);
+    await query(createUnitsTable);
     console.log('✅ Units of measure table created');
 
     // Create accounts table for income and expense account selection
@@ -95,27 +95,27 @@ const migration: Migration = {
       CREATE TABLE IF NOT EXISTS accounts (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        type VARCHAR(50) NOT NULL,
+        type ENUM('income', 'expense') NOT NULL,
         code VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT unique_account_name UNIQUE (name),
-        CONSTRAINT unique_account_code UNIQUE (code)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_account_name (name),
+        UNIQUE KEY unique_account_code (code)
       )
     `;
 
-    await db.$executeRawUnsafe(createAccountsTable);
+    await query(createAccountsTable);
     console.log('✅ Accounts table created');
   },
 
   async down(): Promise<void> {
     // Drop tables in reverse order due to foreign key constraints
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS accounts');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS units_of_measure');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS subcategories');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS categories');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS brands');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS products');
+    await query('DROP TABLE IF EXISTS accounts');
+    await query('DROP TABLE IF EXISTS units_of_measure');
+    await query('DROP TABLE IF EXISTS subcategories');
+    await query('DROP TABLE IF EXISTS categories');
+    await query('DROP TABLE IF EXISTS brands');
+    await query('DROP TABLE IF EXISTS products');
     console.log('✅ Initial schema tables dropped');
   }
 };

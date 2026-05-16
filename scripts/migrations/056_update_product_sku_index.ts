@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '056_update_product_sku_index',
@@ -10,20 +10,18 @@ const migration: Migration = {
 
     try {
       // 1. Check if the 'sku' index exists and drop it
-      const checkIndexSql = `
-        SELECT indexname 
-        FROM pg_indexes 
-        WHERE tablename = 'products' AND indexname = 'sku'
-      `;
-      const existingIndexes: any[] = await db.$queryRawUnsafe(checkIndexSql);
-      
+      const existingIndexes: any[] = await query(`SHOW INDEX FROM products WHERE Key_name = 'sku'`);
       if (existingIndexes.length > 0) {
-        await db.$executeRawUnsafe(`DROP INDEX sku`);
+        await query(`ALTER TABLE products DROP INDEX sku`);
         console.log('✅ Dropped existing unique index "sku"');
       }
 
       // 2. Add new composite unique index
-      await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS sku_warehouse ON products (sku, warehouse_id)`);
+      // We use a regular index first to check for duplicates if we wanted to be safe, 
+      // but here we expect to allow multiple SKUs if warehouse_id is different.
+      // NOTE: In MySQL, the same SKU with different warehouse_ids will be allowed.
+      // However, multiple records with same SKU AND same warehouse_id (including NULL) will be blocked.
+      await query(`ALTER TABLE products ADD UNIQUE INDEX sku_warehouse (sku, warehouse_id)`);
       console.log('✅ Added composite unique index "sku_warehouse" (sku, warehouse_id)');
 
     } catch (error) {
@@ -35,11 +33,12 @@ const migration: Migration = {
   async down(): Promise<void> {
     console.log('Restoring unique constraint on sku...');
     try {
-      await db.$executeRawUnsafe(`DROP INDEX IF EXISTS sku_warehouse`);
-      await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS sku ON products (sku)`);
+      await query(`ALTER TABLE products DROP INDEX sku_warehouse`);
+      await query(`ALTER TABLE products ADD UNIQUE INDEX sku (sku)`);
       console.log('✅ Restored original unique index "sku"');
     } catch (error) {
       console.error('❌ Error restoring product SKU index:', error);
+      // This might fail if there are now duplicate SKUs in the table!
       throw error;
     }
   }

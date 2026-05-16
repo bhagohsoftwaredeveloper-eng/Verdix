@@ -1,5 +1,6 @@
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../../lib/mysql';
 
 export async function GET(
   request: NextRequest,
@@ -18,70 +19,86 @@ export async function GET(
     // Unescape the ID just in case
     const invoiceId = decodeURIComponent(id);
 
-    // Fetch Invoice with details and items
-    const invoice = await db.salesInvoice.findUnique({
-      where: { id: invoiceId },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            contactNumber: true,
-            address: true
-          }
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                sku: true,
-                unitOfMeasure: true
-              }
-            }
-          }
-        }
-      }
-    });
+    // 1. Fetch Invoice Details
+    const invoiceSql = `
+      SELECT
+        si.id,
+        si.customer_id,
+        c.name as customer_name,
+        c.contact_number as customer_contact,
+        c.address as customer_address,
+        si.invoice_date,
+        si.due_date,
+        si.total,
+        si.payment_method,
+        si.status,
+        si.notes,
+        si.amount_paid,
+        si.created_at
+      FROM sales_invoices si
+      LEFT JOIN customers c ON si.customer_id = c.id
+      WHERE si.id = ?
+    `;
 
-    if (!invoice) {
+    const invoices = await query(invoiceSql, [invoiceId]);
+
+    if (invoices.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Invoice not found' },
         { status: 404 }
       );
     }
 
+    const invoice = invoices[0];
+
+    // 2. Fetch Invoice Items
+    const itemsSql = `
+      SELECT
+        sii.id,
+        sii.product_id,
+        sii.product_name,
+        sii.quantity,
+        sii.price,
+        p.unit_of_measure as uom,
+        p.sku
+      FROM sales_invoice_items sii
+      LEFT JOIN products p ON sii.product_id = p.id
+      WHERE sii.sales_invoice_id = ?
+    `;
+
+    const items = await query(itemsSql, [invoiceId]);
+
     const formattedInvoice = {
       id: invoice.id,
       customer: {
-        id: invoice.customer?.id,
-        name: invoice.customer?.name || 'Walk-in Customer',
-        contactNumber: invoice.customer?.contactNumber,
-        address: invoice.customer?.address
+        id: invoice.customer_id,
+        name: invoice.customer_name || 'Walk-in Customer',
+        contactNumber: invoice.customer_contact,
+        address: invoice.customer_address,
       },
-      invoiceDate: invoice.invoiceDate,
-      dueDate: invoice.dueDate,
-      total: Number(invoice.total),
-      amountPaid: Number(invoice.amountPaid || 0),
-      balance: Number(invoice.total) - Number(invoice.amountPaid || 0),
-      paymentMethod: invoice.paymentMethod,
+      invoiceDate: invoice.invoice_date,
+      dueDate: invoice.due_date,
+      total: parseFloat(invoice.total),
+      amountPaid: parseFloat(invoice.amount_paid || 0),
+      balance: parseFloat(invoice.total) - parseFloat(invoice.amount_paid || 0),
+      paymentMethod: invoice.payment_method,
       status: invoice.status,
       notes: invoice.notes,
-      items: invoice.items.map((item) => ({
+      items: items.map((item: any) => ({
         id: item.id,
-        productId: item.productId,
-        productName: item.productName,
-        sku: item.product?.sku || '',
-        quantity: item.quantity,
-        price: Number(item.price),
-        uom: item.product?.unitOfMeasure || 'units',
-        total: item.quantity * Number(item.price)
-      }))
+        productId: item.product_id,
+        productName: item.product_name,
+        sku: item.sku || '',
+        quantity: parseFloat(item.quantity),
+        price: parseFloat(item.price),
+        uom: item.uom || 'units',
+        total: parseFloat(item.quantity) * parseFloat(item.price)
+      })),
     };
 
     return NextResponse.json({
       success: true,
-      data: formattedInvoice
+      data: formattedInvoice,
     });
   } catch (error) {
     console.error('Error fetching invoice details:', error);

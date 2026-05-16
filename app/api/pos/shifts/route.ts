@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { withTransaction, query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,110 +8,82 @@ export async function GET(request: NextRequest) {
 
     if (shiftId) {
       // 1. Get Shift Details
-      const shift = await db.shift.findUnique({
-        where: { id: shiftId },
-        select: { startingCash: true, status: true, userId: true }
-      });
+      const shiftResult = await query(
+        `SELECT starting_cash, status, user_id FROM shifts WHERE id = ?`,
+        [shiftId]
+      );
 
-      if (!shift) {
+      if (shiftResult.length === 0) {
         return NextResponse.json(
           { success: false, error: 'Shift not found' },
           { status: 404 }
         );
       }
 
-      const startingCash = Number(shift.startingCash || 0);
+      const startingCash = parseFloat(shiftResult[0].starting_cash || 0);
 
       // 2. Get Cash Sales
-      const salesAggregate = await db.posTransaction.aggregate({
-        where: {
-          shiftId: shiftId,
-          paymentMethod: 'CASH'
-        },
-        _sum: {
-          totalAmount: true
-        }
-      });
+      const salesResult = await query(
+        `SELECT 
+           SUM(CASE WHEN transaction_type = 'sale' THEN total_amount ELSE 0 END) as total_sales,
+           SUM(CASE WHEN transaction_type IN ('void', 'return', 'refund') THEN total_amount ELSE 0 END) as total_refunds
+         FROM pos_transactions 
+         WHERE shift_id = ? AND payment_method = 'CASH'`,
+        [shiftId]
+      );
 
-      // Filter by type for accurate calculation
-      const totalSales = await db.posTransaction.aggregate({
-        where: {
-          shiftId: shiftId,
-          paymentMethod: 'CASH',
-          transactionType: 'sale'
-        },
-        _sum: { totalAmount: true }
-      });
-
-      const totalRefunds = await db.posTransaction.aggregate({
-        where: {
-          shiftId: shiftId,
-          paymentMethod: 'CASH',
-          transactionType: { in: ['void', 'return', 'refund'] }
-        },
-        _sum: { totalAmount: true }
-      });
-
-      const totalCashSales = Number(totalSales._sum.totalAmount || 0) - Number(totalRefunds._sum.totalAmount || 0);
+      const totalCashSales = (parseFloat(salesResult[0].total_sales || 0) - parseFloat(salesResult[0].total_refunds || 0));
 
       // 3. Get Cash Transfers
-      const transfers = await db.cashTransfer.aggregate({
-        where: { shiftId: shiftId },
-        _sum: { amount: true }
-      });
+      const transfersResult = await query(
+        `SELECT 
+           SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) as total_deposits,
+           SUM(CASE WHEN type = 'pickup' THEN amount ELSE 0 END) as total_pickups
+         FROM cash_transfers 
+         WHERE shift_id = ?`,
+        [shiftId]
+      );
 
-      const totalDeposits = await db.cashTransfer.aggregate({
-        where: { shiftId: shiftId, type: 'deposit' },
-        _sum: { amount: true }
-      });
-
-      const totalPickups = await db.cashTransfer.aggregate({
-        where: { shiftId: shiftId, type: 'pickup' },
-        _sum: { amount: true }
-      });
-
-      const deposits = Number(totalDeposits._sum.amount || 0);
-      const pickups = Number(totalPickups._sum.amount || 0);
+      const totalDeposits = parseFloat(transfersResult[0].total_deposits || 0);
+      const totalPickups = parseFloat(transfersResult[0].total_pickups || 0);
 
       return NextResponse.json({
         success: true,
         data: {
           startingCash,
           cashSales: totalCashSales,
-          cashDeposits: deposits,
-          cashPickups: pickups,
-          expectedCash: startingCash + totalCashSales + deposits - pickups,
-          userId: shift.userId,
-          status: shift.status
+          cashDeposits: totalDeposits,
+          cashPickups: totalPickups,
+          expectedCash: startingCash + totalCashSales + totalDeposits - totalPickups,
+          userId: shiftResult[0].user_id,
+          status: shiftResult[0].status
         }
       });
     }
 
+    // Restore: Fetch active shift for a terminal (Takeover support)
     const terminalId = searchParams.get('terminalId');
     const status = searchParams.get('status');
 
     if (terminalId && status === 'active') {
-      const activeShift = await db.shift.findFirst({
-        where: {
-          terminalId: terminalId,
-          status: 'active'
-        },
-        include: {
-          user: {
-            select: { displayName: true }
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
+      const activeShiftResult = await query(
+        `SELECT s.id, s.user_id, s.starting_cash, u.display_name as cashier_name
+         FROM shifts s
+         LEFT JOIN users u ON s.user_id = u.uid
+         WHERE s.terminal_id = ? AND s.status = 'active'
+         ORDER BY s.created_at DESC
+         LIMIT 1`,
+        [terminalId]
+      );
 
-      if (activeShift) {
+      if (activeShiftResult.length > 0) {
         return NextResponse.json({
           success: true,
           data: {
-            id: activeShift.id,
-            userId: activeShift.userId,
-            cashierName: activeShift.user.displayName,
-            startingCash: Number(activeShift.startingCash || 0)
+            id: activeShiftResult[0].id,
+            userId: activeShiftResult[0].user_id,
+            cashierName: activeShiftResult[0].cashier_name,
+            startingCash: parseFloat(activeShiftResult[0].starting_cash || 0)
           }
         });
       } else {
@@ -124,43 +95,36 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const where: any = { status: 'completed' };
+    let sql = `
+      SELECT s.id, s.user_id, s.terminal_id, s.starting_cash, s.actual_cash, s.start_time, s.end_time, s.status, u.display_name as cashier_name
+      FROM shifts s
+      LEFT JOIN users u ON s.user_id = u.uid
+      WHERE s.status = 'completed'
+    `;
+    const params: any[] = [];
 
     if (terminalId && terminalId !== 'all') {
-      where.terminalId = terminalId;
+      sql += ' AND s.terminal_id = ?';
+      params.push(terminalId);
     }
 
-    if (startDate || endDate) {
-      where.startTime = {};
-      if (startDate) where.startTime.gte = new Date(`${startDate}T00:00:00`);
-      if (endDate) where.startTime.lte = new Date(`${endDate}T23:59:59`);
+    if (startDate) {
+      sql += ' AND s.start_time >= ?';
+      params.push(`${startDate} 00:00:00`);
     }
 
-    const shifts = await db.shift.findMany({
-      where,
-      include: {
-        user: {
-          select: { displayName: true }
-        }
-      },
-      orderBy: { endTime: 'desc' }
-    });
+    if (endDate) {
+      sql += ' AND s.end_time <= ?';
+      params.push(`${endDate} 23:59:59`);
+    }
 
-    const formattedShifts = shifts.map(s => ({
-      id: s.id,
-      user_id: s.userId,
-      terminal_id: s.terminalId,
-      starting_cash: Number(s.startingCash),
-      actual_cash: Number(s.actualCash),
-      start_time: s.startTime,
-      end_time: s.endTime,
-      status: s.status,
-      cashier_name: s.user.displayName
-    }));
+    sql += ' ORDER BY s.end_time DESC';
+
+    const shifts = await query(sql, params);
 
     return NextResponse.json({
       success: true,
-      data: formattedShifts
+      data: shifts
     });
 
 
@@ -185,25 +149,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Generate specific ID format if needed, or use auto-increment/uuid
+    // Based on existing code, IDs are often strings like "SHIFT-..."
     const shiftId = `SHIFT-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-    const newShift = await db.shift.create({
-      data: {
-        id: shiftId,
-        userId,
-        terminalId: terminalId || 'Counter 1',
-        startingCash: Number(startingCash),
-        startTime: new Date(),
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    });
+    return await withTransaction(async (connection) => {
+      // Check if user already has an active shift? Optional but good practice.
+      // For now, let's just create.
 
-    return NextResponse.json({
-      success: true,
-      data: { shiftId: newShift.id },
-      message: 'Shift started successfully'
+      await connection.query(
+        `INSERT INTO shifts (
+            id, user_id, terminal_id, starting_cash, start_time, status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, NOW(), 'active', NOW(), NOW())`,
+        [shiftId, userId, terminalId || 'Counter 1', startingCash]
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: { shiftId },
+        message: 'Shift started successfully'
+      });
     });
 
   } catch (error: any) {
@@ -228,18 +193,20 @@ export async function PUT(request: NextRequest) {
     }
 
     if (takeoverUserId) {
-        // Handle Shift Takeover
-        await db.shift.update({
-          where: { id: shiftId },
-          data: {
-            userId: takeoverUserId,
-            updatedAt: new Date()
-          }
-        });
+        // Handle Shift Takeover (Transfer ownership)
+        return await withTransaction(async (connection) => {
+            await connection.query(
+                `UPDATE shifts SET 
+                    user_id = ?, 
+                    updated_at = NOW() 
+                 WHERE id = ?`,
+                [takeoverUserId, shiftId]
+            );
 
-        return NextResponse.json({
-            success: true,
-            message: 'Shift ownership transferred successfully'
+            return NextResponse.json({
+                success: true,
+                message: 'Shift ownership transferred successfully'
+            });
         });
     }
 
@@ -248,22 +215,24 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Missing actual cash' }, { status: 400 });
     }
 
-    await db.shift.update({
-      where: { id: shiftId },
-      data: {
-        endTime: new Date(),
-        actualCash: Number(actualCash),
-        cashDifference: Number(cashDifference || 0),
-        cashDenominations: body.cashDenominations || [],
-        notes: notes || null,
-        status: 'completed',
-        updatedAt: new Date()
-      }
-    });
+    return await withTransaction(async (connection) => {
+     await connection.query(
+        `UPDATE shifts SET 
+            end_time = NOW(), 
+            actual_cash = ?, 
+            cash_difference = ?, 
+            cash_denominations = ?,
+            notes = ?, 
+            status = 'completed', 
+            updated_at = NOW() 
+         WHERE id = ?`,
+        [actualCash, cashDifference || 0, JSON.stringify(body.cashDenominations || []), notes || null, shiftId]
+      );
 
-    return NextResponse.json({
-      success: true,
-      message: 'Shift ended successfully'
+      return NextResponse.json({
+        success: true,
+        message: 'Shift ended successfully'
+      });
     });
 
   } catch (error: any) {

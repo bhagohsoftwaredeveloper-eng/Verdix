@@ -1,12 +1,12 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '071_create_repackaging_logs_table',
   timestamp: '2026-04-16_07-00-00',
 
   async up(): Promise<void> {
-    await db.$executeRawUnsafe(`
+    await query(`
       CREATE TABLE IF NOT EXISTS repackaging_logs (
         id VARCHAR(100) PRIMARY KEY,
         source_product_id VARCHAR(100) NOT NULL,
@@ -20,20 +20,18 @@ const migration: Migration = {
         approval_queue_id VARCHAR(100) NULL,
         notes TEXT NULL,
         created_by VARCHAR(100) NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_source_product (source_product_id),
+        INDEX idx_target_product (target_product_id),
+        INDEX idx_created_at (created_at),
+        INDEX idx_status (status)
       )
     `);
-    
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_repackaging_source_product ON repackaging_logs (source_product_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_repackaging_target_product ON repackaging_logs (target_product_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_repackaging_created_at ON repackaging_logs (created_at)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_repackaging_status ON repackaging_logs (status)');
-    
     console.log('✅ repackaging_logs table created');
   },
 
   async down(): Promise<void> {
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS repackaging_logs');
+    await query('DROP TABLE IF EXISTS repackaging_logs');
     console.log('✅ repackaging_logs table dropped');
   }
 };

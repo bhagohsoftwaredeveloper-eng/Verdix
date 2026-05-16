@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '021_create_sales_invoices_table',
@@ -15,20 +15,20 @@ const migration: Migration = {
         due_date DATE,
         total DECIMAL(10,2) NOT NULL,
         payment_method VARCHAR(100),
-        status VARCHAR(50) DEFAULT 'Pending',
+        status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned', 'Partially Paid') DEFAULT 'Pending',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_sales_invoices_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+        INDEX idx_customer_id (customer_id),
+        INDEX idx_invoice_date (invoice_date),
+        INDEX idx_due_date (due_date),
+        INDEX idx_status (status),
+        INDEX idx_payment_method (payment_method)
       )
     `;
 
-    await db.$executeRawUnsafe(createSalesInvoicesTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_invoices_customer_id ON sales_invoices(customer_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_invoices_invoice_date ON sales_invoices(invoice_date)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_invoices_due_date ON sales_invoices(due_date)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_invoices_status ON sales_invoices(status)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_invoices_payment_method ON sales_invoices(payment_method)');
+    await query(createSalesInvoicesTable);
     console.log('✅ Sales invoices table created');
 
     // Create sales_invoice_items table
@@ -41,21 +41,21 @@ const migration: Migration = {
         quantity INT NOT NULL,
         price DECIMAL(10,2) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_sales_invoice_items_invoice FOREIGN KEY (sales_invoice_id) REFERENCES sales_invoices(id) ON DELETE CASCADE,
-        CONSTRAINT fk_sales_invoice_items_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+        FOREIGN KEY (sales_invoice_id) REFERENCES sales_invoices(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        INDEX idx_sales_invoice_id (sales_invoice_id),
+        INDEX idx_product_id (product_id)
       )
     `;
 
-    await db.$executeRawUnsafe(createSalesInvoiceItemsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_invoice_items_sales_invoice_id ON sales_invoice_items(sales_invoice_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_invoice_items_product_id ON sales_invoice_items(product_id)');
+    await query(createSalesInvoiceItemsTable);
     console.log('✅ Sales invoice items table created');
   },
 
   async down(): Promise<void> {
     // Drop tables in reverse order due to foreign key constraints
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS sales_invoice_items');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS sales_invoices');
+    await query('DROP TABLE IF EXISTS sales_invoice_items');
+    await query('DROP TABLE IF EXISTS sales_invoices');
     console.log('✅ Sales invoices tables dropped');
   }
 };

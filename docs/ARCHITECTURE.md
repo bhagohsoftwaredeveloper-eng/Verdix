@@ -16,9 +16,7 @@ StockPilot is a **Next.js 16** web application that runs inside an **Electron 33
 | Styling | Tailwind CSS | 3.4 |
 | Component Library | shadcn/ui + Radix UI | Latest |
 | Form Management | React Hook Form + Zod | 7.x / 3.x |
-| Database | PostgreSQL | 15+ |
-| Database ORM | Prisma | 5.x |
-| Database Driver | pg | 8.11 |
+| Database Driver | mysql2 | 3.15 |
 | Charts | Recharts | 2.x |
 | Drag & Drop | @hello-pangea/dnd | 18.x |
 | PDF Export | jsPDF + jspdf-autotable | 4.x |
@@ -96,8 +94,7 @@ Stock_Pilot/
 │   ├── logo.tsx                # StockPilot logo component
 │   └── window-controls.tsx     # Electron window min/max/close buttons
 ├── lib/                        # Server-side utilities & shared logic
-│   ├── db.ts                   # Prisma client instance
-│   ├── db-helpers.ts           # Database transaction & utility helpers
+│   ├── mysql.ts                # Database connection pool
 │   ├── types.ts                # TypeScript type definitions
 │   ├── family-sync.ts          # Recursive product family stock sync
 │   ├── purchase-utils.ts       # Markup calculation & purchase helpers
@@ -193,10 +190,14 @@ StockPilot uses a **localStorage session** approach (suitable for a single-machi
 
 ## Database
 
-StockPilot uses **PostgreSQL** (managed via **Prisma ORM**):
+StockPilot uses **MySQL** (configured via `.env`):
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/stockpilot_db"
+MYSQL_HOST=localhost
+MYSQL_USER=stockpilot
+MYSQL_PASSWORD=<password>
+MYSQL_DATABASE=stockpilot_db
+MYSQL_PORT=3306
 ```
 
 Key tables:
@@ -255,7 +256,7 @@ window.electronAPI = {
 
 | Task | Schedule | Description |
 |------|----------|-------------|
-| Database Backup | Configurable | Auto-backup PostgreSQL to local file |
+| Database Backup | Configurable | Auto-backup MySQL to local file |
 | External API Sync | Configurable | Retry failed webhook deliveries |
 
 ---

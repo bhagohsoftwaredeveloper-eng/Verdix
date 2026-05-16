@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../lib/mysql';
 import { isLoyaltyCardExpired } from '../../../../lib/loyalty-utils';
 
 export async function GET(request: NextRequest) {
@@ -14,36 +14,44 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Lookup using Prisma
-    const loyaltyRecord = await db.customerLoyalty.findUnique({
-      where: { rfidCode: rfid },
-      include: {
-        customer: true,
-      },
-    });
+    const sql = `
+      SELECT
+        c.id,
+        c.name,
+        c.contact_number as contactNumber,
+        c.active,
+        c.sales_person as salesPerson,
+        c.sales_area as salesArea,
+        c.sales_group as salesGroup,
+        c.payment_terms as paymentTerms,
+        c.address,
+        c.billing_address as billingAddress,
+        c.discount,
+        c.credit_limit as creditLimit,
+        c.price_level_id as priceLevelId,
+        c.created_at as createdAt,
+        c.updated_at as updatedAt,
+        cl.current_points as loyaltyPoints,
+        cl.rfid_code as rfidCode,
+        cl.expiry_date as expiryDate,
+        cl.point_setting as pointSetting
+      FROM customer_loyalty cl
+      JOIN customers c ON cl.customer_id = c.id
+      WHERE cl.rfid_code = ?
+      LIMIT 1
+    `;
 
-    if (loyaltyRecord) {
+    const result: any = await query(sql, [rfid]);
+
+    if (result.length > 0) {
+      // Cast integers and booleans as needed, mysql often returns them as numbers/strings
       const customer = {
-        id: loyaltyRecord.customer.id,
-        name: loyaltyRecord.customer.name,
-        contactNumber: loyaltyRecord.customer.contactNumber,
-        active: loyaltyRecord.customer.active,
-        salesPerson: loyaltyRecord.customer.salesPerson,
-        salesArea: loyaltyRecord.customer.salesArea,
-        salesGroup: loyaltyRecord.customer.salesGroup,
-        paymentTerms: loyaltyRecord.customer.paymentTerms,
-        address: loyaltyRecord.customer.address,
-        billingAddress: loyaltyRecord.customer.billingAddress,
-        discount: Number(loyaltyRecord.customer.discount || 0),
-        creditLimit: Number(loyaltyRecord.customer.creditLimit || 0),
-        priceLevelId: loyaltyRecord.customer.priceLevelId,
-        createdAt: loyaltyRecord.customer.createdAt,
-        updatedAt: loyaltyRecord.customer.updatedAt,
-        loyaltyPoints: Number(loyaltyRecord.currentPoints || 0),
-        rfidCode: loyaltyRecord.rfidCode,
-        expiryDate: loyaltyRecord.expiryDate,
-        pointSetting: loyaltyRecord.pointSetting,
-        isExpired: isLoyaltyCardExpired(loyaltyRecord.expiryDate)
+        ...result[0],
+        active: Boolean(result[0].active),
+        loyaltyPoints: Number(result[0].loyaltyPoints || 0),
+        discount: Number(result[0].discount || 0),
+        creditLimit: Number(result[0].creditLimit || 0),
+        isExpired: isLoyaltyCardExpired(result[0].expiryDate)
       };
 
       return NextResponse.json({

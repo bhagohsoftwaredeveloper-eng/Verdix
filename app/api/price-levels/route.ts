@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { query } from '../../../lib/mysql';
 
 // GET endpoint to fetch price levels
 export async function GET(request: NextRequest) {
   try {
-    const priceLevels = await db.priceLevel.findMany({
-      orderBy: {
-        name: 'asc'
-      }
-    });
+    const priceLevels = await query('SELECT * FROM price_levels ORDER BY name ASC');
     return NextResponse.json({
       success: true,
       data: priceLevels,
@@ -28,7 +23,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, isDefault = false, calculationBase, percentageAdjustment, minQuantity } = body;
+    const { name, description, isDefault = false } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -37,30 +32,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await withTransaction(async (tx) => {
-      // If this is set as default, unset other defaults
-      if (isDefault) {
-        await tx.priceLevel.updateMany({
-          data: { isDefault: false }
-        });
-      }
+    const id = `level_${Date.now()}`;
 
-      return await tx.priceLevel.create({
-        data: {
-          name,
-          description,
-          isDefault,
-          calculationBase,
-          percentageAdjustment,
-          minQuantity
-        }
-      });
-    });
+    // If this is set as default, unset other defaults
+    if (isDefault) {
+      await query('UPDATE price_levels SET is_default = FALSE');
+    }
+
+    const sql = `
+      INSERT INTO price_levels (id, name, description, is_default)
+      VALUES (?, ?, ?, ?)
+    `;
+
+    await query(sql, [id, name, description, isDefault]);
 
     return NextResponse.json({
       success: true,
       message: 'Price level created successfully',
-      data: result,
+      data: { id, name, isDefault },
       timestamp: new Date().toISOString()
     });
   } catch (error) {

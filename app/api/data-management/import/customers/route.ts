@@ -1,8 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 import Papa from 'papaparse';
-import { Decimal } from '@prisma/client/runtime/library';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,85 +39,99 @@ export async function POST(request: NextRequest) {
 
       try {
         // Check if exists
-        const existing = await db.customer.findUnique({
-          where: { id: c.id }
-        });
-
-        const activeValue = c.active !== undefined ? (c.active === 'true' || c.active === '1' || c.active === true) : true;
-        const loyaltyPoints = new Decimal(parseFloat(c.loyalty_points) || 0);
-        const discount = new Decimal(parseFloat(c.discount) || 0);
-        const creditLimit = new Decimal(parseFloat(c.credit_limit) || 0);
+        const [existing] = await query('SELECT * FROM customers WHERE id = ?', [c.id]);
 
         if (existing) {
           // Normalization for Exact Match Validation
           const normalizeActive = (val: any) => {
-            if (val === true || val === 1 || val === 'true' || val === '1') return true;
-            return false;
+            if (val === true || val === 1 || val === 'true' || val === '1') return 1;
+            return 0;
           };
 
-          const normalizeDecimal = (val: any) => new Decimal(val || 0).toNumber();
+          const normalizeNumber = (val: any) => parseFloat(val) || 0;
           const normalizeString = (val: any) => val === undefined || val === null ? null : String(val).trim() || null;
 
           const isExactMatch = 
             normalizeString(existing.name) === normalizeString(c.name) &&
-            normalizeString(existing.contactNumber) === normalizeString(c.contact_number) &&
-            normalizeActive(existing.active) === normalizeActive(activeValue) &&
-            normalizeString(existing.salesPerson) === normalizeString(c.sales_person) &&
-            normalizeString(existing.salesArea) === normalizeString(c.sales_area) &&
-            normalizeString(existing.salesGroup) === normalizeString(c.sales_group) &&
-            normalizeDecimal(existing.loyaltyPoints) === normalizeDecimal(loyaltyPoints) &&
-            normalizeString(existing.paymentTerms) === normalizeString(c.payment_terms) &&
+            normalizeString(existing.contact_number) === normalizeString(c.contact_number) &&
+            normalizeActive(existing.active) === normalizeActive(c.active !== undefined ? (c.active === 'true' || c.active === '1' || c.active === true) : true) &&
+            normalizeString(existing.sales_person) === normalizeString(c.sales_person) &&
+            normalizeString(existing.sales_area) === normalizeString(c.sales_area) &&
+            normalizeString(existing.sales_group) === normalizeString(c.sales_group) &&
+            normalizeNumber(existing.loyalty_points) === normalizeNumber(c.loyalty_points) &&
+            normalizeString(existing.payment_terms) === normalizeString(c.payment_terms) &&
             normalizeString(existing.address) === normalizeString(c.address) &&
-            normalizeString(existing.billingAddress) === normalizeString(c.billing_address) &&
-            normalizeDecimal(existing.discount) === normalizeDecimal(discount) &&
-            normalizeDecimal(existing.creditLimit) === normalizeDecimal(creditLimit) &&
-            normalizeString(existing.priceLevelId) === normalizeString(c.price_level_id);
+            normalizeString(existing.billing_address) === normalizeString(c.billing_address) &&
+            normalizeNumber(existing.discount) === normalizeNumber(c.discount) &&
+            normalizeNumber(existing.credit_limit) === normalizeNumber(c.credit_limit) &&
+            normalizeString(existing.price_level_id) === normalizeString(c.price_level_id);
 
           if (isExactMatch) {
             exactMatchCount++;
           } else {
-            await db.customer.update({
-              where: { id: c.id },
-              data: {
-                name: c.name,
-                contactNumber: c.contact_number || null,
-                active: activeValue,
-                salesPerson: c.sales_person || null,
-                salesArea: c.sales_area || null,
-                salesGroup: c.sales_group || null,
-                loyaltyPoints: loyaltyPoints,
-                paymentTerms: c.payment_terms || null,
-                address: c.address || null,
-                billingAddress: c.billing_address || null,
-                discount: discount,
-                creditLimit: creditLimit,
-                priceLevelId: c.price_level_id || null,
-                tin: c.tin || null,
-              }
-            });
+            // It's a conflict (different data for same ID)
+            // For now, let's update it to make it "Import Customers" functional
+            await query(
+              `UPDATE customers SET 
+                name = ?, 
+                contact_number = ?, 
+                active = ?, 
+                sales_person = ?, 
+                sales_area = ?, 
+                sales_group = ?, 
+                loyalty_points = ?, 
+                payment_terms = ?, 
+                address = ?, 
+                billing_address = ?, 
+                discount = ?, 
+                credit_limit = ?, 
+                price_level_id = ?,
+                updated_at = NOW()
+              WHERE id = ?`,
+              [
+                c.name,
+                c.contact_number || null,
+                c.active !== undefined ? (c.active === 'true' || c.active === '1' || c.active === true) : true,
+                c.sales_person || null,
+                c.sales_area || null,
+                c.sales_group || null,
+                parseFloat(c.loyalty_points) || 0,
+                c.payment_terms || null,
+                c.address || null,
+                c.billing_address || null,
+                parseFloat(c.discount) || 0,
+                parseFloat(c.credit_limit) || 0,
+                c.price_level_id || null,
+                c.id
+              ]
+            );
             conflictCount++;
           }
         } else {
           // New customer
-          await db.customer.create({
-            data: {
-              id: c.id,
-              name: c.name,
-              contactNumber: c.contact_number || null,
-              active: activeValue,
-              salesPerson: c.sales_person || null,
-              salesArea: c.sales_area || null,
-              salesGroup: c.sales_group || null,
-              loyaltyPoints: loyaltyPoints,
-              paymentTerms: c.payment_terms || null,
-              address: c.address || null,
-              billingAddress: c.billing_address || null,
-              discount: discount,
-              creditLimit: creditLimit,
-              priceLevelId: c.price_level_id || null,
-              tin: c.tin || null,
-            }
-          });
+          await query(
+            `INSERT INTO customers (
+              id, name, contact_number, active, sales_person, sales_area, sales_group,
+              loyalty_points, payment_terms, address, billing_address, discount, credit_limit, price_level_id,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+            [
+              c.id,
+              c.name,
+              c.contact_number || null,
+              c.active !== undefined ? (c.active === 'true' || c.active === '1' || c.active === true) : true,
+              c.sales_person || null,
+              c.sales_area || null,
+              c.sales_group || null,
+              parseFloat(c.loyalty_points) || 0,
+              c.payment_terms || null,
+              c.address || null,
+              c.billing_address || null,
+              parseFloat(c.discount) || 0,
+              parseFloat(c.credit_limit) || 0,
+              c.price_level_id || null
+            ]
+          );
           successCount++;
         }
       } catch (err) {
