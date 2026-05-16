@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '067_add_quantity_to_product_shelves',
@@ -11,23 +11,27 @@ const migration: Migration = {
 
       const addQuantityColumn = `
         ALTER TABLE product_shelves
-        ADD COLUMN quantity DECIMAL(15, 4) NOT NULL DEFAULT 0
+        ADD COLUMN quantity INT NOT NULL DEFAULT 0
       `;
 
-      await db.$executeRawUnsafe(addQuantityColumn);
+      await query(addQuantityColumn);
       console.log('✅ Quantity column added to product_shelves');
 
       // Initialize quantity for existing records
+      // We'll set the quantity to the product's total stock for its primary shelf assignment
+      // Note: If a product has multiple shelf assignments, this might lead to over-counting if we just copy stock to each,
+      // but in the current system, updateProductShelfLocations only keeps ONE shelf per product at a time for transfers.
+      // A safer approach is to only assign quantity if it's the only shelf.
+      
       console.log('Initializing shelf quantities from product stock...');
       const initializeQuantities = `
         UPDATE product_shelves ps
-        SET quantity = p.stock
-        FROM products p
-        WHERE ps.product_id = p.id
-        AND (SELECT COUNT(*) FROM product_shelves ps2 WHERE ps2.product_id = ps.product_id) = 1
+        JOIN products p ON ps.product_id = p.id
+        SET ps.quantity = p.stock
+        WHERE (SELECT COUNT(*) FROM (SELECT * FROM product_shelves) as ps2 WHERE ps2.product_id = ps.product_id) = 1
       `;
       
-      await db.$executeRawUnsafe(initializeQuantities);
+      await query(initializeQuantities);
       console.log('✅ Initialized shelf quantities');
 
     } catch (error) {
@@ -39,7 +43,7 @@ const migration: Migration = {
   async down(): Promise<void> {
     try {
       console.log('Removing quantity column from product_shelves...');
-      await db.$executeRawUnsafe('ALTER TABLE product_shelves DROP COLUMN IF EXISTS quantity');
+      await query('ALTER TABLE product_shelves DROP COLUMN quantity');
       console.log('✅ Quantity column removed');
     } catch (error) {
       console.error('❌ Error removing quantity column:', error);

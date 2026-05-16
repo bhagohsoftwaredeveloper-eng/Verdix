@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction, getNextReference } from '@/lib/db-helpers';
+import { query, withTransaction } from '@/lib/mysql';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
@@ -16,72 +15,76 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return await withTransaction(async (tx) => {
+    return await withTransaction(async (connection) => {
         // Check if customer exists
-        const customer = await tx.customer.findUnique({
-          where: { id: customerId },
-          select: { id: true }
-        });
+        const [customerCheck]: any = await connection.query(
+          'SELECT id FROM customers WHERE id = ?',
+          [customerId]
+        );
 
-        if (!customer) {
+        if (!customerCheck || customerCheck.length === 0) {
           throw new Error('Customer not found');
         }
 
         let finalReference = reference;
 
         if (!finalReference) {
-           finalReference = await getNextReference('customerPayment');
+           // Generate sequential reference
+           const [maxRefResult]: any = await connection.query(
+               "SELECT MAX(CAST(reference AS UNSIGNED)) as max_ref FROM customer_payments WHERE reference REGEXP '^[0-9]+$'"
+           );
+           
+           let nextRef = 1;
+           if (maxRefResult && maxRefResult.length > 0 && maxRefResult[0].max_ref !== null) {
+               nextRef = parseInt(maxRefResult[0].max_ref, 10) + 1;
+           }
+           finalReference = nextRef.toString().padStart(6, '0');
         } else {
             // Check if user-provided reference is unique
-            const referenceCheck = await tx.customerPayment.findUnique({
-              where: { reference: finalReference }
-            });
+            const [referenceCheck]: any = await connection.query(
+              'SELECT id FROM customer_payments WHERE reference = ?',
+              [finalReference]
+            );
 
-            if (referenceCheck) {
+            if (referenceCheck && referenceCheck.length > 0) {
               throw new Error('Reference already exists');
             }
         }
 
         // Insert payment record
         const paymentId = uuidv4();
-        await tx.customerPayment.create({
-          data: {
-            id: paymentId,
-            customerId,
-            paymentType,
-            paymentDate: new Date(paymentDate),
-            amount: Number(amount),
-            reference: finalReference,
-            note: note || null,
-          }
-        });
+        await connection.query(
+          `INSERT INTO customer_payments (
+            id, customer_id, payment_type, payment_date, amount, reference, note
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [paymentId, customerId, paymentType, new Date(paymentDate), amount, finalReference, note]
+        );
 
         // Process allocations
         if (allocations && Array.isArray(allocations)) {
             for (const alloc of allocations) {
                 if (alloc.amountAllocated <= 0) continue;
 
-                // 1. Get current invoice details
-                const invoice = await tx.salesInvoice.findUnique({
-                    where: { id: alloc.invoiceId },
-                    select: { total: true, amountPaid: true }
-                });
+                // 1. Get current invoice details (using FOR UPDATE to lock row during transaction)
+                const [invoiceResult]: any = await connection.query(
+                    'SELECT total, amount_paid FROM sales_invoices WHERE id = ? FOR UPDATE', 
+                    [alloc.invoiceId]
+                );
 
-                if (!invoice) continue;
+                if (!invoiceResult || invoiceResult.length === 0) continue;
                 
-                const currentAmountPaid = Number(invoice.amountPaid || 0);
+                const invoice = invoiceResult[0];
+                const currentAmountPaid = Number(invoice.amount_paid || 0);
                 const newAmountPaid = currentAmountPaid + Number(alloc.amountAllocated);
-                // Note: SaleStatus enum in schema has 'Paid', 'Pending', etc.
                 const newStatus = newAmountPaid >= Number(invoice.total) ? 'Paid' : 'Pending';
 
                 // 2. Update invoice amount_paid and status
-                await tx.salesInvoice.update({
-                    where: { id: alloc.invoiceId },
-                    data: { 
-                        amountPaid: newAmountPaid, 
-                        status: newStatus as any 
-                    }
-                });
+                await connection.query(
+                    `UPDATE sales_invoices 
+                     SET amount_paid = ?, status = ?, updated_at = NOW()
+                     WHERE id = ?`,
+                    [newAmountPaid, newStatus, alloc.invoiceId]
+                );
             }
         }
 
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
             paymentType,
             paymentDate,
             amount,
-            reference: finalReference,
+            reference,
             note,
             allocations
           },
@@ -114,31 +117,29 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
 
-    const payments = await db.customerPayment.findMany({
-      where: customerId ? { customerId } : {},
-      include: {
-        customer: {
-          select: {
-            name: true,
-            contactNumber: true,
-          }
-        }
-      },
-      orderBy: [
-        { paymentDate: 'desc' },
-        { createdAt: 'desc' }
-      ]
-    });
+    let sql = `
+      SELECT
+        cp.*,
+        c.name as customer_name,
+        c.contact_number
+      FROM customer_payments cp
+      JOIN customers c ON cp.customer_id = c.id
+    `;
 
-    const formattedPayments = payments.map(p => ({
-      ...p,
-      customer_name: p.customer?.name,
-      contact_number: p.customer?.contactNumber
-    }));
+    const params: any[] = [];
+
+    if (customerId) {
+      sql += ' WHERE cp.customer_id = ?';
+      params.push(customerId);
+    }
+
+    sql += ' ORDER BY cp.payment_date DESC, cp.created_at DESC';
+
+    const payments = await query(sql, params);
 
     return NextResponse.json({
       success: true,
-      data: formattedPayments,
+      data: payments,
     });
   } catch (error) {
     console.error('Error fetching customer payments:', error);

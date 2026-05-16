@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,60 +11,56 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
 
-    const where: any = {};
+    let baseSql = `
+      FROM stock_adjustments sa
+      LEFT JOIN products p ON sa.product_id = p.id
+    `;
+
+    const conditions = [];
+    const params = [];
 
     if (startDate) {
-      where.createdAt = { gte: new Date(startDate) };
+      conditions.push('DATE(sa.created_at) >= ?');
+      params.push(startDate);
     }
 
     if (endDate) {
-      const endDateObj = new Date(endDate);
-      endDateObj.setHours(23, 59, 59, 999);
-      if (where.createdAt) {
-        where.createdAt.lte = endDateObj;
-      } else {
-        where.createdAt = { lte: endDateObj };
-      }
+      conditions.push('DATE(sa.created_at) <= ?');
+      params.push(endDate);
     }
 
-    // Get total count
-    const totalItems = await db.stockAdjustment.count({ where });
+    if (conditions.length > 0) {
+      baseSql += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    // Pagination Count
+    const countSql = `SELECT COUNT(*) as total ${baseSql}`;
+    const [countResult] = await query(countSql, params);
+    const totalItems = countResult.total;
     const totalPages = Math.ceil(totalItems / limit);
 
-    // Get paginated adjustments with product details
-    const adjustments = await db.stockAdjustment.findMany({
-      where,
-      include: {
-        product: {
-          select: {
-            name: true,
-            sku: true,
-            barcode: true,
-            unitOfMeasure: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      skip: offset,
-      take: limit
-    });
+    let sql = `
+      SELECT 
+        sa.id,
+        sa.product_id,
+        sa.quantity,
+        sa.reason,
+        sa.new_stock,
+        sa.created_at,
+        p.name as product_name,
+        p.sku,
+        p.barcode,
+        p.unit_of_measure
+      ${baseSql}
+      ORDER BY sa.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const adjustments = await query(sql, [...params, limit, offset]);
 
     return NextResponse.json({
       success: true,
-      data: adjustments.map(adj => ({
-        id: adj.id,
-        productId: adj.productId,
-        quantity: adj.quantity.toNumber ? adj.quantity.toNumber() : Number(adj.quantity),
-        reason: adj.reason,
-        newStock: adj.newStock.toNumber ? adj.newStock.toNumber() : Number(adj.newStock),
-        createdAt: adj.createdAt,
-        productName: adj.product?.name,
-        sku: adj.product?.sku,
-        barcode: adj.product?.barcode,
-        unitOfMeasure: adj.product?.unitOfMeasure
-      })),
+      data: adjustments,
       pagination: {
         page,
         limit,

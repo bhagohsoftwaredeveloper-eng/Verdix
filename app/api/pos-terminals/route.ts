@@ -1,10 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { Prisma } from '@prisma/client';
+import { query } from '../../../lib/mysql';
+
+// Helper function to ensure pos_terminals table exists
+async function ensurePosTerminalsTable() {
+  try {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS pos_terminals (
+        id VARCHAR(50) PRIMARY KEY,
+        ip_address VARCHAR(45),
+        name VARCHAR(100),
+        serial_number VARCHAR(100),
+        min_number VARCHAR(100),
+        permit_no VARCHAR(100),
+        print_official_receipt VARCHAR(10) DEFAULT 'No',
+        or_next_reference VARCHAR(100),
+        location VARCHAR(100),
+        is_active BOOLEAN DEFAULT TRUE,
+        last_active TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_is_active (is_active)
+      )
+    `;
+    
+    await query(createTableSQL);
+
+    // Add missing columns if table already exists
+    const columns = [
+      { name: 'serial_number', type: 'VARCHAR(100)' },
+      { name: 'min_number', type: 'VARCHAR(100)' },
+      { name: 'permit_no', type: 'VARCHAR(100)' },
+      { name: 'print_official_receipt', type: 'VARCHAR(10) DEFAULT "No"' },
+      { name: 'or_next_reference', type: 'VARCHAR(100)' },
+      { name: 'last_active', type: 'TIMESTAMP NULL' },
+      { name: 'z_counter', type: 'INT DEFAULT 0' },
+      { name: 'reset_counter', type: 'INT DEFAULT 0' }
+    ];
+
+    // Get current columns
+    const currentColumnsResult = await query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'pos_terminals' AND TABLE_SCHEMA = DATABASE()"
+    );
+    const existingColumns = new Set(currentColumnsResult.map((c: any) => c.COLUMN_NAME));
+
+    for (const col of columns) {
+      if (!existingColumns.has(col.name)) {
+        try {
+          await query(`ALTER TABLE pos_terminals ADD COLUMN ${col.name} ${col.type}`);
+        } catch (e) {
+          // Fallback catch
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('Error ensuring pos_terminals table:', error);
+    throw error;
+  }
+}
 
 // GET endpoint to fetch POS terminals
 export async function GET(request: NextRequest) {
   try {
+    await ensurePosTerminalsTable();
+
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -13,21 +73,20 @@ export async function GET(request: NextRequest) {
     const getNextOR = searchParams.get('getNextOR') === 'true';
 
     if (getNextOR) {
-      // For PostgreSQL, we use queryRaw for regex-based ordering if needed, 
-      // or just fetch and process in JS for a small number of terminals
-      const terminals = await db.posTerminal.findMany({
-        select: { orNextReference: true },
-      });
+      const sql = `
+        SELECT or_next_reference 
+        FROM pos_terminals 
+        WHERE or_next_reference REGEXP '^[0-9]+$'
+        ORDER BY CAST(or_next_reference AS UNSIGNED) DESC 
+        LIMIT 1
+      `;
+      const result = await query(sql);
       
-      let maxVal = 0;
-      for (const t of terminals) {
-        const val = parseInt(t.orNextReference);
-        if (!isNaN(val) && val > maxVal) {
-          maxVal = val;
-        }
+      let nextRef = '00000001';
+      if (result && result.length > 0) {
+        const currentMax = parseInt(result[0].or_next_reference);
+        nextRef = (currentMax + 1).toString().padStart(8, '0');
       }
-      
-      const nextRef = (maxVal + 1).toString().padStart(8, '0');
 
       return NextResponse.json({
         success: true,
@@ -36,36 +95,58 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const where: Prisma.PosTerminalWhereInput = {};
+    let sql = `
+      SELECT
+        id,
+        ip_address AS ipAddress,
+        name AS terminalDescription,
+        serial_number AS serialNumber,
+        min_number AS min,
+        permit_no AS permitNo,
+        print_official_receipt AS printOfficialReceipt,
+        or_next_reference AS orNextReference,
+        location AS inventoryLocation,
+        is_active AS isActive,
+        last_active AS lastActive,
+        created_at AS createdAt,
+        z_counter AS zCounter,
+        reset_counter AS resetCounter
+      FROM pos_terminals
+      WHERE 1=1
+    `;
+    const params: any[] = [];
 
     if (activeOnly) {
-      where.isActive = true;
+      sql += ' AND is_active = ?';
+      params.push(true);
     }
 
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { ipAddress: { contains: search, mode: 'insensitive' } },
-      ];
+      sql += ' AND (name LIKE ? OR ip_address LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
     }
 
-    const [terminals, total] = await Promise.all([
-      db.posTerminal.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-      db.posTerminal.count({ where }),
-    ]);
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
-    // Map to the format expected by the frontend if necessary
-    const formattedTerminals = terminals.map(t => ({
-      ...t,
-      terminalDescription: t.name,
-      inventoryLocation: t.location,
-      min: t.terminalMin,
-    }));
+    const terminals = await query(sql, params);
+
+    // Get total count for pagination
+    let countSql = 'SELECT COUNT(*) as total FROM pos_terminals WHERE 1=1';
+    const countParams: any[] = [];
+
+    if (activeOnly) {
+      countSql += ' AND is_active = ?';
+      countParams.push(true);
+    }
+
+    if (search) {
+      countSql += ' AND (name LIKE ? OR ip_address LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`);
+    }
+
+    const countResult = await query(countSql, countParams);
+    const total = countResult[0]?.total || 0;
 
     // Get client IP
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
@@ -75,7 +156,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: formattedTerminals,
+      data: terminals,
       clientIp,
       pagination: {
         total,
@@ -97,6 +178,8 @@ export async function GET(request: NextRequest) {
 // POST endpoint to create a new POS terminal
 export async function POST(request: NextRequest) {
   try {
+    await ensurePosTerminalsTable();
+
     const body = await request.json();
     const {
       ipAddress,
@@ -112,30 +195,49 @@ export async function POST(request: NextRequest) {
       resetCounter = 0
     } = body;
 
-    const newTerminal = await db.posTerminal.create({
-      data: {
-        ipAddress: ipAddress?.trim() || null,
-        name: terminalDescription?.trim() || 'Terminal',
-        serialNumber: serialNumber?.trim() || null,
-        terminalMin: min?.trim() || null,
-        permitNo: permitNo?.trim() || null,
-        printOfficialReceipt: printOfficialReceipt || 'No',
-        orNextReference: orNextReference?.trim() || '00000001',
-        location: inventoryLocation || 'Store',
-        isActive,
-        zCounter,
-        resetCounter
-      }
-    });
+    // Generate ID
+    const id = `terminal_${Date.now()}`;
+
+    const sql = `
+      INSERT INTO pos_terminals (
+        id, ip_address, name, serial_number, min_number,
+        permit_no, print_official_receipt, or_next_reference,
+        location, is_active, z_counter, reset_counter
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    await query(sql, [
+      id,
+      ipAddress?.trim() || null,
+      terminalDescription?.trim() || null,
+      serialNumber?.trim() || null,
+      min?.trim() || null,
+      permitNo?.trim() || null,
+      printOfficialReceipt || 'No',
+      orNextReference?.trim() || null,
+      inventoryLocation || 'Store',
+      isActive,
+      zCounter,
+      resetCounter
+    ]);
 
     return NextResponse.json({
       success: true,
       message: 'POS terminal created successfully',
       data: {
-        ...newTerminal,
-        terminalDescription: newTerminal.name,
-        inventoryLocation: newTerminal.location,
-        min: newTerminal.terminalMin,
+        id,
+        ipAddress: ipAddress?.trim() || null,
+        terminalDescription: terminalDescription?.trim() || null,
+        serialNumber: serialNumber?.trim() || null,
+        min: min?.trim() || null,
+        permitNo: permitNo?.trim() || null,
+        printOfficialReceipt: printOfficialReceipt || 'No',
+        orNextReference: orNextReference?.trim() || null,
+        inventoryLocation: inventoryLocation || 'Store',
+        isActive,
+        zCounter,
+        resetCounter
       },
       timestamp: new Date().toISOString()
     });
@@ -152,6 +254,8 @@ export async function POST(request: NextRequest) {
 // PUT endpoint to update a POS terminal
 export async function PUT(request: NextRequest) {
   try {
+    await ensurePosTerminalsTable();
+
     const body = await request.json();
     const { id } = body;
 
@@ -162,46 +266,56 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const data: Prisma.PosTerminalUpdateInput = {
-      lastActive: new Date()
+    // Build dynamic UPDATE query
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    const fieldMap: Record<string, string> = {
+      ipAddress: 'ip_address',
+      terminalDescription: 'name',
+      serialNumber: 'serial_number',
+      min: 'min_number',
+      permitNo: 'permit_no',
+      printOfficialReceipt: 'print_official_receipt',
+      orNextReference: 'or_next_reference',
+      inventoryLocation: 'location',
+      isActive: 'is_active',
+      zCounter: 'z_counter',
+      resetCounter: 'reset_counter'
     };
 
-    if (body.ipAddress !== undefined) data.ipAddress = body.ipAddress?.trim() || null;
-    if (body.terminalDescription !== undefined) data.name = body.terminalDescription?.trim() || null;
-    if (body.serialNumber !== undefined) data.serialNumber = body.serialNumber?.trim() || null;
-    if (body.min !== undefined) data.terminalMin = body.min?.trim() || null;
-    if (body.permitNo !== undefined) data.permitNo = body.permitNo?.trim() || null;
-    if (body.printOfficialReceipt !== undefined) data.printOfficialReceipt = body.printOfficialReceipt;
-    if (body.orNextReference !== undefined) data.orNextReference = body.orNextReference?.trim() || '00000001';
-    if (body.inventoryLocation !== undefined) data.location = body.inventoryLocation;
-    if (body.isActive !== undefined) data.isActive = body.isActive;
-    if (body.zCounter !== undefined) data.zCounter = body.zCounter;
-    if (body.resetCounter !== undefined) data.resetCounter = body.resetCounter;
-
-    const updatedTerminal = await db.posTerminal.update({
-      where: { id },
-      data
+    Object.entries(fieldMap).forEach(([bodyKey, dbColumn]) => {
+      if (body[bodyKey] !== undefined) {
+        updates.push(`${dbColumn} = ?`);
+        const val = body[bodyKey];
+        params.push(typeof val === 'string' ? (val.trim() || null) : val);
+      }
     });
+
+    // Always update last_active
+    updates.push('last_active = ?');
+    params.push(new Date());
+
+    if (updates.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    params.push(id);
+    const sql = `UPDATE pos_terminals SET ${updates.join(', ')} WHERE id = ?`;
+
+    await query(sql, params);
 
     return NextResponse.json({
       success: true,
       message: 'POS terminal updated successfully',
-      data: {
-        ...updatedTerminal,
-        terminalDescription: updatedTerminal.name,
-        inventoryLocation: updatedTerminal.location,
-        min: updatedTerminal.terminalMin,
-      },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
     console.error('Error updating POS terminal:', error);
-    if (error.code === 'P2025') {
-       return NextResponse.json(
-        { success: false, error: 'POS terminal not found' },
-        { status: 404 }
-      );
-    }
+
     return NextResponse.json(
       { success: false, error: 'Failed to update POS terminal' },
       { status: 500 }
@@ -222,23 +336,16 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await db.posTerminal.delete({
-      where: { id },
-    });
+    const sql = 'DELETE FROM pos_terminals WHERE id = ?';
+    await query(sql, [id]);
 
     return NextResponse.json({
       success: true,
       message: 'POS terminal deleted successfully',
       timestamp: new Date().toISOString()
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting POS terminal:', error);
-    if (error.code === 'P2025') {
-      return NextResponse.json(
-        { success: false, error: 'POS terminal not found' },
-        { status: 404 }
-      );
-    }
     return NextResponse.json(
       { success: false, error: 'Failed to delete POS terminal' },
       { status: 500 }

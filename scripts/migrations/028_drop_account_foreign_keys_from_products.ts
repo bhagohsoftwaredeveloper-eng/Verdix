@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '028_drop_account_foreign_keys_from_products',
@@ -13,16 +13,16 @@ const migration: Migration = {
       const constraints = ['fk_products_income_account', 'fk_products_expense_account'];
 
       for (const constraint of constraints) {
-        const result: any[] = await db.$queryRawUnsafe(`
-          SELECT constraint_name
-          FROM information_schema.key_column_usage
-          WHERE table_schema = 'public'
-            AND table_name = 'products'
-            AND constraint_name = '${constraint}'
+        const result = await query(`
+          SELECT CONSTRAINT_NAME
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'products'
+            AND CONSTRAINT_NAME = '${constraint}'
         `);
 
         if (result.length > 0) {
-          await db.$executeRawUnsafe(`ALTER TABLE products DROP CONSTRAINT ${constraint}`);
+          await query(`ALTER TABLE products DROP FOREIGN KEY ${constraint}`);
           console.log(`✅ Dropped foreign key constraint ${constraint}`);
         } else {
           console.log(`ℹ️  Foreign key constraint ${constraint} does not exist`);
@@ -45,12 +45,12 @@ const migration: Migration = {
       ];
 
       for (const constraint of constraints) {
-        const result: any[] = await db.$queryRawUnsafe(`
-          SELECT constraint_name
-          FROM information_schema.key_column_usage
-          WHERE table_schema = 'public'
-            AND table_name = 'products'
-            AND constraint_name = '${constraint.name}'
+        const result = await query(`
+          SELECT CONSTRAINT_NAME
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'products'
+            AND CONSTRAINT_NAME = '${constraint.name}'
         `);
 
         if (result.length === 0) {
@@ -59,7 +59,7 @@ const migration: Migration = {
             ADD CONSTRAINT ${constraint.name}
             FOREIGN KEY (${constraint.column}) REFERENCES accounts(id)
           `;
-          await db.$executeRawUnsafe(addFKQuery);
+          await query(addFKQuery);
           console.log(`✅ Restored foreign key constraint ${constraint.name}`);
         } else {
           console.log(`ℹ️  Foreign key constraint ${constraint.name} already exists`);

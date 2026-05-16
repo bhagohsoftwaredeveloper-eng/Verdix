@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '009_add_account_foreign_keys_to_products',
@@ -11,16 +11,16 @@ const migration: Migration = {
     let columnsAdded = false;
 
     for (const column of columns) {
-      const result = await db.$queryRawUnsafe<any[]>(`
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'products'
-          AND column_name = '${column}'
+      const result = await query(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'products'
+          AND COLUMN_NAME = '${column}'
       `);
       if (result.length === 0) {
-        const addColumnQuery = `ALTER TABLE products ADD COLUMN "${column}" VARCHAR(50)`;
-        await db.$executeRawUnsafe(addColumnQuery);
+        const addColumnQuery = `ALTER TABLE products ADD COLUMN ${column} VARCHAR(50)`;
+        await query(addColumnQuery);
         columnsAdded = true;
       }
     }
@@ -38,20 +38,20 @@ const migration: Migration = {
     ];
 
     for (const constraint of constraints) {
-      const result = await db.$queryRawUnsafe<any[]>(`
-        SELECT constraint_name
-        FROM information_schema.table_constraints
-        WHERE table_schema = 'public'
-          AND table_name = 'products'
-          AND constraint_name = '${constraint.name}'
+      const result = await query(`
+        SELECT CONSTRAINT_NAME
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'products'
+          AND CONSTRAINT_NAME = '${constraint.name}'
       `);
       if (result.length === 0) {
         const addFKQuery = `
           ALTER TABLE products
           ADD CONSTRAINT ${constraint.name}
-          FOREIGN KEY ("${constraint.column}") REFERENCES accounts(id)
+          FOREIGN KEY (${constraint.column}) REFERENCES accounts(id)
         `;
-        await db.$executeRawUnsafe(addFKQuery);
+        await query(addFKQuery);
         console.log(`✅ Added foreign key constraint for ${constraint.column}`);
       } else {
         console.log(`ℹ️  Foreign key constraint ${constraint.name} already exists`);
@@ -61,12 +61,12 @@ const migration: Migration = {
 
   async down(): Promise<void> {
     // Drop foreign key constraints first
-    await db.$executeRawUnsafe('ALTER TABLE products DROP CONSTRAINT fk_products_expense_account');
-    await db.$executeRawUnsafe('ALTER TABLE products DROP CONSTRAINT fk_products_income_account');
+    await query('ALTER TABLE products DROP FOREIGN KEY fk_products_expense_account');
+    await query('ALTER TABLE products DROP FOREIGN KEY fk_products_income_account');
     console.log('✅ Dropped foreign key constraints');
 
     // Drop columns
-    await db.$executeRawUnsafe('ALTER TABLE products DROP COLUMN "expense_account", DROP COLUMN "income_account"');
+    await query('ALTER TABLE products DROP COLUMN expense_account, DROP COLUMN income_account');
     console.log('✅ Dropped income_account and expense_account columns');
   }
 };

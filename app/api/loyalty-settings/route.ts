@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../lib/mysql';
 
 // GET endpoint to fetch loyalty settings
 export async function GET(request: NextRequest) {
   try {
-    const settings = await db.loyaltyPointsSetting.findMany({
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    const sql = `
+      SELECT
+        id,
+        description,
+        base,
+        amount,
+        equivalent,
+        created_at,
+        updated_at
+      FROM loyalty_points_settings
+      ORDER BY created_at DESC
+    `;
+
+    const settings = await query(sql);
 
     return NextResponse.json({
       success: true,
@@ -43,20 +52,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const newSetting = await db.loyaltyPointsSetting.create({
-      data: {
-        id,
-        description,
-        base: base || 0,
-        amount: amount || 0,
-        equivalent: equivalent || 0,
-      },
-    });
+    const sql = `
+      INSERT INTO loyalty_points_settings (
+        id, description, base, amount, equivalent
+      ) VALUES (?, ?, ?, ?, ?)
+    `;
+
+    await query(sql, [id, description, base || 'amount', amount || 0, equivalent || 0]);
 
     return NextResponse.json({
       success: true,
       message: 'Loyalty setting created successfully',
-      data: newSetting,
+      data: { id, description, base, amount, equivalent },
       timestamp: new Date().toISOString()
     });
   } catch (error) {

@@ -1,42 +1,38 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createConnection } = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
+
+// Extract DB config from environment or fallback to defaults
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'stock_pilot',
+  multipleStatements: true
+};
 
 async function runMigration() {
-  console.log('Starting External API settings migration...');
+  console.log('Starting External API tables migration...');
   
+  let connection;
   try {
-    // Ensure connection
-    await prisma.$connect();
+    connection = await createConnection(dbConfig);
     console.log('Connected to database.');
 
-    const defaultSettings = [
-      { settingKey: 'enabled', settingValue: 'false' },
-      { settingKey: 'api_endpoint', settingValue: '' },
-      { settingKey: 'auth_type', settingValue: 'api_key' },
-      { settingKey: 'api_key', settingValue: '' },
-      { settingKey: 'bearer_token', settingValue: '' },
-      { settingKey: 'timeout', settingValue: '30000' },
-      { settingKey: 'retry_attempts', settingValue: '3' },
-      { settingKey: 'retry_delay', settingValue: '2000' },
-      { settingKey: 'sync_mode', settingValue: 'realtime' },
-      { settingKey: 'on_error_action', settingValue: 'log_only' }
-    ];
+    const sqlPath = path.join(__dirname, 'create_external_api_tables.sql');
+    const sql = fs.readFileSync(sqlPath, 'utf8');
 
-    console.log('Upserting default settings...');
-    for (const setting of defaultSettings) {
-      await prisma.externalApiSettings.upsert({
-        where: { settingKey: setting.settingKey },
-        update: {}, // Keep existing values if already present
-        create: setting
-      });
-    }
+    console.log('Executing migration script...');
+    await connection.query(sql);
     
     console.log('Migration completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);
     process.exit(1);
   } finally {
-    await prisma.$disconnect();
+    if (connection) {
+      await connection.end();
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 /**
  * GET /api/suppliers/[id]/balance
@@ -13,89 +13,81 @@ export async function GET(
     const supplierId = params.id;
 
     // Get supplier info
-    const supplier = await db.supplier.findUnique({
-      where: { id: supplierId }
-    });
+    const supplierQuery = `
+      SELECT * FROM suppliers WHERE id = ?
+    `;
+    const suppliers = await query(supplierQuery, [supplierId]);
 
-    if (!supplier) {
+    if (suppliers.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Supplier not found' },
         { status: 404 }
       );
     }
 
+    const supplier = suppliers[0];
+
     // Get total purchases
-    const purchasesAggregate = await db.purchaseOrder.aggregate({
-      where: {
-        supplierId,
-        NOT: { status: 'Failed' } // In MySQL it was status != 'Cancelled', but schema has PurchaseOrderStatus enum. 
-        // Wait, schema says: enum PurchaseOrderStatus { Pending, Approved, Paid, Shipped, Received, Failed, PartiallyPaid }
-        // MySQL query was: WHERE supplier_id = ? AND status != 'Cancelled'
-        // Let's see what statuses are equivalent.
-      },
-      _sum: {
-        total: true
-      }
-    });
-    const totalPurchases = Number(purchasesAggregate._sum.total || 0);
+    const purchasesQuery = `
+      SELECT COALESCE(SUM(total), 0) as total_purchases
+      FROM purchase_orders
+      WHERE supplier_id = ? AND status != 'Cancelled'
+    `;
+    const purchasesResult = await query(purchasesQuery, [supplierId]);
+    const totalPurchases = parseFloat(purchasesResult[0]?.total_purchases || '0');
 
     // Get total payments
-    const paymentsAggregate = await db.supplierPayment.aggregate({
-      where: {
-        supplierId
-      },
-      _sum: {
-        amount: true
-      }
-    });
-    const totalPayments = Number(paymentsAggregate._sum.amount || 0);
+    const paymentsQuery = `
+      SELECT COALESCE(SUM(amount), 0) as total_payments
+      FROM supplier_payments
+      WHERE supplier_id = ?
+    `;
+    const paymentsResult = await query(paymentsQuery, [supplierId]);
+    const totalPayments = parseFloat(paymentsResult[0]?.total_payments || '0');
 
     // Get transaction history
-    const [purchaseOrders, payments] = await Promise.all([
-      db.purchaseOrder.findMany({
-        where: {
-          supplierId,
-          NOT: { status: 'Failed' }
-        },
-        select: {
-          id: true,
-          date: true,
-          total: true,
-          status: true,
-          referenceNumber: true
-        }
-      }),
-      db.supplierPayment.findMany({
-        where: {
-          supplierId
-        },
-        select: {
-          id: true,
-          date: true,
-          amount: true,
-          paymentMethod: true,
-          reference: true
-        }
-      })
-    ]);
+    const purchaseTransactionsQuery = `
+      SELECT 
+        id, 
+        date, 
+        total as amount, 
+        status,
+        'Purchase Order' as description,
+        reference_number as reference
+      FROM purchase_orders 
+      WHERE supplier_id = ? AND status != 'Cancelled'
+    `;
+    const purchases = await query(purchaseTransactionsQuery, [supplierId]);
+
+    const paymentTransactionsQuery = `
+      SELECT 
+        id, 
+        date, 
+        amount, 
+        payment_method as description,
+        reference
+      FROM supplier_payments 
+      WHERE supplier_id = ?
+    `;
+    const payments = await query(paymentTransactionsQuery, [supplierId]);
 
     // Combine and format transactions
     const transactions = [
-      ...purchaseOrders.map((p) => ({
+      ...purchases.map((p: any) => ({
         type: 'PURCHASE',
         id: p.id,
         date: p.date,
-        amount: Number(p.total),
-        description: 'Purchase Order',
+        amount: parseFloat(p.amount),
+        description: p.description,
         status: p.status,
-        reference: p.referenceNumber,
+        reference: p.reference,
       })),
-      ...payments.map((p) => ({
+      ...payments.map((p: any) => ({
         type: 'PAYMENT',
         id: p.id,
         date: p.date,
-        amount: Number(p.amount),
-        description: `Payment - ${p.paymentMethod || 'Unknown'}`,
+        amount: parseFloat(p.amount),
+        description: `Payment - ${p.description}`,
         reference: p.reference,
       })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -112,11 +104,7 @@ export async function GET(
   } catch (error) {
     console.error('Error fetching supplier balance:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to fetch supplier balance',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { success: false, error: 'Failed to fetch supplier balance' },
       { status: 500 }
     );
   }

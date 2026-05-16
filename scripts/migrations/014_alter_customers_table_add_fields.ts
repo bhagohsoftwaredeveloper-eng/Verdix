@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '014_alter_customers_table_add_fields',
@@ -19,11 +19,11 @@ const migration: Migration = {
         discount DECIMAL(5,2) DEFAULT 0,
         credit_limit DECIMAL(15,2) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `;
 
-    await db.$executeRawUnsafe(checkTableQuery);
+    await query(checkTableQuery);
     console.log('✅ Customers table ensured to exist');
 
     // Add columns if they don't exist
@@ -35,7 +35,13 @@ const migration: Migration = {
     ];
 
     for (const alterQuery of alterQueries) {
-      await db.$executeRawUnsafe(alterQuery);
+      try {
+        await query(alterQuery);
+        console.log('✅ Column added or already exists');
+      } catch (error) {
+        // Column might already exist, continue
+        console.log('ℹ️ Column may already exist, continuing...');
+      }
     }
 
     console.log('✅ Customers table fields updated');
@@ -51,7 +57,12 @@ const migration: Migration = {
     ];
 
     for (const dropQuery of dropQueries) {
-      await db.$executeRawUnsafe(dropQuery);
+      try {
+        await query(dropQuery);
+        console.log('✅ Column dropped');
+      } catch (error) {
+        console.log('ℹ️ Column may not exist, continuing...');
+      }
     }
 
     console.log('✅ Customers table fields reverted');

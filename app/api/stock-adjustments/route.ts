@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { withTransaction, query } from '@/lib/mysql';
 import { addFamilyStock, deductFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 
 // GET endpoint to fetch stock adjustments
@@ -12,42 +11,47 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const productId = searchParams.get('productId');
 
-    const where: any = {};
+    let sql = `
+      SELECT
+        sa.id,
+        sa.product_id AS productId,
+        p.name AS productName,
+        sa.quantity,
+        sa.reason,
+        sa.new_stock AS newStock,
+        sa.created_at AS createdAt,
+        sa.updated_at AS updatedAt
+      FROM stock_adjustments sa
+      LEFT JOIN products p ON sa.product_id = p.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
     if (productId) {
-      where.productId = productId;
+      sql += ' AND sa.product_id = ?';
+      params.push(productId);
     }
 
-    const [adjustments, total] = await Promise.all([
-      db.stockAdjustment.findMany({
-        where,
-        include: {
-          product: {
-            select: {
-              name: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-      db.stockAdjustment.count({ where })
-    ]);
+    sql += ' ORDER BY sa.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
-    const formattedAdjustments = adjustments.map(sa => ({
-      id: sa.id,
-      productId: sa.productId,
-      productName: sa.product.name,
-      quantity: Number(sa.quantity),
-      reason: sa.reason,
-      newStock: Number(sa.newStock),
-      createdAt: sa.createdAt,
-      updatedAt: sa.updatedAt
-    }));
+    const adjustments = await query(sql, params);
+
+    // Get total count for pagination
+    let countSql = 'SELECT COUNT(*) as total FROM stock_adjustments WHERE 1=1';
+    const countParams: any[] = [];
+
+    if (productId) {
+      countSql += ' AND product_id = ?';
+      countParams.push(productId);
+    }
+
+    const countResult = await query(countSql, countParams);
+    const total = countResult[0]?.total || 0;
 
     return NextResponse.json({
       success: true,
-      data: formattedAdjustments,
+      data: adjustments,
       pagination: {
         total,
         limit,
@@ -59,11 +63,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching stock adjustments:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to fetch stock adjustments',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { success: false, error: 'Failed to fetch stock adjustments' },
       { status: 500 }
     );
   }
@@ -82,69 +82,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return await withTransaction(async (tx) => {
+    return await withTransaction(async (connection) => {
       // Get current product stock
-      const product = await tx.product.findUnique({
-        where: { id: productId },
-        select: { id: true, name: true, stock: true }
-      });
-
-      if (!product) {
+      const [productResult]: any = await connection.query('SELECT id, name, stock FROM products WHERE id = ?', [productId]);
+      if (!productResult || productResult.length === 0) {
         throw new Error('Product not found');
       }
 
+      const product = productResult[0];
       const currentStock = Number(product.stock || 0);
-      const newStock = currentStock + Number(quantity);
+      const newStock = currentStock + quantity;
 
       // --- Family Stock Sync ---
-      const { rootId, factorToRoot } = await findUltimateRoot(productId, tx);
-      const rootQuantity = Math.abs(Number(quantity)) / factorToRoot;
+      const { rootId, factorToRoot } = await findUltimateRoot(productId, connection as any);
+      const rootQuantity = Math.abs(quantity) / factorToRoot;
 
       const adjustmentId = uuidv4();
 
-      if (Number(quantity) < 0) {
-        await deductFamilyStock(rootId, rootQuantity, adjustmentId, 'adjustment', reason, tx);
-      } else if (Number(quantity) > 0) {
-        await addFamilyStock(rootId, rootQuantity, adjustmentId, 'adjustment', reason, tx);
+      if (quantity < 0) {
+        await deductFamilyStock(rootId, rootQuantity, adjustmentId, 'adjustment', reason, connection as any);
+      } else if (quantity > 0) {
+        await addFamilyStock(rootId, rootQuantity, adjustmentId, 'adjustment', reason, connection as any);
       } else {
         // If qty is 0, still update the product to refresh its timestamp
-        await tx.product.update({
-          where: { id: productId },
-          data: { updatedAt: new Date() }
-        });
+        await connection.query('UPDATE products SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [productId]);
       }
 
       // Record the adjustment
+      const adjustmentSql = `
+        INSERT INTO stock_adjustments (id, product_id, quantity, reason, new_stock)
+        VALUES (?, ?, ?, ?, ?)
+      `;
       // Fetch new stock after sync to be accurate
-      const updatedProduct = await tx.product.findUnique({
-        where: { id: productId },
-        select: { stock: true }
-      });
-      const actualNewStock = updatedProduct?.stock || newStock;
+      const [newProductResult]: any = await connection.query('SELECT stock FROM products WHERE id = ?', [productId]);
+      const actualNewStock = newProductResult[0]?.stock || newStock;
 
-      const adjustment = await tx.stockAdjustment.create({
-        data: {
-          id: adjustmentId,
-          productId,
-          quantity: Number(quantity),
-          reason,
-          newStock: actualNewStock,
-          adjType: Number(quantity) >= 0 ? 'add' : 'remove',
-          status: 'Completed',
-          date: new Date()
-        }
-      });
+      await connection.query(adjustmentSql, [adjustmentId, productId, quantity, reason, actualNewStock]);
 
       return NextResponse.json({
         success: true,
         message: 'Stock adjustment created successfully',
         data: {
-          id: adjustment.id,
+          id: adjustmentId,
           productId,
           productName: product.name,
-          quantity: Number(quantity),
+          quantity,
           previousStock: currentStock,
-          newStock: Number(actualNewStock),
+          newStock: actualNewStock,
           reason
         },
         timestamp: new Date().toISOString()
@@ -153,11 +137,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating stock adjustment:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to create stock adjustment',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { success: false, error: 'Failed to create stock adjustment' },
       { status: 500 }
     );
   }

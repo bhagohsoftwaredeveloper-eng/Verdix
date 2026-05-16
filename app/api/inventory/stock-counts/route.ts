@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { StockCountStatus } from '@prisma/client';
+import { MySqlStockCountRepository } from '../../../../src/infrastructure/repositories/MySqlStockCountRepository';
+import { query } from '@/lib/mysql';
+
+// Initialize dependencies
+const stockCountRepository = new MySqlStockCountRepository();
 
 export async function GET() {
   try {
-    const counts = await db.stockCount.findMany({
-      orderBy: {
-        createdAt: 'desc'
-      },
-      include: {
-        _count: {
-          select: { items: true }
-        }
-      }
-    });
-
+    const counts = await stockCountRepository.findAll();
     return NextResponse.json({
       success: true,
       data: counts,
@@ -36,54 +29,48 @@ export async function POST(request: NextRequest) {
     const effectiveShelfIds = shelfLocationIds || (shelfLocationId ? [shelfLocationId] : []);
     
     // 1. Fetch products to include in the snapshot based on filters
-    const products = await db.product.findMany({
-      where: {
-        availability: 'available',
-        ...(warehouseId && { warehouseId }),
-        ...(effectiveShelfIds.length > 0 && {
-          shelfLocationId: {
-            in: effectiveShelfIds
-          }
-        })
-      },
-      select: {
-        id: true,
-        name: true,
-        stock: true,
-        sku: true,
-        barcode: true,
-        shelfLocationId: true
-      }
-    });
+    let productsSql = `SELECT id, name, stock, sku, barcode FROM products WHERE availability = 'available'`;
+    const params: any[] = [];
+    
+    if (warehouseId) {
+      productsSql += ' AND warehouse_id = ?';
+      params.push(warehouseId);
+    }
+    
+    if (effectiveShelfIds && effectiveShelfIds.length > 0) {
+      const placeholders = effectiveShelfIds.map(() => '?').join(',');
+      productsSql += ` AND shelf_location_id IN (${placeholders})`;
+      params.push(...effectiveShelfIds);
+    }
+    
+    const products: any[] = await query(productsSql, params);
     
     // 2. Map products to stock count items
-    // Using a transaction to ensure both stock count and items are created
-    const result = await db.stockCount.create({
-      data: {
-        name,
-        warehouseId,
-        notes,
-        createdBy: createdBy || 'Admin',
-        status: StockCountStatus.in_progress,
-        items: {
-          create: products.map(p => ({
-            productId: p.id,
-            snapshotQuantity: Math.round(Number(p.stock || 0)),
-            shelfLocationId: p.shelfLocationId
-          }))
-        }
-      },
-      include: {
-        _count: {
-          select: { items: true }
-        }
-      }
+    const stockCountId = `sc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const items = products.map((p: any) => ({
+      id: `sci_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      stockCountId: stockCountId,
+      productId: p.id,
+      productName: p.name,
+      snapshotQuantity: parseFloat(p.stock || 0)
+    }));
+    
+    // 3. Create the stock count with items
+    await stockCountRepository.create({
+      id: stockCountId,
+      name,
+      warehouseId,
+      shelfLocationId: effectiveShelfIds.length > 0 ? effectiveShelfIds[0] : undefined,
+      notes,
+      createdBy: createdBy || 'Admin',
+      status: 'in_progress',
+      items
     });
 
     return NextResponse.json({
       success: true,
-      message: `Stock count created successfully with ${result._count.items} items`,
-      data: { id: result.id },
+      message: 'Stock count created successfully with ' + items.length + ' items',
+      data: { id: stockCountId },
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {

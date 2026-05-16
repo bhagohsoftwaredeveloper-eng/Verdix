@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '012_create_pos_tables',
@@ -14,18 +14,18 @@ const migration: Migration = {
         password_hash VARCHAR(255) NOT NULL,
         full_name VARCHAR(255) NOT NULL,
         email VARCHAR(255),
-        role VARCHAR(50) DEFAULT 'cashier',
+        role ENUM('admin', 'cashier', 'manager') DEFAULT 'cashier',
         is_active BOOLEAN DEFAULT TRUE,
         last_login TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_username (username),
+        INDEX idx_role (role),
+        INDEX idx_is_active (is_active)
       )
     `;
 
-    await db.$executeRawUnsafe(createUsersTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active)');
+    await query(createUsersTable);
     console.log('✅ Users table created');
 
     // Create pos_terminals table
@@ -37,13 +37,13 @@ const migration: Migration = {
         ip_address VARCHAR(45),
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_is_active (is_active)
       )
     `;
 
-    await db.$executeRawUnsafe(createPosTerminalsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_terminals_name ON pos_terminals(name)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_terminals_is_active ON pos_terminals(is_active)');
+    await query(createPosTerminalsTable);
     console.log('✅ POS terminals table created');
 
     // Create shifts table
@@ -58,23 +58,23 @@ const migration: Migration = {
         expected_cash DECIMAL(10,2) DEFAULT 0,
         actual_cash DECIMAL(10,2) DEFAULT 0,
         cash_difference DECIMAL(10,2) DEFAULT 0,
-        status VARCHAR(50) DEFAULT 'active',
+        status ENUM('active', 'completed', 'reconciled') DEFAULT 'active',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_shifts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        CONSTRAINT fk_shifts_terminal FOREIGN KEY (terminal_id) REFERENCES pos_terminals(id) ON DELETE SET NULL
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (terminal_id) REFERENCES pos_terminals(id) ON DELETE SET NULL,
+        INDEX idx_user_id (user_id),
+        INDEX idx_terminal_id (terminal_id),
+        INDEX idx_status (status),
+        INDEX idx_start_time (start_time)
       )
     `;
 
-    await db.$executeRawUnsafe(createShiftsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_shifts_user_id ON shifts(user_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_shifts_terminal_id ON shifts(terminal_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_shifts_status ON shifts(status)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_shifts_start_time ON shifts(start_time)');
+    await query(createShiftsTable);
     console.log('✅ Shifts table created');
 
-    // Create pos_transactions table
+    // Create pos_transactions table for detailed POS transaction info
     const createPosTransactionsTable = `
       CREATE TABLE IF NOT EXISTS pos_transactions (
         id VARCHAR(50) PRIMARY KEY,
@@ -82,7 +82,7 @@ const migration: Migration = {
         shift_id VARCHAR(50),
         user_id VARCHAR(50) NOT NULL,
         terminal_id VARCHAR(50),
-        transaction_type VARCHAR(50) DEFAULT 'sale',
+        transaction_type ENUM('sale', 'void', 'return', 'refund') DEFAULT 'sale',
         subtotal DECIMAL(10,2) NOT NULL,
         tax_amount DECIMAL(10,2) DEFAULT 0,
         discount_amount DECIMAL(10,2) DEFAULT 0,
@@ -94,24 +94,24 @@ const migration: Migration = {
         void_reason TEXT,
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_pos_transactions_sale FOREIGN KEY (sale_id) REFERENCES sales_transactions(id) ON DELETE CASCADE,
-        CONSTRAINT fk_pos_transactions_shift FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL,
-        CONSTRAINT fk_pos_transactions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        CONSTRAINT fk_pos_transactions_terminal FOREIGN KEY (terminal_id) REFERENCES pos_terminals(id) ON DELETE SET NULL
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (sale_id) REFERENCES sales_transactions(id) ON DELETE CASCADE,
+        FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (terminal_id) REFERENCES pos_terminals(id) ON DELETE SET NULL,
+        INDEX idx_sale_id (sale_id),
+        INDEX idx_shift_id (shift_id),
+        INDEX idx_user_id (user_id),
+        INDEX idx_terminal_id (terminal_id),
+        INDEX idx_transaction_type (transaction_type),
+        INDEX idx_transaction_time (transaction_time)
       )
     `;
 
-    await db.$executeRawUnsafe(createPosTransactionsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transactions_sale_id ON pos_transactions(sale_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transactions_shift_id ON pos_transactions(shift_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transactions_user_id ON pos_transactions(user_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transactions_terminal_id ON pos_transactions(terminal_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transactions_transaction_type ON pos_transactions(transaction_type)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transactions_transaction_time ON pos_transactions(transaction_time)');
+    await query(createPosTransactionsTable);
     console.log('✅ POS transactions table created');
 
-    // Create pos_transaction_items table
+    // Create pos_transaction_items table for item-level POS details
     const createPosTransactionItemsTable = `
       CREATE TABLE IF NOT EXISTS pos_transaction_items (
         id VARCHAR(50) PRIMARY KEY,
@@ -125,26 +125,26 @@ const migration: Migration = {
         discount_amount DECIMAL(10,2) DEFAULT 0,
         line_total DECIMAL(10,2) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_pos_transaction_items_transaction FOREIGN KEY (pos_transaction_id) REFERENCES pos_transactions(id) ON DELETE CASCADE,
-        CONSTRAINT fk_pos_transaction_items_sale_item FOREIGN KEY (sale_item_id) REFERENCES sale_items(id) ON DELETE CASCADE,
-        CONSTRAINT fk_pos_transaction_items_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+        FOREIGN KEY (pos_transaction_id) REFERENCES pos_transactions(id) ON DELETE CASCADE,
+        FOREIGN KEY (sale_item_id) REFERENCES sale_items(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        INDEX idx_pos_transaction_id (pos_transaction_id),
+        INDEX idx_sale_item_id (sale_item_id),
+        INDEX idx_product_id (product_id)
       )
     `;
 
-    await db.$executeRawUnsafe(createPosTransactionItemsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transaction_items_transaction_id ON pos_transaction_items(pos_transaction_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transaction_items_sale_item_id ON pos_transaction_items(sale_item_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_pos_transaction_items_product_id ON pos_transaction_items(product_id)');
+    await query(createPosTransactionItemsTable);
     console.log('✅ POS transaction items table created');
   },
 
   async down(): Promise<void> {
     // Drop tables in reverse order due to foreign key constraints
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS pos_transaction_items');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS pos_transactions');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS shifts');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS pos_terminals');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS users');
+    await query('DROP TABLE IF EXISTS pos_transaction_items');
+    await query('DROP TABLE IF EXISTS pos_transactions');
+    await query('DROP TABLE IF EXISTS shifts');
+    await query('DROP TABLE IF EXISTS pos_terminals');
+    await query('DROP TABLE IF EXISTS users');
     console.log('✅ POS tables dropped');
   }
 };

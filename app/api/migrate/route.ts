@@ -1,27 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../lib/mysql';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('Starting sales orders table migration for PostgreSQL...');
+    console.log('Starting sales orders table migration...');
 
     // Add new columns to sales_orders table
-    // PostgreSQL doesn't support AFTER. Columns are added at the end.
-    // Also, we do it in separate steps or one ALTER TABLE without AFTER.
     const alterTableSQL = `
       ALTER TABLE sales_orders
-      ADD COLUMN IF NOT EXISTS shipping DECIMAL(10,2) DEFAULT 0.00,
-      ADD COLUMN IF NOT EXISTS warehouse_id VARCHAR(50),
-      ADD COLUMN IF NOT EXISTS sales_person_id VARCHAR(50),
-      ADD COLUMN IF NOT EXISTS note TEXT
+      ADD COLUMN shipping DECIMAL(10,2) DEFAULT 0.00 AFTER total,
+      ADD COLUMN warehouse_id VARCHAR(50) AFTER shipping,
+      ADD COLUMN sales_person_id VARCHAR(50) AFTER warehouse_id,
+      ADD COLUMN note TEXT AFTER sales_person_id,
+      ADD INDEX idx_warehouse_id (warehouse_id),
+      ADD INDEX idx_sales_person_id (sales_person_id)
     `;
 
-    await db.$executeRawUnsafe(alterTableSQL);
-    
-    // Create indexes separately as Postgres doesn't support ADD INDEX in ALTER TABLE
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_sales_orders_warehouse_id ON sales_orders(warehouse_id)`);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_sales_orders_sales_person_id ON sales_orders(sales_person_id)`);
-    
+    await query(alterTableSQL);
     console.log('✅ Sales orders table altered with new fields: shipping, warehouse_id, sales_person_id, note');
 
     return NextResponse.json({
@@ -35,7 +30,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: error.message || 'Migration failed',
-        details: 'There was a database error during migration.'
+        details: 'The fields may already exist or there was a database error.'
       },
       { status: 500 }
     );

@@ -1,43 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { withTransaction } from '@/lib/mysql';
 import { addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 
 export async function POST(request: NextRequest) {
     try {
         const { saleId } = await request.json();
+        console.log('void-transaction: Received saleId:', saleId);
 
         if (!saleId) {
             return NextResponse.json({ success: false, error: 'Sale ID is required' }, { status: 400 });
         }
 
-        return await withTransaction(async (tx) => {
+        return await withTransaction(async (connection: any) => {
             // 1. Fetch sales transaction to check status
-            const sale = await tx.salesTransaction.findUnique({
-                where: { id: saleId },
-                select: { id: true, status: true }
-            });
+            const [sale]: any = await connection.query('SELECT id, status FROM sales_transactions WHERE id = ?', [saleId]);
+            console.log('void-transaction: Found sale:', sale);
 
-            if (!sale) {
+            if (!sale || sale.length === 0) {
                 return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
             }
 
-            // Note: status from schema is CaseSensitive Enum (Paid, Pending, Voided, etc.)
-            if (sale.status === 'Voided') {
+            if (sale[0].status === 'voided') {
                 return NextResponse.json({ success: false, error: 'Transaction is already voided' }, { status: 400 });
             }
 
             // 2. Fetch items to reverse stock
-            const items = await tx.saleItem.findMany({
-                where: { saleId: saleId },
-                select: { productId: true, productName: true, quantity: true }
-            });
+            const [items]: any = await connection.query('SELECT product_id, product_name, quantity FROM sale_items WHERE sale_id = ?', [saleId]);
+            console.log('void-transaction: Found items:', items?.length || 0);
 
             if (items && items.length > 0) {
                 for (const item of items) {
                     // --- Inventory Addition (Reversal) using recursive family sync ---
-                    const { rootId, factorToRoot } = await findUltimateRoot(item.productId, tx);
-                    const quantityToAddInRootUnits = Number(item.quantity) / factorToRoot;
+                    const { rootId, factorToRoot } = await findUltimateRoot(item.product_id, connection as any);
+                    const quantityToAddInRootUnits = item.quantity / factorToRoot;
                     
                     await addFamilyStock(
                         rootId, 
@@ -45,19 +40,14 @@ export async function POST(request: NextRequest) {
                         saleId, 
                         'adjustment', 
                         `Voiding POS Sale: ${saleId}`, 
-                        tx
+                        connection as any
                     );
                 }
             }
 
-            // 3. Update sales_transactions status to 'Voided'
-            await tx.salesTransaction.update({
-                where: { id: saleId },
-                data: { 
-                    status: 'Voided',
-                    updatedAt: new Date()
-                }
-            });
+            // 3. Update sales_transactions status to 'voided'
+            await connection.query('UPDATE sales_transactions SET status = "Voided", updated_at = NOW() WHERE id = ?', [saleId]);
+            console.log('void-transaction: Transaction marked as voided');
 
             return NextResponse.json({
                 success: true,
@@ -72,3 +62,4 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+

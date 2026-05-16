@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '../../../lib/db';
+import { query } from '../../../lib/mysql';
 import { MySqlSaleRepository } from '../../../src/infrastructure/repositories/MySqlSaleRepository';
 import { MySqlCustomerRepository } from '../../../src/infrastructure/repositories/MySqlCustomerRepository';
 import { InventorySyncService } from '../../../src/infrastructure/services/InventorySyncService';
@@ -16,7 +16,7 @@ const getSalesUseCase = new GetSalesUseCase(saleRepository);
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
+    
     const saleId = await createSaleUseCase.execute(body);
 
     // Fetch the created sale to return it (or just return the response)
@@ -57,16 +57,17 @@ export async function GET(request: NextRequest) {
     const countOnly = searchParams.get('countOnly') === 'true';
     const warehouse = searchParams.get('warehouse');
 
-    // Handle countOnly requests
+    // Handle countOnly requests (as in original)
     if (countOnly && warehouse) {
-      const total = await db.salesTransaction.count({
-        where: {
-          warehouseId: warehouse,
-        },
-      });
+      const countQuery = `
+        SELECT COUNT(*) as total
+        FROM sales_transactions
+        WHERE warehouse_id = ?
+      `;
+      const countResult = await query(countQuery, [warehouse]);
       return NextResponse.json({
         success: true,
-        total,
+        total: countResult[0]?.total || 0,
         timestamp: new Date().toISOString()
       });
     }
@@ -74,35 +75,21 @@ export async function GET(request: NextRequest) {
     const filters = { warehouse };
     const salesInvoices = await getSalesUseCase.execute(filters);
 
-    // Fetch transactions with customer data using Prisma
-    const transactions = await db.salesTransaction.findMany({
-      where: warehouse ? { warehouseId: warehouse } : {},
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            contactNumber: true,
-            paymentTerms: true,
-          },
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                barcode: true,
-              },
-            },
-          },
-        },
-      },
-    });
+    // For compliance with frontend expectation, we need to join with customer data 
+    // The original route did more joins. I'll supplement the repository data with customer data if needed,
+    // but the repository should ideally handle it. For now, let's keep it simple or expand repository.
+    
+    // Supplement with customer data (Original route joined customers table)
+    const customerIds = salesInvoices.map(s => s.customerId).filter(id => id && id !== '');
+    let customersMap = new Map();
+    if (customerIds.length > 0) {
+      const placeholders = customerIds.map(() => '?').join(',');
+      const customers: any[] = await query(`SELECT id, name, contact_number, payment_terms FROM customers WHERE id IN (${placeholders})`, customerIds);
+      customers.forEach(c => customersMap.set(c.id, c));
+    }
 
-    const invoicesWithItems = transactions.map((row) => {
-      const customer = row.customer || { name: 'Walk-in Customer' };
+    const invoicesWithItems = salesInvoices.map((row: any) => {
+      const customer = customersMap.get(row.customerId) || { name: 'Walk-in Customer' };
       return {
         id: row.id,
         reference: row.reference,
@@ -111,29 +98,24 @@ export async function GET(request: NextRequest) {
         customer: {
           id: row.customerId || '',
           name: customer.name,
-          contactNumber: customer.contactNumber || '',
-          paymentTerms: customer.paymentTerms || '',
+          contactNumber: customer.contact_number || '',
+          paymentTerms: customer.payment_terms || '',
         },
         invoiceDate: row.invoiceDate,
         dueDate: row.dueDate,
-        total: row.total.toNumber(),
+        total: Number(row.total || 0),
         paymentMethod: row.paymentMethod || '',
         paymentReference: row.paymentReference || '',
         status: row.status,
         notes: row.notes,
         orderNumber: row.orderNumber,
-        items: row.items.map((item) => ({
-          id: item.id,
-          productId: item.productId,
-          productName: item.productName,
-          quantity: item.quantity,
-          price: item.price.toNumber(),
-          costAtSale: item.costAtSale?.toNumber() || 0,
+        items: (row.items || []).map((item: any) => ({
+          ...item,
           product: {
-            id: item.product.id,
-            name: item.product.name,
-            sku: item.product.sku || '',
-            barcode: item.product.barcode || ''
+            id: item.productId,
+            name: item.productName || 'Unknown Product',
+            sku: item.sku || '',
+            barcode: item.barcode || ''
           }
         })),
       };

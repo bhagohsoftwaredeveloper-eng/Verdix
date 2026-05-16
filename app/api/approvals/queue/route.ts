@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,54 +7,74 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const txType = searchParams.get('txType');
 
-    // Build where clause
-    const where: any = {};
+    // Fetch queue items with requester info
+    let sql = `
+      SELECT 
+        aq.*,
+        COALESCE(u.display_name, 'System') as requester_name,
+        COALESCE(u.username, 'system@stockpilot.com') as requester_email
+      FROM approval_queue aq
+      LEFT JOIN users u ON aq.created_by = u.uid
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
     if (status && status !== 'ALL') {
-      where.status = status;
+      sql += ' AND aq.status = ?';
+      params.push(status);
     }
     if (txType) {
-      where.transactionType = txType;
+      sql += ' AND aq.transaction_type = ?';
+      params.push(txType);
     }
 
-    // Fetch queue items with requester and history info
-    const queueItems = await db.approvalQueue.findMany({
-      where,
-      include: {
-        history: {
-          orderBy: { createdAt: 'asc' }
-        },
-        customer: true
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    sql += ' ORDER BY aq.created_at DESC';
+
+    const queueItems: any[] = await query(sql, params);
 
     if (queueItems.length === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
 
+    const itemIds = queueItems.map(i => i.id);
+
+    // Fetch history ONLY for these items
+    const history: any = await query(
+      `SELECT * FROM approval_history WHERE approval_queue_id IN (?) ORDER BY created_at ASC`,
+      [itemIds]
+    );
+
     // Fetch workflows for the specific transaction types in the queue
-    const txTypes = Array.from(new Set(queueItems.map((i: typeof queueItems[0]) => i.transactionType)));
-    const workflows = await db.approvalWorkflow.findMany({
-      where: {
-        transactionType: { in: txTypes }
-      },
-      orderBy: { stepOrder: 'asc' }
-    });
+    const txTypes = Array.from(new Set(queueItems.map(i => i.transaction_type)));
+    const workflows: any = await query(`
+      SELECT aw.*, ut.name as role_name 
+      FROM approval_workflows aw 
+      JOIN user_types ut ON aw.user_type_id = ut.id
+      WHERE aw.transaction_type IN (?)
+      ORDER BY aw.step_order ASC
+    `, [txTypes]);
 
-    // Enrich items with workflow info
-    const enrichedItems = queueItems.map((item: typeof queueItems[0]) => {
-      const itemWorkflow = workflows.filter((w: typeof workflows[0]) => w.transactionType === item.transactionType);
-      const currentStepInfo = itemWorkflow.find((w: typeof workflows[0]) => w.stepOrder === item.currentStep);
+    // Group history and add workflow info
+    const enrichedItems = queueItems.map(item => {
+      const itemHistory = (history || []).filter((h: any) => h.approval_queue_id === item.id);
+      const itemWorkflow = (workflows || []).filter((w: any) => w.transaction_type === item.transaction_type);
 
-      const parsedData = item.transactionData as any;
+      const currentStepInfo = itemWorkflow.find((w: any) => w.step_order === item.current_step);
+
+      let parsedData: any = {};
+      try {
+        parsedData = typeof item.transaction_data === 'string' ? JSON.parse(item.transaction_data) : item.transaction_data;
+      } catch (e) {
+        console.error(`Failed to parse transaction_data for item ${item.id}:`, e);
+      }
 
       return {
         ...item,
         transaction_data: parsedData,
-        history: item.history,
+        history: itemHistory,
         workflow: itemWorkflow,
-        currentStepRole: currentStepInfo?.userTypeId || 'Unknown',
-        currentStepRoleId: currentStepInfo?.userTypeId || null
+        currentStepRole: currentStepInfo?.role_name || 'Unknown',
+        currentStepRoleId: currentStepInfo?.user_type_id || null
       };
     });
 
@@ -65,14 +85,14 @@ export async function GET(request: NextRequest) {
     const productIdSet = new Set<string>(); // for STOCK_ADJUSTMENT missing warehouse
 
     for (const item of enrichedItems) {
-      const d = item.transaction_data;
+      const d = item.transaction_data as any;
       if (!d) continue;
       if (!d.warehouseName && d.warehouseId)       warehouseIdSet.add(d.warehouseId);
       if (!d.fromWarehouseName && d.sourceWarehouseId) warehouseIdSet.add(d.sourceWarehouseId);
       if (!d.toWarehouseName && d.targetWarehouseId)   warehouseIdSet.add(d.targetWarehouseId);
       if (!d.shelfName && d.shelfId)                shelfIdSet.add(d.shelfId);
       // For STOCK_ADJUSTMENT with productId but no warehouseName/shelfName
-      if (item.transactionType === 'STOCK_ADJUSTMENT' && d.productId && !d.warehouseName) {
+      if (item.transaction_type === 'STOCK_ADJUSTMENT' && d.productId && !d.warehouseName) {
         productIdSet.add(d.productId);
       }
     }
@@ -80,49 +100,44 @@ export async function GET(request: NextRequest) {
     // Batch fetch warehouse names
     const warehouseMap: Record<string, string> = {};
     if (warehouseIdSet.size > 0) {
-      const whRows = await db.warehouse.findMany({
-        where: { id: { in: [...warehouseIdSet] } },
-        select: { id: true, name: true }
-      });
+      const whRows: any[] = await query(
+        'SELECT id, name FROM warehouses WHERE id IN (?)',
+        [[...warehouseIdSet]]
+      );
       for (const r of whRows) warehouseMap[r.id] = r.name;
     }
 
     // Batch fetch shelf names
     const shelfMap: Record<string, string> = {};
     if (shelfIdSet.size > 0) {
-      const shRows = await db.shelfLocation.findMany({
-        where: { id: { in: [...shelfIdSet] } },
-        select: { id: true, name: true }
-      });
+      const shRows: any[] = await query(
+        'SELECT id, name FROM shelf_locations WHERE id IN (?)',
+        [[...shelfIdSet]]
+      );
       for (const r of shRows) shelfMap[r.id] = r.name;
     }
 
     // Batch fetch warehouse+shelf for products missing that info (STOCK_ADJUSTMENT)
     const productWarehouseMap: Record<string, { warehouseName: string | null; shelfName: string | null }> = {};
     if (productIdSet.size > 0) {
-      const pRows = await db.product.findMany({
-        where: { id: { in: [...productIdSet] } },
-        select: {
-          id: true,
-          warehouseId: true,
-          shelfLocationId: true,
-          warehouse: { select: { name: true } },
-          productShelves: { select: { shelf: { select: { name: true } } } }
-        }
-      });
+      const pRows: any[] = await query(`
+        SELECT p.id, w.name as warehouse_name, sl.name as shelf_name
+        FROM products p
+        LEFT JOIN warehouses w ON p.warehouse_id = w.id
+        LEFT JOIN shelf_locations sl ON p.shelf_location_id = sl.id
+        WHERE p.id IN (?)
+      `, [[...productIdSet]]);
       for (const r of pRows) {
-        const shelfName = r.productShelves?.[0]?.shelf?.name || null;
-        const warehouseName = r.warehouse?.name || null;
         productWarehouseMap[r.id] = {
-          warehouseName,
-          shelfName,
+          warehouseName: r.warehouse_name || null,
+          shelfName: r.shelf_name || null,
         };
       }
     }
 
     // Apply enrichment to each item
     for (const item of enrichedItems) {
-      const d = item.transaction_data;
+      const d = item.transaction_data as any;
       if (!d) continue;
 
       if (!d.warehouseName && d.warehouseId && warehouseMap[d.warehouseId]) {
@@ -139,7 +154,7 @@ export async function GET(request: NextRequest) {
       }
 
       // For STOCK_ADJUSTMENT: fill from product lookup if still missing
-      if (item.transactionType === 'STOCK_ADJUSTMENT' && d.productId) {
+      if (item.transaction_type === 'STOCK_ADJUSTMENT' && d.productId) {
         const pw = productWarehouseMap[d.productId];
         if (pw) {
           if (!d.warehouseName && pw.warehouseName) d.warehouseName = pw.warehouseName;
@@ -151,7 +166,7 @@ export async function GET(request: NextRequest) {
     const itemProductIdSet = new Set<string>();
 
     for (const item of enrichedItems) {
-      const d = item.transaction_data;
+      const d = item.transaction_data as any;
       if (!d) continue;
       for (const arr of [d.items, d.receivedItems]) {
         if (!Array.isArray(arr)) continue;
@@ -170,15 +185,15 @@ export async function GET(request: NextRequest) {
 
     const productInfoMap: Record<string, { barcode: string | null; sku: string | null }> = {};
     if (itemProductIdSet.size > 0) {
-      const piRows = await db.product.findMany({
-        where: { id: { in: [...itemProductIdSet] } },
-        select: { id: true, barcode: true, sku: true }
-      });
+      const piRows: any[] = await query(
+        'SELECT id, barcode, sku FROM products WHERE id IN (?)',
+        [[...itemProductIdSet]]
+      );
       for (const r of piRows) productInfoMap[r.id] = { barcode: r.barcode || null, sku: r.sku || null };
     }
 
     for (const item of enrichedItems) {
-      const d = item.transaction_data;
+      const d = item.transaction_data as any;
       if (!d) continue;
       for (const arr of [d.items, d.receivedItems]) {
         if (!Array.isArray(arr)) continue;

@@ -1,0 +1,4 @@
+{
+  "success": false,
+  "error": "Data truncated for column 'reference_type' at row 1"
+}

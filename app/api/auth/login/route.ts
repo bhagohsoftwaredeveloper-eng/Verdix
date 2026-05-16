@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 import { compare } from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
@@ -13,15 +13,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Fetch user from database
-        const user = await db.user.findUnique({
-            where: { username },
-            include: {
-                permissions: {
-                    select: { permission: true }
-                }
-            }
-        });
+        // Fetch user and their role category from database
+        const users = await query(`
+            SELECT 
+                u.uid, u.username, u.password, u.user_type as userType, 
+                u.display_name as displayName, u.photo_url as photoURL, u.disabled,
+                ut.id as roleId
+            FROM users u
+            LEFT JOIN user_types ut ON u.user_type = ut.name OR u.user_type = ut.id
+            WHERE u.username = ?
+        `, [username]) as any[];
+
+        const user = users[0];
 
         if (!user) {
             return NextResponse.json(
@@ -38,7 +41,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Verify password
-        const isValid = await compare(password, user.passwordHash || '');
+        const isValid = await compare(password, user.password);
 
         if (!isValid) {
             return NextResponse.json(
@@ -47,21 +50,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Fetch role info if userType is set
-        let roleId = null;
-        if (user.userType) {
-            const role = await db.userType.findFirst({
-                where: {
-                    OR: [
-                        { name: user.userType },
-                        { id: user.userType }
-                    ]
-                }
-            });
-            roleId = role?.id || null;
-        }
+        // Fetch permissions
+        const permissions = await query(
+            'SELECT permission FROM user_permissions WHERE user_uid = ?',
+            [user.uid]
+        ) as any[];
 
-        const userPermissions = user.permissions.map((p) => p.permission);
+        const userPermissions = permissions.map((p: any) => p.permission);
 
         // Return user session data
         return NextResponse.json({
@@ -69,9 +64,9 @@ export async function POST(request: NextRequest) {
             username: user.username, // using "username" as the field
             email: user.username, // keeping "email" for compatibility if frontend expects it, or we can just use username
             userType: user.userType,
-            roleId: roleId,
+            roleId: user.roleId,
             displayName: user.displayName,
-            photoURL: user.photoUrl,
+            photoURL: user.photoURL,
             permissions: userPermissions,
         });
     } catch (error: any) {

@@ -6,7 +6,7 @@
 |------------|----------------|
 | Node.js | 20.x LTS |
 | npm | 10.x |
-| PostgreSQL | 15+ |
+| MySQL | 8.0+ |
 | Windows | 10 / 11 (for Electron / printer DLL) |
 | RAM | 4 GB (8 GB recommended) |
 | Disk | 2 GB free space |
@@ -37,29 +37,49 @@ npm install
 
 ## 3. Configure the Environment
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (copy from `.env.example` if available):
 
 ```env
-# Database Connection
-DATABASE_URL="postgresql://user:password@localhost:5432/stock_pilot"
+# MySQL Connection
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=stockpilot_db
+MYSQL_USER=stockpilot
+MYSQL_PASSWORD=your_secure_password
 
 # Application
+NEXTAUTH_SECRET=a_very_long_random_string
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 ---
 
-## 4. Set Up PostgreSQL
+## 4. Set Up MySQL
 
-### 4.1 Run Migrations
+### 4.1 Create the Database and User
 
-```bash
-npx prisma migrate dev --name init
+```sql
+CREATE DATABASE stockpilot_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'stockpilot'@'localhost' IDENTIFIED BY 'your_secure_password';
+GRANT ALL PRIVILEGES ON stockpilot_db.* TO 'stockpilot'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
-This sets up the schema and runs initial migrations.
+Or run the provided helper:
 
-### 4.2 Seed Initial Data (Optional)
+```bash
+mysql -u root -p < create_stockpilot_user.sql
+```
+
+### 4.2 Run Migrations
+
+```bash
+npm run migrate
+```
+
+This runs all pending migration scripts from `scripts/migrations/`.
+
+### 4.3 Seed Initial Data (Optional)
 
 ```bash
 npm run seed
@@ -185,7 +205,7 @@ In **Settings → Data Management**, click **Restore** and select a backup file.
 
 | Problem | Solution |
 |---------|---------|
-| `ECONNREFUSED` on startup | PostgreSQL is not running. Start PostgreSQL service. |
+| `ECONNREFUSED` on startup | MySQL is not running. Start MySQL service. |
 | Blank POS window | Ensure `npm run dev` is running on port 3000 before launching Electron. |
 | Printer not found | In Native mode, click "Scan Printers". Ensure driver is installed. |
 | Login redirect loop | Clear `localStorage` in browser devtools (`localStorage.clear()`). |
@@ -203,8 +223,8 @@ In **Settings → Data Management**, click **Restore** and select a backup file.
 | Lint | `npm run lint` | ESLint check |
 | Typecheck | `npm run typecheck` | TypeScript type check |
 | Seed | `npm run seed` | Seed database with defaults |
-| Migrate up | `npx prisma migrate dev` | Apply pending migrations |
-| Migrate reset | `npx prisma migrate reset` | Reset and re-run all migrations |
+| Migrate up | `npm run migrate` | Apply pending migrations |
+| Migrate down | `npm run migrate:down` | Roll back last migration |
 | Set admin | `npm run set-admin` | Create or update super admin user |
 | POS Electron | `npm run electron-only` | Launch POS Electron window only |
 | Admin Electron | `npm run electron-admin` | Launch admin Electron window only |

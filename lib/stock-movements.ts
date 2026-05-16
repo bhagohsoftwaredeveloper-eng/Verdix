@@ -1,59 +1,68 @@
-import { db } from './db';
+import { query, withTransaction } from './mysql';
 import { StockMovement } from './types';
 import { v4 as uuidv4 } from 'uuid';
-import { Prisma } from '@prisma/client';
+import mysql from 'mysql2/promise';
 import { generateBatchId } from './batch-utils';
 import { deductFromBatches } from './batch-deduction';
 
 /**
- * Records a stock movement in the database (Prisma version)
+ * Records a stock movement in the database
  * @param movement The stock movement data to record
- * @param tx Optional Prisma transaction client
- * @returns The recorded movement
+ * @param connection Optional connection for transaction support
+ * @returns The recorded movement with generated ID and timestamps
  */
 export async function recordStockMovement(
   movement: Omit<StockMovement, 'id' | 'createdAt' | 'updatedAt'>,
-  tx?: Prisma.TransactionClient
+  connection?: mysql.PoolConnection | mysql.Pool
 ): Promise<StockMovement> {
-  const client = tx || db;
   const id = uuidv4();
 
-  const createdMovement = await client.stockMovement.create({
-    data: {
-      id,
-      productId: movement.productId,
-      productName: movement.productName,
-      movementType: movement.movementType as any,
-      quantityChange: Number(movement.quantityChange),
-      previousStock: Number(movement.previousStock),
-      newStock: Number(movement.newStock),
-      referenceId: movement.referenceId || null,
-      referenceType: movement.referenceType || null,
-      notes: movement.notes || null,
-    }
-  });
+  const sql = `
+    INSERT INTO stock_movements (
+      id, product_id, product_name, movement_type, quantity_change,
+      previous_stock, new_stock, reference_id, reference_type, notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const params = [
+    id,
+    movement.productId,
+    movement.productName,
+    movement.movementType,
+    movement.quantityChange,
+    movement.previousStock,
+    movement.newStock,
+    movement.referenceId || null,
+    movement.referenceType || null,
+    movement.notes || null,
+  ];
+
+  if (connection) {
+    await connection.query(sql, params);
+  } else {
+    await query(sql, params);
+  }
 
   return {
     ...movement,
-    id: createdMovement.id,
-    createdAt: createdMovement.createdAt.toISOString(),
-    updatedAt: createdMovement.updatedAt.toISOString(),
+    id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
 /**
  * Records stock movements for a sale transaction
+ * @param saleId The sale ID
+ * @param items Array of sale items with product info
+ * @returns Array of recorded stock movements
  */
-export async function recordSaleMovements(
-  saleId: string, 
-  items: Array<{ product: { id: string; name: string; stock: number }; quantity: number }>,
-  tx?: Prisma.TransactionClient
-): Promise<StockMovement[]> {
+export async function recordSaleMovements(saleId: string, items: Array<{ product: { id: string; name: string; stock: number }; quantity: number }>): Promise<StockMovement[]> {
   const movements: StockMovement[] = [];
 
   for (const item of items) {
-    const previousStock = Number(item.product.stock);
-    const quantityChange = -Number(item.quantity);
+    const previousStock = item.product.stock;
+    const quantityChange = -item.quantity; // Sales decrease stock
     const newStock = previousStock + quantityChange;
 
     const movement = await recordStockMovement({
@@ -66,7 +75,7 @@ export async function recordSaleMovements(
       referenceId: saleId,
       referenceType: 'sale',
       notes: `Sale transaction`,
-    }, tx);
+    });
 
     movements.push(movement);
   }
@@ -76,24 +85,20 @@ export async function recordSaleMovements(
 
 /**
  * Records stock movements for a purchase transaction
+ * @param purchaseId The purchase ID
+ * @param items Array of purchase items with product info
+ * @returns Array of recorded stock movements
  */
-export async function recordPurchaseMovements(
-  purchaseId: string, 
-  items: Array<{ productId: string; productName: string; quantity: number }>,
-  tx?: Prisma.TransactionClient
-): Promise<StockMovement[]> {
+export async function recordPurchaseMovements(purchaseId: string, items: Array<{ productId: string; productName: string; quantity: number }>): Promise<StockMovement[]> {
   const movements: StockMovement[] = [];
-  const client = tx || db;
 
   for (const item of items) {
-    const product = await client.product.findUnique({
-      where: { id: item.productId },
-      select: { stock: true }
-    });
-    const currentStock = Number(product?.stock || 0);
+    // Get current stock for the product
+    const currentStockResult = await query('SELECT stock FROM products WHERE id = ?', [item.productId]);
+    const currentStock = currentStockResult[0]?.stock || 0;
 
     const previousStock = currentStock;
-    const quantityChange = Number(item.quantity);
+    const quantityChange = item.quantity; // Purchases increase stock
     const newStock = previousStock + quantityChange;
 
     const movement = await recordStockMovement({
@@ -106,7 +111,7 @@ export async function recordPurchaseMovements(
       referenceId: purchaseId,
       referenceType: 'purchase',
       notes: `Purchase transaction`,
-    }, tx);
+    });
 
     movements.push(movement);
   }
@@ -116,66 +121,61 @@ export async function recordPurchaseMovements(
 
 /**
  * Records a stock adjustment movement
+ * @param adjustmentId The adjustment ID
+ * @param productId The product ID
+ * @param productName The product name
+ * @param quantityChange The quantity change
+ * @param reason The adjustment reason
+ * @returns The recorded stock movement
  */
 export async function recordAdjustmentMovement(
   adjustmentId: string,
   productId: string,
   productName: string,
   quantityChange: number,
-  reason: string,
-  tx?: Prisma.TransactionClient
+  reason: string
 ): Promise<StockMovement> {
-  const client = tx || db;
-  
-  const product = await client.product.findUnique({
-    where: { id: productId },
-    select: { stock: true, price: true, cost: true }
-  });
-  const currentStock = Number(product?.stock || 0);
+  // Get current stock for the product
+  const currentStockResult = await query('SELECT stock FROM products WHERE id = ?', [productId]);
+  const currentStock = currentStockResult[0]?.stock || 0;
 
-  const previousStock = currentStock - Number(quantityChange);
+  const previousStock = currentStock - quantityChange; // Reverse to get previous stock
   const newStock = currentStock;
 
   const movement = await recordStockMovement({
     productId,
     productName,
     movementType: 'adjustment',
-    quantityChange: Number(quantityChange),
+    quantityChange,
     previousStock,
     newStock,
     referenceId: adjustmentId,
     referenceType: 'adjustment',
     notes: reason,
-  }, tx);
+  });
 
-  // --- SHELF SYNC ---
+  // --- SHELF SYNC: Auto-allocate stock to shelves to prevent "Unassigned" status ---
   try {
     if (quantityChange > 0) {
-      const shelf = await client.productShelf.findFirst({
-        where: { productId }
-      });
+      // Find the first assigned shelf for this product
+      const shelfSql = 'SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1';
+      const shelfResult = await query(shelfSql, [productId]);
+      const shelfId = shelfResult?.[0]?.shelf_id;
       
-      if (shelf) {
-        await client.productShelf.update({
-          where: { productId_shelfId: { productId, shelfId: shelf.shelfId } },
-          data: { quantity: { increment: quantityChange } }
-        });
+      if (shelfId) {
+        await query('UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?', [quantityChange, productId, shelfId]);
       }
     } else if (quantityChange < 0) {
+      // Deduct from shelves
       let remainingToDeduct = Math.abs(quantityChange);
-      const shelves = await client.productShelf.findMany({
-        where: { productId, quantity: { gt: 0 } },
-        orderBy: { quantity: 'desc' }
-      });
+      const shelfSql = 'SELECT shelf_id, quantity FROM product_shelves WHERE product_id = ? AND quantity > 0 ORDER BY quantity DESC';
+      const shelfRows = await query(shelfSql, [productId]);
       
-      for (const shelf of shelves) {
+      for (const shelf of (shelfRows || [])) {
         if (remainingToDeduct <= 0) break;
-        const take = Math.min(Number(shelf.quantity), remainingToDeduct);
+        const take = Math.min(shelf.quantity, remainingToDeduct);
         if (take > 0) {
-          await client.productShelf.update({
-            where: { productId_shelfId: { productId, shelfId: shelf.shelfId } },
-            data: { quantity: { decrement: take } }
-          });
+          await query('UPDATE product_shelves SET quantity = quantity - ? WHERE product_id = ? AND shelf_id = ?', [take, productId, shelf.shelf_id]);
           remainingToDeduct -= take;
         }
       }
@@ -184,29 +184,29 @@ export async function recordAdjustmentMovement(
     console.warn('[ShelfSync] Failed to sync shelf quantities in adjustment:', shelfErr);
   }
 
-  // --- BATCH COSTING ---
+  // --- BATCH COSTING: Sync Batch quantities with adjustments ---
   try {
     if (quantityChange > 0) {
+      // INCREASE: Create a new batch
       const batchId = generateBatchId();
-      const unitCost = Number(product?.cost || 0);
-      const sellingPrice = Number(product?.price || 0);
+      const costInfo = await query('SELECT cost, price FROM products WHERE id = ?', [productId]);
+      const unitCost = costInfo?.[0]?.cost ? parseFloat(costInfo[0].cost) : 0;
+      const sellingPrice = costInfo?.[0]?.price ? parseFloat(costInfo[0].price) : 0;
 
-      await client.inventoryBatch.create({
-        data: {
-          id: batchId,
-          productId,
-          receivedDate: new Date(),
-          quantityIn: quantityChange,
-          quantityRemaining: quantityChange,
-          unitCost,
-          sellingPrice,
-          sourceType: 'adjustment',
-          notes: `Auto-generated from adjustment: ${reason}`
-        }
-      });
+      await query(`
+        INSERT INTO inventory_batches
+          (id, product_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type, notes)
+        VALUES (?, ?, CURDATE(), ?, ?, ?, ?, 'adjustment', ?)
+      `, [
+        batchId, productId, quantityChange, quantityChange, unitCost, sellingPrice, `Auto-generated from adjustment: ${reason}`
+      ]);
     } else if (quantityChange < 0) {
+      // DECREASE: Deduct from existing batches using FIFO
+      // This is critical for Physical Counts that reduce stock to prevent "exhausted" batch errors
       const qtyToDeduct = Math.abs(quantityChange);
-      await deductFromBatches(productId, qtyToDeduct, false, client);
+      await withTransaction(async (conn) => {
+          await deductFromBatches(productId, qtyToDeduct, false, conn as any);
+      });
     }
   } catch (batchErr) {
     console.warn('[BatchCosting] Could not sync batches for adjustment:', batchErr);
@@ -217,27 +217,38 @@ export async function recordAdjustmentMovement(
 
 /**
  * Gets stock movements for a specific product
+ * @param productId The product ID
+ * @param limit Optional limit for number of results
+ * @returns Array of stock movements
  */
 export async function getStockMovementsByProduct(productId: string, limit?: number): Promise<StockMovement[]> {
-  const results = await db.stockMovement.findMany({
-    where: { productId },
-    orderBy: { createdAt: 'desc' },
-    take: limit
-  });
+  let sql = `
+    SELECT
+      id, product_id as productId, product_name as productName,
+      movement_type as movementType, quantity_change as quantityChange,
+      previous_stock as previousStock, new_stock as newStock,
+      reference_id as referenceId, reference_type as referenceType,
+      notes, created_at as createdAt, updated_at as updatedAt
+    FROM stock_movements
+    WHERE product_id = ?
+    ORDER BY created_at DESC
+  `;
 
-  return results.map(m => ({
-    ...m,
-    quantityChange: Number(m.quantityChange),
-    previousStock: Number(m.previousStock),
-    newStock: Number(m.newStock),
-    createdAt: m.createdAt.toISOString(),
-    updatedAt: m.updatedAt.toISOString(),
-    movementType: m.movementType as any
-  }));
+  const params: any[] = [productId];
+
+  if (limit) {
+    sql += ' LIMIT ?';
+    params.push(limit);
+  }
+
+  const results = await query(sql, params);
+  return results as StockMovement[];
 }
 
 /**
  * Gets all stock movements with optional filters
+ * @param filters Optional filters for movement type, date range, etc.
+ * @returns Array of stock movements
  */
 export async function getStockMovements(filters?: {
   movementType?: string;
@@ -246,35 +257,59 @@ export async function getStockMovements(filters?: {
   dateTo?: string;
   limit?: number;
 }): Promise<StockMovement[]> {
-  const where: Prisma.StockMovementWhereInput = {};
+  let sql = `
+    SELECT
+      id, product_id as productId, product_name as productName,
+      movement_type as movementType, quantity_change as quantityChange,
+      previous_stock as previousStock, new_stock as newStock,
+      reference_id as referenceId, reference_type as referenceType,
+      notes, created_at as createdAt, updated_at as updatedAt
+    FROM stock_movements
+    WHERE 1=1
+  `;
 
-  if (filters?.movementType) where.movementType = filters.movementType as any;
-  if (filters?.productId) where.productId = filters.productId;
-  if (filters?.dateFrom || filters?.dateTo) {
-    where.createdAt = {};
-    if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-    if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+  const params: any[] = [];
+
+  if (filters?.movementType) {
+    sql += ' AND movement_type = ?';
+    params.push(filters.movementType);
   }
 
-  const results = await db.stockMovement.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    take: filters?.limit
-  });
+  if (filters?.productId) {
+    sql += ' AND product_id = ?';
+    params.push(filters.productId);
+  }
 
-  return results.map(m => ({
-    ...m,
-    quantityChange: Number(m.quantityChange),
-    previousStock: Number(m.previousStock),
-    newStock: Number(m.newStock),
-    createdAt: m.createdAt.toISOString(),
-    updatedAt: m.updatedAt.toISOString(),
-    movementType: m.movementType as any
-  }));
+  if (filters?.dateFrom) {
+    sql += ' AND created_at >= ?';
+    params.push(filters.dateFrom);
+  }
+
+  if (filters?.dateTo) {
+    sql += ' AND created_at <= ?';
+    params.push(filters.dateTo);
+  }
+
+  sql += ' ORDER BY created_at DESC';
+
+  if (filters?.limit) {
+    sql += ' LIMIT ?';
+    params.push(filters.limit);
+  }
+
+  const results = await query(sql, params);
+  return results as StockMovement[];
 }
 
 /**
  * Updates product stock and records the movement
+ * @param productId The product ID
+ * @param quantityChange The quantity change (positive for increase, negative for decrease)
+ * @param movementType The type of movement
+ * @param referenceId Optional reference ID
+ * @param referenceType Optional reference type
+ * @param notes Optional notes
+ * @returns The recorded stock movement
  */
 export async function updateStockAndRecordMovement(
   productId: string,
@@ -283,29 +318,33 @@ export async function updateStockAndRecordMovement(
   referenceId?: string,
   referenceType?: 'sale' | 'purchase' | 'adjustment' | 'return' | 'transfer',
   notes?: string,
-  tx?: Prisma.TransactionClient
+  connection?: mysql.PoolConnection | mysql.Pool
 ): Promise<StockMovement> {
-  const client = tx || db;
-
   // Get current product info
-  const product = await client.product.findUnique({
-    where: { id: productId },
-    select: { name: true, stock: true, cost: true, price: true }
-  });
+  const productSql = 'SELECT name, stock FROM products WHERE id = ?';
+  const productResult = connection 
+    ? (await connection.query(productSql, [productId]))[0] as any[]
+    : await query(productSql, [productId]);
     
-  if (!product) {
+  if (!productResult || productResult.length === 0) {
     throw new Error(`Product with ID ${productId} not found`);
   }
 
+  const product = productResult[0];
   const previousStock = Number(product.stock || 0);
   const numericChange = Number(quantityChange || 0);
   const newStock = previousStock + numericChange;
 
+  console.log(`[StockMove] Updating Product: ${productId} (${product.name})`);
+  console.log(`           Change: ${numericChange}, Prev: ${previousStock}, New: ${newStock}`);
+
   // Update product stock
-  await client.product.update({
-    where: { id: productId },
-    data: { stock: newStock }
-  });
+  const updateSql = 'UPDATE products SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+  if (connection) {
+    await (connection as mysql.PoolConnection).query(updateSql, [newStock, productId]);
+  } else {
+    await query(updateSql, [newStock, productId]);
+  }
 
   // Record the movement
   const movement = await recordStockMovement({
@@ -318,36 +357,45 @@ export async function updateStockAndRecordMovement(
     referenceId,
     referenceType,
     notes,
-  }, tx);
+  }, connection);
 
-  // --- SHELF SYNC ---
+  // --- SHELF SYNC: Auto-allocate stock to shelves to prevent "Unassigned" status ---
   try {
     if (numericChange > 0) {
-      const shelf = await client.productShelf.findFirst({
-        where: { productId }
-      });
+      // Find the first assigned shelf for this product
+      const shelfSql = 'SELECT shelf_id FROM product_shelves WHERE product_id = ? LIMIT 1';
+      const shelfResult = connection 
+        ? (await (connection as mysql.PoolConnection).query(shelfSql, [productId]))[0] as any[]
+        : await query(shelfSql, [productId]);
       
-      if (shelf) {
-        await client.productShelf.update({
-          where: { productId_shelfId: { productId, shelfId: shelf.shelfId } },
-          data: { quantity: { increment: numericChange } }
-        });
+      const shelfId = shelfResult?.[0]?.shelf_id;
+      
+      if (shelfId) {
+        const updateShelfSql = 'UPDATE product_shelves SET quantity = quantity + ? WHERE product_id = ? AND shelf_id = ?';
+        if (connection) {
+          await (connection as mysql.PoolConnection).query(updateShelfSql, [numericChange, productId, shelfId]);
+        } else {
+          await query(updateShelfSql, [numericChange, productId, shelfId]);
+        }
       }
     } else if (numericChange < 0) {
+      // Deduct from shelves (FIFO-ish: take from the shelf with the most stock first)
       let remainingToDeduct = Math.abs(numericChange);
-      const shelves = await client.productShelf.findMany({
-        where: { productId, quantity: { gt: 0 } },
-        orderBy: { quantity: 'desc' }
-      });
+      const shelfSql = 'SELECT shelf_id, quantity FROM product_shelves WHERE product_id = ? AND quantity > 0 ORDER BY quantity DESC';
+      const shelfRows = connection 
+        ? (await (connection as mysql.PoolConnection).query(shelfSql, [productId]))[0] as any[]
+        : await query(shelfSql, [productId]);
       
-      for (const shelf of shelves) {
+      for (const shelf of (shelfRows || [])) {
         if (remainingToDeduct <= 0) break;
-        const take = Math.min(Number(shelf.quantity), remainingToDeduct);
+        const take = Math.min(shelf.quantity, remainingToDeduct);
         if (take > 0) {
-          await client.productShelf.update({
-            where: { productId_shelfId: { productId, shelfId: shelf.shelfId } },
-            data: { quantity: { decrement: take } }
-          });
+          const updateShelfSql = 'UPDATE product_shelves SET quantity = quantity - ? WHERE product_id = ? AND shelf_id = ?';
+          if (connection) {
+            await (connection as mysql.PoolConnection).query(updateShelfSql, [take, productId, shelf.shelf_id]);
+          } else {
+            await query(updateShelfSql, [take, productId, shelf.shelf_id]);
+          }
           remainingToDeduct -= take;
         }
       }
@@ -356,30 +404,56 @@ export async function updateStockAndRecordMovement(
     console.warn('[ShelfSync] Failed to sync shelf quantities:', shelfErr);
   }
 
-  // --- BATCH COSTING ---
+  // --- BATCH COSTING: Sync Batch quantities with stock movements ---
   if (['adjustment', 'transfer', 'return'].includes(movementType)) {
     try {
       if (numericChange > 0) {
+        // INCREASE: Create a new batch
         const batchId = generateBatchId();
-        const unitCost = Number(product.cost || 0);
-        const sellingPrice = Number(product.price || 0);
+        
+        const costInfo = connection 
+          ? (await connection.query('SELECT cost, price FROM products WHERE id = ?', [productId]))[0] as any[]
+          : await query('SELECT cost, price FROM products WHERE id = ?', [productId]);
+          
+        const unitCost = costInfo?.[0]?.cost ? parseFloat(costInfo[0].cost) : 0;
+        const sellingPrice = costInfo?.[0]?.price ? parseFloat(costInfo[0].price) : 0;
 
-        await client.inventoryBatch.create({
-          data: {
-            id: batchId,
-            productId,
-            receivedDate: new Date(),
-            quantityIn: numericChange,
-            quantityRemaining: numericChange,
-            unitCost,
-            sellingPrice,
-            sourceType: movementType,
-            notes: notes ? `Auto-batch for ${movementType}: ${notes}` : `Auto-batch for ${movementType}`
-          }
-        });
+        const batchSql = `
+          INSERT INTO inventory_batches
+            (id, product_id, received_date, quantity_in, quantity_remaining, unit_cost, selling_price, source_type, notes)
+          VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?)
+        `;
+        const batchParams = [
+          batchId, 
+          productId, 
+          numericChange, 
+          numericChange, 
+          unitCost, 
+          sellingPrice, 
+          movementType, 
+          notes ? `Auto-batch for ${movementType}: ${notes}` : `Auto-batch for ${movementType}`
+        ];
+
+        if (connection) {
+          await connection.query(batchSql, batchParams);
+        } else {
+          await query(batchSql, batchParams);
+        }
       } else if (numericChange < 0) {
+        // DECREASE: Deduct from batches (FIFO)
+        // This is critical for Physical Counts that reduce stock to prevent "exhausted" batch errors
         const qtyToDeduct = Math.abs(numericChange);
-        await deductFromBatches(productId, qtyToDeduct, false, client);
+        
+        if (connection) {
+          // Use our FIFO deduction utility
+          // oversellBlock = false because we are just syncing reality, not blocking a sale
+          await deductFromBatches(productId, qtyToDeduct, false, connection as any);
+        } else {
+          // If no connection, we need one to ensure atomicity
+          await withTransaction(async (conn) => {
+            await deductFromBatches(productId, qtyToDeduct, false, conn as any);
+          });
+        }
       }
     } catch (batchErr) {
       console.warn('[BatchCosting] Could not sync batches for movement:', batchErr);
@@ -391,6 +465,12 @@ export async function updateStockAndRecordMovement(
 
 /**
  * Records stock movements for a transfer between warehouses
+ * @param transferId The transfer ID (reference)
+ * @param sourceProductId The source product ID
+ * @param targetProductId The target product ID
+ * @param quantity The quantity transferred (positive)
+ * @param notes Optional notes
+ * @param connection Optional connection for transaction support
  */
 export async function recordTransferMovements(
   transferId: string,
@@ -398,8 +478,9 @@ export async function recordTransferMovements(
   targetProductId: string,
   quantity: number,
   notes?: string,
-  tx?: Prisma.TransactionClient
+  connection?: mysql.PoolConnection | mysql.Pool
 ): Promise<{ sourceMovement: StockMovement; targetMovement: StockMovement }> {
+  // 1. Record OUT movement from source
   const sourceMovement = await updateStockAndRecordMovement(
     sourceProductId,
     -quantity,
@@ -407,9 +488,10 @@ export async function recordTransferMovements(
     transferId,
     'transfer',
     `Transfer to product ${targetProductId}${notes ? ': ' + notes : ''}`,
-    tx
+    connection
   );
 
+  // 2. Record IN movement to target
   const targetMovement = await updateStockAndRecordMovement(
     targetProductId,
     quantity,
@@ -417,7 +499,7 @@ export async function recordTransferMovements(
     transferId,
     'transfer',
     `Transfer from product ${sourceProductId}${notes ? ': ' + notes : ''}`,
-    tx
+    connection
   );
 
   return { sourceMovement, targetMovement };

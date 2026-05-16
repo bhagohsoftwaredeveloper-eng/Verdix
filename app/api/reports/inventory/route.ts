@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,99 +12,84 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
 
-    // Build where clause
-    const where: any = {};
+    let baseSql = `
+      FROM products p
+    `;
+
+    const conditions = [];
+    const params = [];
 
     if (category && category !== 'all') {
-      where.category = category;
+      conditions.push('p.category = ?');
+      params.push(category);
+    }
+
+    if (lowStock === 'true') {
+      conditions.push('p.stock > 0 AND (p.stock < p.reorder_point OR p.stock < (SELECT COALESCE(low_stock_threshold, 0) FROM pos_settings LIMIT 1))');
     }
 
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { sku: { contains: search, mode: 'insensitive' } },
-        { barcode: { contains: search, mode: 'insensitive' } }
-      ];
+      conditions.push('(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)');
+      const searchVal = `%${search}%`;
+      params.push(searchVal, searchVal, searchVal);
     }
 
-    // Get total count (before low stock filter)
-    const totalItems = await db.product.count({ where });
+    if (conditions.length > 0) {
+      baseSql += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    // Get Total Count for Pagination
+    const countSql = `SELECT COUNT(*) as total ${baseSql}`;
+    const [countResult] = await query(countSql, params);
+    const totalItems = countResult.total;
     const totalPages = Math.ceil(totalItems / limit);
 
-    // Get products
-    let products = await db.product.findMany({
-      where,
-      orderBy: {
-        name: 'asc'
-      },
-      skip: offset,
-      take: limit
-    });
-
-    // Apply low stock filter post-query if needed
-    if (lowStock === 'true') {
-      const settings = await db.posSettings.findFirst();
-      const lowStockThreshold = 0; // Default, can be fetched from settings if available
-
-      products = products.filter(p => {
-        const stock = p.stock.toNumber ? p.stock.toNumber() : Number(p.stock);
-        const reorderPoint = p.reorderPoint.toNumber ? p.reorderPoint.toNumber() : Number(p.reorderPoint);
-        return stock > 0 && (stock < reorderPoint || stock < lowStockThreshold);
-      });
-    }
-
-    // Get inventory batch totals for value calculation
-    const batchTotals = await db.$queryRaw<Array<{product_id: string, batch_value: any}>>`
-      SELECT product_id, SUM(quantity_remaining * unit_cost) as batch_value
-      FROM inventory_batches
-      WHERE quantity_remaining > 0
-      GROUP BY product_id
+    // Get Data with Pagination
+    let sql = `
+      SELECT 
+        p.id,
+        p.name,
+        p.sku,
+        p.barcode,
+        p.category,
+        p.brand,
+        p.stock,
+        p.unit_of_measure,
+        p.cost,
+        p.price,
+        p.reorder_point,
+        COALESCE(
+          (SELECT SUM(quantity_remaining * unit_cost) FROM inventory_batches WHERE product_id = p.id AND quantity_remaining > 0),
+          (p.stock * COALESCE(p.cost, 0))
+        ) as total_value
+      ${baseSql}
+      ORDER BY p.name ASC
+      LIMIT ? OFFSET ?
     `;
 
-    const batchMap = new Map(batchTotals.map(bt => [bt.product_id, parseFloat(bt.batch_value?.toString() || '0')]));
+    const products = await query(sql, [...params, limit, offset]);
 
-    const productsWithValues = products.map(p => {
-      const stock = p.stock.toNumber ? p.stock.toNumber() : Number(p.stock);
-      const cost = p.cost?.toNumber ? p.cost.toNumber() : Number(p.cost || 0);
-      const batchValue = batchMap.get(p.id) || 0;
-      const totalValue = batchValue || (stock * cost);
-
-      return {
-        id: p.id,
-        name: p.name,
-        sku: p.sku,
-        barcode: p.barcode,
-        category: p.category,
-        brand: p.brand,
-        stock,
-        unitOfMeasure: p.unitOfMeasure,
-        cost,
-        price: p.price.toNumber ? p.price.toNumber() : Number(p.price),
-        reorderPoint: p.reorderPoint.toNumber ? p.reorderPoint.toNumber() : Number(p.reorderPoint),
-        totalValue
-      };
-    });
-
-    // Calculate summary for ALL filtered items
-    const summaryResult = await db.$queryRaw<Array<any>>`
-      SELECT
+    // Calculate Global Totals (need separate query without pagination if we want accurate totals for ALL items, not just current page)
+    // However, usually detailed reports want totals for EVERYTHING.
+    // So we effectively need to run a sum query over the filtered set.
+    
+    let sumSql = `
+      SELECT 
         COUNT(*) as totalItems,
-        SUM(stock) as totalStock,
+        SUM(p.stock) as totalStock,
         SUM(
           COALESCE(
             (SELECT SUM(quantity_remaining * unit_cost) FROM inventory_batches WHERE product_id = p.id AND quantity_remaining > 0),
-            (stock * COALESCE(cost, 0))
+            (p.stock * COALESCE(p.cost, 0))
           )
         ) as totalValue
-      FROM products p
-      ${Object.keys(where).length > 0 ? 'WHERE ' : ''}
+      ${baseSql}
     `;
-
-    const [summary] = summaryResult;
-
+    const [summaryResult] = await query(sumSql, params);
+    
     return NextResponse.json({
       success: true,
-      data: productsWithValues,
+      data: products,
       pagination: {
         page,
         limit,
@@ -112,9 +97,9 @@ export async function GET(request: NextRequest) {
         totalPages
       },
       summary: {
-        totalItems: parseInt(summary?.totalItems?.toString() || '0'),
-        totalStock: Number(summary?.totalStock || 0),
-        totalValue: Number(summary?.totalValue || 0)
+        totalItems: summaryResult.totalItems || 0,
+        totalStock: Number(summaryResult.totalStock) || 0,
+        totalValue: Number(summaryResult.totalValue) || 0
       }
     });
 

@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
-import { getExternalApiConfig } from '@/lib/external-api-config';
-import { syncPurchaseTransaction, syncAccountsPayable } from '@/lib/services/external-accounting-api';
-import { calculatePurchaseCosts } from '@/lib/purchase-utils';
-import { toSafeNumber } from '@/lib/utils';
-import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
-import { processPurchaseOrderReceipt } from '@/lib/purchase-actions';
-import { PurchaseOrderStatus } from '@prisma/client';
+import { query, withTransaction } from '../../../../lib/mysql';
+import { getExternalApiConfig } from '../../../../lib/external-api-config';
+import { syncPurchaseTransaction, syncAccountsPayable } from '../../../../lib/services/external-accounting-api';
+import { calculatePurchaseCosts } from '../../../../lib/purchase-utils';
+import { toSafeNumber } from '../../../../lib/utils';
+import { checkApprovalRequired, submitToApprovalQueue } from '../../../../lib/approvals';
+import { processPurchaseOrderReceipt } from '../../../../lib/purchase-actions';
 
 export async function PATCH(
   request: NextRequest,
@@ -24,6 +22,7 @@ export async function PATCH(
       total, 
       shipping, 
       reference, 
+      note, 
       paymentMethod,
       items,
       // Status update only fields
@@ -65,8 +64,8 @@ export async function PATCH(
     }
 
     // Recalculate if items or shipping updated
-    let finalTotal = total !== undefined ? toSafeNumber(total) : undefined;
-    let finalVatAmount = vatAmount !== undefined ? toSafeNumber(vatAmount) : undefined;
+    let finalTotal = toSafeNumber(total);
+    let finalVatAmount = toSafeNumber(vatAmount);
 
     if (items && Array.isArray(items)) {
       const calculations = calculatePurchaseCosts(items, shipping !== undefined ? shipping : 0);
@@ -74,59 +73,90 @@ export async function PATCH(
       finalVatAmount = calculations.vatAmount;
     }
 
-    return await withTransaction(async (tx) => {
-      // 1. Update purchase order
-      const updateData: any = {};
-      if (status) updateData.status = status as PurchaseOrderStatus;
-      if (receivedTotal !== undefined) updateData.receivedTotal = toSafeNumber(receivedTotal);
-      if (supplierId) updateData.supplierId = supplierId;
-      if (supplierName) updateData.supplierName = supplierName;
-      if (date) updateData.date = new Date(date);
-      if (deliveryDate !== undefined) updateData.deliveryDate = deliveryDate ? new Date(deliveryDate) : null;
-      if (finalTotal !== undefined) updateData.total = finalTotal;
-      if (shipping !== undefined) updateData.shippingFee = toSafeNumber(shipping);
-      if (reference !== undefined) updateData.referenceNumber = reference;
-      if (paymentMethod) updateData.paymentMethod = paymentMethod;
-      if (finalVatAmount !== undefined) updateData.vatAmount = finalVatAmount;
+    return await withTransaction(async (connection) => {
+      // 1. Build and execute dynamic update query for the purchase order
+      let sql = 'UPDATE purchase_orders SET ';
+      const paramsUpdate: any[] = [];
+      const updates: string[] = [];
 
-      await tx.purchaseOrder.update({
-        where: { id },
-        data: updateData
-      });
+      if (status) {
+        updates.push('status = ?');
+        paramsUpdate.push(status);
+      }
+      if (receivedTotal !== undefined) {
+        updates.push('received_total = ?');
+        paramsUpdate.push(toSafeNumber(receivedTotal));
+      }
+      if (supplierId) {
+        updates.push('supplier_id = ?');
+        paramsUpdate.push(supplierId);
+      }
+      if (supplierName) {
+        updates.push('supplier_name = ?');
+        paramsUpdate.push(supplierName);
+      }
+      if (date) {
+        const formattedDate = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
+        updates.push('date = ?');
+        paramsUpdate.push(formattedDate);
+      }
+      if (deliveryDate !== undefined) {
+        updates.push('delivery_date = ?');
+        paramsUpdate.push(deliveryDate || null);
+      }
+      if (finalTotal !== undefined) {
+        updates.push('total = ?');
+        paramsUpdate.push(finalTotal);
+      }
+      if (shipping !== undefined) {
+        updates.push('shipping_fee = ?');
+        paramsUpdate.push(toSafeNumber(shipping));
+      }
+      if (reference !== undefined) {
+        updates.push('reference_number = ?');
+        paramsUpdate.push(reference);
+      }
+      if (paymentMethod) {
+        updates.push('payment_method = ?');
+        paramsUpdate.push(paymentMethod);
+      }
+      if (finalVatAmount !== undefined) {
+        updates.push('vat_amount = ?');
+        paramsUpdate.push(finalVatAmount);
+      }
+
+      if (updates.length > 0) {
+        sql += updates.join(', ');
+        sql += ' WHERE id = ?';
+        paramsUpdate.push(id);
+        await connection.query(sql, paramsUpdate);
+      }
 
       // 2. Handle Items Update if provided (Full Replace Strategy)
       if (items && Array.isArray(items)) {
-        await tx.purchaseOrderItem.deleteMany({
-          where: { purchaseOrderId: id }
-        });
+        await connection.query('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [id]);
+        const insertItemQuery = `
+          INSERT INTO purchase_order_items (
+            id, purchase_order_id, product_id, product_name, quantity, cost,
+            selling_price, discount, discount_type, vat_subject, expiration_date
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
 
         for (const item of items) {
-          const quantity = toSafeNumber(item.quantity);
-          const cost = toSafeNumber(item.cost);
-          const discount = toSafeNumber(item.discount);
-          const discountType = item.discountType || 'amount';
-          
-          let itemSubtotal = quantity * cost;
-          if (discountType === 'percentage') {
-            itemSubtotal = itemSubtotal - (itemSubtotal * (discount / 100));
-          } else {
-            itemSubtotal = itemSubtotal - discount;
-          }
-
-          await tx.purchaseOrderItem.create({
-            data: {
-              purchaseOrderId: id,
-              productId: item.productId,
-              productName: item.productName,
-              quantity: Math.floor(quantity),
-              cost: cost,
-              sellingPrice: item.sellingPrice ? toSafeNumber(item.sellingPrice) : null,
-              discount: discount,
-              discountType: discountType,
-              vatSubject: !!item.vatSubject,
-              subtotal: itemSubtotal
-            }
-          });
+          const itemId = `poi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await connection.query(insertItemQuery, [
+            itemId,
+            id,
+            item.productId,
+            item.productName,
+            toSafeNumber(item.quantity),
+            toSafeNumber(item.cost),
+            item.sellingPrice ? toSafeNumber(item.sellingPrice) : null,
+            toSafeNumber(item.discount),
+            item.discountType || 'amount',
+            item.vatSubject ? 1 : 0,
+            item.expirationDate ? new Date(item.expirationDate).toISOString().slice(0, 10) : null
+          ]);
         }
       }
 
@@ -137,39 +167,39 @@ export async function PATCH(
           receivedTotal: receivedTotal || finalTotal,
           allocationStrategy
         };
-        await processPurchaseOrderReceipt(id, receiptData, userId || 'system', tx);
+        await processPurchaseOrderReceipt(id, receiptData, userId || 'system', connection);
       }
 
       // 4. Trigger External API Sync (if enabled)
       try {
         const apiConfig = await getExternalApiConfig();
         if (apiConfig.enabled) {
-          const updatedPO = await tx.purchaseOrder.findUnique({
-            where: { id },
-            include: { items: true }
-          });
+          // Fetch the updated PO for sync
+          const [updatedPO]: any = await connection.query('SELECT * FROM purchase_orders WHERE id = ?', [id]);
+          const [poItems]: any = await connection.query('SELECT * FROM purchase_order_items WHERE purchase_order_id = ?', [id]);
           
-          if (updatedPO) {
+          if (updatedPO && updatedPO.length > 0) {
             const poData = {
-              ...updatedPO,
-              items: updatedPO.items.map((pi: any) => ({
-                productId: pi.productId,
-                productName: pi.productName,
+              ...updatedPO[0],
+              items: poItems.map((pi: any) => ({
+                productId: pi.product_id,
+                productName: pi.product_name,
                 quantity: pi.quantity,
-                cost: pi.cost.toNumber(),
-                discount: pi.discount.toNumber(),
-                discountType: pi.discountType,
-                vatSubject: pi.vatSubject
+                cost: pi.cost,
+                discount: pi.discount,
+                discountType: pi.discount_type,
+                vatSubject: pi.vat_subject === 1
               }))
             };
 
             // Fire and forget sync calls
             syncPurchaseTransaction(id, poData, apiConfig).catch(console.error);
-            syncAccountsPayable(poData.supplierId, apiConfig).catch(console.error);
+            syncAccountsPayable(poData.supplier_id, apiConfig).catch(console.error);
           }
         }
       } catch (syncError) {
         console.error('Error during external sync trigger:', syncError);
+        // We don't fail the transaction if sync fails
       }
 
       return NextResponse.json({
@@ -186,15 +216,14 @@ export async function PATCH(
   }
 }
 
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params;
-        await db.purchaseOrder.delete({
-            where: { id }
-        });
+        await query('DELETE FROM purchase_orders WHERE id = ?', [id]);
         
         return NextResponse.json({
             success: true,

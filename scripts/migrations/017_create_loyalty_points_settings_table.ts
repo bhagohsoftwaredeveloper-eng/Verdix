@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '017_create_loyalty_points_settings_table',
@@ -15,18 +15,18 @@ const migration: Migration = {
         amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         equivalent DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_description (description)
       )
     `;
 
-    await db.$executeRawUnsafe(createLoyaltyPointsSettingsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_loyalty_points_settings_description ON loyalty_points_settings(description)');
+    await query(createLoyaltyPointsSettingsTable);
     console.log('✅ Loyalty points settings table created');
   },
 
   async down(): Promise<void> {
     // Drop the table
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS loyalty_points_settings');
+    await query('DROP TABLE IF EXISTS loyalty_points_settings');
     console.log('✅ Loyalty points settings table dropped');
   }
 };

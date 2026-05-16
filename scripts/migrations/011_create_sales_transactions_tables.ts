@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '011_create_sales_transactions_tables',
@@ -15,13 +15,13 @@ const migration: Migration = {
         payment_terms VARCHAR(100),
         loyalty_points INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_contact_number (contact_number)
       )
     `;
 
-    await db.$executeRawUnsafe(createCustomersTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_customers_contact_number ON customers(contact_number)');
+    await query(createCustomersTable);
     console.log('✅ Customers table created');
 
     // Create sales_transactions table
@@ -34,20 +34,20 @@ const migration: Migration = {
         due_date DATE,
         total DECIMAL(10,2) NOT NULL,
         payment_method VARCHAR(100),
-        status VARCHAR(50) DEFAULT 'Pending',
+        status ENUM('Paid', 'Pending', 'Failed', 'Shipped', 'Delivered', 'Returned') DEFAULT 'Pending',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_sales_transactions_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+        INDEX idx_customer_id (customer_id),
+        INDEX idx_date (date),
+        INDEX idx_invoice_date (invoice_date),
+        INDEX idx_status (status),
+        INDEX idx_payment_method (payment_method)
       )
     `;
 
-    await db.$executeRawUnsafe(createSalesTransactionsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_transactions_customer_id ON sales_transactions(customer_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_transactions_date ON sales_transactions(date)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_transactions_invoice_date ON sales_transactions(invoice_date)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_transactions_status ON sales_transactions(status)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sales_transactions_payment_method ON sales_transactions(payment_method)');
+    await query(createSalesTransactionsTable);
     console.log('✅ Sales transactions table created');
 
     // Create sale_items table
@@ -60,38 +60,38 @@ const migration: Migration = {
         quantity INT NOT NULL,
         price DECIMAL(10,2) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_sale_items_sale FOREIGN KEY (sale_id) REFERENCES sales_transactions(id) ON DELETE CASCADE,
-        CONSTRAINT fk_sale_items_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+        FOREIGN KEY (sale_id) REFERENCES sales_transactions(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        INDEX idx_sale_id (sale_id),
+        INDEX idx_product_id (product_id)
       )
     `;
 
-    await db.$executeRawUnsafe(createSaleItemsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON sale_items(product_id)');
+    await query(createSaleItemsTable);
     console.log('✅ Sale items table created');
 
-    // Create payment_methods table
+    // Create payment_methods table for better payment method management
     const createPaymentMethodsTable = `
       CREATE TABLE IF NOT EXISTS payment_methods (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL UNIQUE,
         is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_name (name),
+        INDEX idx_is_active (is_active)
       )
     `;
 
-    await db.$executeRawUnsafe(createPaymentMethodsTable);
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_payment_methods_name ON payment_methods(name)');
-    await db.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS idx_payment_methods_is_active ON payment_methods(is_active)');
+    await query(createPaymentMethodsTable);
     console.log('✅ Payment methods table created');
   },
 
   async down(): Promise<void> {
     // Drop tables in reverse order due to foreign key constraints
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS sale_items');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS sales_transactions');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS payment_methods');
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS customers');
+    await query('DROP TABLE IF EXISTS sale_items');
+    await query('DROP TABLE IF EXISTS sales_transactions');
+    await query('DROP TABLE IF EXISTS payment_methods');
+    await query('DROP TABLE IF EXISTS customers');
     console.log('✅ Sales transaction tables dropped');
   }
 };

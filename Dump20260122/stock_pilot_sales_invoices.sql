@@ -1,0 +1,68 @@
+-- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: stock_pilot
+-- ------------------------------------------------------
+-- Server version	8.0.43
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `sales_invoices`
+--
+
+DROP TABLE IF EXISTS `sales_invoices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `sales_invoices` (
+  `id` varchar(50) NOT NULL,
+  `customer_id` varchar(50) DEFAULT NULL,
+  `invoice_date` date NOT NULL,
+  `due_date` date DEFAULT NULL,
+  `total` decimal(10,2) NOT NULL,
+  `payment_method` varchar(100) DEFAULT NULL,
+  `sales_person_id` varchar(50) DEFAULT NULL,
+  `status` enum('Paid','Pending','Failed','Shipped','Delivered','Returned') DEFAULT 'Pending',
+  `notes` text,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_customer_id` (`customer_id`),
+  KEY `idx_invoice_date` (`invoice_date`),
+  KEY `idx_due_date` (`due_date`),
+  KEY `idx_status` (`status`),
+  KEY `idx_payment_method` (`payment_method`),
+  KEY `idx_sales_person_id` (`sales_person_id`),
+  CONSTRAINT `fk_sales_invoices_sales_person_id` FOREIGN KEY (`sales_person_id`) REFERENCES `sales_persons` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `sales_invoices_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `sales_invoices`
+--
+
+LOCK TABLES `sales_invoices` WRITE;
+/*!40000 ALTER TABLE `sales_invoices` DISABLE KEYS */;
+INSERT INTO `sales_invoices` VALUES ('inv_1766989513009_lgrejlzee','1','2025-12-29','2026-01-28',50.00,'Charge',NULL,'Pending',NULL,'2025-12-29 06:25:13','2025-12-29 06:25:13'),('inv_1766991015035_nv7e010f2','1','2025-12-29','2026-01-28',50.00,'Charge',NULL,'Pending',NULL,'2025-12-29 06:50:15','2025-12-29 06:50:15'),('inv_1766991918676_hdq2zojih','1','2025-12-29','2026-01-28',600.00,'Charge',NULL,'Paid',NULL,'2025-12-29 07:05:18','2026-01-17 08:38:00'),('inv_1768632370238_na8sqv28j','CUST-QJX6HM7N8','2026-01-17','2026-02-16',6590.00,'Charge',NULL,'Paid',NULL,'2026-01-17 06:46:10','2026-01-17 06:53:47'),('INV-1767941411197-tpqyi',NULL,'2026-01-09','2026-01-09',133480.00,'CASH',NULL,'Paid','POS Sale','2026-01-09 06:50:11','2026-01-09 06:50:11'),('INV-1767943536120-qol8j',NULL,'2026-01-09','2026-01-09',139980.00,'CREDIT CARD',NULL,'Paid','POS Sale','2026-01-09 07:25:36','2026-01-09 07:25:36'),('INV-1768282201945-v7z1h',NULL,'2026-01-13','2026-01-13',129130.00,'CASH',NULL,'Paid','POS Sale','2026-01-13 05:30:01','2026-01-13 05:30:01'),('INV-1768287046853-jj6io',NULL,'2026-01-13','2026-01-13',66590.00,'CASH',NULL,'Paid','POS Sale','2026-01-13 06:50:46','2026-01-13 06:50:46'),('INV-1768782963083-z827q',NULL,'2026-01-19','2026-01-19',140.40,'CASH',NULL,'Paid','POS Sale','2026-01-19 00:36:03','2026-01-19 00:36:03'),('INV-1768788277962-ygg6h',NULL,'2026-01-19','2026-01-19',59990.00,'CASH',NULL,'Paid','POS Sale','2026-01-19 02:04:37','2026-01-19 02:04:37'),('INV-1768788522951-8l91j',NULL,'2026-01-19','2026-01-19',59995.00,'CASH',NULL,'Paid','POS Sale','2026-01-19 02:08:42','2026-01-19 02:08:42'),('INV-1768789954875-h00ha',NULL,'2026-01-19','2026-01-19',120.00,'CASH',NULL,'Paid','POS Sale','2026-01-19 02:32:34','2026-01-19 02:32:34'),('INV-1768790554510-rj1nl',NULL,'2026-01-19','2026-01-19',146.25,'CASH',NULL,'Paid','POS Sale','2026-01-19 02:42:34','2026-01-19 02:42:34'),('INV-1768798438730-vbwng',NULL,'2026-01-19','2026-01-19',12.50,'CASH',NULL,'Paid','POS Sale','2026-01-19 04:53:58','2026-01-19 04:53:58'),('INV-1768800639007-r15od',NULL,'2026-01-19','2026-01-19',5.00,'CASH',NULL,'Paid','POS Sale','2026-01-19 05:30:39','2026-01-19 05:30:39'),('INV-1768800711931-u14ef',NULL,'2026-01-19','2026-01-19',70990.00,'CASH',NULL,'Paid','POS Sale','2026-01-19 05:31:51','2026-01-19 05:31:51'),('INV-1768803406580-t0ry7',NULL,'2026-01-19','2026-01-19',130.00,'CASH',NULL,'Paid','POS Sale','2026-01-19 06:16:46','2026-01-19 06:16:46'),('INV-1768804504068-p3s0g',NULL,'2026-01-19','2026-01-19',6590.00,'CASH',NULL,'Paid','POS Sale','2026-01-19 06:35:04','2026-01-19 06:35:04'),('INV-1769042217795-41evf',NULL,'2026-01-22','2026-01-22',140.40,'CASH',NULL,'Paid','POS Sale','2026-01-22 00:36:57','2026-01-22 00:36:57');
+/*!40000 ALTER TABLE `sales_invoices` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-01-22 18:11:05

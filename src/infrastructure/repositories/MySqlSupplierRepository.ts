@@ -1,79 +1,71 @@
-import { db } from '@/lib/db';
+import { query } from '../../../lib/mysql';
 import { SupplierRepository } from '../../core/suppliers/domain/ISupplierRepository';
 import { SupplierEntity } from '../../core/suppliers/domain/Supplier';
 
 export class MySqlSupplierRepository implements SupplierRepository {
   async findAll(): Promise<SupplierEntity[]> {
-    const suppliers = await db.supplier.findMany({
-      orderBy: { name: 'asc' }
-    });
-    
+    const sql = 'SELECT id, name, contact_number as contactNumber, email, address, payment_terms as paymentTerms, created_at as createdAt, updated_at as updatedAt FROM suppliers ORDER BY name ASC';
+    const suppliers: any[] = await query(sql);
     return suppliers.map(s => ({
-      id: s.id,
-      name: s.name,
-      contactNumber: s.contactNumber || '',
-      email: s.email || undefined,
-      address: s.address || undefined,
-      paymentTerms: s.paymentTerms || undefined,
-      createdAt: s.createdAt.toISOString(),
-      updatedAt: s.updatedAt.toISOString(),
+      ...s,
       active: true,
-      contactPerson: undefined,
-      category: undefined
+      contactPerson: null,
+      category: null
     }));
   }
 
   async findById(id: string): Promise<SupplierEntity | null> {
-    const s = await db.supplier.findUnique({
-      where: { id }
-    });
-
-    if (!s) return null;
-
+    const sql = 'SELECT id, name, contact_number as contactNumber, email, address, payment_terms as paymentTerms, created_at as createdAt, updated_at as updatedAt FROM suppliers WHERE id = ?';
+    const results: any[] = await query(sql, [id]);
+    if (results.length === 0) return null;
+    const s = results[0];
     return {
-      id: s.id,
-      name: s.name,
-      contactNumber: s.contactNumber || '',
-      email: s.email || undefined,
-      address: s.address || undefined,
-      paymentTerms: s.paymentTerms || undefined,
-      createdAt: s.createdAt.toISOString(),
-      updatedAt: s.updatedAt.toISOString(),
+      ...s,
       active: true,
-      contactPerson: undefined,
-      category: undefined
+      contactPerson: null,
+      category: null
     };
   }
 
   async create(supplier: Partial<SupplierEntity>): Promise<string> {
-    const created = await db.supplier.create({
-      data: {
-        id: supplier.id,
-        name: supplier.name!,
-        contactNumber: supplier.contactNumber,
-        email: supplier.email,
-        address: supplier.address,
-        paymentTerms: supplier.paymentTerms,
-      }
-    });
-    return created.id;
+    const sql = `
+      INSERT INTO suppliers (id, name, contact_number, email, address, payment_terms)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+    await query(sql, [
+      supplier.id, supplier.name, supplier.contactNumber || null,
+      supplier.email || null, supplier.address || null, supplier.paymentTerms || null
+    ]);
+    return supplier.id as string;
   }
 
   async update(id: string, supplier: Partial<SupplierEntity>): Promise<void> {
-    const data: any = {};
-    if (supplier.name !== undefined) data.name = supplier.name;
-    if (supplier.contactNumber !== undefined) data.contactNumber = supplier.contactNumber;
-    if (supplier.email !== undefined) data.email = supplier.email;
-    if (supplier.address !== undefined) data.address = supplier.address;
-    if (supplier.paymentTerms !== undefined) data.paymentTerms = supplier.paymentTerms;
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    const fieldMapping: Record<string, string> = {
+      name: 'name',
+      contactNumber: 'contact_number',
+      email: 'email',
+      address: 'address',
+      paymentTerms: 'payment_terms'
+    };
 
-    await db.supplier.update({
-      where: { id },
-      data
+    Object.entries(supplier).forEach(([key, value]) => {
+      if (fieldMapping[key]) {
+        updates.push(`${fieldMapping[key]} = ?`);
+        params.push(value);
+      }
     });
+
+    if (updates.length > 0) {
+      const sql = `UPDATE suppliers SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`;
+      params.push(id);
+      await query(sql, params);
+    }
   }
 
   async delete(id: string): Promise<void> {
-    await db.supplier.delete({ where: { id } });
+    await query('DELETE FROM suppliers WHERE id = ?', [id]);
   }
 }

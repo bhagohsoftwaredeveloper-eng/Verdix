@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../lib/mysql';
 
 // POST endpoint to send product data to external APIs
 export async function POST(request: NextRequest) {
@@ -14,8 +14,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const where = productIds && productIds.length > 0 ? { id: { in: productIds } } : {};
-    const products = await db.product.findMany({ where });
+    // Get product data from database
+    let sql = `
+      SELECT
+        id,
+        name,
+        description,
+        category,
+        brand,
+        stock,
+        price,
+        cost,
+        sku,
+        barcode,
+        created_at,
+        updated_at
+      FROM products
+    `;
+
+    const params: any[] = [];
+
+    if (productIds && productIds.length > 0) {
+      // Send specific products
+      const placeholders = productIds.map(() => '?').join(',');
+      sql += ` WHERE id IN (${placeholders})`;
+      params.push(...productIds);
+    }
+
+    const products = await query(sql, params);
 
     if (products.length === 0) {
       return NextResponse.json(
@@ -41,12 +67,7 @@ export async function POST(request: NextRequest) {
       }),
     });
 
-    let responseData;
-    try {
-      responseData = await response.json();
-    } catch (e) {
-      responseData = { message: 'Could not parse response as JSON' };
-    }
+    const responseData = await response.json();
 
     return NextResponse.json({
       success: true,
@@ -69,23 +90,29 @@ export async function POST(request: NextRequest) {
 // GET endpoint to see available products for sending
 export async function GET() {
   try {
-    const products = await db.product.findMany({
-      take: 10,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        brand: true,
-        stock: true,
-        price: true
-      }
-    });
+    const products = await query(`
+      SELECT
+        id,
+        name,
+        category,
+        brand,
+        stock,
+        price
+      FROM products
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
 
     return NextResponse.json({
       success: true,
       message: 'Available products to send',
-      products,
+      products: products.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        stock: p.stock,
+        price: p.price
+      })),
       usage: {
         endpoint: 'POST /api/send-products',
         body: {

@@ -1,5 +1,6 @@
+
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 export async function PUT(
   req: Request,
@@ -15,21 +16,13 @@ export async function PUT(
     }
 
     if (isDefault) {
-      await db.taxRate.updateMany({
-        where: { id: { not: id } },
-        data: { isDefault: false }
-      });
+      await query('UPDATE tax_rates SET is_default = FALSE WHERE id != ?', [id]);
     }
 
-    await db.taxRate.update({
-      where: { id },
-      data: {
-        name,
-        rate,
-        description,
-        isDefault: !!isDefault
-      }
-    });
+    await query(
+      'UPDATE tax_rates SET name = ?, rate = ?, description = ?, is_default = ? WHERE id = ?',
+      [name, rate, description, isDefault ? 1 : 0, id]
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -44,9 +37,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await db.taxRate.delete({
-      where: { id }
-    });
+    await query('DELETE FROM tax_rates WHERE id = ?', [id]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting tax rate:', error);

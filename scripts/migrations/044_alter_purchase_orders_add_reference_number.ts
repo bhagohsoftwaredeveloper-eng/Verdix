@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '044_alter_purchase_orders_add_reference_number',
@@ -8,19 +8,31 @@ const migration: Migration = {
   async up(): Promise<void> {
     const addField = `
       ALTER TABLE purchase_orders
-      ADD COLUMN IF NOT EXISTS reference_number VARCHAR(100) NULL
+      ADD COLUMN reference_number VARCHAR(100) NULL AFTER id
     `;
 
-    await db.$executeRawUnsafe(addField);
-    console.log('✅ Purchase orders table updated with reference_number field');
+    try {
+      await query(addField);
+      console.log('✅ Purchase orders table updated with reference_number field');
+      
+      // Optional: Copy ID to reference_number for existing records so it's not empty?
+      // Or just leave it null. Let's leave it null or maybe set it to ID if we want consistency.
+      // await query('UPDATE purchase_orders SET reference_number = id WHERE reference_number IS NULL');
+    } catch (error: any) {
+      if (error.code === 'ER_DUP_FIELDNAME') {
+        console.log('⚠️ reference_number column already exists in purchase_orders table');
+      } else {
+        throw error;
+      }
+    }
   },
 
   async down(): Promise<void> {
     const dropField = `
       ALTER TABLE purchase_orders
-      DROP COLUMN IF EXISTS reference_number
+      DROP COLUMN reference_number
     `;
-    await db.$executeRawUnsafe(dropField);
+    await query(dropField);
     console.log('✅ Purchase orders table reference_number field dropped');
   }
 };

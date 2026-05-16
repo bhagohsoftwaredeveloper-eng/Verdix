@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 export const migration: Migration = {
   name: '061_add_bir_compliance_columns',
@@ -16,10 +16,10 @@ export const migration: Migration = {
 
     for (const col of settingsColumns) {
       try {
-        await db.$executeRawUnsafe(`ALTER TABLE pos_settings ADD COLUMN ${col}`);
+        await query(`ALTER TABLE pos_settings ADD COLUMN ${col}`);
         console.log(`✅ Added ${col.split(' ')[0]} to pos_settings`);
       } catch (e: any) {
-        if (e.message && (e.message.includes('already exists') || e.message.includes('42701'))) {
+        if (e.code === 'ER_DUP_COLUMN_NAME' || e.errno === 1060) {
           console.log(`⚠️ Column ${col.split(' ')[0]} already exists in pos_settings`);
         } else {
           throw e;
@@ -38,10 +38,10 @@ export const migration: Migration = {
 
     for (const col of terminalColumns) {
       try {
-        await db.$executeRawUnsafe(`ALTER TABLE pos_terminals ADD COLUMN ${col}`);
+        await query(`ALTER TABLE pos_terminals ADD COLUMN ${col}`);
         console.log(`✅ Added ${col.split(' ')[0]} to pos_terminals`);
       } catch (e: any) {
-        if (e.message && (e.message.includes('already exists') || e.message.includes('42701'))) {
+        if (e.code === 'ER_DUP_COLUMN_NAME' || e.errno === 1060) {
           console.log(`⚠️ Column ${col.split(' ')[0]} already exists in pos_terminals`);
         } else {
           throw e;
@@ -53,19 +53,19 @@ export const migration: Migration = {
   async down() {
     console.log('Rolling back migration: 061_add_bir_compliance_columns');
     
-    await db.$executeRawUnsafe(`
+    await query(`
       ALTER TABLE pos_settings
-      DROP COLUMN IF EXISTS is_training_mode,
-      DROP COLUMN IF EXISTS last_ejournal_export
+      DROP COLUMN is_training_mode,
+      DROP COLUMN last_ejournal_export
     `);
     
-    await db.$executeRawUnsafe(`
+    await query(`
       ALTER TABLE pos_terminals
-      DROP COLUMN IF EXISTS z_counter,
-      DROP COLUMN IF EXISTS reset_counter,
-      DROP COLUMN IF EXISTS terminal_min,
-      DROP COLUMN IF EXISTS terminal_serial_number,
-      DROP COLUMN IF EXISTS or_next_reference
+      DROP COLUMN z_counter,
+      DROP COLUMN reset_counter,
+      DROP COLUMN terminal_min,
+      DROP COLUMN terminal_serial_number,
+      DROP COLUMN or_next_reference
     `);
   }
 };

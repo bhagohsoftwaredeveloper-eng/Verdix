@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '029_create_user_permissions_table',
@@ -13,20 +13,19 @@ const migration: Migration = {
         user_uid VARCHAR(255) NOT NULL,
         permission VARCHAR(100) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT unique_user_permission UNIQUE (user_uid, permission)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_user_permission (user_uid, permission),
+        INDEX idx_user_uid (user_uid),
+        INDEX idx_permission (permission)
       )
     `;
 
-    await db.$executeRawUnsafe(createUserPermissionsTable);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_user_uid ON user_permissions (user_uid)`);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_permission ON user_permissions (permission)`);
-    
+    await query(createUserPermissionsTable);
     console.log('✅ User permissions table created');
   },
 
   async down(): Promise<void> {
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS user_permissions CASCADE');
+    await query('DROP TABLE IF EXISTS user_permissions');
     console.log('✅ User permissions table dropped');
   }
 };

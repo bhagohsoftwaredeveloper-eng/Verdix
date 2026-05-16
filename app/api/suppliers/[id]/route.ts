@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../../lib/mysql';
 
 // GET endpoint to fetch a single supplier by ID
 export async function GET(
@@ -9,11 +9,29 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const supplier = await db.supplier.findUnique({
-      where: { id }
-    });
+    const sql = `
+      SELECT
+        id,
+        name,
+        contact_number AS contactNumber,
+        address,
+        email,
+        telephone,
+        mobile_phone AS mobilePhone,
+        company,
+        tin,
+        payment_terms AS paymentTerms,
+        markup_percentage AS markupPercentage,
+        order_schedule AS orderSchedule,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM suppliers
+      WHERE id = ?
+    `;
 
-    if (!supplier) {
+    const suppliers = await query(sql, [id]);
+
+    if (!suppliers || suppliers.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Supplier not found' },
         { status: 404 }
@@ -22,7 +40,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: supplier,
+      data: suppliers[0],
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -56,39 +74,42 @@ export async function PUT(
       orderSchedule
     } = body;
 
-    const supplier = await db.supplier.update({
-      where: { id },
-      data: {
-        name: name !== undefined ? name : undefined,
-        contactNumber: contactNumber !== undefined ? contactNumber : undefined,
-        address: address !== undefined ? address : undefined,
-        email: email !== undefined ? email : undefined,
-        telephone: telephone !== undefined ? telephone : undefined,
-        mobilePhone: mobilePhone !== undefined ? mobilePhone : undefined,
-        company: company !== undefined ? company : undefined,
-        tin: tin !== undefined ? tin : undefined,
-        paymentTerms: paymentTerms !== undefined ? paymentTerms : undefined,
-        markupPercentage: markupPercentage !== undefined ? markupPercentage : undefined,
-        orderSchedule: orderSchedule !== undefined ? orderSchedule : undefined
-      }
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Supplier updated successfully',
-      data: supplier,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error: any) {
-    console.error('Error updating supplier:', error);
-
-    if (error.code === 'P2025') {
+    // Check if supplier exists
+    const existingSupplier = await query('SELECT id FROM suppliers WHERE id = ?', [id]);
+    if (!existingSupplier || existingSupplier.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Supplier not found' },
         { status: 404 }
       );
     }
 
+    const sql = `
+      UPDATE suppliers SET
+        name = COALESCE(?, name),
+        contact_number = COALESCE(?, contact_number),
+        address = COALESCE(?, address),
+        email = COALESCE(?, email),
+        telephone = COALESCE(?, telephone),
+        mobile_phone = COALESCE(?, mobile_phone),
+        company = COALESCE(?, company),
+        tin = COALESCE(?, tin),
+        payment_terms = COALESCE(?, payment_terms),
+        markup_percentage = COALESCE(?, markup_percentage),
+        order_schedule = COALESCE(?, order_schedule),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `;
+
+    await query(sql, [name, contactNumber, address, email, telephone, mobilePhone, company, tin, paymentTerms, markupPercentage, orderSchedule, id]);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Supplier updated successfully',
+      data: { id },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error updating supplier:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to update supplier' },
       { status: 500 }
@@ -104,25 +125,24 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    await db.supplier.delete({
-      where: { id }
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Supplier deleted successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error: any) {
-    console.error('Error deleting supplier:', error);
-
-    if (error.code === 'P2025') {
+    // Check if supplier exists
+    const existingSupplier = await query('SELECT id FROM suppliers WHERE id = ?', [id]);
+    if (!existingSupplier || existingSupplier.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Supplier not found' },
         { status: 404 }
       );
     }
 
+    await query('DELETE FROM suppliers WHERE id = ?', [id]);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Supplier deleted successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error deleting supplier:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to delete supplier' },
       { status: 500 }

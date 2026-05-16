@@ -1,32 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '../../../lib/mysql';
+
+// Helper function to ensure transaction_references table exists
+async function ensureTransactionReferencesTable() {
+  try {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS transaction_references (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        sales_order VARCHAR(50),
+        purchase_order VARCHAR(50),
+        sales_delivery VARCHAR(50),
+        payment_to_supplier VARCHAR(50),
+        sales_invoice VARCHAR(50),
+        customer_payment VARCHAR(50),
+        delivery_receipt VARCHAR(50),
+        stock_adjustment VARCHAR(50),
+        sales_hold VARCHAR(50),
+        receipt_number VARCHAR(100) DEFAULT '00000001',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `;
+    
+    await query(createTableSQL);
+
+    // Check if there's any data, if not insert default row
+    const checkData = await query('SELECT COUNT(*) as count FROM transaction_references');
+    if (checkData[0].count === 0) {
+      await query(`
+        INSERT INTO transaction_references (
+          sales_order, purchase_order, sales_delivery, payment_to_supplier,
+          sales_invoice, customer_payment, delivery_receipt, stock_adjustment, sales_hold,
+          receipt_number
+        ) VALUES ('2944', '53', '2832', '34', '2974', '63', '1', '106', '5', '00000001')
+      `);
+    }
+  } catch (error) {
+    console.error('Error ensuring transaction_references table:', error);
+    throw error;
+  }
+}
 
 // GET endpoint to fetch transaction references
 export async function GET(request: NextRequest) {
   try {
-    const result = await db.transactionReference.findFirst({
-      orderBy: {
-        id: 'desc'
-      }
-    });
+    await ensureTransactionReferencesTable();
 
-    // Format the data for the response
-    const formattedData = result ? {
-      salesOrder: result.salesOrder,
-      purchaseOrder: result.purchaseOrder,
-      salesDelivery: result.salesDelivery,
-      paymentToSupplier: result.paymentToSupplier,
-      salesInvoice: result.salesInvoice,
-      customerPayment: result.customerPayment,
-      deliveryReceipt: result.deliveryReceipt,
-      stockAdjustment: result.stockAdjustment,
-      salesHold: result.salesHold,
-      receiptNumber: result.receiptNumber
-    } : null;
+    const result = await query(`
+      SELECT
+        sales_order AS salesOrder,
+        purchase_order AS purchaseOrder,
+        sales_delivery AS salesDelivery,
+        payment_to_supplier AS paymentToSupplier,
+        sales_invoice AS salesInvoice,
+        customer_payment AS customerPayment,
+        delivery_receipt AS deliveryReceipt,
+        stock_adjustment AS stockAdjustment,
+        sales_hold AS salesHold,
+        receipt_number AS receiptNumber
+      FROM transaction_references
+      ORDER BY id DESC
+      LIMIT 1
+    `);
 
     return NextResponse.json({
       success: true,
-      data: formattedData,
+      data: result[0] || null,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -41,6 +80,8 @@ export async function GET(request: NextRequest) {
 // POST endpoint to update transaction references
 export async function POST(request: NextRequest) {
   try {
+    await ensureTransactionReferencesTable();
+
     const body = await request.json();
     const {
       salesOrder,
@@ -56,41 +97,57 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Check if a record exists
-    const existing = await db.transactionReference.findFirst();
+    const existing = await query('SELECT id FROM transaction_references LIMIT 1');
 
-    if (existing) {
+    if (existing.length > 0) {
       // Update existing record
-      await db.transactionReference.update({
-        where: { id: existing.id },
-        data: {
-          salesOrder: salesOrder !== undefined ? salesOrder : undefined,
-          purchaseOrder: purchaseOrder !== undefined ? purchaseOrder : undefined,
-          salesDelivery: salesDelivery !== undefined ? salesDelivery : undefined,
-          paymentToSupplier: paymentToSupplier !== undefined ? paymentToSupplier : undefined,
-          salesInvoice: salesInvoice !== undefined ? salesInvoice : undefined,
-          customerPayment: customerPayment !== undefined ? customerPayment : undefined,
-          deliveryReceipt: deliveryReceipt !== undefined ? deliveryReceipt : undefined,
-          stockAdjustment: stockAdjustment !== undefined ? stockAdjustment : undefined,
-          salesHold: salesHold !== undefined ? salesHold : undefined,
-          receiptNumber: receiptNumber !== undefined ? receiptNumber : undefined
-        }
-      });
+      await query(`
+        UPDATE transaction_references
+        SET
+          sales_order = ?,
+          purchase_order = ?,
+          sales_delivery = ?,
+          payment_to_supplier = ?,
+          sales_invoice = ?,
+          customer_payment = ?,
+          delivery_receipt = ?,
+          stock_adjustment = ?,
+          sales_hold = ?,
+          receipt_number = ?
+        WHERE id = ?
+      `, [
+        salesOrder || null,
+        purchaseOrder || null,
+        salesDelivery || null,
+        paymentToSupplier || null,
+        salesInvoice || null,
+        customerPayment || null,
+        deliveryReceipt || null,
+        stockAdjustment || null,
+        salesHold || null,
+        receiptNumber || null,
+        existing[0].id
+      ]);
     } else {
       // Insert new record
-      await db.transactionReference.create({
-        data: {
-          salesOrder: salesOrder || null,
-          purchaseOrder: purchaseOrder || null,
-          salesDelivery: salesDelivery || null,
-          paymentToSupplier: paymentToSupplier || null,
-          salesInvoice: salesInvoice || null,
-          customerPayment: customerPayment || null,
-          deliveryReceipt: deliveryReceipt || null,
-          stockAdjustment: stockAdjustment || null,
-          salesHold: salesHold || null,
-          receiptNumber: receiptNumber || '00000001'
-        }
-      });
+      await query(`
+        INSERT INTO transaction_references (
+          sales_order, purchase_order, sales_delivery, payment_to_supplier,
+          sales_invoice, customer_payment, delivery_receipt, stock_adjustment, sales_hold,
+          receipt_number
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        salesOrder || null,
+        purchaseOrder || null,
+        salesDelivery || null,
+        paymentToSupplier || null,
+        salesInvoice || null,
+        customerPayment || null,
+        deliveryReceipt || null,
+        stockAdjustment || null,
+        salesHold || null,
+        receiptNumber || null
+      ]);
     }
 
     return NextResponse.json({

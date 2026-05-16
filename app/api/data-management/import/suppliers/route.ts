@@ -1,8 +1,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 import Papa from 'papaparse';
-import { Decimal } from '@prisma/client/runtime/library';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,34 +37,44 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Check if exists by name (name is unique in schema)
-        const existing = await db.supplier.findUnique({
-          where: { name: s.name }
-        });
-
-        const supplierData = {
-          contactNumber: s.contact_number || null,
-          address: s.address || null,
-          paymentTerms: s.payment_terms || null,
-          markupPercentage: new Decimal(parseFloat(s.markup_percentage) || 0),
-          tin: s.tin || null,
-        };
+        // Check if exists by name (suppliers usually unique by name)
+        const [existing]: any = await query('SELECT id FROM suppliers WHERE name = ?', [s.name]);
 
         if (existing) {
           // Update existing supplier
-          await db.supplier.update({
-            where: { name: s.name },
-            data: supplierData,
-          });
+          await query(
+            `UPDATE suppliers SET 
+              contact_number = ?, 
+              address = ?, 
+              payment_terms = ?, 
+              markup_percentage = ?,
+              updated_at = NOW()
+            WHERE id = ?`,
+            [
+              s.contact_number || null,
+              s.address || null,
+              s.payment_terms || null,
+              parseFloat(s.markup_percentage) || null,
+              existing.id
+            ]
+          );
           updateCount++;
         } else {
           // Insert new supplier
-          await db.supplier.create({
-            data: {
-              ...supplierData,
-              name: s.name,
-            },
-          });
+          await query(
+            `INSERT INTO suppliers (
+              id, name, contact_number, address, payment_terms, markup_percentage,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+            [
+              uuidv4(),
+              s.name,
+              s.contact_number || null,
+              s.address || null,
+              s.payment_terms || null,
+              parseFloat(s.markup_percentage) || null
+            ]
+          );
           successCount++;
         }
       } catch (err) {

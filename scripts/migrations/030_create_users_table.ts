@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 
 const migration: Migration = {
   name: '030_create_users_table',
@@ -7,7 +7,7 @@ const migration: Migration = {
 
   async up(): Promise<void> {
     // Create users table
-    await db.$executeRawUnsafe(`
+    await query(`
       CREATE TABLE IF NOT EXISTS users (
         uid VARCHAR(255) PRIMARY KEY,
         username VARCHAR(100) NOT NULL UNIQUE,
@@ -16,18 +16,17 @@ const migration: Migration = {
         disabled BOOLEAN DEFAULT FALSE,
         creation_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_username (username),
+        INDEX idx_disabled (disabled)
       )
     `);
-
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_username ON users (username)`);
-    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_disabled ON users (disabled)`);
 
     console.log('✅ Users table created');
   },
 
   async down(): Promise<void> {
-    await db.$executeRawUnsafe('DROP TABLE IF EXISTS users CASCADE');
+    await query('DROP TABLE IF EXISTS users');
     console.log('✅ Users table dropped');
   }
 };

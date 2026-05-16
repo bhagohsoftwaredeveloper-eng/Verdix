@@ -1,6 +1,6 @@
 'use server';
 
-import { db } from '@/lib/db';
+import { query } from '@/lib/mysql';
 import { calculatePurchaseCosts, PurchaseItem } from '@/lib/purchase-utils';
 
 /**
@@ -8,31 +8,40 @@ import { calculatePurchaseCosts, PurchaseItem } from '@/lib/purchase-utils';
  */
 export async function getPurchaseCostDetails(orderId: string) {
   try {
-    // 1. Fetch Purchase Order and its items
-    const po = await db.purchaseOrder.findUnique({
-      where: { id: orderId },
-      include: {
-        items: true
-      }
-    });
+    // 1. Fetch Purchase Order
+    const poResult = await query(
+      'SELECT total, shipping_fee, vat_amount, status FROM purchase_orders WHERE id = ?',
+      [orderId]
+    );
 
-    if (!po) {
+    if (!poResult || poResult.length === 0) {
       return { success: false, error: 'Purchase order not found' };
     }
 
-    // 2. Map items to PurchaseItem type
-    const items: PurchaseItem[] = po.items.map((item) => ({
-      productId: item.productId,
-      productName: item.productName,
-      quantity: item.quantity,
-      cost: Number(item.cost),
-      discount: Number(item.discount),
-      discountType: item.discountType,
-      vatSubject: item.vatSubject
+    const po = poResult[0];
+
+    // 2. Fetch Items
+    const itemsResult = await query(
+      `SELECT 
+        product_id as productId, 
+        product_name as productName, 
+        quantity, 
+        cost, 
+        discount, 
+        discount_type as discountType, 
+        vat_subject as vatSubject 
+      FROM purchase_order_items 
+      WHERE purchase_order_id = ?`,
+      [orderId]
+    );
+
+    const items: PurchaseItem[] = itemsResult.map((item: any) => ({
+      ...item,
+      vatSubject: item.vatSubject === 1
     }));
 
     // 3. Calculate using utility
-    const calculations = calculatePurchaseCosts(items, Number(po.shippingFee || 0));
+    const calculations = calculatePurchaseCosts(items, parseFloat(po.shipping_fee || '0'));
 
     return {
       success: true,

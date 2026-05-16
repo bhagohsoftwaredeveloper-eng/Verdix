@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { withTransaction } from '@/lib/db-helpers';
+import { query } from '../../../../lib/mysql';
 
 export async function PATCH(
   request: NextRequest,
@@ -10,55 +9,56 @@ export async function PATCH(
   try {
     const { id } = params;
     const body = await request.json();
-    const {
-      name,
-      description,
-      category,
-      brand,
-      stock,
-      price,
-      cost,
-      sku,
+    const { 
+      name, 
+      description, 
+      category, 
+      brand, 
+      stock, 
+      price, 
+      cost, 
+      sku, 
       barcode,
-      stockIncrement
+      stockIncrement 
     } = body;
 
     // Handle atomic stock increment if provided
     if (stockIncrement !== undefined) {
-      const updatedProduct = await db.product.update({
-        where: { id },
-        data: {
-          stock: {
-            increment: Number(stockIncrement),
-          },
-        },
-      });
-
+      await query(
+        'UPDATE products SET stock = stock + ? WHERE id = ?',
+        [Number(stockIncrement), id]
+      );
+      
+      // Fetch updated product to return
+      const updatedProduct = await query('SELECT * FROM products WHERE id = ?', [id]);
+      
       return NextResponse.json({
         success: true,
-        data: updatedProduct,
+        data: updatedProduct[0],
         message: 'Product stock updated successfully'
       });
     }
 
     // Handle general updates
-    const updateData: any = {};
+    const updates: string[] = [];
+    const values: any[] = [];
 
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (category !== undefined) updateData.category = category;
-    if (brand !== undefined) updateData.brand = brand;
-    if (stock !== undefined) updateData.stock = Number(stock);
-    if (price !== undefined) updateData.price = Number(price);
-    if (cost !== undefined) updateData.cost = cost ? Number(cost) : null;
-    if (sku !== undefined) updateData.sku = sku;
-    if (barcode !== undefined) updateData.barcode = barcode;
+    if (name !== undefined) { updates.push('name = ?'); values.push(name); }
+    if (description !== undefined) { updates.push('description = ?'); values.push(description); }
+    if (category !== undefined) { updates.push('category = ?'); values.push(category); }
+    if (brand !== undefined) { updates.push('brand = ?'); values.push(brand); }
+    if (stock !== undefined) { updates.push('stock = ?'); values.push(stock); }
+    if (price !== undefined) { updates.push('price = ?'); values.push(price); }
+    if (cost !== undefined) { updates.push('cost = ?'); values.push(cost); }
+    if (sku !== undefined) { updates.push('sku = ?'); values.push(sku); }
+    if (barcode !== undefined) { updates.push('barcode = ?'); values.push(barcode); }
 
-    if (Object.keys(updateData).length > 0) {
-      await db.product.update({
-        where: { id },
-        data: updateData,
-      });
+    if (updates.length > 0) {
+      values.push(id);
+      await query(
+        `UPDATE products SET ${updates.join(', ')} WHERE id = ?`,
+        values
+      );
     }
 
     return NextResponse.json({

@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { db } from '@/lib/db';
+import { query } from '../../lib/mysql';
 
 const migration: Migration = {
   name: '043_alter_purchase_orders_add_tracking_fields',
@@ -8,27 +8,36 @@ const migration: Migration = {
   async up(): Promise<void> {
     const addFields = `
       ALTER TABLE purchase_orders
-      ADD COLUMN IF NOT EXISTS ordered_by VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS shipping_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-      ADD COLUMN IF NOT EXISTS vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-      ADD COLUMN IF NOT EXISTS delivery_date TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS received_total DECIMAL(10,2) NOT NULL DEFAULT 0.00
+      ADD COLUMN ordered_by VARCHAR(255) NULL AFTER supplier_name,
+      ADD COLUMN shipping_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total,
+      ADD COLUMN vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER shipping_fee,
+      ADD COLUMN delivery_date DATETIME NULL AFTER date,
+      ADD COLUMN received_total DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER total
     `;
 
-    await db.$executeRawUnsafe(addFields);
-    console.log('✅ Purchase orders table updated with new tracking fields');
+    try {
+      await query(addFields);
+      console.log('✅ Purchase orders table updated with new tracking fields');
+    } catch (error: any) {
+      // Ignore if columns already exist (safe guard for re-running)
+      if (error.code === 'ER_DUP_FIELDNAME') {
+        console.log('⚠️ Columns already exist in purchase_orders table');
+      } else {
+        throw error;
+      }
+    }
   },
 
   async down(): Promise<void> {
     const dropFields = `
       ALTER TABLE purchase_orders
-      DROP COLUMN IF EXISTS ordered_by,
-      DROP COLUMN IF EXISTS shipping_fee,
-      DROP COLUMN IF EXISTS vat_amount,
-      DROP COLUMN IF EXISTS delivery_date,
-      DROP COLUMN IF EXISTS received_total
+      DROP COLUMN ordered_by,
+      DROP COLUMN shipping_fee,
+      DROP COLUMN vat_amount,
+      DROP COLUMN delivery_date,
+      DROP COLUMN received_total
     `;
-    await db.$executeRawUnsafe(dropFields);
+    await query(dropFields);
     console.log('✅ Purchase orders table tracking fields dropped');
   }
 };
