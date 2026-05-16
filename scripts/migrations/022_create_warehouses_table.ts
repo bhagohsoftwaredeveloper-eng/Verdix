@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '022_create_warehouses_table',
@@ -16,22 +16,23 @@ const migration: Migration = {
           location VARCHAR(255),
           is_active BOOLEAN DEFAULT TRUE,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `;
 
-      await query(createWarehousesTable);
+      await db.$executeRawUnsafe(createWarehousesTable);
       console.log('✅ Warehouses table created successfully');
 
       // Insert some default warehouses
       const insertDefaultWarehouses = `
-        INSERT IGNORE INTO warehouses (id, name, location, is_active) VALUES
+        INSERT INTO warehouses (id, name, location, is_active) VALUES
         ('wh_main', 'Main Warehouse', 'Building A, Floor 1', TRUE),
         ('wh_secondary', 'Secondary Warehouse', 'Building B, Floor 2', TRUE),
         ('wh_distribution', 'Distribution Center', 'Building C, Ground Floor', TRUE)
+        ON CONFLICT (id) DO NOTHING
       `;
 
-      await query(insertDefaultWarehouses);
+      await db.$executeRawUnsafe(insertDefaultWarehouses);
       console.log('✅ Default warehouses inserted successfully');
 
     } catch (error) {
@@ -43,7 +44,7 @@ const migration: Migration = {
   async down(): Promise<void> {
     try {
       console.log('Dropping warehouses table...');
-      await query('DROP TABLE IF EXISTS warehouses');
+      await db.$executeRawUnsafe('DROP TABLE IF EXISTS warehouses');
       console.log('✅ Warehouses table dropped successfully');
     } catch (error) {
       console.error('❌ Error dropping warehouses table:', error);

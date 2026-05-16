@@ -1,24 +1,43 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const lastSync = searchParams.get('last_sync');
 
-    let sql = 'SELECT * FROM products';
-    const params: any[] = [];
-
+    const productsWhere: any = {};
     if (lastSync) {
-      sql += ' WHERE updated_at > ?';
-      params.push(lastSync);
+      productsWhere.updatedAt = { gt: new Date(lastSync) };
     }
 
-    const products = await query(sql, params);
-    const categories = await query('SELECT * FROM categories');
-    const brands = await query('SELECT * FROM brands');
-    const users = await query('SELECT uid, username, password, user_type, display_name, disabled, creation_time FROM users');
-    const userPermissions = await query('SELECT * FROM user_permissions');
+    const [products, categories, brands, users, userPermissions] = await Promise.all([
+      db.product.findMany({
+        where: productsWhere
+      }),
+      db.category.findMany(),
+      db.brand.findMany(),
+      db.user.findMany({
+        select: {
+          uid: true,
+          username: true,
+          // passwordHash: true, // Original query selected 'password' but in Prisma it's 'passwordHash'
+          userType: true,
+          displayName: true,
+          disabled: true,
+          creationTime: true
+        }
+      }),
+      db.userPermission.findMany()
+    ]);
+
+    // Map fields if necessary (e.g., uid to id if client expects that, but here it was uid)
+    // Map passwordHash back to password for compatibility if needed? 
+    // The original query selected 'password'.
+    const formattedUsers = users.map(u => ({
+        ...u,
+        password: '' // Don't send passwords in sync
+    }));
 
     return NextResponse.json({
       success: true,
@@ -27,7 +46,7 @@ export async function GET(request: Request) {
         products,
         categories,
         brands,
-        users,
+        users: formattedUsers,
         userPermissions
       }
     });

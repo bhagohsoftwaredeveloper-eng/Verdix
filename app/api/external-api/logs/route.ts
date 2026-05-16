@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 /**
  * GET /api/external-api/logs
@@ -13,61 +14,25 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    let sql = `
-      SELECT *
-      FROM external_api_logs
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    const where: Prisma.ExternalApiLogWhereInput = {};
 
     if (status) {
-      sql += ' AND status = ?';
-      params.push(status);
+      where.status = status;
     }
 
     if (transactionType) {
-      sql += ' AND transaction_type = ?';
-      params.push(transactionType);
+      where.transactionType = transactionType;
     }
 
-    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-
-    const rawLogs: any[] = await query(sql, params);
-    
-    // Map snake_case DB columns to camelCase for the frontend
-    const logs = rawLogs.map((log: any) => ({
-      id: log.id,
-      transactionType: log.transaction_type,
-      transactionId: log.transaction_id,
-      endpoint: log.endpoint,
-      payload: log.payload,
-      response: log.response,
-      status: log.status,
-      errorMessage: log.error_message,
-      retryCount: log.retry_count,
-      nextRetryAt: log.next_retry_at,
-      lastRetryAt: log.last_retry_at,
-      createdAt: log.created_at,
-      updatedAt: log.updated_at,
-    }));
-
-    // Get total count
-    let countSql = 'SELECT COUNT(*) as total FROM external_api_logs WHERE 1=1';
-    const countParams: any[] = [];
-
-    if (status) {
-      countSql += ' AND status = ?';
-      countParams.push(status);
-    }
-
-    if (transactionType) {
-      countSql += ' AND transaction_type = ?';
-      countParams.push(transactionType);
-    }
-
-    const countResult = await query(countSql, countParams);
-    const total = countResult[0]?.total || 0;
+    const [logs, total] = await Promise.all([
+      db.externalApiLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      db.externalApiLog.count({ where }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -108,32 +73,24 @@ export async function POST(request: NextRequest) {
       lastRetryAt,
     } = body;
 
-    const logId = `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    const insertQuery = `
-      INSERT INTO external_api_logs (
-        id, transaction_type, transaction_id, endpoint, payload,
-        response, status, error_message, retry_count, next_retry_at, last_retry_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    await query(insertQuery, [
-      logId,
-      transactionType,
-      transactionId,
-      endpoint,
-      payload,
-      response,
-      status,
-      errorMessage || null,
-      retryCount || 0,
-      nextRetryAt || null,
-      lastRetryAt || null,
-    ]);
+    const log = await db.externalApiLog.create({
+      data: {
+        transactionType,
+        transactionId,
+        endpoint,
+        payload,
+        response,
+        status,
+        errorMessage: errorMessage || null,
+        retryCount: retryCount || 0,
+        nextRetryAt: nextRetryAt ? new Date(nextRetryAt) : null,
+        lastRetryAt: lastRetryAt ? new Date(lastRetryAt) : null,
+      },
+    });
 
     return NextResponse.json({
       success: true,
-      logId,
+      logId: log.id,
     });
   } catch (error) {
     console.error('Error creating API log:', error);

@@ -1,38 +1,30 @@
-
-import mysql from 'mysql2/promise';
+import { db } from '../../lib/db';
 import dotenv from 'dotenv';
-import path from 'path';
 
 // Load environment variables from .env file
 dotenv.config({ path: '../../.env' });
 
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'rootpassword',
-  database: 'stock_pilot',
-};
-
 async function migrate() {
-  let connection;
   try {
-    console.log('Connecting to database...');
-    connection = await mysql.createConnection(dbConfig);
+    console.log('Verifying database connection...');
+    await db.$connect();
     console.log('Connected.');
 
-    console.log('Adding cash_denominations column to shifts table...');
+    console.log('Checking for cash_denominations column in shifts table...');
     
-    // Check if column exists first
-    const [columns] = await connection.query(`
-        SELECT COLUMN_NAME 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'shifts' AND COLUMN_NAME = 'cash_denominations'
-    `, [dbConfig.database]);
+    // Check if column exists in PostgreSQL
+    const columnExists: any[] = await db.$queryRaw`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'shifts' AND column_name = 'cash_denominations'
+    `;
 
-    if ((columns as any[]).length === 0) {
-        await connection.query(`
+    if (columnExists.length === 0) {
+        console.log('Adding cash_denominations column to shifts table...');
+        // Using JSONB for PostgreSQL which is the default mapping for Prisma Json type
+        await db.$executeRawUnsafe(`
             ALTER TABLE shifts
-            ADD COLUMN cash_denominations JSON NULL AFTER cash_difference
+            ADD COLUMN cash_denominations JSONB
         `);
         console.log('Column cash_denominations added successfully.');
     } else {
@@ -43,7 +35,7 @@ async function migrate() {
     console.error('Migration failed:', error);
     process.exit(1);
   } finally {
-    if (connection) await connection.end();
+    await db.$disconnect();
   }
 }
 

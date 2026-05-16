@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction, query } from '@/lib/mysql';
-import { syncFamilyStockDuringTransfer } from '@/lib/family-sync';
+import { db } from '@/lib/db';
 import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
 import { processTransferStock } from '@/lib/transfer-actions';
 
@@ -26,9 +25,11 @@ export async function POST(request: NextRequest) {
       // Need to find the source warehouse ID for each product if not provided
       let sourceWhId = t.sourceWarehouseId;
       if (!sourceWhId) {
-        const rows: any = await query('SELECT warehouse_id FROM products WHERE id = ?', [t.sourceProductId]);
-        const p = rows[0];
-        sourceWhId = p?.warehouse_id || 'unassigned';
+        const p = await db.product.findUnique({
+          where: { id: t.sourceProductId },
+          select: { warehouseId: true }
+        });
+        sourceWhId = p?.warehouseId || 'unassigned';
       }
       
       if (!groupedBySource[sourceWhId]) groupedBySource[sourceWhId] = [];
@@ -44,14 +45,16 @@ export async function POST(request: NextRequest) {
 
       if (isApprovalRequired) {
         // Enrich data for approval center
-        const [sourceRes, targetRes]: any = await Promise.all([
-          query(`SELECT name FROM warehouses WHERE id = ?`, [sourceWhId]),
-          query(`SELECT name FROM warehouses WHERE id = ?`, [targetWhId])
+        const [sourceWh, targetWh] = await Promise.all([
+          db.warehouse.findUnique({ where: { id: sourceWhId }, select: { name: true } }),
+          db.warehouse.findUnique({ where: { id: targetWhId }, select: { name: true } })
         ]);
 
         const enrichedItems = await Promise.all(items.map(async item => {
-          const rows: any = await query('SELECT name, sku, barcode FROM products WHERE id = ?', [item.sourceProductId]);
-          const p = rows[0];
+          const p = await db.product.findUnique({
+            where: { id: item.sourceProductId },
+            select: { name: true, sku: true, barcode: true }
+          });
           return {
             productId: item.sourceProductId,
             productName: p?.name || 'Unknown',
@@ -65,9 +68,9 @@ export async function POST(request: NextRequest) {
         const approvalData = {
           sourceWarehouseId: sourceWhId,
           targetWarehouseId: targetWhId,
-          fromWarehouseName: sourceRes[0]?.name || 'Unknown',
-          toWarehouseName: targetRes[0]?.name || 'Unknown',
-          transferDate: new Date().toISOString().slice(0, 19).replace('T', ' '),
+          fromWarehouseName: sourceWh?.name || 'Unknown',
+          toWarehouseName: targetWh?.name || 'Unknown',
+          transferDate: new Date().toISOString(),
           notes: globalNotes || 'Bulk Warehouse Transfer',
           items: enrichedItems
         };
@@ -84,11 +87,13 @@ export async function POST(request: NextRequest) {
       const transferPayload = {
         sourceWarehouseId: sourceWhId,
         targetWarehouseId: targetWhId,
-        transferDate: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        transferDate: new Date().toISOString(),
         notes: globalNotes || 'Bulk Warehouse Transfer',
         items: await Promise.all(items.map(async item => {
-          const rows: any = await query('SELECT name FROM products WHERE id = ?', [item.sourceProductId]);
-          const p = rows[0];
+          const p = await db.product.findUnique({
+            where: { id: item.sourceProductId },
+            select: { name: true }
+          });
           return {
             productId: item.sourceProductId,
             productName: p?.name || 'Unknown',

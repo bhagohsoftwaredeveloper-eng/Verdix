@@ -1,50 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
-import { format } from 'date-fns';
+import { db } from '@/lib/db';
+import { format, startOfDay, endOfDay } from 'date-fns';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const date = searchParams.get('date'); // Format: yyyy-MM-dd
+    const dateParam = searchParams.get('date'); // Format: yyyy-MM-dd
     const terminalId = searchParams.get('terminalId');
 
-    if (!date) {
+    if (!dateParam) {
       return NextResponse.json({ success: false, error: 'Date is required' }, { status: 400 });
     }
 
-    // Fetch transactions with items for the specific date
-    let sql = `
-      SELECT 
-        st.invoice_date,
-        st.reference as si_number,
-        st.receipt_number as or_number,
-        u.display_name as cashier,
-        si.product_name,
-        si.quantity,
-        si.price,
-        pt.discount_amount as total_discount,
-        pt.tax_amount as total_vat,
-        st.total as total_amount,
-        st.status,
-        st.created_at,
-        c.name as customer_name
-      FROM sales_transactions st
-      JOIN pos_transactions pt ON st.id = pt.sale_id
-      JOIN sale_items si ON st.id = si.sale_id
-      JOIN users u ON pt.user_id = u.uid
-      LEFT JOIN customers c ON st.customer_id = c.id
-      WHERE DATE(st.created_at) = ? AND st.is_training = 0
-    `;
-
-    const params: any[] = [date];
-    if (terminalId && terminalId !== 'all') {
-      sql += ` AND pt.terminal_id = ?`;
-      params.push(terminalId);
+    const date = new Date(dateParam);
+    if (isNaN(date.getTime())) {
+      return NextResponse.json({ success: false, error: 'Invalid date format' }, { status: 400 });
     }
 
-    sql += ` ORDER BY st.created_at ASC, si.id ASC`;
+    const start = startOfDay(date);
+    const end = endOfDay(date);
 
-    const transactions = await query(sql, params) as any[];
+    // Fetch transactions with items for the specific date
+    const salesTransactions = await db.salesTransaction.findMany({
+      where: {
+        createdAt: {
+          gte: start,
+          lte: end,
+        },
+        isTraining: false,
+        posTransaction: terminalId && terminalId !== 'all' ? {
+          terminalId: terminalId
+        } : undefined
+      },
+      include: {
+        posTransaction: {
+          include: {
+            user: true
+          }
+        },
+        items: true,
+        customer: true
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
+
+    const transactions: any[] = [];
+    salesTransactions.forEach(st => {
+      // Create a flat array of items mirroring the SQL JOIN structure
+      st.items.forEach(si => {
+        transactions.push({
+          invoice_date: st.invoiceDate,
+          si_number: st.reference,
+          or_number: st.receiptNumber,
+          cashier: st.posTransaction?.user?.displayName || '',
+          product_name: si.productName,
+          quantity: si.quantity,
+          price: Number(si.price),
+          total_discount: Number(st.posTransaction?.discountAmount || 0),
+          total_vat: Number(st.posTransaction?.taxAmount || 0),
+          total_amount: Number(st.total),
+          status: st.status,
+          created_at: st.createdAt,
+          customer_name: st.customer?.name || ''
+        });
+      });
+    });
 
     if (transactions.length === 0) {
       // Still return an empty file with a header rather than an error
@@ -52,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     // Format into text
     // Header for BIR E-Journal
-    let content = `E-JOURNAL EXPORT - ${date}\n`;
+    let content = `E-JOURNAL EXPORT - ${dateParam}\n`;
     content += `Generated on: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}\n`;
     content += `Terminal: ${terminalId || 'All'}\n`;
     content += `------------------------------------------------------------------------------------------------------------------------------------\n`;
@@ -83,13 +105,17 @@ export async function GET(request: NextRequest) {
 
     // Update last_ejournal_export in pos_settings if it's for today or past
     if (transactions.length > 0) {
-       await query('UPDATE pos_settings SET last_ejournal_export = NOW() WHERE 1=1');
+       await db.posSettings.updateMany({
+           data: {
+               lastEjournalExport: new Date()
+           }
+       });
     }
 
     return new NextResponse(content, {
       headers: {
         'Content-Type': 'text/plain',
-        'Content-Disposition': `attachment; filename="ejournal_${date}_${terminalId || 'all'}.txt"`,
+        'Content-Disposition': `attachment; filename="ejournal_${dateParam}_${terminalId || 'all'}.txt"`,
       },
     });
 

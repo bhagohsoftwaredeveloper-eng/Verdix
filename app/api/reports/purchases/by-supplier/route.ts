@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,39 +8,64 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const search = searchParams.get('search');
 
-    let sql = `
-      SELECT 
-        s.id as supplierId,
-        s.name as supplierName,
-        s.contact_person as contactPerson,
-        COUNT(po.id) as totalOrders,
-        SUM(po.total) as totalSpent,
-        MAX(po.date) as lastPurchaseDate
-      FROM suppliers s
-      JOIN purchase_orders po ON s.id = po.supplier_id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-
+    const dateFilter: any = {};
     if (startDate) {
-      sql += ' AND po.date >= ?';
-      params.push(startDate);
+      dateFilter.gte = new Date(startDate);
     }
-
     if (endDate) {
-      sql += ' AND po.date <= ?';
-      params.push(`${endDate} 23:59:59`);
+      const endDateObj = new Date(endDate);
+      endDateObj.setHours(23, 59, 59, 999);
+      dateFilter.lte = endDateObj;
     }
 
-    if (search) {
-      sql += ' AND (s.name LIKE ? OR s.contact_person LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
-    }
+    // Get purchase orders with date filter
+    const purchaseOrders = await db.purchaseOrder.groupBy({
+      by: ['supplierId'],
+      where: Object.keys(dateFilter).length > 0 ? {
+        date: dateFilter
+      } : {},
+      _count: {
+        id: true
+      },
+      _sum: {
+        total: true
+      },
+      _max: {
+        date: true
+      }
+    });
 
-    sql += ' GROUP BY s.id, s.name, s.contact_person';
-    sql += ' ORDER BY totalSpent DESC';
+    // Get supplier details
+    const supplierIds = purchaseOrders.map(po => po.supplierId);
+    const suppliers = await db.supplier.findMany({
+      where: { id: { in: supplierIds } },
+      select: {
+        id: true,
+        name: true
+      }
+    });
 
-    const results = await query(sql, params);
+    const supplierMap = new Map(suppliers.map(s => [s.id, s]));
+
+    const results = purchaseOrders
+      .map(po => {
+        const supplier = supplierMap.get(po.supplierId);
+        return {
+          supplierId: po.supplierId,
+          supplierName: supplier?.name,
+          totalOrders: po._count.id,
+          totalSpent: parseFloat((po._sum.total?.toNumber?.() || 0).toFixed(2)),
+          lastPurchaseDate: po._max.date
+        };
+      })
+      .filter(item => {
+        if (search) {
+          const searchLower = search.toLowerCase();
+          return item.supplierName?.toLowerCase().includes(searchLower);
+        }
+        return true;
+      })
+      .sort((a, b) => b.totalSpent - a.totalSpent);
 
     return NextResponse.json({
       success: true,

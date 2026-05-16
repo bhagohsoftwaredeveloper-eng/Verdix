@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MySqlStockCountRepository } from '../../../../../../src/infrastructure/repositories/MySqlStockCountRepository';
 import { CompleteStockCountUseCase } from '../../../../../../src/core/inventory/application/CompleteStockCountUseCase';
 import { checkApprovalRequired, submitToApprovalQueue } from '../../../../../../lib/approvals';
-import { query } from '../../../../../../lib/mysql';
+import { db } from '../../../../../../lib/db';
 
 // Initialize dependencies
 const stockCountRepository = new MySqlStockCountRepository();
@@ -22,25 +22,25 @@ export async function POST(
 
     if (isApprovalRequired) {
       // Fetch some details for enrichment
-      const countRes: any = await query(`
-        SELECT sc.name, w.name as warehouseName, sl.name as shelfName
+      const countRes: any = await db.$queryRawUnsafe(`
+        SELECT sc.name, w.name as "warehouseName"
         FROM stock_counts sc
         LEFT JOIN warehouses w ON sc.warehouse_id = w.id
-        LEFT JOIN shelf_locations sl ON sc.shelf_location_id = sl.id
-        WHERE sc.id = ?
-      `, [id]);
+        WHERE sc.id = $1
+      `, id);
+      
       const countName = countRes[0]?.name || 'Unknown Count';
       const warehouseName = countRes[0]?.warehouseName || 'All Warehouses';
-      const shelfName = countRes[0]?.shelfName || 'All Shelves';
+      const shelfName = 'All Shelves';
 
       // Fetch items with variances for enrichment
       const itemsSql = `
-        SELECT sci.*, p.name as productName, p.sku as productSku, p.barcode as productBarcode
+        SELECT sci.*, p.name as "productName", p.sku as "productSku", p.barcode as "productBarcode"
         FROM stock_count_items sci
         JOIN products p ON sci.product_id = p.id
-        WHERE sci.stock_count_id = ? AND sci.counted_quantity IS NOT NULL AND sci.counted_quantity != sci.snapshot_quantity
+        WHERE sci.stock_count_id = $1 AND sci.counted_quantity IS NOT NULL AND sci.counted_quantity != sci.snapshot_quantity
       `;
-      const varianceItems = await query(itemsSql, [id]);
+      const varianceItems = await db.$queryRawUnsafe(itemsSql, id);
 
       const approvalData = {
         stockCountId: id,

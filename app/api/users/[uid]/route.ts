@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, withTransaction } from '@/lib/mysql';
-import { v4 as uuidv4 } from 'uuid';
+import { db } from '@/lib/db';
+import { withTransaction } from '@/lib/db-helpers';
 import { hash } from 'bcryptjs';
 
 // PUT /api/users/[uid] - Update user details and permissions
@@ -20,35 +20,41 @@ export async function PUT(
       );
     }
 
-    await withTransaction(async (connection) => {
-      // Update user basic info
-      let updateFields = ['username = ?', 'display_name = ?', 'user_type = ?'];
-      let queryParams = [username, displayName || username.split('@')[0], userType || 'User'];
-
+    await withTransaction(async (tx) => {
+      // Hash password if provided
+      let passwordHash = undefined;
       if (password) {
-        const hashedPassword = await hash(password, 10);
-        updateFields.push('password = ?');
-        queryParams.push(hashedPassword);
+        passwordHash = await hash(password, 10);
       }
 
-      queryParams.push(uid);
-      await connection.execute(
-        `UPDATE users SET ${updateFields.join(', ')} WHERE uid = ?`,
-        queryParams
-      );
+      // Update user basic info
+      const updateData: any = {
+        username,
+        displayName: displayName || username.split('@')[0]
+      };
 
-      // Update permissions
-      // Delete existing permissions for this user
-      await connection.execute('DELETE FROM user_permissions WHERE user_uid = ?', [uid]);
+      if (passwordHash) {
+        updateData.passwordHash = passwordHash;
+      }
 
-      // Insert new permissions
+      await tx.user.update({
+        where: { uid },
+        data: updateData
+      });
+
+      // Update permissions - delete existing and create new ones
+      await tx.userPermission.deleteMany({
+        where: { userUid: uid }
+      });
+
+      // Create new permissions
       if (permissions && permissions.length > 0) {
-        for (const permission of permissions) {
-          await connection.execute(
-            'INSERT INTO user_permissions (id, user_uid, permission) VALUES (?, ?, ?)',
-            [uuidv4(), uid, permission]
-          );
-        }
+        await tx.userPermission.createMany({
+          data: permissions.map((permission: string) => ({
+            userUid: uid,
+            permission
+          }))
+        });
       }
     });
 

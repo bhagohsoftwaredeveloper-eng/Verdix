@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '045_add_tax_rates',
@@ -9,21 +9,21 @@ const migration: Migration = {
     const createTaxRatesTable = `
       CREATE TABLE IF NOT EXISTS tax_rates (
         id VARCHAR(50) PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
+        name VARCHAR(100) NOT NULL UNIQUE,
         rate DECIMAL(5,2) NOT NULL,
         description TEXT,
         is_default BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
 
-    await query(createTaxRatesTable);
+    await db.$executeRawUnsafe(createTaxRatesTable);
     console.log('✅ Tax Rates table created');
   },
 
   async down(): Promise<void> {
-    await query('DROP TABLE IF EXISTS tax_rates');
+    await db.$executeRawUnsafe('DROP TABLE IF EXISTS tax_rates');
     console.log('✅ Tax Rates table dropped');
   }
 };

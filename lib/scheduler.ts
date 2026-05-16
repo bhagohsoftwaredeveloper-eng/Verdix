@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import cron from 'node-cron';
 import { performBackup } from './backup';
-import { query } from './mysql';
+import { db } from './db';
 import { getExternalApiConfig } from './external-api-config';
 import { 
   syncPurchaseTransaction, 
@@ -102,13 +102,26 @@ export async function processSyncQueue(): Promise<void> {
     if (!apiConfig.enabled) return;
 
     // Find items that are pending or failed and due for retry
-    const pendingItems = await query(`
-      SELECT * FROM external_api_logs 
-      WHERE (status = 'pending' OR status = 'failed')
-      AND (next_retry_at IS NULL OR next_retry_at <= NOW())
-      ORDER BY created_at ASC
-      LIMIT 10
-    `);
+    const pendingItems = await db.externalApiLog.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { status: 'pending' },
+              { status: 'failed' }
+            ]
+          },
+          {
+            OR: [
+              { nextRetryAt: null },
+              { nextRetryAt: { lte: new Date() } }
+            ]
+          }
+        ]
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 10
+    });
 
     if (pendingItems.length === 0) return;
 
@@ -119,44 +132,51 @@ export async function processSyncQueue(): Promise<void> {
         let syncResult: { success: boolean; error?: string };
         const payload = JSON.parse(log.payload);
 
-        console.log(`Retrying ${log.transaction_type} sync for ID: ${log.transaction_id}`);
+        console.log(`Retrying ${log.transactionType} sync for ID: ${log.transactionId}`);
 
-        switch (log.transaction_type) {
+        switch (log.transactionType) {
           case 'PURCHASE_ORDER':
-            syncResult = await syncPurchaseTransaction(log.transaction_id, payload, apiConfig);
+            syncResult = await syncPurchaseTransaction(log.transactionId, payload, apiConfig);
             break;
           case 'SUPPLIER_PAYMENT':
-            syncResult = await syncPaymentTransaction(log.transaction_id, payload, apiConfig);
+            syncResult = await syncPaymentTransaction(log.transactionId, payload, apiConfig);
             break;
           case 'SALES_INVOICE':
-            syncResult = await syncSalesTransaction(log.transaction_id, payload, apiConfig);
+            syncResult = await syncSalesTransaction(log.transactionId, payload, apiConfig);
             break;
           case 'ACCOUNTS_PAYABLE':
-            syncResult = await syncAccountsPayable(log.transaction_id, apiConfig);
+            syncResult = await syncAccountsPayable(log.transactionId, apiConfig);
             break;
           default:
-            console.warn(`Unsupported transaction type in sync queue: ${log.transaction_type}`);
+            console.warn(`Unsupported transaction type in sync queue: ${log.transactionType}`);
             continue;
         }
 
         if (syncResult.success) {
           // Success: Mark as success
-          await query('UPDATE external_api_logs SET status = "success", error_message = NULL, next_retry_at = NULL WHERE id = ?', [log.id]);
-          console.log(`✅ Success: Synced ${log.transaction_type} (${log.transaction_id})`);
+          await db.externalApiLog.update({
+            where: { id: log.id },
+            data: {
+              status: "success",
+              errorMessage: null,
+              nextRetryAt: null
+            }
+          });
+          console.log(`✅ Success: Synced ${log.transactionType} (${log.transactionId})`);
         } else {
           // Failure: Log but keep in queue (system will retry next sweep)
           const nextRetry = new Date();
           nextRetry.setMinutes(nextRetry.getMinutes() + 15); // Wait longer between sweeps
-          const nextRetryStr = nextRetry.toISOString().slice(0, 19).replace('T', ' ');
           
-          await query(`
-            UPDATE external_api_logs 
-            SET error_message = ?, 
-                last_retry_at = NOW(), 
-                next_retry_at = ? 
-            WHERE id = ?
-          `, [syncResult.error || 'Sync failed', nextRetryStr, log.id]);
-          console.log(`❌ Failed: Could not sync ${log.transaction_type} (${log.transaction_id}). Next retry at ${nextRetryStr}`);
+          await db.externalApiLog.update({
+            where: { id: log.id },
+            data: {
+              errorMessage: syncResult.error || 'Sync failed',
+              lastRetryAt: new Date(),
+              nextRetryAt: nextRetry
+            }
+          });
+          console.log(`❌ Failed: Could not sync ${log.transactionType} (${log.transactionId}). Next retry at ${nextRetry.toISOString()}`);
         }
       } catch (itemError) {
         console.error(`Error processing sync queue item ${log.id}:`, itemError);
@@ -177,8 +197,10 @@ export async function processPullSync(): Promise<void> {
 
     console.log('--- Pull Sync: Checking for updates from cloud ---');
 
-    const lastSyncSetting = await query("SELECT setting_value FROM external_api_settings WHERE setting_key = 'last_pull_sync'", []);
-    const lastSync = lastSyncSetting[0]?.setting_value || '';
+    const lastSyncSetting = await db.externalApiSettings.findUnique({
+      where: { settingKey: 'last_pull_sync' }
+    });
+    const lastSync = lastSyncSetting?.settingValue || '';
 
     const url = `${apiConfig.apiEndpoint}/sync/pull?last_sync=${encodeURIComponent(lastSync)}`;
     const response = await fetch(url);
@@ -196,72 +218,71 @@ export async function processPullSync(): Promise<void> {
       if (products && products.length > 0) {
         console.log(`Pull Sync: Received ${products.length} updated products.`);
         for (const product of products) {
-          await query(`
-            INSERT INTO products (
-              id, name, barcode, price, cost, stock, category, brand, created_at, updated_at,
-              description, additional_description, department, subcategory, reorder_point,
-              avg_daily_sales, sku, image_url, image_hint, unit_of_measure, parent_id,
-              conversion_factor, supplier_id, income_account, expense_account, warehouse_id,
-              vat_status, availability, earns_points, expiration_date, shelf_location_id
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            name = VALUES(name),
-            barcode = VALUES(barcode),
-            price = VALUES(price),
-            cost = VALUES(cost),
-            stock = VALUES(stock),
-            category = VALUES(category),
-            brand = VALUES(brand),
-            updated_at = VALUES(updated_at),
-            description = VALUES(description),
-            additional_description = VALUES(additional_description),
-            department = VALUES(department),
-            subcategory = VALUES(subcategory),
-            reorder_point = VALUES(reorder_point),
-            avg_daily_sales = VALUES(avg_daily_sales),
-            sku = VALUES(sku),
-            image_url = VALUES(image_url),
-            image_hint = VALUES(image_hint),
-            unit_of_measure = VALUES(unit_of_measure),
-            parent_id = VALUES(parent_id),
-            conversion_factor = VALUES(conversion_factor),
-            supplier_id = VALUES(supplier_id),
-            income_account = VALUES(income_account),
-            expense_account = VALUES(expense_account),
-            warehouse_id = VALUES(warehouse_id),
-            vat_status = VALUES(vat_status),
-            availability = VALUES(availability),
-            earns_points = VALUES(earns_points),
-            expiration_date = VALUES(expiration_date),
-            shelf_location_id = VALUES(shelf_location_id)
-          `, [
-            product.id, product.name, product.barcode, product.price, product.cost, 
-            product.stock, product.category, product.brand, 
-            product.created_at ? product.created_at.slice(0, 19).replace('T', ' ') : null,
-            product.updated_at ? product.updated_at.slice(0, 19).replace('T', ' ') : null,
-            product.description ?? null, 
-            product.additional_description ?? null, 
-            product.department ?? null, 
-            product.subcategory ?? null, 
-            product.reorder_point ?? null,
-            product.avg_daily_sales ?? null, 
-            product.sku ?? null, 
-            product.image_url ?? null, 
-            product.image_hint ?? null, 
-            product.unit_of_measure ?? null, 
-            product.parent_id ?? null,
-            product.conversion_factor ?? null, 
-            product.supplier_id ?? null, 
-            product.income_account ?? null, 
-            product.expense_account ?? null, 
-            product.warehouse_id ?? null,
-            product.vat_status ?? null, 
-            product.availability ?? null, 
-            product.earns_points ?? null, 
-            product.expiration_date ? product.expiration_date.slice(0, 10) : null,
-            product.shelf_location_id ?? null
-          ]);
+          await db.product.upsert({
+            where: { id: product.id },
+            create: {
+              id: product.id,
+              name: product.name,
+              barcode: product.barcode,
+              price: product.price,
+              cost: product.cost,
+              stock: product.stock,
+              category: product.category,
+              brand: product.brand,
+              description: product.description,
+              additionalDescription: product.additional_description,
+              department: product.department,
+              subcategory: product.subcategory,
+              reorderPoint: product.reorder_point,
+              avgDailySales: product.avg_daily_sales,
+              sku: product.sku,
+              imageUrl: product.image_url,
+              imageHint: product.image_hint,
+              unitOfMeasure: product.unit_of_measure,
+              parentId: product.parent_id,
+              supplierId: product.supplier_id,
+              incomeAccount: product.income_account,
+              expenseAccount: product.expense_account,
+              warehouseId: product.warehouse_id,
+              vatStatus: product.vat_status,
+              availability: product.availability,
+              earnsPoints: product.earns_points,
+              expirationDate: product.expiration_date ? new Date(product.expiration_date) : null,
+              shelfLocationId: product.shelf_location_id,
+              createdAt: product.created_at ? new Date(product.created_at) : new Date(),
+              updatedAt: product.updated_at ? new Date(product.updated_at) : new Date(),
+            },
+            update: {
+              name: product.name,
+              barcode: product.barcode,
+              price: product.price,
+              cost: product.cost,
+              stock: product.stock,
+              category: product.category,
+              brand: product.brand,
+              description: product.description,
+              additionalDescription: product.additional_description,
+              department: product.department,
+              subcategory: product.subcategory,
+              reorderPoint: product.reorder_point,
+              avgDailySales: product.avg_daily_sales,
+              sku: product.sku,
+              imageUrl: product.image_url,
+              imageHint: product.image_hint,
+              unitOfMeasure: product.unit_of_measure,
+              parentId: product.parent_id,
+              supplierId: product.supplier_id,
+              incomeAccount: product.income_account,
+              expenseAccount: product.expense_account,
+              warehouseId: product.warehouse_id,
+              vatStatus: product.vat_status,
+              availability: product.availability,
+              earnsPoints: product.earns_points,
+              expirationDate: product.expiration_date ? new Date(product.expiration_date) : null,
+              shelfLocationId: product.shelf_location_id,
+              updatedAt: product.updated_at ? new Date(product.updated_at) : new Date(),
+            }
+          });
         }
       }
 
@@ -269,13 +290,11 @@ export async function processPullSync(): Promise<void> {
       if (categories && categories.length > 0) {
         console.log(`Pull Sync: Received ${categories.length} categories.`);
         for (const cat of categories) {
-          await query(`
-            INSERT INTO categories (id, name, markup_percentage)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            name = VALUES(name),
-            markup_percentage = VALUES(markup_percentage)
-          `, [cat.id, cat.name, cat.markup_percentage]);
+          await db.category.upsert({
+            where: { id: cat.id },
+            create: { id: cat.id, name: cat.name, markupPercentage: cat.markup_percentage },
+            update: { name: cat.name, markupPercentage: cat.markup_percentage }
+          });
         }
       }
 
@@ -283,13 +302,11 @@ export async function processPullSync(): Promise<void> {
       if (brands && brands.length > 0) {
         console.log(`Pull Sync: Received ${brands.length} brands.`);
         for (const brand of brands) {
-          await query(`
-            INSERT INTO brands (id, name, markup_percentage)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            name = VALUES(name),
-            markup_percentage = VALUES(markup_percentage)
-          `, [brand.id, brand.name, brand.markup_percentage]);
+          await db.brand.upsert({
+            where: { id: brand.id },
+            create: { id: brand.id, name: brand.name, markupPercentage: brand.markup_percentage },
+            update: { name: brand.name, markupPercentage: brand.markup_percentage }
+          });
         }
       }
 
@@ -297,20 +314,25 @@ export async function processPullSync(): Promise<void> {
       if (users && users.length > 0) {
         console.log(`Pull Sync: Received ${users.length} users.`);
         for (const user of users) {
-          await query(`
-            INSERT INTO users (uid, username, password, user_type, display_name, disabled, creation_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            username = VALUES(username),
-            password = VALUES(password),
-            user_type = VALUES(user_type),
-            display_name = VALUES(display_name),
-            disabled = VALUES(disabled)
-          `, [
-            user.uid, user.username, user.password, user.user_type, 
-            user.display_name, user.disabled ? 1 : 0, 
-            user.creation_time ? user.creation_time.slice(0, 19).replace('T', ' ') : null
-          ]);
+          await db.user.upsert({
+            where: { uid: user.uid },
+            create: {
+              uid: user.uid,
+              username: user.username,
+              passwordHash: user.password,
+              userType: user.user_type,
+              displayName: user.display_name,
+              disabled: !!user.disabled,
+              creationTime: user.creation_time ? new Date(user.creation_time) : new Date()
+            },
+            update: {
+              username: user.username,
+              passwordHash: user.password,
+              userType: user.user_type,
+              displayName: user.display_name,
+              disabled: !!user.disabled
+            }
+          });
         }
       }
 
@@ -318,16 +340,24 @@ export async function processPullSync(): Promise<void> {
       if (userPermissions && userPermissions.length > 0) {
         console.log(`Pull Sync: Received ${userPermissions.length} user permissions.`);
         for (const perm of userPermissions) {
-          await query(`
-            INSERT INTO user_permissions (id, user_uid, permission)
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            permission = VALUES(permission)
-          `, [perm.id, perm.user_uid, perm.permission]);
+          await db.userPermission.upsert({
+            where: {
+              userUid_permission: {
+                userUid: perm.user_uid,
+                permission: perm.permission
+              }
+            },
+            create: { id: perm.id, userUid: perm.user_uid, permission: perm.permission },
+            update: { permission: perm.permission }
+          });
         }
       }
 
-      await query("INSERT INTO external_api_settings (setting_key, setting_value) VALUES ('last_pull_sync', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)", [result.timestamp]);
+      await db.externalApiSettings.upsert({
+        where: { settingKey: 'last_pull_sync' },
+        update: { settingValue: result.timestamp },
+        create: { settingKey: 'last_pull_sync', settingValue: result.timestamp }
+      });
       console.log(`✅ Success: Synced data down (Products, Categories, Brands, Users).`);
     }
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../lib/mysql';
+import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 // GET endpoint to fetch payment methods
 export async function GET(request: NextRequest) {
@@ -10,51 +11,28 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    let sql = `
-      SELECT
-        id,
-        name,
-        is_active AS isActive,
-        require_reference AS isReferenceRequired,
-        points_amount AS pointsAmount,
-        currency_equivalent AS currencyEquivalent,
-        created_at AS createdAt
-      FROM payment_methods
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    const where: Prisma.PaymentMethodWhereInput = {};
 
     if (activeOnly) {
-      sql += ' AND is_active = ?';
-      params.push(true);
+      where.isActive = true;
     }
 
     if (search) {
-      sql += ' AND name LIKE ?';
-      params.push(`%${search}%`);
+      where.name = {
+        contains: search,
+        mode: 'insensitive',
+      };
     }
 
-    sql += ' ORDER BY name ASC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-
-    const paymentMethods = await query(sql, params);
-
-    // Get total count for pagination
-    let countSql = 'SELECT COUNT(*) as total FROM payment_methods WHERE 1=1';
-    const countParams: any[] = [];
-
-    if (activeOnly) {
-      countSql += ' AND is_active = ?';
-      countParams.push(true);
-    }
-
-    if (search) {
-      countSql += ' AND name LIKE ?';
-      countParams.push(`%${search}%`);
-    }
-
-    const countResult = await query(countSql, countParams);
-    const total = countResult[0]?.total || 0;
+    const [paymentMethods, total] = await Promise.all([
+      db.paymentMethod.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      db.paymentMethod.count({ where }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -89,27 +67,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate ID
-    const id = `pm_${Date.now()}`;
-
-    const sql = `
-      INSERT INTO payment_methods (id, name, is_active, require_reference, points_amount, currency_equivalent)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
-
-    await query(sql, [id, name.trim(), isActive, isReferenceRequired, pointsAmount, currencyEquivalent]);
+    const newPaymentMethod = await db.paymentMethod.create({
+      data: {
+        name: name.trim(),
+        isActive,
+        isReferenceRequired,
+        pointsAmount,
+        currencyEquivalent,
+      },
+    });
 
     return NextResponse.json({
       success: true,
       message: 'Payment method created successfully',
-      data: { id, name: name.trim(), isActive, isReferenceRequired, pointsAmount, currencyEquivalent },
+      data: newPaymentMethod,
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
     console.error('Error creating payment method:', error);
 
-    // Handle duplicate name error
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'Payment method name already exists' },
         { status: 409 }

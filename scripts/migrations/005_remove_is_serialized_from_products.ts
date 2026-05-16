@@ -1,39 +1,23 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '005_remove_is_serialized_from_products',
   timestamp: '2025-26-11_17-22-00',
 
   async up(): Promise<void> {
-    // Check if column exists before dropping
-    const result = await query(`
-      SELECT COLUMN_NAME
-      FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'products'
-        AND COLUMN_NAME = 'is_serialized'
-    `);
-    if (result.length > 0) {
-      // Remove is_serialized column from products table
-      const alterProductsTable = `
-        ALTER TABLE products DROP COLUMN is_serialized
-      `;
-
-      await query(alterProductsTable);
-      console.log('✅ is_serialized column removed from products table');
-    } else {
-      console.log('ℹ️  is_serialized column does not exist, skipping drop');
-    }
+    // Remove is_serialized column from products table (PostgreSQL syntax)
+    await db.$executeRawUnsafe('ALTER TABLE products DROP COLUMN IF EXISTS is_serialized');
+    console.log('✅ is_serialized column removed from products table if it existed');
   },
 
   async down(): Promise<void> {
     // Add is_serialized column back
     const alterProductsTable = `
-      ALTER TABLE products ADD COLUMN is_serialized BOOLEAN DEFAULT FALSE AFTER image_hint
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS is_serialized BOOLEAN DEFAULT FALSE
     `;
 
-    await query(alterProductsTable);
+    await db.$executeRawUnsafe(alterProductsTable);
     console.log('✅ is_serialized column added back to products table');
   }
 };

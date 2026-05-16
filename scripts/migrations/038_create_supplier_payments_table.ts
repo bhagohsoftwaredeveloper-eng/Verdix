@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '038_create_supplier_payments_table',
@@ -12,24 +12,25 @@ const migration: Migration = {
         id VARCHAR(50) PRIMARY KEY,
         supplier_id VARCHAR(50) NOT NULL,
         amount DECIMAL(10,2) NOT NULL,
-        date DATETIME NOT NULL,
+        date TIMESTAMP NOT NULL,
         payment_method VARCHAR(100),
         reference VARCHAR(100),
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
-        INDEX idx_supplier_id (supplier_id),
-        INDEX idx_date (date)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
       )
     `;
 
-    await query(createSupplierPaymentsTable);
+    await db.$executeRawUnsafe(createSupplierPaymentsTable);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_sp_supplier_id ON supplier_payments (supplier_id)`);
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_sp_date ON supplier_payments (date)`);
+    
     console.log('✅ Supplier payments table created');
   },
 
   async down(): Promise<void> {
-    await query('DROP TABLE IF EXISTS supplier_payments');
+    await db.$executeRawUnsafe('DROP TABLE IF EXISTS supplier_payments CASCADE');
     console.log('✅ Supplier payments table dropped');
   }
 };

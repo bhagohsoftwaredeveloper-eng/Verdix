@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, withTransaction } from '../../../lib/mysql';
-import { getExternalApiConfig } from '../../../lib/external-api-config';
-import { syncPurchaseTransaction } from '../../../lib/services/external-accounting-api';
-import { calculatePurchaseCosts } from '../../../lib/purchase-utils';
-import { toSafeNumber } from '../../../lib/utils';
-import { processPurchaseOrderCreation } from '../../../lib/purchase-actions';
-import { checkApprovalRequired, submitToApprovalQueue } from '../../../lib/approvals';
+import { db } from '@/lib/db';
+import { getExternalApiConfig } from '@/lib/external-api-config';
+import { syncPurchaseTransaction } from '@/lib/services/external-accounting-api';
+import { calculatePurchaseCosts } from '@/lib/purchase-utils';
+import { toSafeNumber } from '@/lib/utils';
+import { processPurchaseOrderCreation } from '@/lib/purchase-actions';
+import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
+import { PurchaseOrderStatus } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,154 +19,94 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    let sql = `
-      SELECT
-        po.id,
-        po.supplier_id,
-        po.supplier_name,
-        po.date,
-        po.total,
-        po.payment_method,
-        po.status,
-        po.created_at,
-        po.updated_at,
-        po.ordered_by,
-        po.shipping_fee,
-        po.vat_amount,
-        po.delivery_date,
-        po.delivery_date,
-        po.received_total,
-        po.reference_number,
-        po.warehouse_id,
-        po.warehouse_name
-      FROM purchase_orders po
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    const where: any = {};
 
-    if (status) {
-      sql += ' AND po.status = ?';
-      params.push(status);
+    if (status && status !== 'all') {
+      where.status = status as PurchaseOrderStatus;
     }
 
-    if (supplierId) {
-      sql += ' AND po.supplier_id = ?';
-      params.push(supplierId);
+    if (supplierId && supplierId !== 'all') {
+      where.supplierId = supplierId;
     }
 
     if (search) {
-      sql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ? OR po.reference_number LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      where.OR = [
+        { id: { contains: search, mode: 'insensitive' } },
+        { supplierName: { contains: search, mode: 'insensitive' } },
+        { referenceNumber: { contains: search, mode: 'insensitive' } }
+      ];
     }
 
-    if (startDate) {
-      sql += ' AND po.date >= ?';
-      params.push(startDate);
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) {
+        where.date.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.date.lte = new Date(`${endDate}T23:59:59.999Z`);
+      }
     }
 
-    if (endDate) {
-      sql += ' AND po.date <= ?';
-      params.push(`${endDate} 23:59:59`);
-    }
+    const [purchaseOrders, total] = await Promise.all([
+      db.purchaseOrder.findMany({
+        where,
+        include: {
+          items: {
+            include: {
+              product: {
+                select: {
+                  barcode: true,
+                  stock: true
+                }
+              }
+            },
+            orderBy: {
+              createdAt: 'asc'
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        skip: offset,
+        take: limit
+      }),
+      db.purchaseOrder.count({ where })
+    ]);
 
-    sql += ' ORDER BY po.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-
-    const purchaseOrders = await query(sql, params);
-
-    // Fetch items for each order
-    const ordersWithItems = await Promise.all(
-      purchaseOrders.map(async (row: any) => {
-        const itemsQuery = `
-          SELECT
-            poi.id,
-            poi.product_id,
-            poi.product_name,
-            poi.quantity,
-            poi.cost,
-            poi.selling_price,
-            poi.discount,
-            poi.discount_type,
-            poi.vat_subject,
-            p.barcode,
-            p.stock as current_stock,
-            poi.subtotal
-          FROM purchase_order_items poi
-          LEFT JOIN products p ON poi.product_id = p.id
-          WHERE poi.purchase_order_id = ?
-          ORDER BY poi.created_at ASC
-        `;
-
-        const items = await query(itemsQuery, [row.id]);
-
-        return {
-          id: row.id,
-          supplierId: row.supplier_id,
-          supplierName: row.supplier_name,
-          date: row.date,
-          total: toSafeNumber(row.total),
-          paymentMethod: row.payment_method || '',
-          status: row.status,
-          // New tracking fields
-          orderedBy: row.ordered_by || '',
-          shippingFee: toSafeNumber(row.shipping_fee),
-          vatAmount: toSafeNumber(row.vat_amount),
-          deliveryDate: row.delivery_date ? row.delivery_date : undefined,
-          receivedTotal: toSafeNumber(row.received_total),
-          referenceNumber: row.reference_number || '',
-          warehouseId: row.warehouse_id || undefined,
-          warehouseName: row.warehouse_name || undefined,
-          items: items.map((item: any) => ({
-            productId: item.product_id,
-            productName: item.product_name,
-            quantity: toSafeNumber(item.quantity),
-            cost: toSafeNumber(item.cost),
-            sellingPrice: item.selling_price ? toSafeNumber(item.selling_price) : undefined,
-            discount: item.discount ? toSafeNumber(item.discount) : 0,
-            discountType: item.discount_type || 'amount',
-            vatSubject: item.vat_subject === 1,
-            barcode: item.barcode || undefined,
-            currentStock: toSafeNumber(item.current_stock),
-          })),
-        };
-      })
-    );
-
-    // Get total count for pagination
-    let countSql = 'SELECT COUNT(*) as total FROM purchase_orders po WHERE 1=1';
-    const countParams: any[] = [];
-
-    if (status) {
-      countSql += ' AND po.status = ?';
-      countParams.push(status);
-    }
-
-    if (supplierId) {
-      countSql += ' AND po.supplier_id = ?';
-      countParams.push(supplierId);
-    }
-
-    if (search) {
-      countSql += ' AND (po.id LIKE ? OR po.supplier_name LIKE ? OR po.reference_number LIKE ?)';
-      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
-
-    if (startDate) {
-      countSql += ' AND po.date >= ?';
-      countParams.push(startDate);
-    }
-
-    if (endDate) {
-      countSql += ' AND po.date <= ?';
-      countParams.push(`${endDate} 23:59:59`);
-    }
-
-    const countResult = await query(countSql, countParams);
-    const total = countResult[0]?.total || 0;
+    const formattedOrders = purchaseOrders.map((po) => ({
+      id: po.id,
+      supplierId: po.supplierId,
+      supplierName: po.supplierName,
+      date: po.date,
+      total: po.total.toNumber(),
+      paymentMethod: po.paymentMethod || '',
+      status: po.status,
+      orderedBy: po.orderedBy || '',
+      shippingFee: po.shippingFee.toNumber(),
+      vatAmount: po.vatAmount.toNumber(),
+      deliveryDate: po.deliveryDate || undefined,
+      receivedTotal: po.receivedTotal.toNumber(),
+      referenceNumber: po.referenceNumber || '',
+      warehouseId: po.warehouseId || undefined,
+      warehouseName: po.warehouseName || undefined,
+      items: po.items.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        cost: item.cost.toNumber(),
+        sellingPrice: item.sellingPrice?.toNumber(),
+        discount: item.discount.toNumber(),
+        discountType: item.discountType,
+        vatSubject: item.vatSubject,
+        barcode: item.product?.barcode || undefined,
+        currentStock: item.product?.stock.toNumber() || 0,
+      })),
+    }));
 
     return NextResponse.json({
       success: true,
-      data: ordersWithItems,
+      data: formattedOrders,
       pagination: {
         total,
         limit,
@@ -209,7 +150,6 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const formattedDate = new Date(date || new Date()).toISOString().slice(0, 19).replace('T', ' ');
     const calculations = calculatePurchaseCosts(items, shipping || 0);
     const finalTotal = calculations.grandTotal;
     const finalVatAmount = calculations.vatAmount;
@@ -241,7 +181,7 @@ export async function POST(request: NextRequest) {
       txData.isInternalFinalization = true;
     }
 
-    // Use helper for creation (or finalization if approval was skipped or not required)
+    // Use helper for creation
     const result = await processPurchaseOrderCreation(txData);
     const finalOrderId = (result as any).orderId;
 
@@ -250,10 +190,10 @@ export async function POST(request: NextRequest) {
       const apiConfig = await getExternalApiConfig();
       if (apiConfig.enabled) {
         const purchaseOrderData = {
-          id: orderId,
+          id: finalOrderId,
           supplierId,
           supplierName,
-          date: formattedDate,
+          date: new Date(date || new Date()),
           deliveryDate: body.deliveryDate || null,
           total: finalTotal || 0,
           vatAmount: finalVatAmount || 0,
@@ -265,19 +205,17 @@ export async function POST(request: NextRequest) {
           items,
         };
         
-        // Fire and forget - don't wait for external API
-        syncPurchaseTransaction(orderId, purchaseOrderData, apiConfig).catch(err => {
+        syncPurchaseTransaction(finalOrderId, purchaseOrderData, apiConfig).catch(err => {
           console.error('External API sync failed (non-blocking):', err);
         });
       }
     } catch (error) {
-      // Log but don't fail the purchase order creation
       console.error('Error triggering external API sync:', error);
     }
 
     return NextResponse.json({
       success: true,
-      data: { id: orderId },
+      data: { id: finalOrderId },
       message: 'Purchase order created successfully',
       timestamp: new Date().toISOString()
     });

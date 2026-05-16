@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
+import { Client } from 'pg';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -45,10 +45,10 @@ export async function GET() {
   // Return config but mask password
   return NextResponse.json({
     host: config.DB_HOST || 'localhost',
-    port: config.DB_PORT || '3306',
-    user: config.DB_USER || 'root',
+    port: config.DB_PORT || '5432',
+    user: config.DB_USER || 'postgres',
     database: config.DB_NAME || 'stock_pilot',
-    // Don't send the actual password for security, or send a placeholder if it exists
+    // Don't send the actual password for security
     hasPassword: !!config.DB_PASSWORD
   });
 }
@@ -59,28 +59,34 @@ export async function POST(request: NextRequest) {
     const { host, port, user, password, database, action } = body;
 
     if (action === 'test') {
-      // Test connection
+      // Test PostgreSQL connection
+      const client = new Client({
+        host,
+        port: parseInt(port),
+        user,
+        password,
+        database
+      });
+      
       try {
-        const connection = await mysql.createConnection({
-          host,
-          port: parseInt(port),
-          user,
-          password,
-          database
-        });
-        await connection.end();
+        await client.connect();
+        await client.end();
         return NextResponse.json({ success: true, message: 'Connection successful!' });
       } catch (error: any) {
         return NextResponse.json({ success: false, message: `Connection failed: ${error.message}` }, { status: 400 });
       }
     } else if (action === 'save') {
       // Save to .env
+      // Also update DATABASE_URL for Prisma
+      const dbUrl = `postgresql://${user}:${password}@${host}:${port}/${database}`;
+      
       writeEnvFile({
         DB_HOST: host,
         DB_PORT: port.toString(),
         DB_USER: user,
         DB_PASSWORD: password,
-        DB_NAME: database
+        DB_NAME: database,
+        DATABASE_URL: dbUrl
       });
       
       return NextResponse.json({ success: true, message: 'Configuration saved. Please restart the application for changes to take effect.' });

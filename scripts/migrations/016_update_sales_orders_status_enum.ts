@@ -1,30 +1,30 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '016_update_sales_orders_status_enum',
   timestamp: '2026-01-30_17-05-00',
 
   async up(): Promise<void> {
-    // Update the status ENUM to include new status values
+    // In PostgreSQL, we use VARCHAR(50) for status. This migration ensures the column can hold the new values.
     const alterQuery = `
       ALTER TABLE sales_orders 
-      MODIFY COLUMN status ENUM('Pending', 'Paid', 'Shipped', 'Delivered', 'Failed', 'Returned', 'To Deliver', 'Fully Delivered') DEFAULT 'Pending'
+      ALTER COLUMN status TYPE VARCHAR(50)
     `;
 
-    await query(alterQuery);
-    console.log('✅ Sales orders status ENUM updated to include To Deliver and Fully Delivered');
+    await db.$executeRawUnsafe(alterQuery);
+    console.log('✅ Sales orders status column type confirmed as VARCHAR(50)');
   },
 
   async down(): Promise<void> {
-    // Revert to original ENUM values
+    // Revert is essentially confirm type again or no-op for VARCHAR
     const alterQuery = `
       ALTER TABLE sales_orders 
-      MODIFY COLUMN status ENUM('Pending', 'Paid', 'Shipped', 'Delivered', 'Failed', 'Returned') DEFAULT 'Pending'
+      ALTER COLUMN status TYPE VARCHAR(50)
     `;
 
-    await query(alterQuery);
-    console.log('✅ Sales orders status ENUM reverted to original values');
+    await db.$executeRawUnsafe(alterQuery);
+    console.log('✅ Sales orders status column type reverted/confirmed');
   }
 };
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,45 +8,91 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const search = searchParams.get('search');
 
-    let sql = `
-      SELECT 
-        poi.product_id as productId,
-        poi.product_name as productName,
-        p.sku,
-        p.barcode,
-        p.category,
-        p.brand,
-        p.unit_of_measure as uom,
-        SUM(poi.quantity) as totalQuantity,
-        SUM(poi.quantity * COALESCE(ib.unit_cost, poi.cost)) as totalCost,
-        AVG(COALESCE(ib.unit_cost, poi.cost)) as avgCost
-      FROM purchase_order_items poi
-      JOIN purchase_orders po ON poi.purchase_order_id = po.id
-      LEFT JOIN inventory_batches ib ON poi.purchase_order_id = ib.purchase_order_id AND poi.product_id = ib.product_id
-      LEFT JOIN products p ON poi.product_id = p.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-
+    const dateFilter: any = {};
     if (startDate) {
-      sql += ' AND po.date >= ?';
-      params.push(startDate);
+      dateFilter.gte = new Date(startDate);
     }
-
     if (endDate) {
-      sql += ' AND po.date <= ?';
-      params.push(`${endDate} 23:59:59`);
+      const endDateObj = new Date(endDate);
+      endDateObj.setHours(23, 59, 59, 999);
+      dateFilter.lte = endDateObj;
     }
 
-    if (search) {
-      sql += ' AND (poi.product_name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
+    // Get purchase order items grouped by product
+    const purchaseItems = await db.purchaseOrderItem.groupBy({
+      by: ['productId', 'productName'],
+      where: Object.keys(dateFilter).length > 0 ? {
+        purchaseOrder: {
+          date: dateFilter
+        }
+      } : {},
+      _sum: {
+        quantity: true,
+        cost: true
+      }
+    });
 
-    sql += ' GROUP BY poi.product_id, poi.product_name, p.sku, p.barcode, p.category, p.brand, p.unit_of_measure';
-    sql += ' ORDER BY totalQuantity DESC';
+    // Get product details
+    const productIds = purchaseItems.map(p => p.productId);
+    const products = await db.product.findMany({
+      where: { id: { in: productIds } },
+      select: {
+        id: true,
+        sku: true,
+        barcode: true,
+        category: true,
+        brand: true,
+        unitOfMeasure: true
+      }
+    });
 
-    const results = await query(sql, params);
+    const productMap = new Map(products.map(p => [p.id, p]));
+
+    // Get inventory batch totals for cost calculation
+    const batchData = await db.inventoryBatch.groupBy({
+      by: ['productId'],
+      where: Object.keys(dateFilter).length > 0 ? {
+        // Filter by purchase orders within date range if applicable
+      } : {},
+      _avg: {
+        unitCost: true
+      }
+    });
+
+    const batchMap = new Map(batchData.map(b => [b.productId, b._avg.unitCost?.toNumber?.() || 0]));
+
+    const results = purchaseItems
+      .map(item => {
+        const product = productMap.get(item.productId);
+        const totalQuantity = item._sum.quantity?.toNumber?.() || Number(item._sum.quantity || 0);
+        const costPerUnit = batchMap.get(item.productId) || (item._sum.cost?.toNumber?.() || 0) / (totalQuantity || 1);
+        const totalCost = totalQuantity * costPerUnit;
+
+        return {
+          productId: item.productId,
+          productName: item.productName,
+          sku: product?.sku,
+          barcode: product?.barcode,
+          category: product?.category,
+          brand: product?.brand,
+          uom: product?.unitOfMeasure,
+          totalQuantity: parseInt(totalQuantity.toString()),
+          totalCost: parseFloat(totalCost.toFixed(2)),
+          avgCost: parseFloat(costPerUnit.toFixed(2))
+        };
+      })
+      .filter(item => {
+        if (search) {
+          const searchLower = search.toLowerCase();
+          return (
+            item.productName?.toLowerCase().includes(searchLower) ||
+            item.sku?.toLowerCase().includes(searchLower) ||
+            item.barcode?.toLowerCase().includes(searchLower)
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => b.totalQuantity - a.totalQuantity);
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, withTransaction } from '@/lib/mysql';
+import { db } from '@/lib/db';
+import { withTransaction } from '@/lib/db-helpers';
 import { v4 as uuidv4 } from 'uuid';
 import { hash } from 'bcryptjs';
 
@@ -16,24 +17,25 @@ export type UserWithPermissions = {
 // GET /api/users - List all users with their permissions
 export async function GET() {
   try {
-    // Fetch users from MySQL
-    const users = await query('SELECT uid, username, username as email, user_type as userType, display_name as displayName, photo_url as photoURL, disabled, creation_time as creationTime FROM users ORDER BY creation_time DESC');
-
-    // Fetch permissions for each user
-    const permissions = await query('SELECT user_uid, permission FROM user_permissions');
-
-    // Group permissions by user
-    const permissionsByUser = (permissions || []).reduce((acc: any, curr: any) => {
-      if (!acc[curr.user_uid]) acc[curr.user_uid] = [];
-      acc[curr.user_uid].push(curr.permission);
-      return acc;
-    }, {});
+    // Fetch all users with their permissions
+    const users = await db.user.findMany({
+      include: {
+        permissions: {
+          select: { permission: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
 
     // Map users with their permissions
-    const usersWithPermissions = (users || []).map((user: any) => ({
-      ...user,
-      disabled: !!user.disabled,
-      permissions: permissionsByUser[user.uid] || [],
+    const usersWithPermissions = users.map((user: typeof users[0]) => ({
+      uid: user.uid,
+      email: user.username,
+      displayName: user.displayName,
+      photoURL: user.photoUrl,
+      disabled: user.disabled,
+      creationTime: user.creationTime.toISOString(),
+      permissions: user.permissions.map((p: typeof user.permissions[0]) => p.permission),
     }));
 
     return NextResponse.json(usersWithPermissions);
@@ -61,7 +63,6 @@ export async function POST(request: NextRequest) {
     }
 
     const uid = uuidv4();
-    const creationTime = new Date().toISOString();
 
     // Hash password if provided
     let hashedPassword = null;
@@ -69,34 +70,43 @@ export async function POST(request: NextRequest) {
       hashedPassword = await hash(password, 10);
     }
 
-    await withTransaction(async (connection) => {
-      // Insert user
-      await connection.execute(
-        'INSERT INTO users (uid, username, password, user_type, display_name, photo_url, disabled, creation_time) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-        [uid, username, hashedPassword, userType || 'User', displayName || username.split('@')[0], '', false]
-      );
-
-      // Insert permissions
-      if (permissions && permissions.length > 0) {
-        for (const permission of permissions) {
-          await connection.execute(
-            'INSERT INTO user_permissions (id, user_uid, permission) VALUES (?, ?, ?)',
-            [uuidv4(), uid, permission]
-          );
+    const user = await withTransaction(async (tx) => {
+      // Create user with permissions
+      const newUser = await tx.user.create({
+        data: {
+          uid,
+          username,
+          passwordHash: hashedPassword,
+          displayName: displayName || username.split('@')[0],
+          photoUrl: '',
+          disabled: false,
+          creationTime: new Date(),
+          permissions: {
+            create: (permissions || []).map((permission: string) => ({
+              permission
+            }))
+          }
+        },
+        include: {
+          permissions: {
+            select: { permission: true }
+          }
         }
-      }
+      });
+
+      return newUser;
     });
 
     return NextResponse.json({
-      uid,
-      username,
-      email: username,
+      uid: user.uid,
+      username: user.username,
+      email: user.username,
       userType: userType || 'User',
-      displayName: username.split('@')[0],
-      photoURL: '',
-      disabled: false,
-      creationTime,
-      permissions: permissions || [],
+      displayName: user.displayName,
+      photoURL: user.photoUrl,
+      disabled: user.disabled,
+      creationTime: user.creationTime.toISOString(),
+      permissions: user.permissions.map((p: typeof user.permissions[0]) => p.permission),
     });
   } catch (error: any) {
     console.error('Error creating user:', error);
@@ -116,25 +126,30 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'User UID is required' }, { status: 400 });
     }
 
-    await withTransaction(async (connection) => {
+    await withTransaction(async (tx) => {
       // Update disabled status if provided
       if (disabled !== undefined) {
-        await connection.execute('UPDATE users SET disabled = ? WHERE uid = ?', [!!disabled, uid]);
+        await tx.user.update({
+          where: { uid },
+          data: { disabled }
+        });
       }
 
       // Update permissions if provided
       if (permissions !== undefined) {
         // Delete existing permissions
-        await connection.execute('DELETE FROM user_permissions WHERE user_uid = ?', [uid]);
+        await tx.userPermission.deleteMany({
+          where: { userUid: uid }
+        });
 
-        // Insert new permissions
+        // Create new permissions
         if (permissions.length > 0) {
-          for (const permission of permissions) {
-            await connection.execute(
-              'INSERT INTO user_permissions (id, user_uid, permission) VALUES (?, ?, ?)',
-              [uuidv4(), uid, permission]
-            );
-          }
+          await tx.userPermission.createMany({
+            data: permissions.map((permission: string) => ({
+              userUid: uid,
+              permission
+            }))
+          });
         }
       }
     });
@@ -157,27 +172,39 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check for dependencies
-    const posTransactions: any = await query('SELECT id FROM pos_transactions WHERE user_id = ? LIMIT 1', [uid]);
-    const shifts: any = await query('SELECT id FROM shifts WHERE user_id = ? LIMIT 1', [uid]);
-    const auditLogs: any = await query('SELECT id FROM payment_audit_log WHERE user_id = ? LIMIT 1', [uid]);
-    const cashTransfers: any = await query('SELECT id FROM cash_transfers WHERE user_id = ? LIMIT 1', [uid]);
+    const posTransactionCount = await db.posTransaction.count({
+      where: { userId: uid }
+    });
 
-    if ((posTransactions && posTransactions.length > 0) || 
-        (shifts && shifts.length > 0) || 
-        (auditLogs && auditLogs.length > 0) ||
-        (cashTransfers && cashTransfers.length > 0)) {
+    const shiftCount = await db.shift.count({
+      where: { userId: uid }
+    });
+
+    const auditLogCount = await db.paymentAuditLog.count({
+      where: { userId: uid }
+    });
+
+    const cashTransferCount = await db.cashTransfer.count({
+      where: { userId: uid }
+    });
+
+    if (posTransactionCount > 0 || shiftCount > 0 || auditLogCount > 0 || cashTransferCount > 0) {
       return NextResponse.json(
         { error: 'Cannot delete user. This user has associated transactions, shifts, or cash transfer records. For data integrity, these users cannot be deleted. Consider disabling the account instead.' },
         { status: 400 }
       );
     }
 
-    await withTransaction(async (connection) => {
+    await withTransaction(async (tx) => {
       // Delete user permissions first
-      await connection.execute('DELETE FROM user_permissions WHERE user_uid = ?', [uid]);
-      
+      await tx.userPermission.deleteMany({
+        where: { userUid: uid }
+      });
+
       // Delete user
-      await connection.execute('DELETE FROM users WHERE uid = ?', [uid]);
+      await tx.user.delete({
+        where: { uid }
+      });
     });
 
     return NextResponse.json({ success: true });

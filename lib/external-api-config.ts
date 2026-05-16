@@ -1,3 +1,5 @@
+import { db } from './db';
+
 /**
  * External API Configuration
  * Settings for integrating with external accounting server
@@ -34,8 +36,12 @@ export async function getExternalApiConfig(): Promise<ExternalApiConfig> {
   // If running on the server, query the database directly for better efficiency and to avoid relative URL issues
   if (typeof window === 'undefined') {
     try {
-      const { query } = await import('./mysql');
-      const settings = await query('SELECT setting_key, setting_value FROM external_api_settings', []);
+      const settings = await db.externalApiSettings.findMany({
+        select: {
+          settingKey: true,
+          settingValue: true
+        }
+      });
       
       if (!settings || settings.length === 0) {
         return DEFAULT_EXTERNAL_API_CONFIG;
@@ -43,8 +49,8 @@ export async function getExternalApiConfig(): Promise<ExternalApiConfig> {
 
       // Convert array of settings to object
       const config: any = { ...DEFAULT_EXTERNAL_API_CONFIG };
-      settings.forEach((setting: any) => {
-        let value = setting.setting_value;
+      settings.forEach((setting) => {
+        let value = setting.settingValue;
         
         // Match key format from DB (snake_case) to config object (camelCase)
         const keyMap: Record<string, string> = {
@@ -60,13 +66,13 @@ export async function getExternalApiConfig(): Promise<ExternalApiConfig> {
           'on_error_action': 'onErrorAction'
         };
 
-        const configKey = keyMap[setting.setting_key];
+        const configKey = keyMap[setting.settingKey];
         if (configKey) {
           // Parse boolean and numeric values
           if (value === 'true') value = true;
           else if (value === 'false') value = false;
-          else if (!isNaN(value) && value !== '' && (configKey === 'timeout' || configKey === 'retryAttempts' || configKey === 'retryDelay')) {
-            value = Number(value);
+          else if (value !== null && !isNaN(value as any) && value !== '' && (configKey === 'timeout' || configKey === 'retryAttempts' || configKey === 'retryDelay')) {
+            value = Number(value) as any;
           }
           config[configKey] = value;
         }

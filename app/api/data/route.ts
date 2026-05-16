@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../lib/mysql';
+import { db } from '@/lib/db';
 
 // POST endpoint to receive data from Postman
 export async function POST(request: NextRequest) {
@@ -8,16 +8,7 @@ export async function POST(request: NextRequest) {
     console.log('Received data from Postman:', body);
 
     // You can save this data to your database if needed
-    // Example: await query('INSERT INTO your_table (data) VALUES (?)', [JSON.stringify(body)]);
-
-    // Or forward the data to another service
-    // const externalResponse = await fetch('https://external-api.com/endpoint', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify(body),
-    // });
+    // Example: await db.yourTable.create({ data: { ... } });
 
     return NextResponse.json({
       success: true,
@@ -37,14 +28,10 @@ export async function POST(request: NextRequest) {
 // GET endpoint for testing
 export async function GET() {
   try {
-    // Example: Fetch data from database
-    // const data = await query('SELECT * FROM your_table LIMIT 10');
-
     return NextResponse.json({
       success: true,
       message: 'API is working',
-      timestamp: new Date().toISOString(),
-      // data: data
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error processing GET request:', error);

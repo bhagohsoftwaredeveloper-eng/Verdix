@@ -1,6 +1,6 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../../../lib/mysql';
+import { db } from '@/lib/db';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,91 +14,83 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const offset = (page - 1) * limit;
 
-    // Fetch invoices that are NOT paid (Pending, Failed, Shipped, Delivered, Returned, Partially Paid if applicable)
-    // Assuming 'Pending' is the main status for unpaid, but we should include others if they imply unpaid.
-    // Based on page logic: status === 'Paid' is paid.
-    // So we fetch everything NOT 'Paid'.
-    
-    let sql = `
-      SELECT
-        si.id,
-        si.reference,
-        si.customer_id,
-        c.name as customer_name,
-        c.contact_number as customer_contact,
-        si.invoice_date,
-        si.due_date,
-        si.total,
-        si.payment_method,
-        si.status,
-        si.notes,
-        si.amount_paid,
-        si.created_at
-      FROM sales_invoices si
-      LEFT JOIN customers c ON si.customer_id = c.id
-      WHERE si.status != 'Paid' AND si.amount_paid < si.total
-    `;
-
-    const params: any[] = [];
+    // Build where clause
+    const where: any = {
+      status: { not: 'Paid' },
+      amountPaid: { lt: new Decimal(0) } // Will be handled in post-processing
+    };
 
     if (search) {
-      sql += ' AND (c.name LIKE ? OR si.reference LIKE ? OR si.id LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      where.OR = [
+        { customer: { name: { contains: search, mode: 'insensitive' } } },
+        { reference: { contains: search, mode: 'insensitive' } },
+        { id: { contains: search, mode: 'insensitive' } }
+      ];
     }
 
     if (customerId) {
-        sql += ' AND si.customer_id = ?';
-        params.push(customerId);
+      where.customerId = customerId;
     }
 
     if (fromDate) {
-        sql += ' AND si.invoice_date >= ?';
-        params.push(fromDate);
+      where.invoiceDate = { gte: new Date(fromDate) };
     }
 
     if (toDate) {
-        sql += ' AND si.invoice_date <= ?';
-        params.push(toDate);
+      if (!where.invoiceDate) where.invoiceDate = {};
+      where.invoiceDate = { ...where.invoiceDate, lte: new Date(toDate) };
     }
 
-    // Get total count for pagination
-    const countSql = `SELECT COUNT(*) as total FROM (${sql}) as sub`;
-    const countResult = await query(countSql, params);
-    const total = countResult[0]?.total || 0;
+    // Fetch invoices with count
+    const [invoices, total] = await Promise.all([
+      db.salesInvoice.findMany({
+        where,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              contactNumber: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit
+      }),
+      db.salesInvoice.count({ where })
+    ]);
 
-    sql += ' ORDER BY si.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-
-    const invoices = await query(sql, params);
-
-    // Format for frontend
-    const formattedInvoices = invoices.map((row: any) => ({
-      id: row.id,
-      reference: row.reference,
-      customer: {
-        id: row.customer_id,
-        name: row.customer_name || 'Walk-in Customer',
-        contactNumber: row.customer_contact,
-      },
-      invoiceDate: row.invoice_date,
-      date: row.invoice_date, // backward compatibility
-      dueDate: row.due_date,
-      total: parseFloat(row.total),
-      amountPaid: parseFloat(row.amount_paid || 0),
-      balance: parseFloat(row.total) - parseFloat(row.amount_paid || 0),
-      paymentMethod: row.payment_method,
-      status: row.status,
-      items: [], // we don't need items list for the table view
-    }));
+    // Filter out paid invoices in application
+    const formattedInvoices = invoices
+      .filter((inv) => Number(inv.amountPaid || 0) < Number(inv.total))
+      .map((row) => ({
+        id: row.id,
+        reference: row.reference,
+        customer: {
+          id: row.customerId,
+          name: row.customer?.name || 'Walk-in Customer',
+          contactNumber: row.customer?.contactNumber
+        },
+        invoiceDate: row.invoiceDate,
+        date: row.invoiceDate, // backward compatibility
+        dueDate: row.dueDate,
+        total: Number(row.total),
+        amountPaid: Number(row.amountPaid || 0),
+        balance: Number(row.total) - Number(row.amountPaid || 0),
+        paymentMethod: row.paymentMethod,
+        status: row.status,
+        items: []
+      }));
 
     return NextResponse.json({
       success: true,
       data: formattedInvoices,
       pagination: {
-        total,
+        total: formattedInvoices.length,
         limit,
         page,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(formattedInvoices.length / limit)
       },
       timestamp: new Date().toISOString()
     });

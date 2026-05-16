@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET(request: NextRequest) {
@@ -7,20 +7,24 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('activeOnly') === 'true';
 
-    let sql = `
-      SELECT sl.*,
-        COUNT(DISTINCT ps.product_id) AS product_count
-      FROM shelf_locations sl
-      LEFT JOIN product_shelves ps ON sl.id = ps.shelf_id
-    `;
-    if (activeOnly) {
-      sql += ' WHERE sl.is_active = TRUE';
-    }
-    sql += ' GROUP BY sl.id ORDER BY sl.name ASC';
+    const where = activeOnly ? { isActive: true } : {};
 
-    const locations = await query(sql);
+    const locations = await db.shelfLocation.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      include: {
+        _count: {
+          select: { productShelves: true }
+        }
+      }
+    });
 
-    return NextResponse.json({ success: true, data: locations });
+    const formattedLocations = locations.map(loc => ({
+      ...loc,
+      product_count: loc._count.productShelves
+    }));
+
+    return NextResponse.json({ success: true, data: formattedLocations });
   } catch (error) {
     console.error('Failed to fetch shelf locations:', error);
     return NextResponse.json(
@@ -43,21 +47,22 @@ export async function POST(request: NextRequest) {
     }
 
     const id = `shelf_${uuidv4()}`;
-    const sql = `
-      INSERT INTO shelf_locations (id, name, description, is_active)
-      VALUES (?, ?, ?, TRUE)
-    `;
-
-    await query(sql, [id, name, description]);
+    const location = await db.shelfLocation.create({
+      data: {
+        id,
+        name,
+        description,
+        isActive: true,
+      }
+    });
 
     return NextResponse.json({
       success: true,
-      data: { id, name, description, isActive: true },
+      data: location,
     });
   } catch (error: any) {
     console.error('Failed to create shelf location:', error);
-    // Handle specific MySQL errors
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === 'P2002') {
        return NextResponse.json(
         { success: false, error: 'A shelf location with this name already exists' },
         { status: 400 }

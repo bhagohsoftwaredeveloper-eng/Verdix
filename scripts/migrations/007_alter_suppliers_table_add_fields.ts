@@ -1,12 +1,12 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '007_alter_suppliers_table_add_fields',
   timestamp: '2025-11-27_10-48-00',
 
   async up(): Promise<void> {
-    // Check if columns exist and add them if not
+    // Add columns if they don't exist (PostgreSQL syntax)
     const columns = [
       { name: 'address', definition: 'TEXT' },
       { name: 'payment_terms', definition: 'VARCHAR(100)' },
@@ -14,20 +14,9 @@ const migration: Migration = {
     ];
 
     for (const column of columns) {
-      const result = await query(`
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'suppliers'
-          AND COLUMN_NAME = '${column.name}'
-      `);
-      if (result.length === 0) {
-        const alterQuery = `ALTER TABLE suppliers ADD COLUMN ${column.name} ${column.definition}`;
-        await query(alterQuery);
-        console.log(`✅ Added ${column.name} column to suppliers table`);
-      } else {
-        console.log(`ℹ️  ${column.name} column already exists, skipping add`);
-      }
+      const alterQuery = `ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS ${column.name} ${column.definition}`;
+      await db.$executeRawUnsafe(alterQuery);
+      console.log(`✅ Ensured ${column.name} column exists in suppliers table`);
     }
   },
 
@@ -37,7 +26,7 @@ const migration: Migration = {
 
     for (const column of columnsToRemove) {
       const alterQuery = `ALTER TABLE suppliers DROP COLUMN IF EXISTS ${column}`;
-      await query(alterQuery);
+      await db.$executeRawUnsafe(alterQuery);
       console.log(`✅ Removed ${column} column from suppliers table`);
     }
   }

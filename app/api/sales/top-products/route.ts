@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,22 +8,20 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '5');
-    
-    // Query to get top selling products by quantity
-    const sql = `
+
+    // Use raw query for aggregation
+    const rows = await db.$queryRaw<any[]>`
       SELECT
         sii.product_name as name,
         SUM(sii.quantity) as quantity,
-        SUM(sii.quantity * sii.price) as total_revenue
+        SUM(CAST(sii.quantity AS DECIMAL) * sii.price) as total_revenue
       FROM sales_invoice_items sii
       JOIN sales_invoices si ON sii.sales_invoice_id = si.id
       WHERE si.status != 'Voided'
       GROUP BY sii.product_id, sii.product_name
       ORDER BY quantity DESC
-      LIMIT ?
+      LIMIT ${limit}
     `;
-
-    const rows = await query(sql, [limit]);
 
     // Assign colors dynamically for the chart
     const data = rows.map((row: any, index: number) => ({

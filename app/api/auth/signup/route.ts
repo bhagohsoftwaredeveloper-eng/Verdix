@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 import { hash } from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -15,12 +15,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUsers = await query(
-      'SELECT id FROM users WHERE username = ? OR email = ?',
-      [email, email]
-    ) as any[];
+    const existingUser = await db.user.findFirst({
+      where: {
+        OR: [
+          { username: email }
+        ]
+      }
+    });
 
-    if (existingUsers.length > 0) {
+    if (existingUser) {
       return NextResponse.json(
         { error: 'User with this email already exists' },
         { status: 409 }
@@ -30,16 +33,20 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await hash(password, 10);
     const uid = uuidv4();
-    const id = uuidv4(); // id for the table primary key
 
     // Create user
-    // Defaulting role to 'cashier' for now as per schema default, or make it configurable if needed.
-    // Also mapping email to username as the login page expects username
-    await query(
-      `INSERT INTO users (id, uid, username, email, password, full_name, role, is_active) 
-       VALUES (?, ?, ?, ?, ?, ?, 'cashier', TRUE)`,
-      [id, uid, email, email, hashedPassword, email.split('@')[0]] 
-    );
+    // Defaulting userType to 'Cashier'
+    await db.user.create({
+      data: {
+        uid,
+        username: email,
+        passwordHash: hashedPassword,
+        displayName: email.split('@')[0],
+        userType: 'Cashier',
+        disabled: false,
+        photoUrl: '',
+      }
+    });
 
     // Add default permissions if needed (optional for now, can be expanded)
     

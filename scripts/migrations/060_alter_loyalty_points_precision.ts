@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '060_alter_loyalty_points_precision',
@@ -9,27 +9,31 @@ const migration: Migration = {
     console.log('--- ALTERING LOYALTY POINTS PRECISION ---');
 
     // 1. Alter customers table
-    await query('ALTER TABLE customers MODIFY COLUMN loyalty_points DECIMAL(15,3) DEFAULT 0.000');
+    await db.$executeRawUnsafe('ALTER TABLE customers ALTER COLUMN loyalty_points TYPE DECIMAL(15,3), ALTER COLUMN loyalty_points SET DEFAULT 0.000');
     console.log('✅ Altered customers.loyalty_points to DECIMAL(15,3)');
 
     // 2. Alter customer_loyalty table
-    await query('ALTER TABLE customer_loyalty MODIFY COLUMN current_points DECIMAL(15,3) DEFAULT 0.000');
+    await db.$executeRawUnsafe('ALTER TABLE customer_loyalty ALTER COLUMN current_points TYPE DECIMAL(15,3), ALTER COLUMN current_points SET DEFAULT 0.000');
     console.log('✅ Altered customer_loyalty.current_points to DECIMAL(15,3)');
 
     // 3. Alter point_history table (if points column is INT)
-    const pointHistoryColumns: any = await query('DESCRIBE point_history');
-    const pointsCol = pointHistoryColumns.find((c: any) => c.Field === 'points');
-    if (pointsCol && pointsCol.Type.toLowerCase().includes('int')) {
-        await query('ALTER TABLE point_history MODIFY COLUMN points DECIMAL(15,3) NOT NULL');
+    const pointHistoryColumns: any = await db.$queryRawUnsafe(`
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'point_history' AND column_name = 'points'
+    `);
+    
+    if (pointHistoryColumns.length > 0 && pointHistoryColumns[0].data_type.toLowerCase().includes('int')) {
+        await db.$executeRawUnsafe('ALTER TABLE point_history ALTER COLUMN points TYPE DECIMAL(15,3)');
         console.log('✅ Altered point_history.points to DECIMAL(15,3)');
     }
   },
 
   async down(): Promise<void> {
-    await query('ALTER TABLE customers MODIFY COLUMN loyalty_points INT DEFAULT 0');
-    await query('ALTER TABLE customer_loyalty MODIFY COLUMN current_points INT DEFAULT 0');
-    await query('ALTER TABLE point_history MODIFY COLUMN points INT NOT NULL');
-    console.log('✅ Reverted loyalty points columns to INT');
+    await db.$executeRawUnsafe('ALTER TABLE customers ALTER COLUMN loyalty_points TYPE DECIMAL(15,0), ALTER COLUMN loyalty_points SET DEFAULT 0');
+    await db.$executeRawUnsafe('ALTER TABLE customer_loyalty ALTER COLUMN current_points TYPE DECIMAL(15,0), ALTER COLUMN current_points SET DEFAULT 0');
+    await db.$executeRawUnsafe('ALTER TABLE point_history ALTER COLUMN points TYPE DECIMAL(15,0)');
+    console.log('✅ Reverted loyalty points columns to DECIMAL(15,0) (equivalent to INT precision)');
   }
 };
 

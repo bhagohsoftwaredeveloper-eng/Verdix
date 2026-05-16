@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '033_alter_loyalty_base_column',
@@ -8,24 +8,33 @@ const migration: Migration = {
   async up(): Promise<void> {
     // Change base column from DECIMAL to VARCHAR/ENUM to support 'amount' | 'quantity'
     // We'll use VARCHAR to be safe and flexible
-    const alterTable = `
-      ALTER TABLE loyalty_points_settings
-      MODIFY COLUMN base VARCHAR(50) NOT NULL DEFAULT 'amount';
-    `;
-    await query(alterTable);
-    console.log('✅ Loyalty points settings table altered: base column changed to VARCHAR');
+    try {
+      await db.$executeRawUnsafe(`
+        ALTER TABLE loyalty_points_settings 
+        ALTER COLUMN base TYPE VARCHAR(50),
+        ALTER COLUMN base SET NOT NULL,
+        ALTER COLUMN base SET DEFAULT 'amount'
+      `);
+      console.log('✅ Loyalty points settings table altered: base column changed to VARCHAR');
+    } catch (error: any) {
+      console.error('❌ Error altering loyalty_points_settings:', error.message);
+      throw error;
+    }
   },
 
   async down(): Promise<void> {
-    // Attempt to revert. Note: this will fail if converting string 'amount' to DECIMAL.
-    // In a real scenario we might need to truncate or convert data.
-    // Since this is likely empty or broken, we force it.
-    const alterTable = `
-      ALTER TABLE loyalty_points_settings
-      MODIFY COLUMN base DECIMAL(10,2) NOT NULL DEFAULT 0.00;
-    `;
-    await query(alterTable);
-    console.log('✅ Loyalty points settings table altered: base column changed back to DECIMAL');
+    // Attempt to revert. Note: this will fail if base contains non-numeric values.
+    try {
+      await db.$executeRawUnsafe(`
+        ALTER TABLE loyalty_points_settings 
+        ALTER COLUMN base TYPE DECIMAL(10,2) USING (CASE WHEN base ~ '^[-+]?[0-9]*\\.?[0-9]+$' THEN base::DECIMAL(10,2) ELSE 0 END),
+        ALTER COLUMN base SET NOT NULL,
+        ALTER COLUMN base SET DEFAULT 0.00
+      `);
+      console.log('✅ Loyalty points settings table altered: base column changed back to DECIMAL');
+    } catch (error: any) {
+      console.error('❌ Error reverting loyalty_points_settings:', error.message);
+    }
   }
 };
 

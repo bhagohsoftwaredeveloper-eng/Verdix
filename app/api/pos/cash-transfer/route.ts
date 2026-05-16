@@ -1,14 +1,12 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
-import { v4 as uuidv4 } from 'uuid';
+import { db } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { shiftId, terminalId, userId, amount, type, reason } = body;
 
-    if (!amount || amount <= 0) {
+    if (!amount || Number(amount) <= 0) {
       return NextResponse.json(
         { success: false, error: 'Invalid amount' },
         { status: 400 }
@@ -29,11 +27,12 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const id = uuidv4();
-
     // Verify user exists to avoid FK error
-    const users = await query('SELECT uid FROM users WHERE uid = ?', [userId]);
-    if (users.length === 0) {
+    const user = await db.user.findUnique({
+      where: { uid: userId },
+      select: { uid: true }
+    });
+    if (!user) {
         return NextResponse.json(
             { success: false, error: 'User not found' },
             { status: 404 }
@@ -42,11 +41,11 @@ export async function POST(req: NextRequest) {
     
     // Verify terminal exists if provided
     if (terminalId) {
-         const terminals = await query('SELECT id FROM pos_terminals WHERE id = ?', [terminalId]);
-         if (terminals.length === 0) {
-              // If terminal not found, maybe allow NULL? But UI should provide valid one.
-              // For now, let's allow it but warn.
-              console.warn(`Terminal ${terminalId} not found, proceeding with null? No, foreign key will fail.`);
+         const terminal = await db.posTerminal.findUnique({
+           where: { id: terminalId },
+           select: { id: true }
+         });
+         if (!terminal) {
                return NextResponse.json(
                 { success: false, error: 'Terminal not found' },
                 { status: 404 }
@@ -54,14 +53,33 @@ export async function POST(req: NextRequest) {
          }
     }
 
-    // Insert transfer record
-    await query(
-      `INSERT INTO cash_transfers (id, shift_id, terminal_id, user_id, amount, type, reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, shiftId || null, terminalId || null, userId, amount, type, reason || null]
-    );
+    // Verify shift exists if provided
+    if (shiftId) {
+      const shift = await db.shift.findUnique({
+        where: { id: shiftId },
+        select: { id: true }
+      });
+      if (!shift) {
+        return NextResponse.json(
+          { success: false, error: 'Shift not found' },
+          { status: 404 }
+        );
+      }
+    }
 
-    return NextResponse.json({ success: true, id });
+    // Insert transfer record
+    const result = await db.cashTransfer.create({
+      data: {
+        shiftId: shiftId || null,
+        terminalId: terminalId || null,
+        userId: userId,
+        amount: Number(amount),
+        type: type,
+        reason: reason || null
+      }
+    });
+
+    return NextResponse.json({ success: true, id: result.id });
   } catch (error) {
     console.error('Error creating cash transfer:', error);
     return NextResponse.json(
@@ -83,76 +101,86 @@ export async function GET(req: NextRequest) {
         const limit = parseInt(searchParams.get('limit') || '10');
         const offset = (page - 1) * limit;
 
-        let whereClause = ` WHERE 1=1`;
-        const params: any[] = [];
+        const where: any = {};
 
-        if (startDate) {
-            whereClause += ` AND DATE(ct.transaction_time) >= ?`;
-            params.push(startDate);
-        }
-
-        if (endDate) {
-            whereClause += ` AND DATE(ct.transaction_time) <= ?`;
-            params.push(endDate);
+        if (startDate || endDate) {
+          where.transactionTime = {};
+          if (startDate) {
+            where.transactionTime.gte = new Date(startDate);
+          }
+          if (endDate) {
+            // Set time to end of day if only date is provided
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            where.transactionTime.lte = end;
+          }
         }
 
         if (terminalId && terminalId !== 'all') {
-            whereClause += ` AND ct.terminal_id = ?`;
-            params.push(terminalId);
+            where.terminalId = terminalId;
         }
 
         if (cashierId && cashierId !== 'all') {
-            whereClause += ` AND ct.user_id = ?`;
-            params.push(cashierId);
+            where.userId = cashierId;
         }
 
         if (type && type !== 'all') {
-            whereClause += ` AND ct.type = ?`;
-            params.push(type);
+            where.type = type;
         }
 
         // Get total count for pagination
-        const countSql = `SELECT COUNT(*) as total FROM cash_transfers ct ${whereClause}`;
-        const countResult = await query(countSql, params);
-        const totalCount = countResult[0]?.total || 0;
+        const totalCount = await db.cashTransfer.count({ where });
 
         // Get summary (totals for all filtered data, not just current page)
-        const summarySql = `
-            SELECT 
-                SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) as totalCashIn,
-                SUM(CASE WHEN type = 'pickup' THEN amount ELSE 0 END) as totalCashOut
-            FROM cash_transfers ct
-            ${whereClause}
-        `;
-        const summaryResult = await query(summarySql, params);
-        const summary = summaryResult[0] || { totalCashIn: 0, totalCashOut: 0 };
+        const summaryResult = await db.cashTransfer.groupBy({
+          by: ['type'],
+          where,
+          _sum: {
+            amount: true
+          }
+        });
+
+        const totalCashIn = Number(summaryResult.find(s => s.type === 'deposit')?._sum.amount || 0);
+        const totalCashOut = Number(summaryResult.find(s => s.type === 'pickup')?._sum.amount || 0);
 
         // Get paginated data
-        let sql = `
-            SELECT 
-                ct.id,
-                ct.transaction_time as date,
-                ct.amount,
-                ct.type,
-                ct.reason as note,
-                u.display_name as cashier_name,
-                t.name as terminal_name,
-                ct.user_id,
-                ct.terminal_id
-            FROM cash_transfers ct
-            LEFT JOIN users u ON ct.user_id = u.uid
-            LEFT JOIN pos_terminals t ON ct.terminal_id = t.id
-            ${whereClause}
-            ORDER BY ct.transaction_time DESC
-            LIMIT ? OFFSET ?
-        `;
-        
-        const dataParams = [...params, limit, offset];
-        const rows = await query(sql, dataParams);
+        const rows = await db.cashTransfer.findMany({
+          where,
+          include: {
+            user: {
+              select: {
+                displayName: true
+              }
+            },
+            terminal: {
+              select: {
+                name: true
+              }
+            }
+          },
+          orderBy: {
+            transactionTime: 'desc'
+          },
+          skip: offset,
+          take: limit
+        });
+
+        // Format rows to match expected structure
+        const formattedRows = rows.map(ct => ({
+          id: ct.id,
+          date: ct.transactionTime,
+          amount: Number(ct.amount),
+          type: ct.type,
+          note: ct.reason,
+          cashier_name: ct.user?.displayName,
+          terminal_name: ct.terminal?.name,
+          user_id: ct.userId,
+          terminal_id: ct.terminalId
+        }));
         
         return NextResponse.json({
             success: true,
-            data: rows,
+            data: formattedRows,
             pagination: {
                 totalCount,
                 pageSize: limit,
@@ -160,8 +188,8 @@ export async function GET(req: NextRequest) {
                 totalPages: Math.ceil(totalCount / limit)
             },
             summary: {
-                totalCashIn: parseFloat(summary.totalCashIn || 0),
-                totalCashOut: parseFloat(summary.totalCashOut || 0)
+                totalCashIn,
+                totalCashOut
             }
         });
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/mysql';
+import { db } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,71 +13,71 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
 
-    let baseSql = `
-      FROM stock_movements sm
-      LEFT JOIN products p ON sm.product_id = p.id
-    `;
-
-    const conditions = [];
-    const params = [];
+    const where: any = {};
 
     if (startDate) {
-      conditions.push('DATE(sm.created_at) >= ?');
-      params.push(startDate);
+      where.createdAt = { gte: new Date(startDate) };
     }
 
     if (endDate) {
-      conditions.push('DATE(sm.created_at) <= ?');
-      params.push(endDate);
+      const endDateObj = new Date(endDate);
+      endDateObj.setHours(23, 59, 59, 999);
+      if (where.createdAt) {
+        where.createdAt.lte = endDateObj;
+      } else {
+        where.createdAt = { lte: endDateObj };
+      }
     }
 
     if (type && type !== 'all') {
-      conditions.push('sm.movement_type = ?');
-      params.push(type);
+      where.movementType = type;
     }
 
     if (productId) {
-      conditions.push('sm.product_id = ?');
-      params.push(productId);
+      where.productId = productId;
     }
 
-    if (conditions.length > 0) {
-      baseSql += ' WHERE ' + conditions.join(' AND ');
-    }
-    
-    // Get Total Count for Pagination
-    const countSql = `SELECT COUNT(*) as total ${baseSql}`;
-    const [countResult] = await query(countSql, params);
-    const totalItems = countResult.total;
+    // Get total count
+    const totalItems = await db.stockMovement.count({ where });
     const totalPages = Math.ceil(totalItems / limit);
 
-    // Get Data
-    let sql = `
-      SELECT 
-        sm.id,
-        sm.product_id,
-        sm.product_name,
-        sm.movement_type,
-        sm.quantity_change,
-        sm.previous_stock,
-        sm.new_stock,
-        sm.reference_id,
-        sm.reference_type,
-        sm.notes,
-        sm.created_at,
-        p.sku,
-        p.barcode,
-        p.unit_of_measure
-      ${baseSql}
-      ORDER BY sm.created_at DESC 
-      LIMIT ? OFFSET ?
-    `;
-
-    const movements = await query(sql, [...params, limit, offset]);
+    // Get movements with product details
+    const movements = await db.stockMovement.findMany({
+      where,
+      include: {
+        product: {
+          select: {
+            sku: true,
+            barcode: true,
+            unitOfMeasure: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      skip: offset,
+      take: limit
+    });
 
     return NextResponse.json({
       success: true,
-      data: movements,
+      data: movements.map(m => ({
+        id: m.id,
+        productId: m.productId,
+        productName: m.productName,
+        movementType: m.movementType,
+        quantityChange: m.quantityChange.toNumber ? m.quantityChange.toNumber() : Number(m.quantityChange),
+        previousStock: m.previousStock.toNumber ? m.previousStock.toNumber() : Number(m.previousStock),
+        newStock: m.newStock.toNumber ? m.newStock.toNumber() : Number(m.newStock),
+        referenceId: m.referenceId,
+        referenceType: m.referenceType,
+        notes: m.notes,
+        createdAt: m.createdAt,
+        sku: m.product?.sku,
+        barcode: m.product?.barcode,
+        unitOfMeasure: m.product?.unitOfMeasure
+      })),
       pagination: {
         page,
         limit,

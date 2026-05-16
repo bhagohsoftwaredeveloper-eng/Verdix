@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../../lib/mysql';
+import { db } from '@/lib/db';
 
 // PUT endpoint to update a sales person
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -15,36 +15,33 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    // Check if sales person exists
-    const checkSql = 'SELECT id FROM sales_persons WHERE id = ?';
-    const checkResult = await query(checkSql, [id]);
+    const salesPerson = await db.salesPerson.update({
+      where: { id },
+      data: {
+        name: name.trim(),
+        contactNumber: contactNumber?.trim() || null,
+        isActive: isActive !== undefined ? isActive : true
+      }
+    });
 
-    if (checkResult.length === 0) {
+    return NextResponse.json({
+      success: true,
+      message: 'Sales person updated successfully',
+      data: salesPerson,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Error updating sales person:', error);
+
+    if (error.code === 'P2025') {
       return NextResponse.json(
         { success: false, error: 'Sales person not found' },
         { status: 404 }
       );
     }
 
-    const sql = `
-      UPDATE sales_persons
-      SET name = ?, contact_number = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `;
-
-    await query(sql, [name.trim(), contactNumber?.trim() || null, isActive !== undefined ? isActive : true, id]);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Sales person updated successfully',
-      data: { id, name: name.trim(), contactNumber: contactNumber?.trim() || null, isActive: isActive !== undefined ? isActive : true },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error: any) {
-    console.error('Error updating sales person:', error);
-
     // Handle duplicate name error
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'Sales person name already exists' },
         { status: 409 }
@@ -63,19 +60,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const { id } = await params;
 
-    // Check if sales person exists
-    const checkSql = 'SELECT id, name FROM sales_persons WHERE id = ?';
-    const checkResult = await query(checkSql, [id]);
-
-    if (checkResult.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Sales person not found' },
-        { status: 404 }
-      );
-    }
-
-    const sql = 'DELETE FROM sales_persons WHERE id = ?';
-    await query(sql, [id]);
+    await db.salesPerson.delete({
+      where: { id }
+    });
 
     return NextResponse.json({
       success: true,
@@ -83,8 +70,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       data: { id },
       timestamp: new Date().toISOString()
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting sales person:', error);
+
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { success: false, error: 'Sales person not found' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
       { success: false, error: 'Failed to delete sales person' },
       { status: 500 }

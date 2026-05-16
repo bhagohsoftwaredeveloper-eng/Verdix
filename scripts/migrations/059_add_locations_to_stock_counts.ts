@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '059_add_locations_to_stock_counts',
@@ -11,15 +11,15 @@ const migration: Migration = {
 
       const alterStockCountsTable = `
         ALTER TABLE stock_counts
-        ADD COLUMN warehouse_id VARCHAR(50) DEFAULT NULL,
-        ADD COLUMN shelf_location_id VARCHAR(50) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS warehouse_id VARCHAR(50) DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS shelf_location_id VARCHAR(50) DEFAULT NULL,
         ADD CONSTRAINT fk_stock_counts_warehouse
         FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL,
         ADD CONSTRAINT fk_stock_counts_shelf
         FOREIGN KEY (shelf_location_id) REFERENCES shelf_locations(id) ON DELETE SET NULL
       `;
 
-      await query(alterStockCountsTable);
+      await db.$executeRawUnsafe(alterStockCountsTable);
       console.log('✅ Stock counts table altered to support locations');
 
     } catch (error) {
@@ -31,10 +31,10 @@ const migration: Migration = {
   async down(): Promise<void> {
     try {
       console.log('Removing locations from stock counts...');
-      await query('ALTER TABLE stock_counts DROP FOREIGN KEY fk_stock_counts_warehouse');
-      await query('ALTER TABLE stock_counts DROP FOREIGN KEY fk_stock_counts_shelf');
-      await query('ALTER TABLE stock_counts DROP COLUMN warehouse_id');
-      await query('ALTER TABLE stock_counts DROP COLUMN shelf_location_id');
+      await db.$executeRawUnsafe('ALTER TABLE stock_counts DROP CONSTRAINT IF EXISTS fk_stock_counts_warehouse');
+      await db.$executeRawUnsafe('ALTER TABLE stock_counts DROP CONSTRAINT IF EXISTS fk_stock_counts_shelf');
+      await db.$executeRawUnsafe('ALTER TABLE stock_counts DROP COLUMN IF EXISTS warehouse_id');
+      await db.$executeRawUnsafe('ALTER TABLE stock_counts DROP COLUMN IF EXISTS shelf_location_id');
       console.log('✅ Stock counts table reverted');
     } catch (error) {
       console.error('❌ Error reverting stock counts table:', error);

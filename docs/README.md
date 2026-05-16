@@ -1,6 +1,6 @@
 # StockPilot Enterprise — Documentation Index
 
-> **Version:** 0.1.0 · **Stack:** Next.js 16, Electron 33, MySQL 2, TypeScript 5
+> **Version:** 0.1.0 · **Stack:** Next.js 16, Electron 33, PostgreSQL, Prisma, TypeScript 5
 
 StockPilot is a full-featured, offline-capable inventory and point-of-sale management system packaged as an Electron desktop application. Built for Philippine retail businesses, it ships with BIR-compliance features (RMO 24-2023), multi-level approval workflows, and a native thermal-receipt printer stack.
 
@@ -42,7 +42,8 @@ npm run electron-dev
 |-------|-----------|
 | Framework | Next.js 16 (App Router, Turbopack) |
 | Desktop Shell | Electron 33 |
-| Database | MySQL 2 |
+| Database | PostgreSQL |
+| Database ORM | Prisma |
 | Language | TypeScript 5 |
 | UI Library | shadcn/ui + Radix UI |
 | Styling | Tailwind CSS 3 |

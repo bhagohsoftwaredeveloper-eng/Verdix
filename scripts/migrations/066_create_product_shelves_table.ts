@@ -1,5 +1,5 @@
 import { registerMigration, Migration } from './runner';
-import { query } from '../../lib/mysql';
+import { db } from '@/lib/db';
 
 const migration: Migration = {
   name: '066_create_product_shelves_table',
@@ -14,12 +14,12 @@ const migration: Migration = {
           product_id VARCHAR(50) NOT NULL,
           shelf_id VARCHAR(50) NOT NULL,
           PRIMARY KEY (product_id, shelf_id),
-          FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-          FOREIGN KEY (shelf_id) REFERENCES shelf_locations(id) ON DELETE CASCADE
+          CONSTRAINT fk_product_shelves_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+          CONSTRAINT fk_product_shelves_shelf FOREIGN KEY (shelf_id) REFERENCES shelf_locations(id) ON DELETE CASCADE
         )
       `;
 
-      await query(createProductShelvesTable);
+      await db.$executeRawUnsafe(createProductShelvesTable);
       console.log('✅ Product shelves junction table created successfully');
 
       // Migrate existing data from products.shelf_location_id to product_shelves
@@ -29,9 +29,10 @@ const migration: Migration = {
         SELECT id, shelf_location_id
         FROM products
         WHERE shelf_location_id IS NOT NULL
+        ON CONFLICT (product_id, shelf_id) DO NOTHING
       `;
       
-      await query(migrateData);
+      await db.$executeRawUnsafe(migrateData);
       console.log('✅ Migrated existing shelf data');
 
     } catch (error) {
@@ -43,7 +44,7 @@ const migration: Migration = {
   async down(): Promise<void> {
     try {
       console.log('Dropping product_shelves table...');
-      await query('DROP TABLE IF EXISTS product_shelves');
+      await db.$executeRawUnsafe('DROP TABLE IF EXISTS product_shelves');
       console.log('✅ Product shelves table dropped successfully');
     } catch (error) {
       console.error('❌ Error dropping product shelves table:', error);

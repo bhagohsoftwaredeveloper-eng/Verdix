@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '../../../../lib/mysql';
+import { db } from '@/lib/db';
 
 // GET endpoint to fetch a single payment method
 export async function GET(
@@ -9,22 +9,11 @@ export async function GET(
   try {
     const { id: paymentMethodId } = await params;
 
-    const sql = `
-      SELECT
-        id,
-        name,
-        is_active AS isActive,
-        require_reference AS isReferenceRequired,
-        points_amount AS pointsAmount,
-        currency_equivalent AS currencyEquivalent,
-        created_at AS createdAt
-      FROM payment_methods
-      WHERE id = ?
-    `;
+    const paymentMethod = await db.paymentMethod.findUnique({
+      where: { id: paymentMethodId },
+    });
 
-    const paymentMethods = await query(sql, [paymentMethodId]);
-
-    if (paymentMethods.length === 0) {
+    if (!paymentMethod) {
       return NextResponse.json(
         { success: false, error: 'Payment method not found' },
         { status: 404 }
@@ -33,7 +22,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: paymentMethods[0],
+      data: paymentMethod,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -62,46 +51,37 @@ export async function PUT(
       );
     }
 
-    const sql = `
-      UPDATE payment_methods SET
-        name = ?,
-        is_active = ?,
-        require_reference = ?,
-        points_amount = ?,
-        currency_equivalent = ?
-      WHERE id = ?
-    `;
-
-    const result = await query(sql, [
-      name.trim(),
-      isActive ?? true,
-      isReferenceRequired ?? false,
-      pointsAmount,
-      currencyEquivalent,
-      paymentMethodId
-    ]);
-
-    if (result.affectedRows === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Payment method not found' },
-        { status: 404 }
-      );
-    }
+    const updatedPaymentMethod = await db.paymentMethod.update({
+      where: { id: paymentMethodId },
+      data: {
+        name: name.trim(),
+        isActive: isActive ?? true,
+        isReferenceRequired: isReferenceRequired ?? false,
+        pointsAmount,
+        currencyEquivalent,
+      },
+    });
 
     return NextResponse.json({
       success: true,
       message: 'Payment method updated successfully',
-      data: { id: paymentMethodId, name: name.trim(), isActive: isActive ?? true, isReferenceRequired: isReferenceRequired ?? false, pointsAmount, currencyEquivalent },
+      data: updatedPaymentMethod,
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
     console.error('Error updating payment method:', error);
 
-    // Handle duplicate name error
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === 'P2002') {
       return NextResponse.json(
         { success: false, error: 'Payment method name already exists' },
         { status: 409 }
+      );
+    }
+
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { success: false, error: 'Payment method not found' },
+        { status: 404 }
       );
     }
 
@@ -120,34 +100,47 @@ export async function DELETE(
   try {
     const { id: paymentMethodId } = await params;
 
-    // First check if the payment method is being used in any sales transactions
-    const checkSql = 'SELECT COUNT(*) as count FROM sales_transactions WHERE payment_method = (SELECT name FROM payment_methods WHERE id = ?)';
-    const checkResult = await query(checkSql, [paymentMethodId]);
+    // First get the payment method to get its name
+    const paymentMethod = await db.paymentMethod.findUnique({
+      where: { id: paymentMethodId },
+    });
 
-    if (checkResult[0].count > 0) {
-      return NextResponse.json(
-        { success: false, error: 'Cannot delete payment method that is being used in sales transactions' },
-        { status: 409 }
-      );
-    }
-
-    const sql = 'DELETE FROM payment_methods WHERE id = ?';
-    const result = await query(sql, [paymentMethodId]);
-
-    if (result.affectedRows === 0) {
+    if (!paymentMethod) {
       return NextResponse.json(
         { success: false, error: 'Payment method not found' },
         { status: 404 }
       );
     }
 
+    // First check if the payment method is being used in any sales transactions
+    const count = await db.salesTransaction.count({
+      where: { paymentMethod: paymentMethod.name },
+    });
+
+    if (count > 0) {
+      return NextResponse.json(
+        { success: false, error: 'Cannot delete payment method that is being used in sales transactions' },
+        { status: 409 }
+      );
+    }
+
+    await db.paymentMethod.delete({
+      where: { id: paymentMethodId },
+    });
+
     return NextResponse.json({
       success: true,
       message: 'Payment method deleted successfully',
       timestamp: new Date().toISOString()
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting payment method:', error);
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { success: false, error: 'Payment method not found' },
+        { status: 404 }
+      );
+    }
     return NextResponse.json(
       { success: false, error: 'Failed to delete payment method' },
       { status: 500 }
