@@ -34,25 +34,39 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Handle test connection action
     if (body.action === 'test') {
-      const { apiEndpoint, authType, apiKey, bearerToken, timeout } = body;
+      const { apiEndpoint, authType, apiKey, bearerToken, timeout, role } = body;
       if (!apiEndpoint) {
         return NextResponse.json({ success: false, error: 'API endpoint is required' }, { status: 400 });
       }
 
+      const base = (apiEndpoint as string).replace(/\/$/, '');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (authType === 'api_key' && apiKey) headers['X-API-Key'] = apiKey;
       else if (authType === 'bearer_token' && bearerToken) headers['Authorization'] = `Bearer ${bearerToken}`;
 
       try {
-        const response = await fetch(`${apiEndpoint}/test`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ test: true, timestamp: new Date().toISOString() }),
-          signal: AbortSignal.timeout(timeout || 30000),
-        });
+        let response: Response;
+        if (role === 'cloud_sync') {
+          // Cloud Sync: test the Railway health endpoint (GET, no body)
+          response = await fetch(`${base}/api/cloud-sync/health`, {
+            method: 'GET',
+            headers: { 'X-Sync-Key': apiKey || bearerToken || '' },
+            signal: AbortSignal.timeout(timeout || 10000),
+          });
+        } else {
+          response = await fetch(`${base}/test`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ test: true, timestamp: new Date().toISOString() }),
+            signal: AbortSignal.timeout(timeout || 30000),
+          });
+        }
         const responseData = await response.json().catch(() => ({}));
         if (response.ok) {
-          return NextResponse.json({ success: true, message: 'Connection successful', response: responseData });
+          const msg = role === 'cloud_sync'
+            ? `Railway cloud sync is reachable (${responseData.ts ?? 'OK'})`
+            : 'Connection successful';
+          return NextResponse.json({ success: true, message: msg, response: responseData });
         } else {
           return NextResponse.json({ success: false, error: `Server responded with ${response.status}: ${response.statusText}` });
         }

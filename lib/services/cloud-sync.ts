@@ -240,15 +240,17 @@ const SCAN_CONFIG: Record<string, { idCol: string; timeCol: string; columns: str
   z_readings: {
     idCol: 'id', timeCol: 'created_at',
     columns: [
-      'id','terminal_id','shift_id','z_number','total_sales','total_vat',
-      'total_discount','transaction_count','created_at',
+      'id','reading_number','report_date','terminal_id','cashier_name',
+      'gross_sales','returns','discounts','net_sales','vat_amount',
+      'payment_methods','transaction_count','starting_cash','cash_sales',
+      'cash_in_drawer','created_at','updated_at',
     ],
   },
 
   // ── Approvals ─────────────────────────────────────────────────────────────
   approval_workflows: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: ['id','name','transaction_type','threshold_amount','enabled','updated_at'],
+    idCol: 'id', timeCol: 'created_at',
+    columns: ['id','transaction_type','user_type_id','step_order','created_at'],
   },
 };
 

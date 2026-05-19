@@ -49,7 +49,8 @@ export async function logActivity(options: LogActivityOptions): Promise<void> {
     const user = getCurrentUser();
     if (!user) return;
 
-    const res = await fetch('/api/user-activity-logs', {
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api';
+    const res = await fetch(`${base}/user-activity-logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

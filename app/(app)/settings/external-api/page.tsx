@@ -227,6 +227,7 @@ export default function ExternalApiSettingsPage() {
           apiKey: api.apiKey,
           bearerToken: api.bearerToken,
           timeout: api.timeout,
+          role: api.role,
         }),
       });
       const data = await res.json();

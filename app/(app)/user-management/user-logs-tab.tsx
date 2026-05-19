@@ -130,7 +130,8 @@ export function UserLogsTab() {
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
 
-      const res = await fetch(`/api/user-activity-logs?${params.toString()}`);
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api';
+      const res = await fetch(`${base}/user-activity-logs?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
         setLogs(data.data);
