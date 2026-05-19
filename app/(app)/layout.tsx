@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -71,6 +71,7 @@ import { getApiUrl } from '@/lib/api-config';
 import { ApprovalsDrawer } from '@/components/approvals/approvals-drawer';
 import { WorkflowSettingsDrawer } from '@/components/approvals/workflow-settings-drawer';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
+import { NavigationProgress } from '@/components/navigation-progress';
 
 
 const navItems = [
@@ -229,6 +230,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <Suspense fallback={null}>
+        <NavigationProgress />
+      </Suspense>
       <SidebarProvider className="h-screen overflow-hidden">
       <Sidebar className="non-printable border-r" collapsible="icon">
         <SidebarHeader className="h-20 border-b border-sidebar-border sticky top-0 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl z-10 px-6 group-data-[collapsible=icon]:px-0 justify-center shadow-sm">

@@ -4,7 +4,7 @@
 /**
  * Centralized API configuration
  */
-export const DEFAULT_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
+export const DEFAULT_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api';
 export const API_BASE_URL = DEFAULT_API_BASE_URL;
 
 /**
@@ -35,7 +35,7 @@ export const formatApiUrl = (base: string, path: string) => {
       const noDomainSuffix = !authority.includes('.');
       
       if (isIP || isLocalhost || noDomainSuffix) {
-        formatted = formatted.replace(authority, `${authority}:3001`);
+        formatted = formatted.replace(authority, `${authority}:3000`);
       }
     }
   }

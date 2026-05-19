@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { getApiUrl } from '@/lib/api-config';
 
 type ActivityLog = {
   id: string;
@@ -130,8 +131,7 @@ export function UserLogsTab() {
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
 
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api';
-      const res = await fetch(`${base}/user-activity-logs?${params.toString()}`);
+      const res = await fetch(getApiUrl(`/user-activity-logs?${params.toString()}`));
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (data.success) {

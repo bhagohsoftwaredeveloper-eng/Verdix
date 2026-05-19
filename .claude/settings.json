@@ -6,7 +6,8 @@
       "PowerShell(netsh advfirewall firewall show rule name=\"Stock Pilot Port 3000\" 2>$null)",
       "PowerShell(netsh advfirewall firewall show rule name=\"Next.js\" 2>$null)",
       "PowerShell(netsh advfirewall firewall show rule dir=in protocol=TCP localport=3000)",
-      "PowerShell(New-NetFirewallRule -DisplayName \"Stock Pilot - Port 3000\" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Any)"
+      "PowerShell(New-NetFirewallRule -DisplayName \"Stock Pilot - Port 3000\" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Any)",
+      "PowerShell(Get-ChildItem .next -Directory | ForEach-Object { $size = \\(Get-ChildItem $_.FullName -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum\\).Sum / 1MB; \"{0,-30} {1,10:N1} MB\" -f $_.Name, $size })"
     ]
   }
 }
