@@ -212,6 +212,14 @@ const TABLE_COLUMNS: Record<string, { idCol: string; columns: string[] }> = {
   },
 };
 
+/** Convert ISO 8601 strings (e.g. '2026-05-19T01:08:12.000Z') to MySQL datetime format. */
+function toMySQLDatetime(val: unknown): unknown {
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
+    return val.slice(0, 19).replace('T', ' ');
+  }
+  return val;
+}
+
 function authGuard(request: NextRequest): boolean {
   if (!CLOUD_API_KEY) return true; // open in dev if no key set
   return request.headers.get('X-Sync-Key') === CLOUD_API_KEY;
@@ -266,7 +274,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No whitelisted columns in payload' }, { status: 400 });
     }
 
-    const values       = cols.map(c => payload[c]);
+    const values       = cols.map(c => toMySQLDatetime(payload[c]));
     const placeholders = cols.map(() => '?').join(', ');
     const updates      = cols
       .filter(c => c !== idCol)
