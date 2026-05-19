@@ -13,10 +13,10 @@ import {
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const logId = params.id;
+    const { id: logId } = await params;
 
     // Fetch the log entry
     const logResult = await query('SELECT * FROM external_api_logs WHERE id = ?', [logId]);

@@ -233,8 +233,9 @@ const SCAN_CONFIG: Record<string, { idCol: string; timeCol: string; columns: str
   shifts: {
     idCol: 'id', timeCol: 'updated_at',
     columns: [
-      'id','terminal_id','cashier_id','opening_amount','closing_amount',
-      'status','opened_at','closed_at','updated_at',
+      'id','user_id','terminal_id','starting_cash','expected_cash',
+      'actual_cash','cash_difference','status','start_time','end_time',
+      'notes','created_at','updated_at',
     ],
   },
   z_readings: {
@@ -347,6 +348,7 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 
       let latestTs = lastPush;
       let tableFailed = 0;
+      let remoteTableMissing = false;
 
       for (const row of rows) {
         const recordId = String(row[cfg.idCol]);
@@ -372,13 +374,27 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
               ? new Date(row[cfg.timeCol]).toISOString().slice(0, 19).replace('T', ' ')
               : latestTs;
             if (rowTs > latestTs) latestTs = rowTs;
+          } else if (res.status === 422) {
+            // Remote table doesn't exist yet — skip this entire table silently
+            const body = await res.json().catch(() => ({})) as any;
+            if (body.tableNotFound) {
+              remoteTableMissing = true;
+              break;
+            }
+            tableFailed++;
+            console.error(`[CloudSync] Push failed ${tableName}/${recordId}: HTTP 422 — ${body.error ?? ''}`);
           } else {
             tableFailed++;
+            const errText = await res.text().catch(() => '');
+            console.error(`[CloudSync] Push failed ${tableName}/${recordId}: HTTP ${res.status} — ${errText.slice(0, 200)}`);
           }
-        } catch {
+        } catch (pushErr) {
           tableFailed++;
+          console.error(`[CloudSync] Push network error ${tableName}/${recordId}:`, (pushErr as Error).message);
         }
       }
+
+      if (remoteTableMissing) continue;
 
       totalFailed += tableFailed;
 
@@ -433,6 +449,8 @@ const PULL_COLUMNS: Record<string, { idCol: string; columns: string[] }> = {
 export async function processPullFromCloud(): Promise<{ pulled: number }> {
   const { url, apiKey } = await getCloudConfig();
   if (!url) return { pulled: 0 };
+
+  await ensureTrackerTable();
 
   try {
     const lastRows = await query(

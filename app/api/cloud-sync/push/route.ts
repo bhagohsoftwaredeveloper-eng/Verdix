@@ -190,8 +190,9 @@ const TABLE_COLUMNS: Record<string, { idCol: string; columns: string[] }> = {
   shifts: {
     idCol: 'id',
     columns: [
-      'id','terminal_id','cashier_id','opening_amount','closing_amount',
-      'status','opened_at','closed_at','updated_at',
+      'id','user_id','terminal_id','starting_cash','expected_cash',
+      'actual_cash','cash_difference','status','start_time','end_time',
+      'notes','created_at','updated_at',
     ],
   },
   z_readings: {
@@ -282,6 +283,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, operation: 'upsert', tableName, recordId });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
+    // Table doesn't exist on this DB — return 422 so the sender knows to skip gracefully
+    if (msg.includes("doesn't exist") || msg.includes('Unknown table')) {
+      return NextResponse.json({ error: msg, tableNotFound: true }, { status: 422 });
+    }
     console.error('[CloudSync] Push handler error:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }

@@ -73,6 +73,9 @@ export default function ExternalApiSettingsPage() {
   const [apis, setApis] = useState<ExternalApi[]>([]);
   const [logs, setLogs] = useState<ApiSyncLog[]>([]);
   const [isLoadingApis, setIsLoadingApis] = useState(true);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
+  const [logStatusFilter, setLogStatusFilter] = useState<string>('all');
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -105,12 +108,43 @@ export default function ExternalApiSettingsPage() {
     }
   };
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (statusFilter?: string) => {
+    setIsLoadingLogs(true);
     try {
-      const res = await fetch(getApiUrl('/external-api/logs?limit=50'));
+      const status = statusFilter ?? logStatusFilter;
+      const qs = status !== 'all' ? `?limit=50&status=${status}` : '?limit=50';
+      const res = await fetch(getApiUrl(`/external-api/logs${qs}`));
       const data = await res.json();
       if (data.success) setLogs(data.logs);
-    } catch {}
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load logs.' });
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setLogStatusFilter(value);
+    fetchLogs(value);
+  };
+
+  const handleRetryLog = async (log: ApiSyncLog) => {
+    if (!log.id) return;
+    setRetryingLogId(log.id);
+    try {
+      const res = await fetch(getApiUrl(`/external-api/logs/${log.id}/retry`), { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Retry Successful', description: 'The sync operation completed successfully.' });
+        fetchLogs();
+      } else {
+        toast({ variant: 'destructive', title: 'Retry Failed', description: data.error || 'Failed to retry.' });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Retry Failed', description: 'Network error.' });
+    } finally {
+      setRetryingLogId(null);
+    }
   };
 
   const openAddDialog = () => {
@@ -419,10 +453,25 @@ export default function ExternalApiSettingsPage() {
                 <CardTitle>Synchronization History</CardTitle>
                 <CardDescription>Recent API calls and their status.</CardDescription>
               </div>
-              <Button variant="outline" size="sm" onClick={fetchLogs}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                <Select value={logStatusFilter} onValueChange={handleStatusFilterChange}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="All Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="success">Success</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={() => fetchLogs()} disabled={isLoadingLogs}>
+                  {isLoadingLogs
+                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    : <RefreshCw className="mr-2 h-4 w-4" />}
+                  Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="relative w-full overflow-auto">
@@ -436,19 +485,26 @@ export default function ExternalApiSettingsPage() {
                       <th className="h-12 px-4 text-left font-medium text-muted-foreground">Attempts</th>
                       <th className="h-12 px-4 text-left font-medium text-muted-foreground">Next Retry</th>
                       <th className="h-12 px-4 text-left font-medium text-muted-foreground">Error</th>
+                      <th className="h-12 px-4 text-left font-medium text-muted-foreground">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {logs.length === 0 ? (
+                    {isLoadingLogs ? (
                       <tr>
-                        <td colSpan={7} className="h-24 text-center text-muted-foreground">
+                        <td colSpan={8} className="h-24 text-center">
+                          <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+                        </td>
+                      </tr>
+                    ) : logs.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="h-24 text-center text-muted-foreground">
                           No sync logs found.
                         </td>
                       </tr>
                     ) : (
                       logs.map(log => (
                         <tr key={log.id} className="border-b transition-colors hover:bg-muted/50">
-                          <td className="p-4">{new Date(log.createdAt || '').toLocaleString()}</td>
+                          <td className="p-4 text-xs">{new Date(log.createdAt || '').toLocaleString()}</td>
                           <td className="p-4"><Badge variant="outline">{log.transactionType}</Badge></td>
                           <td className="p-4 font-mono text-xs">{log.transactionId}</td>
                           <td className="p-4">
@@ -467,6 +523,20 @@ export default function ExternalApiSettingsPage() {
                           <td className="p-4 text-center">{(log.retryCount ?? 0) + 1}</td>
                           <td className="p-4 text-xs">{log.nextRetryAt ? new Date(log.nextRetryAt).toLocaleTimeString() : '-'}</td>
                           <td className="p-4 max-w-[200px] truncate text-xs text-destructive">{log.errorMessage || '-'}</td>
+                          <td className="p-4">
+                            {(log.status === 'failed' || log.status === 'pending') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRetryLog(log)}
+                                disabled={retryingLogId === log.id}
+                              >
+                                {retryingLogId === log.id
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <RefreshCw className="h-3.5 w-3.5" />}
+                              </Button>
+                            )}
+                          </td>
                         </tr>
                       ))
                     )}
