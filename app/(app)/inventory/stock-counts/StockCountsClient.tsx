@@ -230,6 +230,7 @@ export function StockCountsClient() {
     try {
       setIsLoading(true);
       const res = await fetch('/api/inventory/stock-counts');
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) setCounts(data.data);
     } catch (error) {

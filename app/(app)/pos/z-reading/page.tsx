@@ -32,6 +32,7 @@ function ZReadingReportView({ onPrint }: { onPrint?: () => void }) {
             try {
                 // Fetch business settings
                 const settingsRes = await fetch(getApiUrl('/pos-settings'));
+                if (!settingsRes.ok) throw new Error(`API error ${settingsRes.status}`);
                 const settingsResult = await settingsRes.json();
                 if (settingsResult.success) {
                     setBusinessSettings(settingsResult.data);
@@ -39,6 +40,7 @@ function ZReadingReportView({ onPrint }: { onPrint?: () => void }) {
 
                 // Fetch current Z-Reading data (live, from DB)
                 const zRes = await fetch(getApiUrl('/sales/z-reading?mode=current'));
+                if (!zRes.ok) throw new Error(`API error ${zRes.status}`);
                 const zResult = await zRes.json();
                 if (zResult.success && zResult.data?.length > 0) {
                     setData(zResult.data[0]);

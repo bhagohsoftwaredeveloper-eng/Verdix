@@ -132,6 +132,7 @@ export function UserLogsTab() {
 
       const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api';
       const res = await fetch(`${base}/user-activity-logs?${params.toString()}`);
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (data.success) {
         setLogs(data.data);

@@ -68,6 +68,7 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
     setIsLoadingWarehouses(true);
     try {
       const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         // Filter out the current warehouse of the product

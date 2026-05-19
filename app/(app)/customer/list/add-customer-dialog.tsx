@@ -88,6 +88,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
     try {
       setIsLoadingLoyaltySettings(true);
       const response = await fetch(getApiUrl('/loyalty-settings'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
 
       if (result.success) {
@@ -124,6 +125,7 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
     try {
       setIsLoadingPaymentTerms(true);
       const response = await fetch(getApiUrl('/payment-terms'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setPaymentTermsList(result.data);

@@ -258,6 +258,7 @@ export default function SalesByProductPage() {
     params.append('limit', '1000000');
     try {
       const res = await fetch(getApiUrl(`/sales/by-product?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (result.success && Array.isArray(result.data)) return result.data;
       return [];
@@ -413,6 +414,7 @@ export default function SalesByProductPage() {
       if (dateRange?.to) params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
       if (terminal && terminal !== 'all') params.append('terminalId', terminal);
       const res = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (result.success) {
         setTransactions((prev) => ({ ...prev, [productId]: result.data }));

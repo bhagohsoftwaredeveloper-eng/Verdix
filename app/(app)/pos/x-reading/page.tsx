@@ -47,6 +47,7 @@ function XReadingReportView({ data }: { data: XReadingData }) {
         try {
             // Check if we should use thermal printing or browser printing
             const settingsResponse = await fetch(getApiUrl('/pos-settings'));
+            if (!settingsResponse.ok) throw new Error(`API error ${settingsResponse.status}`);
             const settingsResult = await settingsResponse.json();
             const settings = settingsResult.success ? settingsResult.data : {};
 
@@ -216,11 +217,13 @@ export default function XReadingPage() {
         try {
             // Fetch business settings first
             const settingsResponse = await fetch(getApiUrl('/pos-settings'));
+            if (!settingsResponse.ok) throw new Error(`API error ${settingsResponse.status}`);
             const settingsResult = await settingsResponse.json();
             const settings = settingsResult.success ? settingsResult.data : {};
 
             // Load the most recent active shift X-reading for the current cashier
             const response = await fetch(getApiUrl('/sales/x-reading?shiftStatus=active&limit=1'));
+            if (!response.ok) throw new Error(`API error ${response.status}`);
             const result = await response.json();
             
             if (result.success && result.data.length > 0) {

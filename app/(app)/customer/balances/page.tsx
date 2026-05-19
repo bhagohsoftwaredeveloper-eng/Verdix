@@ -89,6 +89,7 @@ export default function CustomerBalancesPage() {
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/customers/balances'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       
       if (result.success) {

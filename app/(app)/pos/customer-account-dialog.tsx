@@ -99,6 +99,7 @@ export function CustomerAccountDialog({
     setIsLoading(true);
     try {
       const response = await fetch(getApiUrl('/customers?limit=100'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setCustomers(result.data);
@@ -315,6 +316,7 @@ export function CustomerAccountDialog({
     setRfidError('');
     try {
       const res = await fetch(getApiUrl(`/customer-loyalty/lookup?rfid=${encodeURIComponent(code)}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (result.success && result.data) {
         const found = result.data;

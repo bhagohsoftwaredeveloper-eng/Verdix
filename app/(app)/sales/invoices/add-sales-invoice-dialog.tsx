@@ -187,6 +187,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
   const fetchNextReference = async () => {
     try {
       const response = await fetch(getApiUrl('/transaction-references'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success && result.data?.salesInvoice) {
         const nextVal = parseInt(result.data.salesInvoice) + 1;
@@ -265,6 +266,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
     try {
       setIsLoadingWarehouses(true);
       const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
 
       if (result.success) {
@@ -284,6 +286,7 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
     try {
       setIsLoadingPaymentMethods(true);
       const response = await fetch(getApiUrl('/payment-methods?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
 
       if (result.success) {

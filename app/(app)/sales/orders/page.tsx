@@ -244,6 +244,7 @@ export default function SalesOrdersPage() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(getApiUrl(`/sales/orders/${id}`), { method: 'DELETE' });
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Failed to delete order');
       return data;

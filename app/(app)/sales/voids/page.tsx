@@ -111,6 +111,7 @@ export default function VoidedSalesPage() {
       if (queryDates.from) params.append('startDate', format(queryDates.from, 'yyyy-MM-dd'));
       if (queryDates.to) params.append('endDate', format(queryDates.to, 'yyyy-MM-dd'));
       const response = await fetch(getApiUrl(`/sales/voids-report?${params.toString()}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) return result.data;
       return [];

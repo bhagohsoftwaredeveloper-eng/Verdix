@@ -466,6 +466,7 @@ export default function DataManagementPage() {
     setCreatingBackup(true);
     try {
       const res = await fetch(getApiUrl('/settings/backup/manual'), { method: 'POST' });
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       
       if (res.ok) {

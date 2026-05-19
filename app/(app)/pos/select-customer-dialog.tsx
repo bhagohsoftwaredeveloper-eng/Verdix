@@ -53,6 +53,7 @@ export function SelectCustomerDialog({ isOpen, onOpenChange, onSelectCustomer }:
         params.append('search', query);
       }
       const response = await fetch(getApiUrl(`/customers?${params.toString()}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setCustomers(result.data);

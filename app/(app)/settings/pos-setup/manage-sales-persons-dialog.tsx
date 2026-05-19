@@ -238,6 +238,7 @@ export function ManageSalesPersonsDialog({ trigger, onChange, open, onOpenChange
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/sales-persons?activeOnly=false'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
 
       if (result.success) {

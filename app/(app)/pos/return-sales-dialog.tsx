@@ -360,6 +360,7 @@ export function ReturnSalesDialog({
       
       try {
           const response = await fetch(getApiUrl(`/pos/recent-sales?query=${encodeURIComponent(term)}`));
+          if (!response.ok) throw new Error(`API error ${response.status}`);
           const result = await response.json();
           console.log('ReturnSalesDialog: Search result:', result);
           

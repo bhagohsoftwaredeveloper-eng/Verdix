@@ -49,6 +49,7 @@ export function OverallReadingDialog({
       setLoading(true);
       try {
           const response = await fetch(getApiUrl(`/sales/overall-reading?terminalId=${terminalId}`));
+          if (!response.ok) throw new Error(`API error ${response.status}`);
           const result = await response.json();
           
           if (result.success) {

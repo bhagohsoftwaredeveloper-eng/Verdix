@@ -114,6 +114,7 @@ export default function CustomerList({
     try {
       setIsCheckingTransactions(true);
       const response = await fetch(getApiUrl(`/customers/${customer.id}/check-transactions`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setHasTransactions(result.hasTransactions);

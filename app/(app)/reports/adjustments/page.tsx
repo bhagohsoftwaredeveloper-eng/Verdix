@@ -65,6 +65,7 @@ export default function AdjustmentReportPage() {
       params.append('limit', pageSize.toString());
 
       const res = await fetch(getApiUrl(`/reports/adjustments?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       
       if (data.success) {

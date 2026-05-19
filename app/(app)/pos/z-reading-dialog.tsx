@@ -70,6 +70,7 @@ function ZReadingReportView({ onBack, printMode, terminalId, terminalName, initi
                 // Settings might still be needed for business branding/paper size
                  try {
                     const settingsRes = await fetch(getApiUrl('/pos-settings'));
+                    if (!settingsRes.ok) throw new Error(`API error ${settingsRes.status}`);
                     const settingsResult = await settingsRes.json();
                     if (settingsResult.success) {
                         setBusinessSettings(settingsResult.data);
@@ -82,12 +83,14 @@ function ZReadingReportView({ onBack, printMode, terminalId, terminalName, initi
             setIsLoading(true);
             try {
                 const settingsRes = await fetch(getApiUrl('/pos-settings'));
+                if (!settingsRes.ok) throw new Error(`API error ${settingsRes.status}`);
                 const settingsResult = await settingsRes.json();
                 if (settingsResult.success) {
                     setBusinessSettings(settingsResult.data);
                 }
 
                 const response = await fetch(getApiUrl(`/sales/z-reading?mode=current&terminalId=${terminalId || 'all'}`));
+                if (!response.ok) throw new Error(`API error ${response.status}`);
                 const result = await response.json();
 
                 if (result.success && result.data.length > 0) {

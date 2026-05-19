@@ -76,6 +76,7 @@ export default function StockMovementPage() {
       if (movementType && movementType !== 'all') params.append('type', movementType);
 
       const res = await fetch(getApiUrl(`/reports/movements?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       
       if (data.success) {

@@ -80,6 +80,7 @@ export default function LowStockReportPage() {
         ...(search ? { search } : {})
       });
       const res = await fetch(getApiUrl(`/reports/inventory?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       
       if (data.success) {

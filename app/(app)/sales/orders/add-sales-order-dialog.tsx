@@ -251,6 +251,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     try {
       setIsLoadingPaymentMethods(true);
       const response = await fetch(getApiUrl('/payment-methods?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         // Explicitly map properties (same as invoice dialog)
@@ -275,6 +276,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     try {
       setIsLoadingWarehouses(true);
       const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setWarehouses(result.data);
@@ -293,6 +295,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     try {
       setIsLoadingSalesPersons(true);
       const response = await fetch(getApiUrl('/sales-persons?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setSalesPersons(result.data);

@@ -76,6 +76,7 @@ export default function ZReadingPage() {
     queryKey: ['posSettings'],
     queryFn: async () => {
       const res = await fetch(getApiUrl('/pos-settings'));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       return result.success ? result.data : null;
     },
@@ -90,6 +91,7 @@ export default function ZReadingPage() {
       params.append('endDate', queryParams.to);
       if (queryParams.terminalId) params.append('terminalId', queryParams.terminalId);
       const res = await fetch(getApiUrl(`/sales/z-reading?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (!result.success) return [];
       if (result.data.length === 1 && queryParams.from === queryParams.to) {

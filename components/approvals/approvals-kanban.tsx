@@ -334,17 +334,26 @@ function TransactionDetails({ item }: { item: ApprovalItem }) {
         <>
           <div className="bg-secondary/10 rounded-2xl p-4 space-y-0">
             <Row label="Count Name" value={d.name} />
-            <Row label="Warehouse" value={d.warehouseName} />
+            <Row label="Warehouse" value={d.warehouseName || 'All Warehouses'} />
             <Row label="Shelf" value={d.shelfName || 'All Shelves'} />
+            <Row label="Total Items" value={(d.items || []).length || '—'} />
           </div>
           <ItemsTable
-            items={d.items || []}
+            items={(d.items || []).map((it: any) => ({
+              ...it,
+              variance: it.counted_quantity != null
+                ? (it.counted_quantity - it.snapshot_quantity > 0
+                    ? `+${it.counted_quantity - it.snapshot_quantity}`
+                    : String(it.counted_quantity - it.snapshot_quantity))
+                : '—',
+              counted_quantity: it.counted_quantity != null ? it.counted_quantity : '—',
+            }))}
             cols={[
               { key: 'productName', label: 'Product' },
-              { key: 'productBarcode', label: 'Barcode' },
               { key: 'productSku', label: 'SKU' },
               { key: 'snapshot_quantity', label: 'Expected', right: true },
               { key: 'counted_quantity', label: 'Counted', right: true },
+              { key: 'variance', label: 'Variance', right: true },
             ]}
           />
         </>

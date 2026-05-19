@@ -149,6 +149,7 @@ export default function PosSetupPage() {
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/pos-settings'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       
       if (result.success) {
@@ -158,6 +159,7 @@ export default function PosSetupPage() {
         
         if (termId) {
              const termRes = await fetch(getApiUrl(`/pos-terminals?activeOnly=true`));
+             if (!termRes.ok) throw new Error(`API error ${termRes.status}`);
              const termData = await termRes.json();
              if (termData.success) {
                  const found = termData.data.find((t:any) => t.id === termId);

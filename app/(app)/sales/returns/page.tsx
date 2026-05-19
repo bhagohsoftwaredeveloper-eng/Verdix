@@ -109,6 +109,7 @@ export default function ReturnedSalesPage() {
       if (queryDates.to) params.append('endDate', format(queryDates.to, 'yyyy-MM-dd'));
       params.append('status', 'Returned');
       const response = await fetch(getApiUrl(`/sales/transactions?${params.toString()}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         return result.data

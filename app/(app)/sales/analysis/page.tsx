@@ -112,6 +112,7 @@ export default function SalesAnalysisPage() {
       if (interval) params.append('interval', interval);
       if (paymentType && paymentType !== 'all') params.append('paymentType', paymentType);
       const res = await fetch(getApiUrl(`/sales/by-date?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       return result.success ? result.data : [];
     },
@@ -123,6 +124,7 @@ export default function SalesAnalysisPage() {
       const params = new URLSearchParams();
       if (dateRange?.from) params.append('date', format(dateRange.from, 'yyyy-MM-dd'));
       const res = await fetch(getApiUrl(`/sales/hourly?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       return result.success ? result.data : [];
     },
@@ -132,6 +134,7 @@ export default function SalesAnalysisPage() {
     queryKey: ['analysisCategoryData'],
     queryFn: async () => {
       const res = await fetch(getApiUrl('/sales/monthly-category'));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       return result.success ? result.data : [];
     },

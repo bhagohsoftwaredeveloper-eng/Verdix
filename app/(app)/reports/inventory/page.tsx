@@ -97,6 +97,7 @@ export default function InventoryReportPage() {
     const fetchSettings = async () => {
         try {
             const res = await fetch(getApiUrl('/pos-settings'));
+            if (!res.ok) throw new Error(`API error ${res.status}`);
             const data = await res.json();
             if (data.success) {
                 setSettings(data.data);
@@ -119,6 +120,7 @@ export default function InventoryReportPage() {
       params.append('limit', pageSize.toString());
       
       const res = await fetch(getApiUrl(`/reports/inventory?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       
       if (data.success) {

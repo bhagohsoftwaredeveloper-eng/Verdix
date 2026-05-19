@@ -90,6 +90,7 @@ export function TerminalSettingsDialog({ onTerminalChanged, currentTerminalId }:
   const fetchWarehouses = async () => {
     try {
       const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setWarehouses(result.data);
@@ -103,6 +104,7 @@ export function TerminalSettingsDialog({ onTerminalChanged, currentTerminalId }:
     try {
       setIsLoadingTerminals(true);
       const response = await fetch(getApiUrl('/pos-terminals?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setTerminals(result.data);

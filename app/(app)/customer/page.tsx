@@ -36,6 +36,7 @@ export default function CustomerListPage() {
         url += `&search=${encodeURIComponent(search)}`;
       }
       const response = await fetch(url);
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setCustomers(result.data);

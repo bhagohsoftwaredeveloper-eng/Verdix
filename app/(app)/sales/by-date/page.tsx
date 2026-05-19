@@ -252,6 +252,7 @@ export default function SalesByDatePage() {
     params.append('limit', '1000000');
     try {
       const res = await fetch(`/api/sales/by-date?${params.toString()}`);
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (result.success && Array.isArray(result.data)) return result.data;
       return [];

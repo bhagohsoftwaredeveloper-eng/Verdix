@@ -81,6 +81,7 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
   const fetchWarehouses = async () => {
     try {
       const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setWarehouses(result.data);
@@ -93,6 +94,7 @@ export function AddPosTerminalDialog({ onTerminalAdded }: AddPosTerminalDialogPr
   const fetchNextOR = async () => {
     try {
       const response = await fetch(getApiUrl('/pos-terminals?getNextOR=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success && result.data) {
         form.setValue('orNextReference', result.data);

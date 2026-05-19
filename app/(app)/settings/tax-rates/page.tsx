@@ -53,6 +53,7 @@ export default function TaxRatesPage() {
     try {
       setIsAuthLoading(true);
       const settingsResponse = await fetch(getApiUrl('/pos-settings'));
+      if (!settingsResponse.ok) throw new Error(`API error ${settingsResponse.status}`);
       const settingsResult = await settingsResponse.json();
       
       if (settingsResult.success) {
@@ -82,6 +83,7 @@ export default function TaxRatesPage() {
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/settings/tax-rates'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const data = await response.json();
       if (Array.isArray(data)) {
         setTaxRates(data);

@@ -273,6 +273,7 @@ export default function SalesDetailsPage() {
     params.append('limit', '1000000');
     try {
       const res = await fetch(`/api/sales/transactions?${params.toString()}`);
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       return result.success && Array.isArray(result.data) ? result.data : [];
     } catch { return []; }

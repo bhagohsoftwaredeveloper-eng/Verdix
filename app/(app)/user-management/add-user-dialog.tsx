@@ -76,6 +76,7 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
   async function fetchUserTypes() {
     try {
       const res = await fetch(getApiUrl('/user-types'));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setUserTypes(data);
     } catch (error) {

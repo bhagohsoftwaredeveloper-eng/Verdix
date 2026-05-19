@@ -85,6 +85,7 @@ export default function PosTerminalsPage() {
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/pos-terminals'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setTerminals(result.data);
@@ -104,6 +105,7 @@ export default function PosTerminalsPage() {
   const fetchWarehouses = async () => {
     try {
       const response = await fetch(getApiUrl('/warehouses?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setWarehouses(result.data);

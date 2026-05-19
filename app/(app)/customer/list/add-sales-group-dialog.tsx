@@ -75,6 +75,7 @@ export function AddSalesGroupDialog({ onGroupAdded, onSalesGroupsUpdated }: AddS
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/sales-groups'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setSalesGroups(result.data);

@@ -208,44 +208,26 @@
     size: auto;
   }
 
-  /* Hide everything in the body by default */
-  body > * {
-    display: none !important;
+  /* Hide everything using visibility so nested .printable-area can override */
+  body,
+  body * {
+    visibility: hidden !important;
   }
 
-  /* Show ONLY the portal containing our printable content */
-  /* We use a universal selector for the portal to be safe */
-  body > [data-radix-portal] {
-    display: block !important;
-    position: static !important;
-  }
-
-  /* Inside the portal, hide all children and only show the document */
-  [data-radix-portal] * {
-    visibility: hidden;
-  }
-
+  /* Show the printable area and all its descendants */
   .printable-area,
   .printable-area * {
     visibility: visible !important;
   }
 
-  /* Position the document at the top of the page */
+  /* Position the printable area at the top of the printed page */
   .printable-area {
-    position: absolute !important;
+    display: block !important;
+    position: fixed !important;
     top: 0 !important;
     left: 0 !important;
     width: 100% !important;
     background: white !important;
-    display: block !important;
-  }
-
-  /* Hide all buttons and UI artifacts */
-  .non-printable,
-  button,
-  .DialogOverlay {
-    display: none !important;
-    visibility: hidden !important;
   }
 
   /* Remove scrollbars and force colors */

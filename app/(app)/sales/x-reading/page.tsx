@@ -84,6 +84,7 @@ export default function XReadingPage() {
     queryKey: ['posSettings'],
     queryFn: async () => {
       const res = await fetch(getApiUrl('/pos-settings'));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       return result.success ? result.data : null;
     },
@@ -97,6 +98,7 @@ export default function XReadingPage() {
       params.append('startDate', queryParams.from);
       params.append('endDate', queryParams.to);
       const res = await fetch(getApiUrl(`/sales/x-reading?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (!result.success) return [];
       return result.data;

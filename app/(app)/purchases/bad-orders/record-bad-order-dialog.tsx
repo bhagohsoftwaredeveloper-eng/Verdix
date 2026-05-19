@@ -361,6 +361,7 @@ export function RecordBadOrderDialog({ onSuccess }: RecordBadOrderDialogProps) {
   const loadPosSettings = async () => {
     try {
       const response = await fetch(getApiUrl('/pos-settings'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setPosSettings(result.data);

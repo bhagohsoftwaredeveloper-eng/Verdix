@@ -83,6 +83,7 @@ export function ConnectionSettingsDialog({ open, onOpenChange }: ConnectionSetti
     setIsLoadingTerminals(true);
     try {
       const response = await fetch(getApiUrl('/pos-terminals?activeOnly=true'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setTerminals(result.data);

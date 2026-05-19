@@ -94,6 +94,7 @@ function OutstandingInvoices() {
             params.append('limit', pagination.pageSize.toString());
 
             const response = await fetch(getApiUrl(`/customers/invoices/outstanding?${params.toString()}`));
+            if (!response.ok) throw new Error(`API error ${response.status}`);
             const result = await response.json();
             if (result.success) {
                 setInvoices(result.data);
@@ -288,6 +289,7 @@ function PaymentHistory() {
             params.append('limit', pagination.pageSize.toString());
 
             const response = await fetch(getApiUrl(`/customers/payments?${params.toString()}`));
+            if (!response.ok) throw new Error(`API error ${response.status}`);
             const result = await response.json();
             if (result.success) {
                 setPayments(result.data);
@@ -310,6 +312,7 @@ function PaymentHistory() {
     const fetchPaymentMethods = async () => {
         try {
             const response = await fetch(getApiUrl('/payment-methods?activeOnly=true'));
+            if (!response.ok) throw new Error(`API error ${response.status}`);
             const result = await response.json();
             if (result.success) {
                 setPaymentMethods(result.data);
@@ -335,6 +338,7 @@ function PaymentHistory() {
             params.append('limit', '1000000'); // Fetch all
 
             const response = await fetch(getApiUrl(`/customers/payments?${params.toString()}`));
+            if (!response.ok) throw new Error(`API error ${response.status}`);
             const result = await response.json();
             if (result.success) return result.data;
             return [];
@@ -393,6 +397,7 @@ function PaymentHistory() {
             let businessName = 'BUSINESS NAME';
             try {
                 const settingsRes = await fetch(getApiUrl('/pos-settings'));
+                if (!settingsRes.ok) throw new Error(`API error ${settingsRes.status}`);
                 const settings = await settingsRes.json();
                 if (settings.success && settings.data?.businessName) {
                     businessName = settings.data.businessName;
@@ -697,6 +702,7 @@ function StatementOfAccount() {
                 to: dateRange.to.toISOString(),
             });
             const res = await fetch(getApiUrl(`/reports/soa?${params.toString()}`));
+            if (!res.ok) throw new Error(`API error ${res.status}`);
             const data = await res.json();
             if (data.success) setSoaData(data.data);
             else throw new Error(data.error);

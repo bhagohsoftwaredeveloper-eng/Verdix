@@ -204,6 +204,7 @@ export function RecentSalesDialog({
         const fetchRecentSales = async () => {
             try {
                 const response = await fetch(getApiUrl(`/pos/recent-sales?_t=${Date.now()}`), { cache: 'no-store' });
+                if (!response.ok) throw new Error(`API error ${response.status}`);
                 const result = await response.json();
                 
                 if (result.success) {

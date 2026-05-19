@@ -105,6 +105,7 @@ export default function OverallReadingPage() {
         params.append('terminalId', shiftsQueryParams.terminalId);
       }
       const res = await fetch(getApiUrl(`/pos/shifts?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch shifts');
       if (result.data.length === 0) {
@@ -122,6 +123,7 @@ export default function OverallReadingPage() {
       params.append('terminalId', selectedShift.terminal_id);
       params.append('shiftId', selectedShift.id);
       const res = await fetch(getApiUrl(`/sales/overall-reading?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch reading for shift');
       if (result.data.transactionCount === 0) {

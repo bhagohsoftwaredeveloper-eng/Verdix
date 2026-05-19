@@ -70,6 +70,7 @@ export default function CashTransferPage() {
     queryKey: ['cashiers'],
     queryFn: async () => {
       const res = await fetch(getApiUrl('/users'));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         return data.map((user: any) => ({
@@ -104,6 +105,7 @@ export default function CashTransferPage() {
       params.append('page', currentPage.toString());
       params.append('limit', pageSize.toString());
       const res = await fetch(getApiUrl(`/pos/cash-transfer?${params.toString()}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const json = await res.json();
       if (!json.success) throw new Error('Failed to fetch cash transfers');
       return json;

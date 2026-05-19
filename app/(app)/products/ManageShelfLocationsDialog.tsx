@@ -50,6 +50,7 @@ export function ManageShelfLocationsDialog({ open, onOpenChange, onLocationAdded
     setIsLoading(true);
     try {
       const response = await fetch('/api/shelf-locations');
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const data = await response.json();
       if (data.success) {
         setLocations(data.data);
@@ -113,6 +114,7 @@ export function ManageShelfLocationsDialog({ open, onOpenChange, onLocationAdded
 
     try {
       const response = await fetch(`/api/shelf-locations/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const data = await response.json();
 
       if (data.success) {

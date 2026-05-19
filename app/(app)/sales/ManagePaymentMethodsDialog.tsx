@@ -434,6 +434,7 @@ export function ManagePaymentMethodsDialog({ trigger, onChange, open, onOpenChan
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/payment-methods?activeOnly=false'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
 
       if (result.success) {

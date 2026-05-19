@@ -75,6 +75,7 @@ export function AddSalesAreaDialog({ onAreaAdded, onSalesAreasUpdated }: AddSale
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/sales-areas'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setSalesAreas(result.data);

@@ -111,6 +111,7 @@ export function ManagePaymentTermsDialog({
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl('/payment-terms'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setPaymentTerms(result.data);
@@ -126,6 +127,7 @@ export function ManagePaymentTermsDialog({
     try {
       setIsLoadingTypes(true);
       const response = await fetch(getApiUrl('/payment-term-types'));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setCustomTypes(result.data);

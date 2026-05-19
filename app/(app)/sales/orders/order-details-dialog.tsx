@@ -42,6 +42,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
     const fetchSettings = async () => {
       try {
         const response = await fetch(getApiUrl('/pos-settings'));
+        if (!response.ok) throw new Error(`API error ${response.status}`);
         const data = await response.json();
         if (data.success && data.data) {
           setSettings({

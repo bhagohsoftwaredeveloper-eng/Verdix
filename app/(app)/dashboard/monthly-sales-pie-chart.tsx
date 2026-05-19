@@ -50,6 +50,7 @@ export function MonthlySalesPieChart() {
     async function fetchData() {
         try {
             const res = await fetch(getApiUrl('/sales/monthly-category'))
+            if (!res.ok) throw new Error(`API error ${res.status}`);
             const result = await res.json()
             if (result.success) {
                 // Ensure fill color is set for each item

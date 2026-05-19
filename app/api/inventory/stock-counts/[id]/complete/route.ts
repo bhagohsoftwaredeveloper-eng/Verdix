@@ -33,12 +33,13 @@ export async function POST(
       const warehouseName = countRes[0]?.warehouseName || 'All Warehouses';
       const shelfName = countRes[0]?.shelfName || 'All Shelves';
 
-      // Fetch items with variances for enrichment
+      // Fetch all items for the approval record
       const itemsSql = `
         SELECT sci.*, p.name as productName, p.sku as productSku, p.barcode as productBarcode
         FROM stock_count_items sci
         JOIN products p ON sci.product_id = p.id
-        WHERE sci.stock_count_id = ? AND sci.counted_quantity IS NOT NULL AND sci.counted_quantity != sci.snapshot_quantity
+        WHERE sci.stock_count_id = ?
+        ORDER BY p.name ASC
       `;
       const varianceItems = await query(itemsSql, [id]);
 

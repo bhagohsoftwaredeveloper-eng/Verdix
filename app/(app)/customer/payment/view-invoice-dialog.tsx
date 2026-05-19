@@ -69,6 +69,7 @@ export default function ViewInvoiceDialog({ invoiceId, children }: ViewInvoiceDi
     try {
       setIsLoading(true);
       const response = await fetch(getApiUrl(`/customers/invoices/${encodeURIComponent(invoiceId)}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) {
         setInvoice(result.data);

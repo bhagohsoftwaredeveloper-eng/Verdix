@@ -99,6 +99,7 @@ export default function ExternalApiSettingsPage() {
     setIsLoadingApis(true);
     try {
       const res = await fetch(getApiUrl('/settings/external-api'));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (data.success) setApis(data.apis);
     } catch {
@@ -114,6 +115,7 @@ export default function ExternalApiSettingsPage() {
       const status = statusFilter ?? logStatusFilter;
       const qs = status !== 'all' ? `?limit=50&status=${status}` : '?limit=50';
       const res = await fetch(getApiUrl(`/external-api/logs${qs}`));
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (data.success) setLogs(data.logs);
     } catch {
@@ -133,6 +135,7 @@ export default function ExternalApiSettingsPage() {
     setRetryingLogId(log.id);
     try {
       const res = await fetch(getApiUrl(`/external-api/logs/${log.id}/retry`), { method: 'POST' });
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (data.success) {
         toast({ title: 'Retry Successful', description: 'The sync operation completed successfully.' });
@@ -235,6 +238,7 @@ export default function ExternalApiSettingsPage() {
     setIsDeleting(true);
     try {
       const res = await fetch(getApiUrl(`/settings/external-api/${deleteTarget.id}`), { method: 'DELETE' });
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       if (data.success) {
         toast({ title: 'API Deleted', description: `"${deleteTarget.name}" has been removed.` });
