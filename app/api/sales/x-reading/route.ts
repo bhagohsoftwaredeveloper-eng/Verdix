@@ -202,8 +202,8 @@ export async function POST(request: NextRequest) {
       shiftStatus = 'active',
       minSaleId: minSaleIdRaw,
       maxSaleId: maxSaleIdRaw,
-      voidAmount,
-      refundAmount,
+      voidAmount = 0,
+      refundAmount = 0,
     } = body;
 
     const minSaleId = minSaleIdRaw ? String(minSaleIdRaw).padStart(6, '0') : '000000';
@@ -273,8 +273,8 @@ export async function POST(request: NextRequest) {
       shiftStatus,
       minSaleId,
       maxSaleId,
-      voidAmount,
-      refundAmount,
+      voidAmount ?? 0,
+      refundAmount ?? 0,
     ]);
 
     return NextResponse.json({
