@@ -34,6 +34,7 @@ import { addSupplier, updateSupplier, deleteSupplier } from '../../products/acti
 import { MakePaymentDialog } from '../payment-dialog';
 import { SupplierFormDialog } from '../../products/ManageSuppliersDialog';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import { useBusinessProfile } from '@/hooks/use-api';
 import { exportToCSV, exportToPDF } from '../supplier-export-utils';
 import { getApiUrl } from '@/lib/api-config';
@@ -110,6 +111,12 @@ export default function SuppliersListPage() {
   const handleAddSupplier = async (data: any) => {
     const result = await addSupplier(data);
     if (result.success) {
+      await logActivity({
+        action: 'CREATE',
+        module: 'SUPPLIERS',
+        description: `Added supplier: ${data.name} (${data.id})`,
+        referenceId: data.id,
+      });
       toast({ title: 'Success', description: result.message });
       loadSuppliers();
     } else {
@@ -120,6 +127,12 @@ export default function SuppliersListPage() {
   const handleUpdateSupplier = async (id: string, data: any) => {
     const result = await updateSupplier(id, data);
     if (result.success) {
+      await logActivity({
+        action: 'UPDATE',
+        module: 'SUPPLIERS',
+        description: `Updated supplier: ${data.name || id} (${id})`,
+        referenceId: id,
+      });
       toast({ title: 'Success', description: result.message });
       loadSuppliers();
     } else {
@@ -131,6 +144,12 @@ export default function SuppliersListPage() {
     try {
       const result = await deleteSupplier(id);
       if (result.success) {
+        await logActivity({
+          action: 'DELETE',
+          module: 'SUPPLIERS',
+          description: `Deleted supplier ID: ${id}`,
+          referenceId: id,
+        });
         toast({ title: 'Success', description: result.message });
         loadSuppliers();
       } else {

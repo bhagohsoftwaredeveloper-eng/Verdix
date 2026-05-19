@@ -33,6 +33,7 @@ import { PurchasesFilterDialog } from './purchases-filter-dialog';
 import { Button } from '@/components/ui/button';
 import { Check, Truck, Search, CalendarIcon, X, Printer, ArrowLeft, Download, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -368,10 +369,22 @@ export default function PurchasesPage() {
       receiveMutation.mutate(
         { order: orderToReceive, receivedItems, badItems, allocationStrategy },
         {
-          onSuccess: (data) => {
+          onSuccess: async (data) => {
             if (data.pendingApproval) {
+              await logActivity({
+                action: 'RECEIVE',
+                module: 'PURCHASES',
+                description: `Purchase receipt submitted for approval — PO: ${orderToReceive?.id}`,
+                referenceId: orderToReceive?.id,
+              });
               toast({ title: 'Approval Required', description: 'Purchase receipt has been submitted for approval.' });
             } else {
+              await logActivity({
+                action: 'RECEIVE',
+                module: 'PURCHASES',
+                description: `Received stock for PO: ${orderToReceive?.id}${data.badItemCount > 0 ? ` — ${data.badItemCount} bad items recorded` : ''}`,
+                referenceId: orderToReceive?.id,
+              });
               toast({
                 title: 'Stock Received',
                 description: data.badItemCount > 0

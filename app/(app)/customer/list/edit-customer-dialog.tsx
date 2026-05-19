@@ -37,6 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, PlusCircle } from 'lucide-react';
 
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import { getApiUrl } from '@/lib/api-config';
 import { Customer } from '@/lib/types';
 
@@ -179,6 +180,12 @@ export default function EditCustomerDialog({ customer, onSave, children, open: c
     setIsSaving(true);
     try {
       await onSave(values);
+      await logActivity({
+        action: 'UPDATE',
+        module: 'CUSTOMERS',
+        description: `Updated customer: "${values.name}"`,
+        referenceId: customer?.id,
+      });
       toast({
         title: 'Customer Updated',
         description: `Customer "${values.name}" has been successfully updated.`,

@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import {
   ArrowLeft,
   Save,
@@ -321,6 +322,12 @@ export function CountDetailClient({ countId }: { countId: string }) {
 
       const result = await res.json();
 
+      await logActivity({
+        action: 'UPDATE',
+        module: 'INVENTORY',
+        description: `Completed stock count${result.pendingApproval ? ' (submitted for approval)' : ' — Inventory updated'}`,
+        referenceId: countId,
+      });
       if (result.pendingApproval) {
         toast({
           title: 'Stock count submitted for approval.',

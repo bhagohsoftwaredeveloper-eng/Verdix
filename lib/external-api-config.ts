@@ -27,6 +27,65 @@ export const DEFAULT_EXTERNAL_API_CONFIG: ExternalApiConfig = {
   onErrorAction: 'log_only',
 };
 
+// Multi-API types
+export type AllowedMethods = 'send_only' | 'receive_only' | 'full_access';
+export type ApiRole = 'general' | 'cloud_sync';
+
+export type ExternalApi = {
+  id: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  apiEndpoint: string;
+  authType: 'api_key' | 'bearer_token' | 'none';
+  apiKey?: string;
+  bearerToken?: string;
+  allowedMethods: AllowedMethods;
+  timeout: number;
+  retryAttempts: number;
+  retryDelay: number;
+  syncMode: 'realtime' | 'batch';
+  onErrorAction: 'retry' | 'queue' | 'log_only';
+  role: ApiRole;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export const DEFAULT_EXTERNAL_API: Omit<ExternalApi, 'id' | 'name'> = {
+  enabled: false,
+  apiEndpoint: '',
+  authType: 'none',
+  allowedMethods: 'full_access',
+  timeout: 30000,
+  retryAttempts: 3,
+  retryDelay: 2000,
+  syncMode: 'realtime',
+  onErrorAction: 'log_only',
+  role: 'general',
+};
+
+/**
+ * Returns the cloud_sync ExternalApi entry from the DB, or null if not configured.
+ * Used by lib/services/cloud-sync.ts so the sync URL+key can be managed from the UI.
+ */
+export async function getCloudSyncApiConfig(): Promise<{ url: string; apiKey: string } | null> {
+  try {
+    const { query } = await import('./mysql');
+    const rows = await query(
+      `SELECT api_endpoint, api_key, bearer_token, auth_type FROM external_apis WHERE role = 'cloud_sync' AND enabled = 1 LIMIT 1`,
+      []
+    ) as any[];
+    if (!rows.length) return null;
+    const row = rows[0];
+    const key =
+      row.auth_type === 'api_key' ? (row.api_key ?? '') :
+      row.auth_type === 'bearer_token' ? (row.bearer_token ?? '') : '';
+    return { url: (row.api_endpoint ?? '').replace(/\/$/, ''), apiKey: key };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Get external API configuration from environment or database
  */

@@ -44,6 +44,7 @@ import { PlusCircle, Loader2, Trash2, Plus, Search, ArrowRight, CreditCard, Ware
 import { useToast } from '@/hooks/use-toast';
 import { Product, Customer, Sale, PaymentMethod, Warehouse } from '@/lib/types';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { logActivity } from '@/lib/client-activity-logger';
 import { ManageCustomersDialog } from '../ManageCustomersDialog';
 import { ManagePaymentMethodsDialog } from '../ManagePaymentMethodsDialog';
 import { ManageWarehousesDialog } from '../ManageWarehousesDialog';
@@ -384,6 +385,12 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
       const data = await response.json();
 
       if (data.success) {
+        await logActivity({
+          action: 'CREATE',
+          module: 'SALES',
+          description: `Created sales invoice: ${values.reference || values.paymentReference || 'N/A'} — Customer: ${values.customer || 'Walk-in'}`,
+          referenceId: data.data?.id || values.reference,
+        });
         toast({
           title: 'Sales Invoice Added',
           description: `Sales Invoice ${values.reference || values.paymentReference} has been successfully created.`,

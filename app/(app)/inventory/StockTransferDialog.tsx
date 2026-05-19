@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
+import { logActivity } from '@/lib/client-activity-logger';
 import {
   Dialog,
   DialogContent,
@@ -149,6 +150,13 @@ export function StockTransferDialog({ product, children, onSuccess, requireConfi
       const result = await response.json();
 
       if (result.success) {
+        const targetWh = warehouses.find(w => w.id === targetWarehouseId);
+        await logActivity({
+          action: 'TRANSFER',
+          module: 'INVENTORY',
+          description: `Transferred ${quantity} ${product.unitOfMeasure} of "${product.name}" to ${targetWh?.name || targetWarehouseId}${result.pendingApproval ? ' (pending approval)' : ''}`,
+          referenceId: String(product.id),
+        });
         if (result.pendingApproval) {
           toast({
             title: 'Transfer Pending Approval',

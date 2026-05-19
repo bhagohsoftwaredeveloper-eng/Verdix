@@ -50,6 +50,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -505,8 +506,14 @@ export default function SalesInvoicesPage() {
       const res = await fetch(getApiUrl(`/sales/invoices/${saleId}/void`), { method: 'POST' });
       return res.json();
     },
-    onSuccess: (result) => {
+    onSuccess: async (result, saleId) => {
       if (result.success) {
+        await logActivity({
+          action: 'VOID',
+          module: 'SALES',
+          description: `Voided sales invoice`,
+          referenceId: saleId,
+        });
         toast({ title: 'Invoice voided successfully' });
         queryClient.invalidateQueries({ queryKey: ['salesInvoices'] });
       } else {

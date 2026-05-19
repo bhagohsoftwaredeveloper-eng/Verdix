@@ -3,6 +3,7 @@ import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purcha
 
 import { useState, useEffect } from 'react';
 import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
+import { logActivity } from '@/lib/client-activity-logger';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -237,7 +238,14 @@ export function AddProductDialog({
   });
 
   const selectedUnitOfMeasure = form.watch('unitOfMeasure');
-  
+  const formErrors = form.formState.errors;
+  const tabErrors = {
+    basic: !!(formErrors.name || formErrors.brand || formErrors.sku || formErrors.description || formErrors.category),
+    inventory: !!(formErrors.unitOfMeasure || formErrors.stock),
+    priceLevels: !!(formErrors.priceLevels),
+    conversion: !!(formErrors.conversionFactors),
+  };
+
   // State for selected price level (for automatic price calculation)
   const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
 
@@ -503,6 +511,12 @@ export function AddProductDialog({
           }
         }
 
+        await logActivity({
+          action: 'CREATE',
+          module: 'PRODUCTS',
+          description: `Added product: ${values.name} (SKU: ${values.sku}) — Category: ${values.category || 'N/A'}`,
+          referenceId: result.productId,
+        });
         toast({
           title: 'Product Added',
           description: `${values.name} has been successfully added.${productType === 'parent' && autoCreateChild && values.conversionFactors && values.conversionFactors.length > 0 ? ' Child unit auto-created.' : ''}`,
@@ -566,32 +580,36 @@ export function AddProductDialog({
               <div className="h-full">
                 <Tabs defaultValue="basic" className="w-full h-full">
                   <TabsList className="w-full h-auto justify-start rounded-none border-b bg-transparent p-0">
-                    <TabsTrigger 
+                    <TabsTrigger
                       value="basic"
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                     >
                       Basic Info
+                      {tabErrors.basic && <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-destructive" />}
                     </TabsTrigger>
-                    <TabsTrigger 
+                    <TabsTrigger
                       value="inventory"
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                     >
                       Inventory
+                      {tabErrors.inventory && <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-destructive" />}
                     </TabsTrigger>
 
-                    <TabsTrigger 
+                    <TabsTrigger
                       value="price-levels"
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                     >
                       Price Levels
+                      {tabErrors.priceLevels && <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-destructive" />}
                     </TabsTrigger>
-                    <TabsTrigger 
+                    <TabsTrigger
                       value="conversion"
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                     >
                       Conversion
+                      {tabErrors.conversion && <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-destructive" />}
                     </TabsTrigger>
-                    <TabsTrigger 
+                    <TabsTrigger
                       value="loyalty"
                       className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                     >

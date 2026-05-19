@@ -39,6 +39,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { getApiUrl } from '@/lib/api-config';
 import { AddUserTypeDialog } from './add-user-type-dialog';
 import { Plus } from 'lucide-react';
+import { logActivity } from '@/lib/client-activity-logger';
 
 
 const formSchema = z.object({
@@ -126,6 +127,12 @@ export function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
         throw new Error(result.error || 'Failed to create user');
       }
 
+      await logActivity({
+        action: 'CREATE',
+        module: 'USERS',
+        description: `Created user: ${fullName} (${username}) — Type: ${userType}`,
+        referenceId: result.uid,
+      });
       toast({
         title: 'User Created',
         description: `User ${fullName} (${username}) has been created successfully.`,

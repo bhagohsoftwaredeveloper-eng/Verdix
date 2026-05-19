@@ -3,6 +3,7 @@ import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purcha
 
 import { useState, useEffect, useCallback } from 'react';
 import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
+import { logActivity } from '@/lib/client-activity-logger';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -255,7 +256,14 @@ export function EditProductDialog({
   const watchedCategoryName = form.watch('category');
   const watchedSubcategoryName = form.watch('subcategory');
   const watchedBrandName = form.watch('brand');
-  
+  const formErrors = form.formState.errors;
+  const tabErrors = {
+    basic: !!(formErrors.name || formErrors.brand || formErrors.sku || formErrors.description || formErrors.category),
+    inventory: !!(formErrors.unitOfMeasure),
+    priceLevels: !!(formErrors.priceLevels),
+    conversion: !!(formErrors.conversionFactors),
+  };
+
   // State for selected price level (for automatic price calculation)
   const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
 
@@ -480,6 +488,12 @@ export function EditProductDialog({
       // const result = { success: true, message: 'Mock saved successfully' };
 
       if (result.success) {
+        await logActivity({
+          action: 'UPDATE',
+          module: 'PRODUCTS',
+          description: `Updated product: ${values.name || product.name} (SKU: ${values.sku || product.sku})`,
+          referenceId: String(product.id),
+        });
         toast({
           title: 'Product Updated',
           description: result.message,
@@ -541,32 +555,36 @@ export function EditProductDialog({
                 <div className="h-full">
                   <Tabs defaultValue="basic" className="w-full h-full">
                     <TabsList className="w-full h-auto justify-start rounded-none border-b bg-transparent p-0">
-                      <TabsTrigger 
+                      <TabsTrigger
                         value="basic"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                       >
                         Basic Info
+                        {tabErrors.basic && <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-destructive" />}
                       </TabsTrigger>
-                      <TabsTrigger 
+                      <TabsTrigger
                         value="inventory"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                       >
                         Inventory
+                        {tabErrors.inventory && <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-destructive" />}
                       </TabsTrigger>
 
-                      <TabsTrigger 
+                      <TabsTrigger
                         value="price-levels"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                       >
                         Price Levels
+                        {tabErrors.priceLevels && <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-destructive" />}
                       </TabsTrigger>
-                      <TabsTrigger 
+                      <TabsTrigger
                         value="conversion"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                       >
                         Conversion
+                        {tabErrors.conversion && <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-destructive" />}
                       </TabsTrigger>
-                      <TabsTrigger 
+                      <TabsTrigger
                         value="loyalty"
                         className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3"
                       >

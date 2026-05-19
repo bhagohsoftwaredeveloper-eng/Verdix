@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/table';
 import { PlusCircle, Loader2, Trash2, Search, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import { Product, Customer, Sale, PaymentMethod, Warehouse, SalesPerson } from '@/lib/types';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ManagePaymentMethodsDialog } from '../ManagePaymentMethodsDialog';
@@ -418,6 +419,12 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
       const data = await response.json();
 
       if (data.success) {
+        await logActivity({
+          action: initialData ? 'UPDATE' : 'CREATE',
+          module: 'SALES',
+          description: `${initialData ? 'Updated' : 'Created'} sales order: ${data.data.id}`,
+          referenceId: String(data.data.id),
+        });
         toast({
           title: initialData ? 'Sales Order Updated' : 'Sales Order Added',
           description: `Sales order ${data.data.id} has been successfully ${initialData ? 'updated' : 'created'}.`,

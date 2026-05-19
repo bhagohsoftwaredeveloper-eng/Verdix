@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Database, AlertCircle, CheckCircle2, Save, RefreshCw, Upload, Download, HardDrive, Clock, FileText, Globe, Key, Lock, Link as LinkIcon, Trash2, RotateCcw } from 'lucide-react';
+import { Database, AlertCircle, CheckCircle2, Save, RefreshCw, Upload, Download, HardDrive, Clock, FileText, Trash2, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { getApiUrl } from '@/lib/api-config';
@@ -81,14 +81,6 @@ export default function DataManagementPage() {
     password: '',
     database: 'stock_pilot'
   });
-
-  // API Config states
-  const [apiConfig, setApiConfig] = useState({
-    url: '',
-    key: '',
-    secret: ''
-  });
-  const [savingApiConfig, setSavingApiConfig] = useState(false);
 
   // Reset Data states
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -362,20 +354,7 @@ export default function DataManagementPage() {
     fetchConfig();
     fetchBackups();
     fetchSchedule();
-    fetchApiConfig();
   }, []);
-
-  const fetchApiConfig = async () => {
-    try {
-      const res = await fetch(getApiUrl('/settings/api-connection'));
-      if (res.ok) {
-        const data = await res.json();
-        setApiConfig(data);
-      }
-    } catch (error) {
-      console.error('Failed to load API config', error);
-    }
-  };
 
   const fetchBackups = async () => {
     try {
@@ -591,45 +570,6 @@ export default function DataManagementPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleApiInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setApiConfig(prev => ({ ...prev, [name]: value }));
-  };
-
-  const saveApiConfiguration = async () => {
-    setSavingApiConfig(true);
-    try {
-      const res = await fetch(getApiUrl('/settings/api-connection'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(apiConfig)
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        toast({
-          title: "API Settings Saved",
-          description: data.message,
-        });
-      } else {
-        toast({
-          title: "Error Saving",
-          description: data.message,
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to save API settings",
-        variant: "destructive",
-      });
-    } finally {
-      setSavingApiConfig(false);
-    }
-  };
-
   const openResetDialog = (action: 'clear_sales' | 'reset_references' | 'clear_inventory' | 'clear_master_data' | 'factory_reset') => {
     setResetAction(action);
     setResetConfirmText('');
@@ -709,7 +649,6 @@ export default function DataManagementPage() {
           <TabsTrigger value="connection">Database Connection</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="import-export">Import & Export</TabsTrigger>
-          <TabsTrigger value="api-connection">API Integration</TabsTrigger>
           <TabsTrigger value="reset">Reset Data</TabsTrigger>
         </TabsList>
 
@@ -1119,79 +1058,6 @@ export default function DataManagementPage() {
                 </div>
 
             </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="api-connection" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>API Connection Setup</CardTitle>
-              <CardDescription>
-                Configure the connection details for the external API.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="api-url">API URL</Label>
-                  <div className="relative">
-                    <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="api-url" 
-                      name="url" 
-                      className="pl-9"
-                      value={apiConfig.url} 
-                      onChange={handleApiInputChange} 
-                      placeholder="https://api.example.com" 
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="api-key">API Key</Label>
-                  <div className="relative">
-                    <Key className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="api-key" 
-                      name="key" 
-                      className="pl-9"
-                      value={apiConfig.key} 
-                      onChange={handleApiInputChange} 
-                      placeholder="Enter your API Key" 
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="api-secret">API Secret</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      id="api-secret" 
-                      name="secret" 
-                      type="password"
-                      className="pl-9"
-                      value={apiConfig.secret} 
-                      onChange={handleApiInputChange} 
-                      placeholder="Enter your API Secret" 
-                    />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={saveApiConfiguration} disabled={savingApiConfig}>
-                {savingApiConfig ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Saving...
-                  </>
-                ) : (
-                  <>
-                    <LinkIcon className="mr-2 h-4 w-4" /> Save Connection
-                  </>
-                )}
-              </Button>
-            </CardFooter>
           </Card>
         </TabsContent>
 

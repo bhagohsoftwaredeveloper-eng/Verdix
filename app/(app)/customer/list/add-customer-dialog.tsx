@@ -35,6 +35,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PlusCircle, Loader2, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import { getApiUrl } from '@/lib/api-config';
 import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms-dialog';
 
@@ -206,6 +207,12 @@ export default function AddCustomerDialog({ onSave, children, open, onOpenChange
     setIsSaving(true);
     try {
       await onSave(values.customerId, values.name, values.contactNumber, values.active, values.loyaltyPoints, values.paymentTerms || '', values.address || '', values.billingAddress || '', values.discount, values.creditLimit, values.priceLevelId);
+      await logActivity({
+        action: customer ? 'UPDATE' : 'CREATE',
+        module: 'CUSTOMERS',
+        description: `${customer ? 'Updated' : 'Added'} customer: "${values.name}" (ID: ${values.customerId})`,
+        referenceId: values.customerId,
+      });
       toast({
         title: customer ? 'Customer Updated' : 'Customer Added',
         description: `Customer "${values.name}" has been successfully ${customer ? 'updated' : 'added'}.`,

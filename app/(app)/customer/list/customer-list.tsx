@@ -27,6 +27,7 @@ import {
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import { AddLoyaltyCardDialog } from '../../customer/loyalty/add-loyalty-card-dialog';
 import EditCustomerDialog, { CustomerFormValues } from './edit-customer-dialog';
 import { getApiUrl } from '@/lib/api-config';
@@ -129,6 +130,12 @@ export default function CustomerList({
     if (!deletingCustomer) return;
     try {
       await onDeleteCustomer(deletingCustomer.id);
+      await logActivity({
+        action: 'DELETE',
+        module: 'CUSTOMERS',
+        description: `Deleted customer: "${deletingCustomer.name}" (ID: ${deletingCustomer.id})`,
+        referenceId: deletingCustomer.id,
+      });
       toast({
         title: 'Customer Deleted',
         description: `Customer "${deletingCustomer.name}" has been deleted.`,

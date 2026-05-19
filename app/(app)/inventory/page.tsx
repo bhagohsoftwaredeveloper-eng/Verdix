@@ -67,6 +67,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { getApiUrl } from '@/lib/api-config';
+import { logActivity } from '@/lib/client-activity-logger';
 
 function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, requireConfirmation, open, onOpenChange }: { product: Product, children?: React.ReactNode, defaultReason?: string, onSuccess?: () => void, requireConfirmation?: boolean, open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const { toast } = useToast();
@@ -220,6 +221,13 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
         return;
       }
 
+      const adjustLabel = adjustment > 0 ? `+${adjustment}` : String(adjustment);
+      await logActivity({
+        action: 'ADJUST',
+        module: 'INVENTORY',
+        description: `Stock adjusted: "${product.name}" ${adjustLabel} units — Reason: ${finalReason}${res.pendingApproval ? ' (pending approval)' : ''}`,
+        referenceId: String(product.id),
+      });
       if (res.pendingApproval) {
         toast({
           title: 'Adjustment Pending Approval',
@@ -233,7 +241,7 @@ function StockAdjustmentDialog({ product, children, defaultReason, onSuccess, re
       }
       setIsOpen(false);
       setIsConfirmOpen(false);
-      onSuccess?.(); 
+      onSuccess?.();
       dispatchStockUpdate();
     } catch (error) {
       toast({

@@ -39,6 +39,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { getApiUrl } from '@/lib/api-config';
 import { AddUserTypeDialog } from './add-user-type-dialog';
 import { Plus } from 'lucide-react';
+import { logActivity } from '@/lib/client-activity-logger';
 
 
 type User = {
@@ -170,6 +171,12 @@ export function EditUserDialog({
         throw new Error(result.error || 'Failed to update user');
       }
 
+      await logActivity({
+        action: 'UPDATE',
+        module: 'USERS',
+        description: `Updated user: ${values.displayName} (${values.username}) — Type: ${values.userType}`,
+        referenceId: user.uid,
+      });
       toast({
         title: 'User Updated',
         description: `Details for ${values.username} have been updated successfully.`,

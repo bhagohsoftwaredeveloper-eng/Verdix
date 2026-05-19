@@ -26,6 +26,7 @@ import {
   ChevronRight, ChevronLeft, Search,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -426,6 +427,12 @@ function NewCountDialog({ onCreated }: { onCreated: () => void }) {
       });
       if (!res.ok) throw new Error('Failed to create count');
       const data = await res.json();
+      await logActivity({
+        action: 'CREATE',
+        module: 'INVENTORY',
+        description: `Initialized stock count: "${name}"${warehouseId && warehouseId !== 'all' ? ` — Warehouse: ${warehouseId}` : ''}`,
+        referenceId: data.data?.id,
+      });
       toast({ title: 'Stock count initialized successfully' });
       handleClose();
       dispatchStockUpdate();

@@ -55,6 +55,7 @@ import {
 } from '@/components/ui/table';
 import { PlusCircle, Loader2, Trash2, Plus, Search, ArrowRight, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { ManagePaymentMethodsDialog } from '../sales/ManagePaymentMethodsDialog';
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
@@ -718,16 +719,22 @@ export function AddPurchaseOrderDialog({
 
       if (onAddOrder) onAddOrder(result.data);
 
+      await logActivity({
+        action: editOrder ? 'UPDATE' : 'CREATE',
+        module: 'PURCHASES',
+        description: `${editOrder ? 'Updated' : 'Created'} purchase order: PO ${values.reference} — Supplier: ${suppliers.find((s: any) => s.id === values.supplierId)?.name || values.supplierId}`,
+        referenceId: result.data?.id || values.reference,
+      });
       toast({
         title: editOrder ? 'Purchase Order Updated' : 'Purchase Order Added',
         description: `PO ${values.reference} has been successfully saved.`,
       });
 
       if (!editOrder) form.reset();
-      
+
       // Dispatch event to refresh other modules (Inventory, Products)
       dispatchStockUpdate();
-      
+
       setOpen(false);
       setIsConfirmOpen(false);
     } catch (error) {

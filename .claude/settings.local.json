@@ -15,7 +15,9 @@
       "Bash(powershell *)",
       "Bash(\"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\iscc.exe\" \"D:\\\\BHAGOH PROJECT\\\\Stock_Pilot\\\\setup.iss\")",
       "Bash(magick --version)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(Get-ChildItem \"d:\\\\BHAGOH PROJECT\\\\Stock_Pilot\\\\app\\\\\\(app\\)\" -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

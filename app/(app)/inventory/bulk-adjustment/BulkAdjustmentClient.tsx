@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { logActivity } from '@/lib/client-activity-logger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -169,6 +170,11 @@ export default function BulkAdjustmentClient() {
       });
       const result = await response.json();
       if (result.success) {
+        await logActivity({
+          action: 'ADJUST',
+          module: 'INVENTORY',
+          description: `Bulk stock adjustment: processed ${result.processed} item(s)`,
+        });
         toast({ title: 'Bulk Adjustment Successful', description: `Processed ${result.processed} items.` });
         setAdjustments([]);
         dispatchStockUpdate();

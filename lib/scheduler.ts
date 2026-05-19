@@ -4,12 +4,13 @@ import cron from 'node-cron';
 import { performBackup } from './backup';
 import { query } from './mysql';
 import { getExternalApiConfig } from './external-api-config';
-import { 
-  syncPurchaseTransaction, 
-  syncPaymentTransaction, 
+import {
+  syncPurchaseTransaction,
+  syncPaymentTransaction,
   syncSalesTransaction,
-  syncAccountsPayable 
+  syncAccountsPayable
 } from './services/external-accounting-api';
+import { processPushToCloud, processPullFromCloud } from './services/cloud-sync';
 
 // Disable SSL verification to fix "fetch failed" error on Windows systems with outdated root certs
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -344,13 +345,23 @@ export function initScheduler(): void {
   const schedule = getSchedule();
   startScheduledBackup(schedule);
   
-  // Start the sync queue processor (runs every 2 minutes)
+  // External accounting API sync queue (runs every 2 minutes)
   console.log('Starting background sync queue worker (2m interval)');
   cron.schedule('*/2 * * * *', async () => {
     await processSyncQueue();
     await processPullSync();
   });
-  
+
+  // Railway cloud sync — always register workers; config is read dynamically each tick
+  // (URL/key can be changed via External API settings UI without restarting)
+  console.log('Starting Railway cloud sync workers (push 1m, pull 5m)');
+  cron.schedule('* * * * *', async () => {
+    await processPushToCloud();
+  });
+  cron.schedule('*/5 * * * *', async () => {
+    await processPullFromCloud();
+  });
+
   (global as any).__backupSchedulerInitialized = true;
   console.log('Backup scheduler initialized.');
 }

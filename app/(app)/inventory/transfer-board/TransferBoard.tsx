@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Product, Warehouse } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/client-activity-logger';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -178,10 +179,15 @@ export function TransferBoard() {
       const result = await response.json();
 
       if (result.success) {
+        await logActivity({
+          action: 'TRANSFER',
+          module: 'INVENTORY',
+          description: `Warehouse board transfer: ${stagedItems.length} item(s) transferred${result.pendingApproval ? ' (pending approval)' : ''}`,
+        });
         if (result.pendingApproval) {
-          toast({ 
-            title: "Approval Required", 
-            description: "The transaction is sent to the approvals." 
+          toast({
+            title: "Approval Required",
+            description: "The transaction is sent to the approvals."
           });
         } else {
           toast({ title: "Success", description: "Warehouse transfer completed successfully." });
