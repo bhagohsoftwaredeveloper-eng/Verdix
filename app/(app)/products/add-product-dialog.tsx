@@ -538,8 +538,11 @@ export function AddProductDialog({
   };
 
   const generateBarcode = () => {
-    const randomNumber = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-    form.setValue('barcode', randomNumber);
+    // EAN-8: 7 random digits + 1 check digit
+    const digits = Array.from({ length: 7 }, () => Math.floor(Math.random() * 10));
+    const sum = digits.reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 3 : 1), 0);
+    const check = (10 - (sum % 10)) % 10;
+    form.setValue('barcode', [...digits, check].join(''));
   };
 
   return (
@@ -701,7 +704,7 @@ export function AddProductDialog({
                         name="barcode"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Barcode (UPC)</FormLabel>
+                            <FormLabel>Barcode (EAN-8)</FormLabel>
                             <div className="relative">
                               <FormControl>
                                 <Input placeholder="e.g., 123456789012" {...field} className="pr-10" />

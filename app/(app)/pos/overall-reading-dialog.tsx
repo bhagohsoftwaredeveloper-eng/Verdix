@@ -52,7 +52,10 @@ export function OverallReadingDialog({
           const result = await response.json();
           
           if (result.success) {
-              setReportData(result.data);
+              setReportData({
+                  ...result.data,
+                  terminalName: result.data.terminalName || terminalName || terminalId,
+              });
           } else {
               toast({ title: "Error", description: result.error || "Failed to load report data", variant: "destructive" });
           }

@@ -260,7 +260,7 @@ function POSPageContent() {
   const [terminals, setTerminals] = useState<any[]>([]);
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>('');
   const [isEndingShift, setIsEndingShift] = useState(false);
-  const { setTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
 
   useEffect(() => {
      const posTheme = localStorage.getItem('pos-theme');
@@ -354,6 +354,11 @@ function POSPageContent() {
 
   const [enableCustomerDisplay, setEnableCustomerDisplay] = useState(false);
   const { send: cdSend, openOnSecondScreen } = useCustomerDisplay(enableCustomerDisplay);
+
+  useEffect(() => {
+    if (!resolvedTheme) return;
+    cdSend({ type: 'THEME', theme: resolvedTheme as 'light' | 'dark' });
+  }, [resolvedTheme, cdSend]);
 
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
   const [isQuantityDialogOpen, setIsQuantityDialogOpen] = useState(false);
@@ -467,6 +472,7 @@ function POSPageContent() {
   const fetchSettings = useCallback(async (signal?: AbortSignal) => {
       try {
           const response = await fetch(getApiUrl('/pos-settings'), { signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const result = await response.json();
           if (result.success) {
               setEnableNegativeInventory(result.data.enableNegativeInventory);
@@ -594,6 +600,7 @@ function POSPageContent() {
     const fetchTerminals = async () => {
       try {
         const response = await fetch(getApiUrl('/pos-terminals?activeOnly=true'));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
         if (result.success) {
           const terminalsData = result.data;
@@ -649,6 +656,7 @@ function POSPageContent() {
     const fetchPaymentMethods = async () => {
       try {
         const response = await fetch(getApiUrl('/payment-methods?activeOnly=true'));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
         if (result.success && result.data) {
           setPaymentMethods(result.data);
@@ -846,6 +854,7 @@ function POSPageContent() {
           case '5': e.preventDefault(); setIsRecentSalesOpen(true); break;
           case '6': e.preventDefault(); setIsVoidSalesOpen(true); break;
           case '7': e.preventDefault(); setIsReturnSalesOpen(true); break;
+          case '8': e.preventDefault(); handleOpenOverallReading(); break;
           case '0': e.preventDefault(); setIsZReadingOpen(true); break;
           case 'p': 
           case 'P':
@@ -1188,7 +1197,7 @@ function POSPageContent() {
                  startingCash: cash
              })
          });
-        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
         
         if (result.success) {
@@ -1234,11 +1243,11 @@ function POSPageContent() {
                   shiftId: currentShiftId,
                   actualCash: data.actualCash,
                   cashDifference: data.cashDifference,
-                  cashDenominations: data.cashDenominations, // Add this line
+                  cashDenominations: data.cashDenominations,
                   notes: data.notes
               })
           });
-
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const result = await response.json();
           
           if (result.success) {
@@ -1281,6 +1290,7 @@ function POSPageContent() {
               // 2. Generate and Save X-Reading
               try {
                   const xReadingRes = await fetch(getApiUrl(`/sales/x-reading?shiftId=${currentShiftId}&limit=1`));
+                  if (!xReadingRes.ok) throw new Error(`HTTP ${xReadingRes.status}`);
                   const xReadingResult = await xReadingRes.json();
                   
                   if (xReadingResult.success && xReadingResult.data.length > 0) {
@@ -1330,6 +1340,7 @@ function POSPageContent() {
                           cashierName: currentUser?.displayName || 'Admin'
                       })
                   });
+                  if (!zRes.ok) throw new Error(`HTTP ${zRes.status}`);
                   const zResult = await zRes.json();
                   if (zResult.success && zResult.data?.length > 0) {
                       setLastSavedZReading({
@@ -1379,6 +1390,7 @@ function POSPageContent() {
         try {
             // Check for ANY active shift on this terminal
             const activeRes = await fetch(getApiUrl(`/pos/shifts?terminalId=${terminalId}&status=active`));
+            if (!activeRes.ok) throw new Error(`HTTP ${activeRes.status}`);
             const activeResult = await activeRes.json();
             
             if (activeResult.success && activeResult.data) {
@@ -1427,6 +1439,7 @@ function POSPageContent() {
               })
           });
           
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const result = await response.json();
           if (result.success) {
               setCurrentShiftId(collisionShift.id);
@@ -1570,6 +1583,7 @@ function POSPageContent() {
     if (!currentShiftId) return;
     try {
         const response = await fetch(getApiUrl(`/pos/shifts?shiftId=${currentShiftId}`));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
         if (result.success && result.data) {
             setStartingCash(result.data.startingCash);

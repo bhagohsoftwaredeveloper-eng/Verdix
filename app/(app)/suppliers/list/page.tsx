@@ -1,6 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  SortingState,
+  ColumnFiltersState,
+  useReactTable,
+} from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,7 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Plus, Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreHorizontal, Filter, X, Download, ChevronDown } from 'lucide-react';
+import {
+  Search, Plus, Pencil, Trash2,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  MoreHorizontal, Filter, X, Download, ChevronDown,
+  ArrowUpDown, ArrowUp, ArrowDown,
+} from 'lucide-react';
 import { getSuppliersWithBalance, SupplierWithBalance, SupplierFilters } from '../actions';
 import { addSupplier, updateSupplier, deleteSupplier } from '../../products/actions';
 import { MakePaymentDialog } from '../payment-dialog';
@@ -49,13 +65,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+function SortIcon({ isSorted }: { isSorted: false | 'asc' | 'desc' }) {
+  if (isSorted === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5" />;
+  if (isSorted === 'desc') return <ArrowDown className="ml-1 h-3.5 w-3.5" />;
+  return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50" />;
+}
+
 export default function SuppliersListPage() {
   const [suppliers, setSuppliers] = useState<SupplierWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<SupplierFilters>({});
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [globalFilter, setGlobalFilter] = useState('');
   const { toast } = useToast();
   const { profile } = useBusinessProfile();
   const [editingSupplier, setEditingSupplier] = useState<SupplierWithBalance | null>(null);
@@ -87,26 +110,20 @@ export default function SuppliersListPage() {
   const handleAddSupplier = async (data: any) => {
     const result = await addSupplier(data);
     if (result.success) {
-      toast({
-        title: 'Success',
-        description: result.message,
-      });
+      toast({ title: 'Success', description: result.message });
       loadSuppliers();
     } else {
-        throw new Error(result.message);
+      throw new Error(result.message);
     }
   };
 
-    const handleUpdateSupplier = async (id: string, data: any) => {
+  const handleUpdateSupplier = async (id: string, data: any) => {
     const result = await updateSupplier(id, data);
     if (result.success) {
-        toast({
-          title: 'Success',
-          description: result.message,
-        });
-        loadSuppliers();
+      toast({ title: 'Success', description: result.message });
+      loadSuppliers();
     } else {
-         throw new Error(result.message);
+      throw new Error(result.message);
     }
   };
 
@@ -114,17 +131,10 @@ export default function SuppliersListPage() {
     try {
       const result = await deleteSupplier(id);
       if (result.success) {
-        toast({
-          title: 'Success',
-          description: result.message,
-        });
+        toast({ title: 'Success', description: result.message });
         loadSuppliers();
       } else {
-        toast({
-          title: 'Error',
-          description: result.message,
-          variant: 'destructive',
-        });
+        toast({ title: 'Error', description: result.message, variant: 'destructive' });
       }
     } catch (error) {
       console.error('Error deleting supplier:', error);
@@ -157,23 +167,182 @@ export default function SuppliersListPage() {
         await exportToPDF(result.data, fileName, profile);
       }
 
-      toast({ title: "Export Successful", description: `Your ${format.toUpperCase()} file has been generated.` });
+      toast({ title: 'Export Successful', description: `Your ${format.toUpperCase()} file has been generated.` });
     } catch (error) {
       console.error('Export error:', error);
-      toast({ title: "Export Failed", description: "An error occurred during export.", variant: "destructive" });
+      toast({ title: 'Export Failed', description: 'An error occurred during export.', variant: 'destructive' });
     }
   };
 
-  // Pagination Logic
-  const totalPages = Math.ceil(suppliers.length / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedSuppliers = suppliers.slice(startIndex, endIndex);
+  const columns = useMemo<ColumnDef<SupplierWithBalance>[]>(() => [
+    {
+      accessorKey: 'name',
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 h-8 font-semibold"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Name
+          <SortIcon isSorted={column.getIsSorted()} />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{row.original.name}</span>
+          <span className="text-xs text-muted-foreground">{row.original.email || '-'}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'contact',
+      header: 'Contact',
+      accessorFn: (row) => row.contactNumber || row.mobilePhone || row.telephone || '',
+      cell: ({ row }) => (
+        <div className="flex flex-col">
+          <span>{row.original.contactNumber || row.original.mobilePhone || row.original.telephone || '-'}</span>
+          <span className="text-xs text-muted-foreground truncate max-w-[200px]">{row.original.address}</span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'orderSchedule',
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 h-8 font-semibold"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Schedule
+          <SortIcon isSorted={column.getIsSorted()} />
+        </Button>
+      ),
+      cell: ({ getValue }) => {
+        const val = getValue<string | null>();
+        return val ? (
+          <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+            {val}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-xs">-</span>
+        );
+      },
+    },
+    {
+      accessorKey: 'company',
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 h-8 font-semibold"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Company
+          <SortIcon isSorted={column.getIsSorted()} />
+        </Button>
+      ),
+      cell: ({ getValue }) => getValue<string>() || '-',
+    },
+    {
+      accessorKey: 'tin',
+      header: 'TIN',
+      cell: ({ getValue }) => getValue<string>() || '-',
+    },
+    {
+      accessorKey: 'paymentTerms',
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 h-8 font-semibold"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Payment Terms
+          <SortIcon isSorted={column.getIsSorted()} />
+        </Button>
+      ),
+      cell: ({ getValue }) => {
+        const val = getValue<string | null>();
+        return val ? (
+          <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground">
+            {val}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-xs">-</span>
+        );
+      },
+    },
+    {
+      id: 'actions',
+      header: () => <div className="text-right">Actions</div>,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const supplier = row.original;
+        return (
+          <div className="text-right">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setEditingSupplier(supplier);
+                    setIsEditDialogOpen(true);
+                  }}
+                >
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit Supplier
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setDeletingSupplier(supplier);
+                    setIsDeleteDialogOpen(true);
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Supplier
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      },
+    },
+  ], []);
 
-  // Reset to page 1 when search term changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
+  const table = useReactTable({
+    data: suppliers,
+    columns,
+    state: {
+      sorting,
+      columnFilters,
+      globalFilter,
+    },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: { pageSize: 10 },
+    },
+  });
+
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const totalRows = table.getFilteredRowModel().rows.length;
+  const startIndex = pageIndex * pageSize + 1;
+  const endIndex = Math.min((pageIndex + 1) * pageSize, totalRows);
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
@@ -183,271 +352,213 @@ export default function SuppliersListPage() {
           <p className="text-muted-foreground">Manage your suppliers and their details.</p>
         </div>
         <div className="flex items-center space-x-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export
-                  <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleExport('csv')}>
-                  Export as CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport('pdf')}>
-                  Export as PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <SupplierFormDialog onSave={handleAddSupplier}>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" /> Add Supplier
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Export
+                <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
-            </SupplierFormDialog>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('csv')}>Export as CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('pdf')}>Export as PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <SupplierFormDialog onSave={handleAddSupplier}>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" /> Add Supplier
+            </Button>
+          </SupplierFormDialog>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-           <div className="flex items-center justify-between">
-              <CardTitle>All Suppliers</CardTitle>
-              <div className="flex items-center gap-2">
-                <div className="relative w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search suppliers..."
-                    className="pl-8"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9">
-                      <Filter className="mr-2 h-4 w-4" />
-                      Filter
-                      {Object.keys(filters).length > 0 && (
-                        <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
-                          {Object.keys(filters).length}
-                        </span>
-                      )}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="sm:max-w-[425px]">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Filter Suppliers</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Narrow down your supplier list by applying filters.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="paymentTerms">Payment Terms</Label>
-                        <Select
-                          value={filters.paymentTerms || "all"}
-                          onValueChange={(value) => setFilters(prev => ({ ...prev, paymentTerms: value === "all" ? undefined : value }))}
-                        >
-                          <SelectTrigger id="paymentTerms">
-                            <SelectValue placeholder="All Terms" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Terms</SelectItem>
-                            <SelectItem value="COD">COD</SelectItem>
-                            <SelectItem value="Net 7">Net 7</SelectItem>
-                            <SelectItem value="Net 15">Net 15</SelectItem>
-                            <SelectItem value="Net 30">Net 30</SelectItem>
-                            <SelectItem value="Net 45">Net 45</SelectItem>
-                            <SelectItem value="Net 60">Net 60</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="orderSchedule">Order Schedule</Label>
-                        <Input
-                          id="orderSchedule"
-                          placeholder="e.g. Monday"
-                          value={filters.orderSchedule || ""}
-                          onChange={(e) => setFilters(prev => ({ ...prev, orderSchedule: e.target.value || undefined }))}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="company">Company</Label>
-                        <Input
-                          id="company"
-                          placeholder="Search company..."
-                          value={filters.company || ""}
-                          onChange={(e) => setFilters(prev => ({ ...prev, company: e.target.value || undefined }))}
-                        />
-                      </div>
-                      <div className="flex items-center space-x-2 py-2">
-                        <input
-                          type="checkbox"
-                          id="hasBalance"
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                          checked={filters.hasBalance || false}
-                          onChange={(e) => setFilters(prev => ({ ...prev, hasBalance: e.target.checked || undefined }))}
-                        />
-                        <Label htmlFor="hasBalance" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                          Show only suppliers with outstanding balance
-                        </Label>
-                      </div>
-                    </div>
-                    <AlertDialogFooter>
-                      <Button
-                        variant="ghost"
-                        onClick={() => setFilters({})}
-                        className="mr-auto"
-                      >
-                        Reset
-                      </Button>
-                      <AlertDialogAction>Apply Filters</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-                {Object.keys(filters).length > 0 && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-9 px-2 text-muted-foreground"
-                    onClick={() => setFilters({})}
-                  >
-                    Clear <X className="ml-1 h-3 w-3" />
-                  </Button>
-                )}
+          <div className="flex items-center justify-between">
+            <CardTitle>All Suppliers</CardTitle>
+            <div className="flex items-center gap-2">
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search suppliers..."
+                  className="pl-8"
+                  value={globalFilter}
+                  onChange={(e) => setGlobalFilter(e.target.value)}
+                />
               </div>
-           </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filter
+                    {Object.keys(filters).length > 0 && (
+                      <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
+                        {Object.keys(filters).length}
+                      </span>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="sm:max-w-[425px]">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Filter Suppliers</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Narrow down your supplier list by applying filters.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="paymentTerms">Payment Terms</Label>
+                      <Select
+                        value={filters.paymentTerms || 'all'}
+                        onValueChange={(value) =>
+                          setFilters((prev) => ({ ...prev, paymentTerms: value === 'all' ? undefined : value }))
+                        }
+                      >
+                        <SelectTrigger id="paymentTerms">
+                          <SelectValue placeholder="All Terms" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Terms</SelectItem>
+                          <SelectItem value="COD">COD</SelectItem>
+                          <SelectItem value="Net 7">Net 7</SelectItem>
+                          <SelectItem value="Net 15">Net 15</SelectItem>
+                          <SelectItem value="Net 30">Net 30</SelectItem>
+                          <SelectItem value="Net 45">Net 45</SelectItem>
+                          <SelectItem value="Net 60">Net 60</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="orderSchedule">Order Schedule</Label>
+                      <Input
+                        id="orderSchedule"
+                        placeholder="e.g. Monday"
+                        value={filters.orderSchedule || ''}
+                        onChange={(e) =>
+                          setFilters((prev) => ({ ...prev, orderSchedule: e.target.value || undefined }))
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="company">Company</Label>
+                      <Input
+                        id="company"
+                        placeholder="Search company..."
+                        value={filters.company || ''}
+                        onChange={(e) =>
+                          setFilters((prev) => ({ ...prev, company: e.target.value || undefined }))
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2 py-2">
+                      <input
+                        type="checkbox"
+                        id="hasBalance"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        checked={filters.hasBalance || false}
+                        onChange={(e) =>
+                          setFilters((prev) => ({ ...prev, hasBalance: e.target.checked || undefined }))
+                        }
+                      />
+                      <Label
+                        htmlFor="hasBalance"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Show only suppliers with outstanding balance
+                      </Label>
+                    </div>
+                  </div>
+                  <AlertDialogFooter>
+                    <Button variant="ghost" onClick={() => setFilters({})} className="mr-auto">
+                      Reset
+                    </Button>
+                    <AlertDialogAction>Apply Filters</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              {Object.keys(filters).length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-2 text-muted-foreground"
+                  onClick={() => setFilters({})}
+                >
+                  Clear <X className="ml-1 h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="relative overflow-auto max-h-[calc(100vh-340px)] border rounded-md">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
-                <TableRow>
-                  <TableHead className="min-w-[250px] bg-background">Name</TableHead>
-                  <TableHead className="bg-background">Contact</TableHead>
-                  <TableHead className="bg-background">Schedule</TableHead>
-                  <TableHead className="bg-background">Company</TableHead>
-                  <TableHead className="bg-background">TIN</TableHead>
-                  <TableHead className="bg-background">Payment Terms</TableHead>
-                  <TableHead className="text-right bg-background">Actions</TableHead>
-                </TableRow>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} className="bg-background">
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
               </TableHeader>
-            <TableBody>
-              {loading ? (
-                 <TableRow>
-                   <TableCell colSpan={7} className="text-center py-10">
-                     Loading...
-                   </TableCell>
-                 </TableRow>
-              ) : paginatedSuppliers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                    No suppliers found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginatedSuppliers.map((supplier) => (
-                  <TableRow key={supplier.id}>
-                    <TableCell>
-                        <div className="flex flex-col">
-                            <span className="font-medium">{supplier.name}</span>
-                            <span className="text-xs text-muted-foreground">{supplier.email || '-'}</span>
-                        </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span>{supplier.contactNumber || supplier.mobilePhone || supplier.telephone || '-'}</span>
-                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">{supplier.address}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                         {supplier.orderSchedule ? (
-                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                {supplier.orderSchedule}
-                            </span>
-                         ) : (
-                             <span className="text-muted-foreground text-xs">-</span>
-                         )}
-                    </TableCell>
-                    <TableCell>{supplier.company || '-'}</TableCell>
-                    <TableCell>{supplier.tin || '-'}</TableCell>
-                    <TableCell>
-                        {supplier.paymentTerms ? (
-                             <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                                {supplier.paymentTerms}
-                             </span>
-                        ) : (
-                            <span className="text-muted-foreground text-xs">-</span>
-                        )}
-                    </TableCell>
-                    {/* Removed Markup Column Cell */}
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Open menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => {
-                              setEditingSupplier(supplier);
-                              setIsEditDialogOpen(true);
-                          }}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Edit Supplier
-                          </DropdownMenuItem>
-
-                          <DropdownMenuItem 
-                            onClick={() => {
-                                setDeletingSupplier(supplier);
-                                setIsDeleteDialogOpen(true);
-                            }}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete Supplier
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="text-center py-10">
+                      Loading...
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : table.getRowModel().rows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="text-center py-10 text-muted-foreground">
+                      No suppliers found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
           {/* Pagination Controls */}
-          {suppliers.length > 0 && (
+          {totalRows > 0 && (
             <div className="flex items-center justify-between px-2 py-4">
-              <div className="flex items-center gap-2">
-                 <span className="text-sm text-muted-foreground">
-                   Showing {startIndex + 1} to {Math.min(endIndex, suppliers.length)} of {suppliers.length} entries
-                 </span>
-              </div>
-              
+              <span className="text-sm text-muted-foreground">
+                Showing {startIndex} to {endIndex} of {totalRows} entries
+              </span>
+
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Rows per page:</span>
                   <Select
                     value={pageSize.toString()}
                     onValueChange={(value) => {
-                      setPageSize(Number(value));
-                      setCurrentPage(1);
+                      table.setPageSize(Number(value));
                     }}
                   >
                     <SelectTrigger className="w-[70px] h-8">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="5">5</SelectItem>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
+                      {[5, 10, 20, 50, 100].map((size) => (
+                        <SelectItem key={size} value={size.toString()}>
+                          {size}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -457,8 +568,8 @@ export default function SuppliersListPage() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
+                    onClick={() => table.setPageIndex(0)}
+                    disabled={!table.getCanPreviousPage()}
                   >
                     <ChevronsLeft className="h-4 w-4" />
                   </Button>
@@ -466,15 +577,15 @@ export default function SuppliersListPage() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  
+
                   <div className="flex items-center gap-1 px-2">
                     <span className="text-sm font-medium">
-                      Page {currentPage} of {totalPages}
+                      Page {pageIndex + 1} of {table.getPageCount()}
                     </span>
                   </div>
 
@@ -482,8 +593,8 @@ export default function SuppliersListPage() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -491,8 +602,8 @@ export default function SuppliersListPage() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
+                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                    disabled={!table.getCanNextPage()}
                   >
                     <ChevronsRight className="h-4 w-4" />
                   </Button>
@@ -502,6 +613,7 @@ export default function SuppliersListPage() {
           )}
         </CardContent>
       </Card>
+
       {/* Edit Supplier Dialog */}
       <SupplierFormDialog
         supplier={editingSupplier as any}

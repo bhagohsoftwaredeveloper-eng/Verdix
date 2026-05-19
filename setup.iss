@@ -1,6 +1,6 @@
-; Stock Pilot Inno Setup Script
-#define AppName "Stock Pilot"
-#define AppVersion "1.11"
+; LJMA Supermarket Inno Setup Script
+#define AppName "LJMA SUPERMARKET"
+#define AppVersion "1.12"
 #define AppPublisher "JhazonE"
 #define AppURL "https://github.com/JhazonE/Stock_Pilot"
 #define AppExeName "Stock Pilot.exe"
@@ -14,17 +14,15 @@ AppSupportURL={#AppURL}
 AppUpdatesURL={#AppURL}
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
-OutputBaseFilename=StockPilotSetup_{#AppVersion}
+OutputBaseFilename=LJMASupermarketSetup_{#AppVersion}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
+DisableFinishedPage=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-
-[Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
 ; App Files
@@ -34,6 +32,8 @@ Source: ".env"; DestDir: "{app}"; Flags: ignoreversion
 Source: "establish_mysql_connection.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start_mysql.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "migrate.js"; DestDir: "{app}"; Flags: ignoreversion
+Source: "run_migration.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Next.js Standalone Files
@@ -43,16 +43,15 @@ Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs
 
 
 [Icons]
-Name: "{autoprograms}\Stock Pilot POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""
-Name: "{autodesktop}\Stock Pilot POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; Tasks: desktopicon
-Name: "{userstartup}\Stock Pilot POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""
-Name: "{userstartup}\Stock Pilot Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
+Name: "{autoprograms}\LJMA SUPERMARKET POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\ljma_logo.ico"
+Name: "{autodesktop}\LJMA SUPERMARKET POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\ljma_logo.ico"
+Name: "{userstartup}\LJMA SUPERMARKET POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\ljma_logo.ico"
+Name: "{userstartup}\LJMA SUPERMARKET Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
 
-Name: "{autoprograms}\Stock Pilot Backoffice"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/dashboard --role=""Admin Dashboard"""
-Name: "{autodesktop}\Stock Pilot Backoffice"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/dashboard --role=""Admin Dashboard"""; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\run_migration.bat"; Flags: runhidden waituntilterminated
+Filename: "{app}\{#AppExeName}"; Flags: nowait skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"

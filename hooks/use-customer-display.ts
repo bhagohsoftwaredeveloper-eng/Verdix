@@ -10,6 +10,7 @@ export type CustomerDisplayEvent =
   | { type: 'PAYMENT_UPDATE'; tendered: number; change: number; currency: string }
   | { type: 'PAYMENT_COMPLETE'; change: number; orNumber: string; currency: string }
   | { type: 'SETTINGS'; message: string; showLogo: boolean; logoPath: string | null; businessName: string }
+  | { type: 'THEME'; theme: 'light' | 'dark' }
   | { type: 'READY' };
 
 const CHANNEL_NAME = 'pos-customer-display';
@@ -26,8 +27,8 @@ declare global {
 
 export function useCustomerDisplay(enabled: boolean) {
   const channelRef = useRef<BroadcastChannel | null>(null);
-  // Holds the last non-READY event so we can replay it when display broadcasts READY
-  const lastEventRef = useRef<CustomerDisplayEvent | null>(null);
+  const lastStateRef = useRef<CustomerDisplayEvent | null>(null);
+  const lastThemeRef = useRef<CustomerDisplayEvent | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -35,11 +36,10 @@ export function useCustomerDisplay(enabled: boolean) {
     const channel = new BroadcastChannel(CHANNEL_NAME);
     channelRef.current = channel;
 
-    // Customer display window sends READY after its channel is open.
-    // Re-send the last known state so it immediately shows correct content.
     channel.onmessage = (e: MessageEvent<CustomerDisplayEvent>) => {
-      if (e.data?.type === 'READY' && lastEventRef.current) {
-        channel.postMessage(lastEventRef.current);
+      if (e.data?.type === 'READY') {
+        if (lastThemeRef.current) channel.postMessage(lastThemeRef.current);
+        if (lastStateRef.current) channel.postMessage(lastStateRef.current);
       }
     };
 
@@ -51,7 +51,11 @@ export function useCustomerDisplay(enabled: boolean) {
 
   const send = useCallback((event: CustomerDisplayEvent) => {
     if (!enabled || event.type === 'READY') return;
-    lastEventRef.current = event;
+    if (event.type === 'THEME') {
+      lastThemeRef.current = event;
+    } else {
+      lastStateRef.current = event;
+    }
     channelRef.current?.postMessage(event);
   }, [enabled]);
 

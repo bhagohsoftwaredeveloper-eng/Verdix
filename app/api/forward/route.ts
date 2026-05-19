@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(data),
     });
 
-    const responseData = await response.json();
+    const responseData = response.ok ? await response.json().catch(() => null) : null;
 
     return NextResponse.json({
       success: true,
@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
 
     // Forward GET request to external service
     const response = await fetch(targetUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
 
     return NextResponse.json({

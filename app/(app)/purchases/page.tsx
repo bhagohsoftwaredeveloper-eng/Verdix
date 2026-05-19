@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -19,9 +19,8 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { PurchaseOrder, Product, SystemSettings } from '../../../lib/types';
-import { mockProducts } from '../../../lib/data';
 import { usePurchaseOrders, useProducts, useBusinessProfile, useSuppliers } from '../../../hooks/use-api';
-import { useLiveRefresh, dispatchStockUpdate } from '../../../hooks/use-live-refresh';
+import { useSystemSettings, useUpdatePurchaseOrder, useReceivePurchaseOrder, useInvalidatePurchaseOrders } from '../../../hooks/use-purchase-order-mutations';
 import { format as formatFns } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddPurchaseOrderDialog } from './add-purchase-order-dialog';
@@ -302,37 +301,30 @@ function PurchaseOrderSkeleton() {
 export default function PurchasesPage() {
   const { products } = useProducts();
   const { profile } = useBusinessProfile();
+  const { settings } = useSystemSettings();
   const [searchTerm, setSearchTerm] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  
+
   const [reorderData, setReorderData] = useState<PurchaseOrder | null>(null);
   const [isReorderOpen, setIsReorderOpen] = useState(false);
-  
+
   const [isReceiveDialogOpen, setIsReceiveDialogOpen] = useState(false);
   const [orderToReceive, setOrderToReceive] = useState<PurchaseOrder | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [viewingOrder, setViewingOrder] = useState<PurchaseOrder | null>(null);
-  
+
   const [isScheduledOrderOpen, setIsScheduledOrderOpen] = useState(false);
   const [scheduledSupplierId, setScheduledSupplierId] = useState<string | undefined>(undefined);
 
   const [pageSize, setPageSize] = useState(50);
   const { toast } = useToast();
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
 
-  useEffect(() => {
-    fetch(getApiUrl('/pos-settings'))
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setSettings(data.data);
-        }
-      })
-      .catch(err => console.error('Failed to fetch settings:', err));
-  }, []);
+  const updateOrderMutation = useUpdatePurchaseOrder();
+  const receiveMutation = useReceivePurchaseOrder();
+  const invalidatePurchaseOrders = useInvalidatePurchaseOrders();
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [supplierFilter, setSupplierFilter] = useState<string>('all');
@@ -340,7 +332,7 @@ export default function PurchasesPage() {
   const { suppliers } = useSuppliers('', 1, 100);
 
   // Use the real API hook with updated filters
-  const { purchaseOrders, loading, refetch, pagination } = usePurchaseOrders(
+  const { purchaseOrders, loading, pagination } = usePurchaseOrders(
     searchTerm, 
     statusFilter, 
     currentPage, 
@@ -352,161 +344,58 @@ export default function PurchasesPage() {
 
 
 
-  const updatePurchaseOrder = async (id: string, updates: any) => {
-    try {
-      const response = await fetch(getApiUrl(`/purchase-orders/${id}`), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      });
-
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.error || result.message || 'Failed to update status');
-      }
-
-      if (result.success) {
-        dispatchStockUpdate();
-      } else {
-         throw new Error(result.error || 'Failed to update');
-      }
-    } catch (error: any) {
-      console.error('Failed to update purchase order:', error);
-      toast({
+  const updatePurchaseOrder = (id: string, updates: Partial<PurchaseOrder>) => {
+    updateOrderMutation.mutate({ id, updates }, {
+      onError: (error: any) => {
+        console.error('Failed to update purchase order:', error);
+        toast({
           variant: 'destructive',
           title: 'Update Failed',
-          description: error.message || 'An unexpected error occurred.'
-      });
-    }
+          description: error.message || 'An unexpected error occurred.',
+        });
+      },
+    });
   };
 
   const handleReceiveConfirm = async (
     receivedItems: { productId: string; quantity: number; expirationDate?: string; sellingPrice?: number }[],
     badItems?: { productId: string; productName: string; quantity: number; cost: number; reason: string; description: string }[],
     allocationStrategy?: 'equal' | 'proportional'
-  ) => {
+  ): Promise<void> => {
     if (!orderToReceive) return;
 
-    try {
-      const enrichedReceivedItems = receivedItems.map(item => {
-        // Robust ID matching (case-insensitive and type-neutral)
-        const originalItem = orderToReceive.items.find(i => 
-          String(i.productId).trim().toLowerCase() === String(item.productId).trim().toLowerCase()
-        );
-        
-        const cost = originalItem ? toSafeNumber(originalItem.cost) : 0;
-        return {
-          ...item,
-          productName: originalItem?.productName || originalItem?.name || 'Unknown Product',
-          sku: originalItem?.productSku || originalItem?.sku || '',
-          barcode: originalItem?.barcode || originalItem?.productBarcode || '',
-          cost: cost,
-          subtotal: cost * toSafeNumber(item.quantity)
-        };
-      });
-
-      const receivedTotalValue = enrichedReceivedItems.reduce((acc, item) => acc + (item.subtotal || 0), 0);
-      const userId = localStorage.getItem('mock-user-session') ? JSON.parse(localStorage.getItem('mock-user-session')!).uid : 'system';
-
-      // 1. Update purchase order status and total (stock update, movements, AP sync handled by backend)
-      const response = await fetch(getApiUrl(`/purchase-orders/${orderToReceive.id}`), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          status: 'Received',
-          receivedTotal: receivedTotalValue,
-          receivedItems: enrichedReceivedItems as any,
-          allocationStrategy,
-          userId,
-          // Metadata for approvals snapshot
-          supplierName: orderToReceive.supplierName || 'N/A',
-          referenceNumber: orderToReceive.referenceNumber || orderToReceive.id,
-          poTotal: toSafeNumber(orderToReceive.total),
-          poGrandTotal: toSafeNumber(orderToReceive.grandTotal || orderToReceive.total)
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update status');
-      }
-
-      const result = await response.json();
-
-      if (result.pendingApproval) {
-        toast({ 
-          title: "Approval Required", 
-          description: "Purchase receipt has been submitted for approval.",
-        });
-        setIsReceiveDialogOpen(false);
-        setOrderToReceive(null);
-        refetch();
-        return;
-      }
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to update order');
-      }
-
-      // 2. Create bad order record if there are bad items
-      if (badItems && badItems.length > 0) {
-        const badOrderResponse = await fetch(getApiUrl('/bad-orders'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+    return new Promise((resolve, reject) => {
+      receiveMutation.mutate(
+        { order: orderToReceive, receivedItems, badItems, allocationStrategy },
+        {
+          onSuccess: (data) => {
+            if (data.pendingApproval) {
+              toast({ title: 'Approval Required', description: 'Purchase receipt has been submitted for approval.' });
+            } else {
+              toast({
+                title: 'Stock Received',
+                description: data.badItemCount > 0
+                  ? `Inventory updated and ${data.badItemCount} bad items recorded.`
+                  : 'Inventory has been updated successfully.',
+              });
+            }
+            setIsReceiveDialogOpen(false);
+            setOrderToReceive(null);
+            resolve();
           },
-          body: JSON.stringify({
-            purchaseOrderId: orderToReceive.id,
-            supplierId: orderToReceive.supplierId,
-            supplierName: orderToReceive.supplierName,
-            reportedBy: userId,
-            reportDate: new Date().toISOString(),
-            status: 'Reported',
-            items: badItems,
-            notes: `Automatically created during receipt of PO #${orderToReceive.referenceNumber || orderToReceive.id}`,
-            userId: userId,
-          }),
-        });
-
-        if (!badOrderResponse.ok) {
-          console.error('Failed to create bad order record');
+          onError: (error) => {
+            console.error('Failed to receive items:', error);
+            toast({ title: 'Error', description: 'Failed to update stock items.', variant: 'destructive' });
+            reject(error);
+          },
         }
-      }
-
-      toast({ 
-        title: "Stock Received", 
-        description: badItems && badItems.length > 0 
-          ? `Inventory updated and ${badItems.length} bad items recorded.`
-          : "Inventory has been updated successfully." 
-      });
-      setIsReceiveDialogOpen(false);
-      setOrderToReceive(null);
-      refetch();
-      dispatchStockUpdate();
-    } catch (error) {
-      console.error('Failed to receive items:', error);
-      toast({ 
-        title: "Error", 
-        description: "Failed to update stock items.", 
-        variant: "destructive" 
-      });
-    }
+      );
+    });
   };
 
-  const addPurchaseOrder = async (order: PurchaseOrder) => {
-    try {
-      // TODO: Implement API call to create purchase order
-      console.log('Adding purchase order:', order);
-      // For now, just refetch the data
-      refetch();
-      setEditingOrder(null); // Clear edit state
-    } catch (error) {
-      console.error('Failed to add purchase order:', error);
-    }
+  const addPurchaseOrder = (_order: PurchaseOrder) => {
+    invalidatePurchaseOrders();
+    setEditingOrder(null);
   };
 
   // API handles search and pagination. We use the results directly.

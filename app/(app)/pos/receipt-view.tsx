@@ -257,8 +257,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                     </div>
                 ) : null}
                 <div className="text-center mt-6">
-                <div>Thank you for your purchase!</div>
-                <div style={{fontSize: '9px'}}>Pos System by Bhagoh</div>
+                <div>Shop smart, save more! Thank you for visiting LJMA Supermarket.</div>
                 {saleDetails.isTrainingMode && (
                     <div className="mt-4 border-2 border-black p-2 bg-gray-100 text-center font-bold text-[10px] leading-tight flex flex-col gap-1">
                         <div>THIS IS NOT A CASH SALE/OFFICIAL RECEIPT.</div>

@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(node -e \"try{require\\('jsbarcode'\\);console.log\\('jsbarcode ok'\\)}catch\\(e\\){console.log\\('not found'\\)}\")",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('jsbarcode'\\); console.log\\('jsbarcode installed ok'\\)\")",
+      "Bash(node -e \"const p=require\\('./node_modules/react-to-print/package.json'\\); console.log\\(JSON.stringify\\(p.exports||p.main\\)\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts, null, 2\\)\\)\")",
+      "Bash(npm run *)",
+      "Bash(dir \"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\iscc.exe\")",
+      "Bash(dir \"C:\\\\Program Files\\\\Inno Setup 6\\\\iscc.exe\")",
+      "Bash(C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\iscc.exe *)",
+      "Bash(dir *)",
+      "Bash(powershell *)",
+      "Bash(\"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\iscc.exe\" \"D:\\\\BHAGOH PROJECT\\\\Stock_Pilot\\\\setup.iss\")",
+      "Bash(magick --version)",
+      "Bash(node -e ' *)"
     ]
   }
 }

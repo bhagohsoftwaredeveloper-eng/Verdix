@@ -244,15 +244,16 @@ export async function GET(request: NextRequest) {
     // ── 9. Business settings & terminal info ─────────────────────────────────
     const [settingsResult] = await query(`SELECT business_name, address, tin, contact_number FROM pos_settings LIMIT 1`) as any[];
 
-    let headerTerminalInfo = { min: '', sn: '' };
+    let headerTerminalInfo = { min: '', sn: '', name: '' };
     if (!isAllTerminals) {
         const [termResult] = await query(
-            `SELECT terminal_min, terminal_serial_number FROM pos_terminals WHERE id = ?`,
+            `SELECT terminal_min, terminal_serial_number, name FROM pos_terminals WHERE id = ?`,
             [terminalId]
         ) as any[];
         headerTerminalInfo = {
             min: termResult?.terminal_min || '',
-            sn: termResult?.terminal_serial_number || ''
+            sn: termResult?.terminal_serial_number || '',
+            name: termResult?.name || ''
         };
     }
 
@@ -289,6 +290,7 @@ export async function GET(request: NextRequest) {
 
     const data = {
         terminalId: isAllTerminals ? 'ALL TERMINALS' : terminalId,
+        terminalName: isAllTerminals ? 'All Terminals' : (headerTerminalInfo.name || terminalId),
         startDate,
         endDate,
         grossSales,

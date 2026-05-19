@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       }),
     });
 
-    const responseData = await response.json();
+    const responseData = response.ok ? await response.json().catch(() => null) : null;
 
     return NextResponse.json({
       success: true,

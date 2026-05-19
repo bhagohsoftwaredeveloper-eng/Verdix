@@ -286,8 +286,7 @@ export class ReceiptGenerator {
         // Matches: text-center mt-6
         enc.newline();
         enc.align('center');
-        enc.line('Thank you for your purchase!');
-        enc.line('Pos System by Bhagoh');
+        enc.line('Shop smart, save more! Thank you for visiting LJMA Supermarket.');
         if (sale.isTrainingMode) {
             enc.newline();
             enc.line('THIS IS NOT A CASH SALE/');

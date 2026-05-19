@@ -160,7 +160,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetch(getApiUrl('/pos-settings'))
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error('not ok'); return res.json(); })
       .then(result => {
         if (result.success && result.data?.businessName != null && result.data.businessName !== '') {
           setBusinessName(result.data.businessName);

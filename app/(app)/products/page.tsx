@@ -31,7 +31,8 @@ import { ManageShelfLocationsDialog } from './ManageShelfLocationsDialog';
 import { ManageUnitOfMeasureDialog } from './ManageUnitOfMeasureDialog';
 import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
 
-import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart, MoreVertical, Edit, Eye, Copy, AlertTriangle } from 'lucide-react';
+import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart, MoreVertical, Edit, Eye, Copy, AlertTriangle, Printer } from 'lucide-react';
+import { PrintBarcodeDialog } from './print-barcode-dialog';
 import { useState, useMemo, Fragment, useEffect, useCallback, Suspense } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useQuery } from '@tanstack/react-query';
@@ -67,6 +68,7 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [restockDialogOpen, setRestockDialogOpen] = useState(false);
   const [addChildDialogOpen, setAddChildDialogOpen] = useState(false);
+  const [printBarcodeOpen, setPrintBarcodeOpen] = useState(false);
 
   const { toast } = useToast();
   const stockStatus =
@@ -176,7 +178,11 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
                 <Edit className="mr-2 h-4 w-4" />
                 <span>Edit Product</span>
               </DropdownMenuItem>
-              
+              <DropdownMenuItem onClick={() => setPrintBarcodeOpen(true)}>
+                <Printer className="mr-2 h-4 w-4" />
+                <span>Print Barcode</span>
+              </DropdownMenuItem>
+
               {/* Restock Option */}
               {stockStatus !== 'in-stock' && (
                   <DropdownMenuItem onClick={() => setRestockDialogOpen(true)} className="text-orange-600 focus:text-orange-600">
@@ -206,6 +212,11 @@ function ProductRow({ product, onProductDeleted, onProductUpdated, products, pro
 
           {/* Action Dialogs - Nested here to avoid invalid tbody structure */}
           <div className="hidden">
+            <PrintBarcodeDialog
+              open={printBarcodeOpen}
+              onOpenChange={setPrintBarcodeOpen}
+              product={product}
+            />
             <ViewProductDialog
                 open={viewDialogOpen}
                 onOpenChange={setViewDialogOpen}
