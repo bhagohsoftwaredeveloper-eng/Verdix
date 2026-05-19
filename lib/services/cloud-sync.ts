@@ -262,6 +262,15 @@ async function ensureTrackerTable(): Promise<void> {
       last_push_at TIMESTAMP    NOT NULL DEFAULT '2000-01-01 00:00:00'
     )
   `, []);
+  await query(`
+    CREATE TABLE IF NOT EXISTS external_api_settings (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      setting_key VARCHAR(100) UNIQUE NOT NULL,
+      setting_value TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `, []);
 }
 
 async function getLastPush(tableName: string): Promise<string> {

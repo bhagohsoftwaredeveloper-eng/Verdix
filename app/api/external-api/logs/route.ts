@@ -1,12 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
 
+async function ensureTables() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS external_api_logs (
+      id VARCHAR(50) PRIMARY KEY,
+      transaction_type VARCHAR(50) NOT NULL,
+      transaction_id VARCHAR(50) NOT NULL,
+      endpoint VARCHAR(500) NOT NULL,
+      payload TEXT,
+      response TEXT,
+      status VARCHAR(20) NOT NULL,
+      error_message TEXT,
+      retry_count INT DEFAULT 0,
+      next_retry_at TIMESTAMP NULL DEFAULT NULL,
+      last_retry_at TIMESTAMP NULL DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_transaction_type (transaction_type),
+      INDEX idx_transaction_id (transaction_id),
+      INDEX idx_status (status),
+      INDEX idx_created_at (created_at)
+    )
+  `, []);
+  await query(`
+    CREATE TABLE IF NOT EXISTS external_api_settings (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      setting_key VARCHAR(100) UNIQUE NOT NULL,
+      setting_value TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `, []);
+}
+
 /**
  * GET /api/external-api/logs
  * Retrieve API sync logs with optional filters
  */
 export async function GET(request: NextRequest) {
   try {
+    await ensureTables();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const transactionType = searchParams.get('transactionType');
@@ -94,6 +128,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    await ensureTables();
     const body = await request.json();
     const {
       transactionType,

@@ -178,6 +178,16 @@ export async function processPullSync(): Promise<void> {
 
     console.log('--- Pull Sync: Checking for updates from cloud ---');
 
+    await query(`
+      CREATE TABLE IF NOT EXISTS external_api_settings (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        setting_key VARCHAR(100) UNIQUE NOT NULL,
+        setting_value TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `, []);
+
     const lastSyncSetting = await query("SELECT setting_value FROM external_api_settings WHERE setting_key = 'last_pull_sync'", []);
     const lastSync = lastSyncSetting[0]?.setting_value || '';
 

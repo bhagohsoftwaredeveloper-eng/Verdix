@@ -25,14 +25,20 @@ const INIT_TABLE = `
   )
 `;
 
-const MIGRATE_ROLE = `
-  ALTER TABLE external_apis ADD COLUMN IF NOT EXISTS role ENUM('general','cloud_sync') NOT NULL DEFAULT 'general'
-`;
-
 async function ensureTable() {
   await query(INIT_TABLE, []);
-  // Add role column to existing tables that were created before this field existed
-  try { await query(MIGRATE_ROLE, []); } catch { /* column already exists */ }
+  // Add `role` column only if it doesn't already exist (avoids ER_DUP_FIELDNAME on repeated calls)
+  const cols = await query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'external_apis' AND COLUMN_NAME = 'role'`,
+    []
+  ) as any[];
+  if (!cols.length) {
+    await query(
+      `ALTER TABLE external_apis ADD COLUMN role ENUM('general','cloud_sync') NOT NULL DEFAULT 'general'`,
+      []
+    );
+  }
 }
 
 function rowToApi(row: any) {

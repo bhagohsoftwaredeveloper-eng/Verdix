@@ -27,9 +27,9 @@ function rowToApi(row: any) {
  * PUT /api/settings/external-api/[id]
  * Update an existing external API entry
  */
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     // Handle test connection action
@@ -110,9 +110,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
  * DELETE /api/settings/external-api/[id]
  * Delete an external API entry
  */
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     await query('DELETE FROM external_apis WHERE id = ?', [id]);
     return NextResponse.json({ success: true, message: 'API deleted successfully' });
   } catch (error) {
