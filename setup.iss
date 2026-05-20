@@ -1,6 +1,6 @@
 ; LJMA Supermarket Inno Setup Script
 #define AppName "LJMA SUPERMARKET"
-#define AppVersion "1.12"
+#define AppVersion "1.13"
 #define AppPublisher "JhazonE"
 #define AppURL "https://github.com/JhazonE/Stock_Pilot"
 #define AppExeName "Stock Pilot.exe"
@@ -33,6 +33,8 @@ Source: "establish_mysql_connection.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start_mysql.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "migrate.js"; DestDir: "{app}"; Flags: ignoreversion
+Source: "init_database.js"; DestDir: "{app}"; Flags: ignoreversion
+Source: "schema.sql"; DestDir: "{app}"; Flags: ignoreversion
 Source: "run_migration.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
 
