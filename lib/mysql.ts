@@ -10,6 +10,7 @@ import './init-scheduler';
 // Extend the global object to hold the pool
 declare global {
   var __mysqlPool: mysql.Pool | undefined;
+  var __cloudMysqlPool: mysql.Pool | null | undefined;
 }
 
 // Create connection pool singleton
@@ -41,6 +42,73 @@ if (process.env.NODE_ENV === 'production') {
     console.log('--- Database Connection Pool Created ---');
   }
   pool = global.__mysqlPool;
+}
+
+// ---------------------------------------------------------------------------
+// Cloud (Railway) MySQL pool — used by cloud-sync for direct DB push/pull
+// Lazy-initialized so an offline machine never blocks on cloud connection
+// ---------------------------------------------------------------------------
+function getCloudPool(): mysql.Pool | null {
+  if (!process.env.CLOUD_DB_HOST) return null;
+
+  if (global.__cloudMysqlPool === undefined) {
+    try {
+      global.__cloudMysqlPool = mysql.createPool({
+        host: process.env.CLOUD_DB_HOST,
+        port: parseInt(process.env.CLOUD_DB_PORT || '3306'),
+        user: process.env.CLOUD_DB_USER || 'root',
+        password: process.env.CLOUD_DB_PASSWORD || '',
+        database: process.env.CLOUD_DB_NAME || 'railway',
+        ssl: { rejectUnauthorized: false },
+        waitForConnections: true,
+        connectionLimit: 5,
+        queueLimit: 0,
+        connectTimeout: 8000,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 10_000,
+      });
+      console.log('--- Cloud (Railway) Database Pool Created ---');
+    } catch (err) {
+      console.error('Failed to create cloud pool:', err);
+      global.__cloudMysqlPool = null;
+    }
+  }
+
+  return global.__cloudMysqlPool ?? null;
+}
+
+export function isCloudDbConfigured(): boolean {
+  return !!process.env.CLOUD_DB_HOST;
+}
+
+export async function cloudQuery(sql: string, params?: any[]): Promise<any> {
+  const cp = getCloudPool();
+  if (!cp) throw new Error('Cloud DB not configured');
+  if (params && params.length > 0) {
+    const [rows] = await cp.query(sql, params);
+    return rows;
+  }
+  const [rows] = await cp.query(sql);
+  return rows;
+}
+
+export async function checkCloudConnection(): Promise<boolean> {
+  const cp = getCloudPool();
+  if (!cp) return false;
+  try {
+    const conn = await Promise.race([
+      cp.getConnection(),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('cloud-connect-timeout')), 8000)),
+    ]);
+    try {
+      await conn.query('SELECT 1');
+      return true;
+    } finally {
+      conn.release();
+    }
+  } catch {
+    return false;
+  }
 }
 
 /**

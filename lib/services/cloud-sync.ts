@@ -1,55 +1,30 @@
 /**
- * Cloud Sync Service — Timestamp-Based Automatic Sync
+ * Cloud Sync Service — Direct MySQL Sync (Railway)
  *
- * HOW IT WORKS (no need to touch individual API routes):
- *   Every 1 min → scan each table for records newer than last_push_at
- *                → push to Railway /api/cloud-sync/push
+ * HOW IT WORKS:
+ *   Every 1 min → scan each table for rows newer than last_push_at
+ *                → bulk-upsert to Railway MySQL via direct TCP connection
  *                → update last_push_at per table
- *   Every 5 min → pull master data from Railway (products, users, etc.)
+ *   Every 5 min → pull master data from Railway MySQL (products, users, etc.)
+ *                → upsert locally
  *
- * SETUP:
- *   Local .env:   CLOUD_SYNC_URL=https://your-app.up.railway.app
- *                 CLOUD_SYNC_API_KEY=your-secret
- *   Railway env:  CLOUD_SYNC_URL=  (empty — Railway never pushes to itself)
- *                 CLOUD_SYNC_API_KEY=your-secret  (same value)
+ * SETUP (local .env on each Electron machine):
+ *   CLOUD_DB_HOST=containers-us-west-XX.railway.app
+ *   CLOUD_DB_PORT=7XXX
+ *   CLOUD_DB_USER=root
+ *   CLOUD_DB_PASSWORD=xxx
+ *   CLOUD_DB_NAME=railway
+ *
+ * Railway does NOT need a deployed Next.js app — only the MySQL service.
+ * If CLOUD_DB_HOST is empty, sync is a no-op (offline-only mode).
  */
 
-import { query } from '../mysql';
-import { getCloudSyncApiConfig } from '../external-api-config';
+import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '../mysql';
 
 const BATCH = 100;
 
-// Cached config so we don't hit DB on every record push; refreshed every 5 min
-let _configCache: { url: string; apiKey: string } | null = null;
-let _configCachedAt = 0;
-
-async function getCloudConfig(): Promise<{ url: string; apiKey: string }> {
-  const now = Date.now();
-  if (_configCache && now - _configCachedAt < 5 * 60 * 1000) return _configCache;
-
-  // Prefer DB-managed config (set via External API settings UI)
-  const dbConfig = await getCloudSyncApiConfig();
-  if (dbConfig && dbConfig.url) {
-    _configCache = dbConfig;
-    _configCachedAt = now;
-    return dbConfig;
-  }
-
-  // Fall back to .env vars for backwards compatibility
-  const envConfig = {
-    url: (process.env.CLOUD_SYNC_URL || '').replace(/\/$/, ''),
-    apiKey: process.env.CLOUD_SYNC_API_KEY || '',
-  };
-  _configCache = envConfig;
-  _configCachedAt = now;
-  return envConfig;
-}
-
 // ---------------------------------------------------------------------------
-// Table scan config
-// idCol   = primary key column
-// timeCol = column used to detect new/updated records (updated_at or created_at)
-// columns = columns to push to cloud
+// Push config — local → Railway
 // ---------------------------------------------------------------------------
 const SCAN_CONFIG: Record<string, { idCol: string; timeCol: string; columns: string[] }> = {
 
@@ -256,24 +231,85 @@ const SCAN_CONFIG: Record<string, { idCol: string; timeCol: string; columns: str
 };
 
 // ---------------------------------------------------------------------------
-// Tracker table (stores last_push_at per table)
+// Pull config — Railway → local
+// timeCol null = full reference pull (small lookup tables)
 // ---------------------------------------------------------------------------
-async function ensureTrackerTable(): Promise<void> {
+const PULL_CONFIG: Record<string, { idCol: string; timeCol: string | null; columns: string[] }> = {
+  products: {
+    idCol: 'id', timeCol: 'updated_at',
+    columns: [
+      'id','name','barcode','price','cost','stock','category','brand',
+      'description','additional_description','department','subcategory',
+      'reorder_point','avg_daily_sales','sku','image_url','image_hint',
+      'unit_of_measure','parent_id','conversion_factor','supplier_id',
+      'income_account','expense_account','warehouse_id','vat_status',
+      'availability','earns_points','expiration_date','shelf_location_id',
+      'created_at','updated_at',
+    ],
+  },
+  categories:      { idCol: 'id',  timeCol: 'updated_at', columns: ['id','name','markup_percentage','updated_at'] },
+  brands:          { idCol: 'id',  timeCol: 'updated_at', columns: ['id','name','markup_percentage','updated_at'] },
+  warehouses:      { idCol: 'id',  timeCol: 'updated_at', columns: ['id','name','address','is_default','created_at','updated_at'] },
+  payment_methods: { idCol: 'id',  timeCol: 'updated_at', columns: ['id','name','type','is_active','created_at','updated_at'] },
+  price_levels:    { idCol: 'id',  timeCol: null,         columns: ['id','name','description'] },
+  users: {
+    idCol: 'uid', timeCol: 'creation_time',
+    columns: ['uid','username','password','user_type','display_name','disabled','creation_time'],
+  },
+  user_permissions: { idCol: 'id', timeCol: null, columns: ['id','user_uid','permission'] },
+};
+
+// ---------------------------------------------------------------------------
+// Tracker tables (local) — record sync progress per table
+// ---------------------------------------------------------------------------
+async function ensureTrackerTables(): Promise<void> {
   await query(`
     CREATE TABLE IF NOT EXISTS cloud_sync_tracker (
       table_name   VARCHAR(100) PRIMARY KEY,
-      last_push_at TIMESTAMP    NOT NULL DEFAULT '2000-01-01 00:00:00'
+      last_push_at TIMESTAMP    NOT NULL DEFAULT '2000-01-01 00:00:00',
+      last_pull_at TIMESTAMP    NULL DEFAULT NULL
     )
   `, []);
-  await query(`
-    CREATE TABLE IF NOT EXISTS external_api_settings (
-      id INT PRIMARY KEY AUTO_INCREMENT,
-      setting_key VARCHAR(100) UNIQUE NOT NULL,
-      setting_value TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )
-  `, []);
+
+  // Backfill last_pull_at column if upgrading from older schema
+  try {
+    await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_pull_at TIMESTAMP NULL DEFAULT NULL`, []);
+  } catch {
+    // Column already exists — ignore
+  }
+}
+
+function toMysqlTs(d: Date | string): string {
+  const date = typeof d === 'string' ? new Date(d) : d;
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+// ---------------------------------------------------------------------------
+// Column introspection — only sync columns that actually exist in the table.
+// Uses information_schema (no error thrown for missing tables) and caches the
+// result so we don't introspect on every sync tick. Handles schema drift
+// between local and Railway gracefully.
+// ---------------------------------------------------------------------------
+const COLUMN_TTL = 5 * 60 * 1000;
+const _columnCache = new Map<string, { cols: Set<string>; at: number }>();
+
+async function getTableColumns(
+  runner: (sql: string, params?: any[]) => Promise<any>,
+  scope: 'local' | 'cloud',
+  tableName: string,
+): Promise<Set<string>> {
+  const key = `${scope}:${tableName}`;
+  const cached = _columnCache.get(key);
+  if (cached && Date.now() - cached.at < COLUMN_TTL) return cached.cols;
+
+  const rows = await runner(
+    `SELECT COLUMN_NAME AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+    [tableName],
+  ) as any[];
+  const cols = new Set<string>(rows.map(r => r.c));
+  _columnCache.set(key, { cols, at: Date.now() });
+  return cols;
 }
 
 async function getLastPush(tableName: string): Promise<string> {
@@ -282,7 +318,7 @@ async function getLastPush(tableName: string): Promise<string> {
     [tableName]
   ) as any[];
   return rows[0]?.last_push_at
-    ? new Date(rows[0].last_push_at).toISOString().slice(0, 19).replace('T', ' ')
+    ? toMysqlTs(rows[0].last_push_at)
     : '2000-01-01 00:00:00';
 }
 
@@ -293,49 +329,96 @@ async function setLastPush(tableName: string, ts: string): Promise<void> {
   `, [tableName, ts]);
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+async function getLastPull(tableName: string): Promise<string> {
+  const rows = await query(
+    `SELECT last_pull_at FROM cloud_sync_tracker WHERE table_name = ?`,
+    [tableName]
+  ) as any[];
+  return rows[0]?.last_pull_at
+    ? toMysqlTs(rows[0].last_pull_at)
+    : '2000-01-01 00:00:00';
+}
 
+async function setLastPull(tableName: string, ts: string): Promise<void> {
+  await query(`
+    INSERT INTO cloud_sync_tracker (table_name, last_pull_at) VALUES (?, ?)
+    ON DUPLICATE KEY UPDATE last_pull_at = VALUES(last_pull_at)
+  `, [tableName, ts]);
+}
+
+// ---------------------------------------------------------------------------
+// Public API — kept stable for scheduler/UI compatibility
+// ---------------------------------------------------------------------------
 export async function isCloudConfigured(): Promise<boolean> {
-  const { url } = await getCloudConfig();
-  return !!url;
+  return isCloudDbConfigured();
 }
 
 export async function checkCloudHealth(): Promise<boolean> {
-  const { url } = await getCloudConfig();
-  if (!url) return false;
-  try {
-    const res = await fetch(`${url}/api/cloud-sync/health`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  return await checkCloudConnection();
 }
 
 // ---------------------------------------------------------------------------
-// Push — scan tables, push new/updated rows to Railway
+// Bulk upsert helper — builds one INSERT ... ON DUPLICATE KEY UPDATE statement
+// ---------------------------------------------------------------------------
+function buildBulkUpsert(
+  tableName: string,
+  rows: any[],
+  columns: string[],
+  idCol: string,
+): { sql: string; params: any[] } {
+  const colList = columns.map(c => `\`${c}\``).join(', ');
+  const placeholders = rows
+    .map(() => `(${columns.map(() => '?').join(', ')})`)
+    .join(', ');
+  const updates = columns
+    .filter(c => c !== idCol)
+    .map(c => `\`${c}\` = VALUES(\`${c}\`)`)
+    .join(', ');
+
+  const params: any[] = [];
+  for (const row of rows) {
+    for (const col of columns) {
+      params.push(row[col] ?? null);
+    }
+  }
+
+  const sql = `
+    INSERT INTO \`${tableName}\` (${colList})
+    VALUES ${placeholders}
+    ${updates ? `ON DUPLICATE KEY UPDATE ${updates}` : ''}
+  `;
+  return { sql, params };
+}
+
+// ---------------------------------------------------------------------------
+// Push — scan local tables, bulk-upsert new/updated rows to Railway
 // ---------------------------------------------------------------------------
 export async function processPushToCloud(): Promise<{ pushed: number; failed: number }> {
-  const { url, apiKey } = await getCloudConfig();
-  if (!url) return { pushed: 0, failed: 0 };
+  if (!isCloudDbConfigured()) return { pushed: 0, failed: 0 };
 
-  const online = await checkCloudHealth();
+  const online = await checkCloudConnection();
   if (!online) return { pushed: 0, failed: 0 };
 
-  await ensureTrackerTable();
+  await ensureTrackerTables();
 
   let totalPushed = 0;
   let totalFailed = 0;
 
   for (const [tableName, cfg] of Object.entries(SCAN_CONFIG)) {
     try {
-      const lastPush = await getLastPush(tableName);
-      const colList  = cfg.columns.map(c => `\`${c}\``).join(', ');
+      // Only sync columns present in BOTH local and cloud (handles schema drift)
+      const localCols = await getTableColumns(query, 'local', tableName);
+      if (!localCols.size || !localCols.has(cfg.timeCol) || !localCols.has(cfg.idCol)) continue;
 
-      // Only fetch columns that actually exist in the table (skip unknown columns silently)
+      const cloudCols = await getTableColumns(cloudQuery, 'cloud', tableName);
+      if (!cloudCols.size) continue; // table doesn't exist on Railway yet
+
+      const cols = cfg.columns.filter(c => localCols.has(c) && cloudCols.has(c));
+      if (!cols.includes(cfg.idCol)) continue;
+
+      const lastPush = await getLastPush(tableName);
+      const colList  = cols.map(c => `\`${c}\``).join(', ');
+
       const rows = await query(`
         SELECT ${colList}
         FROM \`${tableName}\`
@@ -346,64 +429,33 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 
       if (!rows.length) continue;
 
-      let latestTs = lastPush;
-      let tableFailed = 0;
-      let remoteTableMissing = false;
+      try {
+        const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol);
+        await cloudQuery(sql, params);
 
-      for (const row of rows) {
-        const recordId = String(row[cfg.idCol]);
-        try {
-          const res = await fetch(`${url}/api/cloud-sync/push`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Sync-Key': apiKey,
-            },
-            body: JSON.stringify({
-              tableName,
-              recordId,
-              operation: 'upsert',
-              payload:   row,
-            }),
-            signal: AbortSignal.timeout(15_000),
-          });
+        totalPushed += rows.length;
 
-          if (res.ok) {
-            totalPushed++;
-            const rowTs = row[cfg.timeCol]
-              ? new Date(row[cfg.timeCol]).toISOString().slice(0, 19).replace('T', ' ')
-              : latestTs;
+        // Advance tracker to the latest timestamp in this batch
+        let latestTs = lastPush;
+        for (const row of rows) {
+          if (row[cfg.timeCol]) {
+            const rowTs = toMysqlTs(row[cfg.timeCol]);
             if (rowTs > latestTs) latestTs = rowTs;
-          } else if (res.status === 422) {
-            // Remote table doesn't exist yet — skip this entire table silently
-            const body = await res.json().catch(() => ({})) as any;
-            if (body.tableNotFound) {
-              remoteTableMissing = true;
-              break;
-            }
-            tableFailed++;
-            console.error(`[CloudSync] Push failed ${tableName}/${recordId}: HTTP 422 — ${body.error ?? ''}`);
-          } else {
-            tableFailed++;
-            const errText = await res.text().catch(() => '');
-            console.error(`[CloudSync] Push failed ${tableName}/${recordId}: HTTP ${res.status} — ${errText.slice(0, 200)}`);
           }
-        } catch (pushErr) {
-          tableFailed++;
-          console.error(`[CloudSync] Push network error ${tableName}/${recordId}:`, (pushErr as Error).message);
         }
-      }
-
-      if (remoteTableMissing) continue;
-
-      totalFailed += tableFailed;
-
-      // Advance tracker only if at least some succeeded
-      if (latestTs > lastPush) {
-        await setLastPush(tableName, latestTs);
+        if (latestTs > lastPush) {
+          await setLastPush(tableName, latestTs);
+        }
+      } catch (cloudErr) {
+        totalFailed += rows.length;
+        const msg = (cloudErr as Error).message;
+        // Remote table missing — skip silently so other tables continue
+        if (msg.includes("doesn't exist") || msg.includes('Unknown column')) {
+          continue;
+        }
+        console.error(`[CloudSync] Push failed ${tableName}:`, msg);
       }
     } catch (err) {
-      // Table may not exist in this deployment — skip silently
       const msg = (err as Error).message;
       if (!msg.includes("doesn't exist") && !msg.includes('Unknown column')) {
         console.error(`[CloudSync] Push error on ${tableName}:`, msg);
@@ -418,114 +470,84 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 }
 
 // ---------------------------------------------------------------------------
-// Pull — fetch master data from Railway and upsert locally
+// Pull — query Railway directly for master data and upsert locally
 // ---------------------------------------------------------------------------
-
-const PULL_COLUMNS: Record<string, { idCol: string; columns: string[] }> = {
-  products: {
-    idCol: 'id',
-    columns: [
-      'id','name','barcode','price','cost','stock','category','brand',
-      'description','additional_description','department','subcategory',
-      'reorder_point','avg_daily_sales','sku','image_url','image_hint',
-      'unit_of_measure','parent_id','conversion_factor','supplier_id',
-      'income_account','expense_account','warehouse_id','vat_status',
-      'availability','earns_points','expiration_date','shelf_location_id',
-      'created_at','updated_at',
-    ],
-  },
-  categories:       { idCol: 'id',  columns: ['id','name','markup_percentage'] },
-  brands:           { idCol: 'id',  columns: ['id','name','markup_percentage'] },
-  warehouses:       { idCol: 'id',  columns: ['id','name','address','is_default','created_at','updated_at'] },
-  payment_methods:  { idCol: 'id',  columns: ['id','name','type','is_active','created_at','updated_at'] },
-  price_levels:     { idCol: 'id',  columns: ['id','name','description'] },
-  users: {
-    idCol: 'uid',
-    columns: ['uid','username','password','user_type','display_name','disabled','creation_time'],
-  },
-  user_permissions: { idCol: 'id',  columns: ['id','user_uid','permission'] },
-};
-
 export async function processPullFromCloud(): Promise<{ pulled: number }> {
-  const { url, apiKey } = await getCloudConfig();
-  if (!url) return { pulled: 0 };
+  if (!isCloudDbConfigured()) return { pulled: 0 };
 
-  await ensureTrackerTable();
+  const online = await checkCloudConnection();
+  if (!online) return { pulled: 0 };
 
-  try {
-    const lastRows = await query(
-      `SELECT setting_value FROM external_api_settings WHERE setting_key = 'last_cloud_pull'`,
-      []
-    ) as any[];
-    const since = lastRows[0]?.setting_value || '2000-01-01T00:00:00.000Z';
+  await ensureTrackerTables();
 
-    const res = await fetch(
-      `${url}/api/cloud-sync/pull?since=${encodeURIComponent(since)}`,
-      {
-        headers: { 'X-Sync-Key': apiKey },
-        signal: AbortSignal.timeout(30_000),
+  let totalPulled = 0;
+
+  for (const [tableName, cfg] of Object.entries(PULL_CONFIG)) {
+    try {
+      // Only sync columns present in BOTH cloud and local (handles schema drift)
+      const cloudCols = await getTableColumns(cloudQuery, 'cloud', tableName);
+      if (!cloudCols.size) continue; // table doesn't exist on Railway
+
+      const localCols = await getTableColumns(query, 'local', tableName);
+      if (!localCols.size || !localCols.has(cfg.idCol)) continue;
+
+      const cols = cfg.columns.filter(c => cloudCols.has(c) && localCols.has(c));
+      if (!cols.includes(cfg.idCol)) continue;
+
+      const useTimeCol = cfg.timeCol && cloudCols.has(cfg.timeCol);
+      const colList = cols.map(c => `\`${c}\``).join(', ');
+
+      let rows: any[] = [];
+      let latestTs: string | null = null;
+
+      if (useTimeCol) {
+        const lastPull = await getLastPull(tableName);
+        rows = await cloudQuery(`
+          SELECT ${colList}
+          FROM \`${tableName}\`
+          WHERE \`${cfg.timeCol}\` > ?
+          ORDER BY \`${cfg.timeCol}\` ASC
+          LIMIT 500
+        `, [lastPull]) as any[];
+
+        latestTs = lastPull;
+        for (const row of rows) {
+          if (row[cfg.timeCol!]) {
+            const rowTs = toMysqlTs(row[cfg.timeCol!]);
+            if (rowTs > (latestTs ?? '')) latestTs = rowTs;
+          }
+        }
+      } else {
+        // Reference table — pull everything (small tables only)
+        rows = await cloudQuery(`SELECT ${colList} FROM \`${tableName}\``) as any[];
       }
-    );
 
-    if (!res.ok) return { pulled: 0 };
+      if (!rows.length) continue;
 
-    const data = await res.json() as {
-      tables: { tableName: string; records: any[] }[];
-    };
+      const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol);
+      await query(sql, params);
+      totalPulled += rows.length;
 
-    let pulled = 0;
-    for (const { tableName, records } of (data.tables || [])) {
-      const cfg = PULL_COLUMNS[tableName];
-      if (!cfg) continue;
-      for (const record of records) {
-        await upsertLocal(tableName, record, cfg);
-        pulled++;
+      if (useTimeCol && latestTs) {
+        await setLastPull(tableName, latestTs);
+      }
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (!msg.includes("doesn't exist") && !msg.includes('Unknown column')) {
+        console.error(`[CloudSync] Pull error on ${tableName}:`, msg);
       }
     }
-
-    await query(`
-      INSERT INTO external_api_settings (setting_key, setting_value)
-      VALUES ('last_cloud_pull', ?)
-      ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
-    `, [new Date().toISOString()]);
-
-    if (pulled > 0) console.log(`[CloudSync] Pull: ${pulled} records applied`);
-    return { pulled };
-  } catch (err) {
-    console.error('[CloudSync] Pull error:', err);
-    return { pulled: 0 };
   }
-}
 
-async function upsertLocal(
-  tableName: string,
-  record: Record<string, unknown>,
-  cfg: { idCol: string; columns: string[] }
-): Promise<void> {
-  const cols = Object.keys(record).filter(c => cfg.columns.includes(c));
-  if (!cols.length) return;
-
-  const values       = cols.map(c => record[c]);
-  const placeholders = cols.map(() => '?').join(', ');
-  const updates      = cols
-    .filter(c => c !== cfg.idCol)
-    .map(c => `\`${c}\` = VALUES(\`${c}\`)`)
-    .join(', ');
-
-  if (!updates) return;
-
-  await query(
-    `INSERT INTO \`${tableName}\` (${cols.map(c => `\`${c}\``).join(', ')})
-     VALUES (${placeholders})
-     ON DUPLICATE KEY UPDATE ${updates}`,
-    values
-  );
+  if (totalPulled > 0) {
+    console.log(`[CloudSync] Pull complete: ${totalPulled} records applied`);
+  }
+  return { pulled: totalPulled };
 }
 
 // ---------------------------------------------------------------------------
 // Status summary for UI
 // ---------------------------------------------------------------------------
-
 export type CloudSyncStatus = {
   isConfigured: boolean;
   isOnline:     boolean;
@@ -535,41 +557,36 @@ export type CloudSyncStatus = {
 };
 
 export async function getCloudSyncStatus(): Promise<CloudSyncStatus> {
-  const isConfigured = await isCloudConfigured();
+  const isConfigured = isCloudDbConfigured();
   if (!isConfigured) {
     return { isConfigured: false, isOnline: false, lastPush: null, lastPull: null, pendingTables: 0 };
   }
 
-  await ensureTrackerTable();
+  await ensureTrackerTables();
 
-  const [trackerRows, lastPullRows, online] = await Promise.all([
-    query(`SELECT table_name, last_push_at FROM cloud_sync_tracker`, []) as Promise<any[]>,
-    query(
-      `SELECT setting_value FROM external_api_settings WHERE setting_key = 'last_cloud_pull'`,
-      []
-    ) as Promise<any[]>,
-    checkCloudHealth(),
+  const [trackerRows, online] = await Promise.all([
+    query(`SELECT table_name, last_push_at, last_pull_at FROM cloud_sync_tracker`, []) as Promise<any[]>,
+    checkCloudConnection(),
   ]);
 
+  const pushTimes: string[] = [];
+  const pullTimes: string[] = [];
   const trackerMap: Record<string, string> = {};
   for (const r of trackerRows) {
     trackerMap[r.table_name] = r.last_push_at;
+    if (r.last_push_at) pushTimes.push(toMysqlTs(r.last_push_at));
+    if (r.last_pull_at) pullTimes.push(toMysqlTs(r.last_pull_at));
   }
 
-  // Count tables that have never been pushed
   const pendingTables = Object.keys(SCAN_CONFIG).filter(t => !trackerMap[t]).length;
-
-  // Most recent push across all tables
-  const pushTimes = Object.values(trackerMap).filter(Boolean);
-  const lastPush  = pushTimes.length
-    ? pushTimes.sort().at(-1)!
-    : null;
+  const lastPush = pushTimes.length ? pushTimes.sort().at(-1)! : null;
+  const lastPull = pullTimes.length ? pullTimes.sort().at(-1)! : null;
 
   return {
     isConfigured: true,
     isOnline:     online,
     lastPush,
-    lastPull:     lastPullRows[0]?.setting_value ?? null,
+    lastPull,
     pendingTables,
   };
 }

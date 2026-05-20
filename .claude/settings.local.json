@@ -17,7 +17,13 @@
       "Bash(magick --version)",
       "Bash(node -e ' *)",
       "Bash(Get-ChildItem \"d:\\\\BHAGOH PROJECT\\\\Stock_Pilot\\\\app\\\\\\(app\\)\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(curl -s -i http://localhost:3000/api/cloud-sync/test-connection)",
+      "Bash(curl -s -o /dev/null -w \"status route: %{http_code}\\\\n\" http://localhost:3000/api/cloud-sync/status)",
+      "Bash(export MYSQL_PWD='gxXKqTsnxEfCvKxwXgzerLEGJsSNKeEg')",
+      "Bash(\"C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe\" -h viaduct.proxy.rlwy.net -P 14274 -u root --default-character-set=utf8mb4 stock_pilot)",
+      "Bash(\"C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe\" -h 127.0.0.1 -P 3306 -u root -N -e \"SELECT \\(SELECT COUNT\\(*\\) FROM information_schema.tables WHERE table_schema='stock_pilot'\\) AS tables, \\(SELECT COUNT\\(*\\) FROM stock_pilot.products\\) AS products, \\(SELECT COUNT\\(*\\) FROM stock_pilot.sales_invoices\\) AS sales_inv, \\(SELECT COUNT\\(*\\) FROM stock_pilot.point_history\\) AS point_hist;\")",
+      "Bash(\"C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe\" -h viaduct.proxy.rlwy.net -P 14274 -u root -N -e \"SELECT \\(SELECT COUNT\\(*\\) FROM information_schema.tables WHERE table_schema='stock_pilot'\\) AS tables, \\(SELECT COUNT\\(*\\) FROM stock_pilot.products\\) AS products, \\(SELECT COUNT\\(*\\) FROM stock_pilot.sales_invoices\\) AS sales_inv, \\(SELECT COUNT\\(*\\) FROM stock_pilot.point_history\\) AS point_hist;\")"
     ]
   }
 }
