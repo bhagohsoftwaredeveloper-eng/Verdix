@@ -23,240 +23,79 @@ import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '..
 
 const BATCH = 100;
 
-// ---------------------------------------------------------------------------
-// Push config — local → Railway
-// ---------------------------------------------------------------------------
-const SCAN_CONFIG: Record<string, { idCol: string; timeCol: string; columns: string[] }> = {
-
-  // ── Transactions ──────────────────────────────────────────────────────────
-  sales_invoices: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','customer_id','invoice_date','due_date','total','subtotal',
-      'vat_amount','discount_amount','payment_method','payment_reference',
-      'status','notes','created_by','warehouse_id','created_at','updated_at',
-    ],
-  },
-  sales_invoice_items: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: [
-      'id','invoice_id','product_id','product_name','quantity','price',
-      'discount','discount_type','subtotal','vat_amount','unit_of_measure',
-    ],
-  },
-  sales_orders: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','customer_id','order_date','total','status','notes',
-      'created_by','warehouse_id','created_at','updated_at',
-    ],
-  },
-  sales_order_items: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: ['id','order_id','product_id','product_name','quantity','price','subtotal'],
-  },
-  sales_transactions: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: [
-      'id','receipt_number','customer_id','total','subtotal','vat_amount',
-      'discount_amount','payment_method','payment_reference','cashier_id',
-      'terminal_id','shift_id','status','created_at',
-    ],
-  },
-  pos_transactions: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: [
-      'id','receipt_number','customer_id','total','payment_method',
-      'cashier_id','terminal_id','shift_id','status','created_at',
-    ],
-  },
-
-  // ── Purchases ─────────────────────────────────────────────────────────────
-  purchase_orders: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','supplier_id','reference_number','order_date','delivery_date',
-      'total','vat_amount','shipping_fee','payment_method','status',
-      'ordered_by','notes','warehouse_id','created_at','updated_at',
-    ],
-  },
-  purchase_order_items: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: [
-      'id','purchase_order_id','product_id','product_name','quantity',
-      'cost','discount','discount_type','vat_subject','subtotal',
-    ],
-  },
-
-  // ── Inventory ─────────────────────────────────────────────────────────────
-  stock_adjustments: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: [
-      'id','product_id','quantity','adjustment_type','reason',
-      'reference_id','adjusted_by','warehouse_id','created_at',
-    ],
-  },
-  stock_movements: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: [
-      'id','product_id','quantity','movement_type','reference_id',
-      'reference_type','notes','warehouse_id','created_at',
-    ],
-  },
-  inventory_transfers: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','from_warehouse_id','to_warehouse_id','status','notes',
-      'transferred_by','created_at','updated_at',
-    ],
-  },
-  inventory_transfer_items: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: ['id','transfer_id','product_id','product_name','quantity','unit_of_measure'],
-  },
-  stock_counts: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','warehouse_id','status','notes','counted_by','created_at','updated_at',
-    ],
-  },
-  stock_count_items: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: ['id','stock_count_id','product_id','expected_qty','counted_qty','variance'],
-  },
-  bad_orders: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','supplier_id','reference_number','date','total','status',
-      'notes','created_by','warehouse_id','created_at','updated_at',
-    ],
-  },
-  bad_order_items: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: ['id','bad_order_id','product_id','product_name','quantity','cost','subtotal'],
-  },
-
-  // ── Master Data ───────────────────────────────────────────────────────────
-  products: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','name','barcode','price','cost','stock','category','brand',
-      'description','additional_description','department','subcategory',
-      'reorder_point','avg_daily_sales','sku','image_url','image_hint',
-      'unit_of_measure','parent_id','conversion_factor','supplier_id',
-      'income_account','expense_account','warehouse_id','vat_status',
-      'availability','earns_points','expiration_date','shelf_location_id',
-      'created_at','updated_at',
-    ],
-  },
-  customers: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','name','email','phone','address','city','province','zip_code',
-      'customer_type','credit_limit','loyalty_points','sales_area_id',
-      'sales_group_id','sales_person_id','price_level_id','created_at','updated_at',
-    ],
-  },
-  suppliers: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','name','contact_person','email','phone','address','city',
-      'province','payment_terms','created_at','updated_at',
-    ],
-  },
-  categories: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: ['id','name','markup_percentage','updated_at'],
-  },
-  brands: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: ['id','name','markup_percentage','updated_at'],
-  },
-  warehouses: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: ['id','name','address','is_default','created_at','updated_at'],
-  },
-  payment_methods: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: ['id','name','type','is_active','created_at','updated_at'],
-  },
-
-  // ── Payments & Loyalty ────────────────────────────────────────────────────
-  customer_payments: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: [
-      'id','customer_id','amount','payment_date','payment_method',
-      'reference','notes','recorded_by','created_at',
-    ],
-  },
-  customer_loyalty: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: ['id','customer_id','points','total_earned','total_redeemed','updated_at'],
-  },
-  point_history: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: ['id','customer_id','points','type','reference_id','notes','created_at'],
-  },
-
-  // ── Users ─────────────────────────────────────────────────────────────────
-  users: {
-    idCol: 'uid', timeCol: 'creation_time',
-    columns: ['uid','username','password','user_type','display_name','disabled','creation_time'],
-  },
-
-  // ── Shifts & Z-readings ───────────────────────────────────────────────────
-  shifts: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','user_id','terminal_id','starting_cash','expected_cash',
-      'actual_cash','cash_difference','status','start_time','end_time',
-      'notes','created_at','updated_at',
-    ],
-  },
-  z_readings: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: [
-      'id','reading_number','report_date','terminal_id','cashier_name',
-      'gross_sales','returns','discounts','net_sales','vat_amount',
-      'payment_methods','transaction_count','starting_cash','cash_sales',
-      'cash_in_drawer','created_at','updated_at',
-    ],
-  },
-
-  // ── Approvals ─────────────────────────────────────────────────────────────
-  approval_workflows: {
-    idCol: 'id', timeCol: 'created_at',
-    columns: ['id','transaction_type','user_type_id','step_order','created_at'],
-  },
-};
+type SyncTable = { tableName: string; idCol: string; timeCol: string | null };
 
 // ---------------------------------------------------------------------------
-// Pull config — Railway → local
-// timeCol null = full reference pull (small lookup tables)
+// Tables that must NOT sync — per-machine counters, config, and bookkeeping.
+// Syncing counters across machines would corrupt receipt/reference numbering.
 // ---------------------------------------------------------------------------
-const PULL_CONFIG: Record<string, { idCol: string; timeCol: string | null; columns: string[] }> = {
-  products: {
-    idCol: 'id', timeCol: 'updated_at',
-    columns: [
-      'id','name','barcode','price','cost','stock','category','brand',
-      'description','additional_description','department','subcategory',
-      'reorder_point','avg_daily_sales','sku','image_url','image_hint',
-      'unit_of_measure','parent_id','conversion_factor','supplier_id',
-      'income_account','expense_account','warehouse_id','vat_status',
-      'availability','earns_points','expiration_date','shelf_location_id',
-      'created_at','updated_at',
-    ],
-  },
-  categories:      { idCol: 'id',  timeCol: 'updated_at', columns: ['id','name','markup_percentage','updated_at'] },
-  brands:          { idCol: 'id',  timeCol: 'updated_at', columns: ['id','name','markup_percentage','updated_at'] },
-  warehouses:      { idCol: 'id',  timeCol: 'updated_at', columns: ['id','name','address','is_default','created_at','updated_at'] },
-  payment_methods: { idCol: 'id',  timeCol: 'updated_at', columns: ['id','name','type','is_active','created_at','updated_at'] },
-  price_levels:    { idCol: 'id',  timeCol: null,         columns: ['id','name','description'] },
-  users: {
-    idCol: 'uid', timeCol: 'creation_time',
-    columns: ['uid','username','password','user_type','display_name','disabled','creation_time'],
-  },
-  user_permissions: { idCol: 'id', timeCol: null, columns: ['id','user_uid','permission'] },
+const EXCLUDE_TABLES = new Set<string>([
+  'cloud_sync_tracker',     // our own sync state
+  'migrations',             // schema version history (per machine)
+  'external_api_logs',      // local sync queue (large, machine-specific)
+  'external_api_settings',  // holds cloud-sync credentials
+  'external_apis',          // API config (per machine)
+  'transaction_references', // global receipt/reference counters
+  'pos_terminals',          // per-terminal OR/X/Z counters
+  'pos_settings',           // local terminal settings
+]);
+
+// ---------------------------------------------------------------------------
+// Push tables — auto-discovered from the local schema (cached for COLUMN_TTL).
+// Every table with a primary key is synced; those with updated_at/created_at
+// sync incrementally, the rest are full-synced. Excluded tables are skipped,
+// so new tables added to the schema later are picked up automatically.
+// ---------------------------------------------------------------------------
+let _pushTablesCache: { tables: SyncTable[]; at: number } | null = null;
+
+async function discoverPushTables(): Promise<SyncTable[]> {
+  if (_pushTablesCache && Date.now() - _pushTablesCache.at < COLUMN_TTL) {
+    return _pushTablesCache.tables;
+  }
+  const rows = await query(`
+    SELECT
+      t.TABLE_NAME AS tableName,
+      (SELECT k.COLUMN_NAME FROM information_schema.COLUMNS k
+         WHERE k.TABLE_SCHEMA = DATABASE() AND k.TABLE_NAME = t.TABLE_NAME
+           AND k.COLUMN_KEY = 'PRI' LIMIT 1) AS idCol,
+      (SELECT COUNT(*) FROM information_schema.COLUMNS u
+         WHERE u.TABLE_SCHEMA = DATABASE() AND u.TABLE_NAME = t.TABLE_NAME
+           AND u.COLUMN_NAME = 'updated_at') AS hasUpdated,
+      (SELECT COUNT(*) FROM information_schema.COLUMNS c
+         WHERE c.TABLE_SCHEMA = DATABASE() AND c.TABLE_NAME = t.TABLE_NAME
+           AND c.COLUMN_NAME = 'created_at') AS hasCreated
+    FROM information_schema.TABLES t
+    WHERE t.TABLE_SCHEMA = DATABASE() AND t.TABLE_TYPE = 'BASE TABLE'
+    ORDER BY t.TABLE_NAME
+  `, []) as any[];
+
+  const tables: SyncTable[] = [];
+  for (const r of rows) {
+    if (EXCLUDE_TABLES.has(r.tableName)) continue;
+    if (!r.idCol) continue; // need a primary key to upsert
+    const timeCol = Number(r.hasUpdated) ? 'updated_at'
+                  : Number(r.hasCreated) ? 'created_at'
+                  : null;
+    tables.push({ tableName: r.tableName, idCol: r.idCol, timeCol });
+  }
+  _pushTablesCache = { tables, at: Date.now() };
+  return tables;
+}
+
+// ---------------------------------------------------------------------------
+// Pull tables — Railway → local master data (curated; these are the records
+// that may be edited centrally and need to flow back down to each machine).
+// timeCol null = full reference pull (small lookup tables).
+// ---------------------------------------------------------------------------
+const PULL_CONFIG: Record<string, { idCol: string; timeCol: string | null }> = {
+  products:         { idCol: 'id',  timeCol: 'updated_at' },
+  categories:       { idCol: 'id',  timeCol: 'updated_at' },
+  brands:           { idCol: 'id',  timeCol: 'updated_at' },
+  warehouses:       { idCol: 'id',  timeCol: 'updated_at' },
+  payment_methods:  { idCol: 'id',  timeCol: 'updated_at' },
+  price_levels:     { idCol: 'id',  timeCol: null },
+  users:            { idCol: 'uid', timeCol: 'creation_time' },
+  user_permissions: { idCol: 'id',  timeCol: null },
 };
 
 // ---------------------------------------------------------------------------
@@ -271,11 +110,14 @@ async function ensureTrackerTables(): Promise<void> {
     )
   `, []);
 
-  // Backfill last_pull_at column if upgrading from older schema
-  try {
+  // Backfill last_pull_at column if upgrading from older schema (only if missing)
+  const cols = await query(
+    `SELECT COLUMN_NAME AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cloud_sync_tracker'`,
+    [],
+  ) as any[];
+  if (!cols.some(r => r.c === 'last_pull_at')) {
     await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_pull_at TIMESTAMP NULL DEFAULT NULL`, []);
-  } catch {
-    // Column already exists — ignore
   }
 }
 
@@ -357,6 +199,16 @@ export async function checkCloudHealth(): Promise<boolean> {
   return await checkCloudConnection();
 }
 
+// Objects/arrays (e.g. JSON columns that mysql2 already parsed) must be
+// re-serialized before re-insertion, otherwise they bind as "[object Object]".
+function normalizeValue(v: unknown): unknown {
+  if (v === undefined || v === null) return null;
+  if (typeof v === 'object' && !(v instanceof Date) && !Buffer.isBuffer(v)) {
+    return JSON.stringify(v);
+  }
+  return v;
+}
+
 // ---------------------------------------------------------------------------
 // Bulk upsert helper — builds one INSERT ... ON DUPLICATE KEY UPDATE statement
 // ---------------------------------------------------------------------------
@@ -378,7 +230,7 @@ function buildBulkUpsert(
   const params: any[] = [];
   for (const row of rows) {
     for (const col of columns) {
-      params.push(row[col] ?? null);
+      params.push(normalizeValue(row[col]));
     }
   }
 
@@ -404,28 +256,33 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
   let totalPushed = 0;
   let totalFailed = 0;
 
-  for (const [tableName, cfg] of Object.entries(SCAN_CONFIG)) {
+  for (const cfg of await discoverPushTables()) {
+    const { tableName } = cfg;
     try {
       // Only sync columns present in BOTH local and cloud (handles schema drift)
       const localCols = await getTableColumns(query, 'local', tableName);
-      if (!localCols.size || !localCols.has(cfg.timeCol) || !localCols.has(cfg.idCol)) continue;
+      if (!localCols.size || !localCols.has(cfg.idCol)) continue;
+      if (cfg.timeCol && !localCols.has(cfg.timeCol)) continue;
 
       const cloudCols = await getTableColumns(cloudQuery, 'cloud', tableName);
       if (!cloudCols.size) continue; // table doesn't exist on Railway yet
 
-      const cols = cfg.columns.filter(c => localCols.has(c) && cloudCols.has(c));
+      // Sync ALL columns common to both sides so NOT NULL columns are never
+      // omitted (schema is kept identical via the initial dump).
+      const cols = [...localCols].filter(c => cloudCols.has(c));
       if (!cols.includes(cfg.idCol)) continue;
 
-      const lastPush = await getLastPush(tableName);
       const colList  = cols.map(c => `\`${c}\``).join(', ');
+      const lastPush = cfg.timeCol ? await getLastPush(tableName) : '2000-01-01 00:00:00';
 
-      const rows = await query(`
-        SELECT ${colList}
-        FROM \`${tableName}\`
-        WHERE \`${cfg.timeCol}\` > ?
-        ORDER BY \`${cfg.timeCol}\` ASC
-        LIMIT ${BATCH}
-      `, [lastPush]) as any[];
+      const rows = cfg.timeCol
+        ? await query(`
+            SELECT ${colList} FROM \`${tableName}\`
+            WHERE \`${cfg.timeCol}\` > ?
+            ORDER BY \`${cfg.timeCol}\` ASC
+            LIMIT ${BATCH}
+          `, [lastPush]) as any[]
+        : await query(`SELECT ${colList} FROM \`${tableName}\` LIMIT ${BATCH}`, []) as any[];
 
       if (!rows.length) continue;
 
@@ -435,16 +292,18 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 
         totalPushed += rows.length;
 
-        // Advance tracker to the latest timestamp in this batch
-        let latestTs = lastPush;
-        for (const row of rows) {
-          if (row[cfg.timeCol]) {
-            const rowTs = toMysqlTs(row[cfg.timeCol]);
-            if (rowTs > latestTs) latestTs = rowTs;
+        // Advance tracker to the latest timestamp in this batch (incremental only)
+        if (cfg.timeCol) {
+          let latestTs = lastPush;
+          for (const row of rows) {
+            if (row[cfg.timeCol]) {
+              const rowTs = toMysqlTs(row[cfg.timeCol]);
+              if (rowTs > latestTs) latestTs = rowTs;
+            }
           }
-        }
-        if (latestTs > lastPush) {
-          await setLastPush(tableName, latestTs);
+          if (latestTs > lastPush) {
+            await setLastPush(tableName, latestTs);
+          }
         }
       } catch (cloudErr) {
         totalFailed += rows.length;
@@ -491,7 +350,8 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
       const localCols = await getTableColumns(query, 'local', tableName);
       if (!localCols.size || !localCols.has(cfg.idCol)) continue;
 
-      const cols = cfg.columns.filter(c => cloudCols.has(c) && localCols.has(c));
+      // Sync ALL columns common to both sides (schema is identical via dump)
+      const cols = [...cloudCols].filter(c => localCols.has(c));
       if (!cols.includes(cfg.idCol)) continue;
 
       const useTimeCol = cfg.timeCol && cloudCols.has(cfg.timeCol);
@@ -578,7 +438,8 @@ export async function getCloudSyncStatus(): Promise<CloudSyncStatus> {
     if (r.last_pull_at) pullTimes.push(toMysqlTs(r.last_pull_at));
   }
 
-  const pendingTables = Object.keys(SCAN_CONFIG).filter(t => !trackerMap[t]).length;
+  const syncTables = await discoverPushTables();
+  const pendingTables = syncTables.filter(t => t.timeCol && !trackerMap[t.tableName]).length;
   const lastPush = pushTimes.length ? pushTimes.sort().at(-1)! : null;
   const lastPull = pullTimes.length ? pullTimes.sort().at(-1)! : null;
 
