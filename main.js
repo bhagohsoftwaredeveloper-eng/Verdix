@@ -79,7 +79,7 @@ function createSplashScreen() {
       </style>
     </head>
     <body>
-      <div class="title">Stock Pilot</div>
+      <div class="title">LJMA SUPERMARKET</div>
       <div class="subtitle">Starting background services...</div>
       <div class="spinner"></div>
     </body>
@@ -359,28 +359,44 @@ app.whenReady().then(async () => {
       
       const { spawn } = require('child_process');
       const dotenv = require('dotenv');
-      const envPath = path.join(process.resourcesPath, '..', '.env');
+      const appRoot = path.join(process.resourcesPath, '..');
+      const envPath = path.join(appRoot, '.env');
       let envConfig = {};
-      
+
       if (fs.existsSync(envPath)) {
         envConfig = dotenv.parse(fs.readFileSync(envPath));
         logStream.write(`Loaded .env from: ${envPath}\n`);
       } else {
         logStream.write(`.env file not found at: ${envPath}\n`);
       }
-      
-      serverProcess = spawn('node', ['server.js'], { 
-        shell: true, 
-        cwd: path.join(process.resourcesPath, '..'),
-        env: { ...process.env, ...envConfig }
+
+      // Prefer the bundled node.exe (shipped next to the app) so the server
+      // does not depend on a system-wide Node.js installation.
+      const bundledNode = path.join(appRoot, 'node.exe');
+      const nodeBin = fs.existsSync(bundledNode) ? bundledNode : 'node';
+
+      // Detach stdio to the log file. We must NOT pipe to the parent's
+      // streams: a pipe keeps a live handle back to Electron, which would
+      // prevent the server from outliving the app.
+      const outFd = fs.openSync(logPath, 'a');
+      const errFd = fs.openSync(logPath, 'a');
+
+      // detached + unref() breaks the server out of Electron's Windows job
+      // object, so closing the app no longer kills the Next.js server.
+      serverProcess = spawn(nodeBin, ['server.js'], {
+        cwd: appRoot,
+        env: { ...process.env, ...envConfig },
+        detached: true,
+        windowsHide: true,
+        stdio: ['ignore', outFd, errFd],
       });
-      
-      serverProcess.stdout.pipe(logStream);
-      serverProcess.stderr.pipe(logStream);
-      
+
       serverProcess.on('error', (err) => {
         dialog.showErrorBox('Server Error', 'Failed to start Next.js server. Please ensure Node.js/NPM is installed.\n\nError: ' + err.message);
       });
+
+      // Allow the Electron process to exit independently of the server.
+      serverProcess.unref();
     }
 
     // Wait for the server — poll every 300ms, up to 30s total
