@@ -54,11 +54,11 @@ import { formatQuantity, formatStockQuantity } from '@/lib/utils';
 
 const salesOrderItemSchema = z.object({
   product: z.object({
-    id: z.string().min(1, 'Product ID is required'),
+    id: z.coerce.string().min(1, 'Product ID is required'),
     name: z.string().min(1, 'Product name is required'),
     sku: z.string().optional(),
-    stock: z.number().optional(),
-  }),
+    stock: z.coerce.number().optional(),
+  }).passthrough(),
   quantity: z.coerce.number().positive('Quantity must be greater than 0'),
   price: z.coerce.number().nonnegative('Price cannot be negative'),
 });
@@ -328,7 +328,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
           salesPersonId: initialData.salesPersonId || '',
           note: initialData.notes,
           items: initialData.items.map(item => ({
-            product: item.product,
+            product: { ...item.product },
             quantity: item.quantity,
             price: item.price
           }))
@@ -394,7 +394,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
       const existingItem = fields[existingItemIndex];
       update(existingItemIndex, { ...existingItem, quantity: existingItem.quantity + 1 });
     } else {
-      append({ product, quantity: 1, price: product.price });
+      append({ product: { ...product }, quantity: 1, price: product.price });
     }
   };
 
@@ -456,6 +456,37 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
     }
   }
 
+  // Surface validation errors so the submit button never appears to "do nothing"
+  function onInvalid(errors: any) {
+    const collectMessages = (errObj: any): string[] => {
+      const messages: string[] = [];
+      const walk = (node: any) => {
+        if (!node) return;
+        if (typeof node.message === 'string') {
+          messages.push(node.message);
+          return;
+        }
+        if (Array.isArray(node)) {
+          node.forEach(walk);
+        } else if (typeof node === 'object') {
+          Object.values(node).forEach(walk);
+        }
+      };
+      walk(errObj);
+      return messages;
+    };
+
+    const messages = collectMessages(errors);
+    console.warn('Sales order validation failed:', errors);
+    toast({
+      title: 'Cannot create order',
+      description: messages.length
+        ? messages.slice(0, 3).join(' • ')
+        : 'Please complete all required fields before creating the order.',
+      variant: 'destructive',
+    });
+  }
+
   const watchedPaymentMethod = form.watch('paymentMethod');
   const selectedPaymentMethod = paymentMethods.find(m => m.name === watchedPaymentMethod);
   const isReferenceRequired = selectedPaymentMethod?.isReferenceRequired ?? false;
@@ -479,7 +510,7 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 flex flex-col overflow-hidden bg-muted/10">
               
               {/* TOP HEADER - Form Fields (Compact Grid) */}

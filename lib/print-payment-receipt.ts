@@ -1,6 +1,21 @@
 import { format } from 'date-fns';
+import { getApiUrl } from '@/lib/api-config';
 
-export const printPaymentReceipt = (
+// Fetch the configured business name from POS settings so the receipt
+// header reflects the actual business instead of a hardcoded value.
+const fetchBusinessName = async (): Promise<string> => {
+  try {
+    const res = await fetch(getApiUrl('/pos-settings'));
+    if (!res.ok) return 'BUSINESS NAME';
+    const settings = await res.json();
+    const name = settings?.data?.businessName?.trim();
+    return name || 'BUSINESS NAME';
+  } catch {
+    return 'BUSINESS NAME';
+  }
+};
+
+export const printPaymentReceipt = async (
   payment: {
     id: string; // or reference
     customerName: string;
@@ -10,12 +25,18 @@ export const printPaymentReceipt = (
     reference?: string;
   }
 ) => {
+  // Open the window synchronously (within the click handler) to avoid popup blockers.
   const printWindow = window.open('', '', 'height=800,width=800');
   if (!printWindow) return;
 
+  // Show a brief placeholder while we load the business name.
+  printWindow.document.write('<html><head><title>Payment Receipt</title></head><body style="font-family: sans-serif; padding: 40px;">Preparing receipt…</body></html>');
+
+  const businessName = await fetchBusinessName();
   const paymentDate = new Date(payment.date);
 
-  printWindow.document.write('<html><head><title>Payment Receipt ' + payment.reference + '</title>');
+  printWindow.document.open();
+  printWindow.document.write('<html><head><title>Payment Receipt ' + (payment.reference || payment.id) + '</title>');
   printWindow.document.write('<style>');
   printWindow.document.write(`
     body { font-family: sans-serif; padding: 40px; }
@@ -34,7 +55,7 @@ export const printPaymentReceipt = (
   printWindow.document.write(`
     <div class="header">
       <div class="title">OFFICIAL RECEIPT</div>
-      <div class="subtitle">Stockpilot POS System</div>
+      <div class="subtitle">${businessName}</div>
     </div>
 
     <div class="content">
@@ -54,7 +75,7 @@ export const printPaymentReceipt = (
         <span class="label">Payment Method:</span>
         <span class="value">${payment.paymentMethod}</span>
       </div>
-      
+
       <div class="amount">
         <div style="font-size: 14px; color: #666; font-weight: normal; text-transform: uppercase; margin-bottom: 5px;">Amount Paid</div>
         ₱${payment.amount.toFixed(2)}
