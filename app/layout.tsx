@@ -3,7 +3,7 @@ import './globals.css';
 import ClientLayout from '../components/client-layout';
 
 export const metadata = {
-  title: 'verdix',
+  title: 'Verdix POS',
   description: 'Point of Sales + Inventory Management',
   icons: {
     icon: [
