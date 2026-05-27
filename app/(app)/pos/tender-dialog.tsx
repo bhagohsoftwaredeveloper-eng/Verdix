@@ -1,13 +1,12 @@
 
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from '@/components/ui/dialog';
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Printer, User, Star, Info, AlertCircle } from 'lucide-react';
+import { Loader2, Printer, User, Star, Info, AlertCircle, CheckCircle2, Wallet, CreditCard, Banknote } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { SaleItem, mapVatStatusToTaxType } from './page';
 import { mapVatStatusToTaxType as mapTax } from './page';
@@ -686,82 +685,101 @@ export function TenderDialog({
     const amountTenderedFloat = parseFloat(amountTendered) || 0;
 
     return (
-        <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className={`${(view === 'print_prompt' || view === 'receipt') ? 'sm:max-w-3xl' : 'sm:max-w-lg'} overflow-hidden flex flex-col p-0 transition-all duration-300`} onInteractOutside={(e) => e.preventDefault()} onKeyDown={handleKeyDown}>
+        <Sheet open={isOpen} onOpenChange={onOpenChange}>
+            <SheetContent side="right" className="w-full sm:max-w-[460px] overflow-hidden flex flex-col p-0 gap-0 [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()} onKeyDown={handleKeyDown}>
                 {view === 'receipt' && completedSale ? (
                     <ReceiptActionView saleDetails={completedSale} onNewSale={handleNewSale} onPrint={handleSmartPrint} settings={settings} />
                 ) : view === 'change' && completedSale ? (
-                    <div className="flex flex-col items-center justify-center p-6 space-y-8 animate-in zoom-in-95 duration-200">
-                        <div className="text-center space-y-2">
-                            <h2 className="text-2xl font-bold uppercase tracking-widest text-muted-foreground">Change Due</h2>
-                            <div className="text-7xl font-black text-primary tabular-nums tracking-tight">
-                                ₱{completedSale.change.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <div className="flex flex-col h-full animate-in fade-in duration-200">
+                        <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6 bg-gradient-to-b from-green-50/60 to-transparent">
+                            <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center animate-in zoom-in-90 duration-300">
+                                <CheckCircle2 className="h-11 w-11 text-green-600" strokeWidth={2.5} />
+                            </div>
+                            <div className="text-center space-y-1">
+                                <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Change Due</p>
+                                <div className="text-7xl font-black text-green-600 tabular-nums tracking-tight leading-none">
+                                    ₱{completedSale.change.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-6 text-center pt-2">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total</p>
+                                    <p className="text-lg font-bold text-foreground tabular-nums">₱{completedSale.totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="h-8 w-px bg-border" />
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Tendered</p>
+                                    <p className="text-lg font-bold text-foreground tabular-nums">₱{Number(completedSale.amountTendered || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                </div>
                             </div>
                         </div>
-                        
-                        <div className="w-full">
-                                <Button size="lg" className="w-full h-16 text-xl font-bold" onClick={handleCompleteChange} autoFocus>
-                                    Next
-                                </Button>
+                        <div className="p-5 border-t bg-background">
+                            <Button size="lg" className="w-full h-14 text-lg font-bold shadow-md shadow-primary/20" onClick={handleCompleteChange} autoFocus>
+                                Next
+                            </Button>
                         </div>
                     </div>
                 ) : view === 'print_prompt' && completedSale ? (
-                    <div className="flex flex-col md:flex-row h-[70vh] md:h-[500px] animate-in zoom-in-95 duration-200">
+                    <div className="flex flex-col h-full animate-in fade-in duration-200">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b bg-background">
+                            <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                                <Printer className="h-5 w-5 text-primary" />
+                                Print Receipt?
+                            </h2>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                                Order #{completedSale.orderNumber} saved successfully.
+                            </p>
+                        </div>
+
                         {/* Receipt Preview Area */}
-                        <div className="flex-1 bg-gray-100/50 p-4 overflow-y-auto border-b md:border-b-0 md:border-r border-dashed border-gray-300">
-                            <div className="flex justify-center">
-                                <div className="bg-white shadow-md transform scale-90 origin-top">
-                                    <ReceiptView saleDetails={completedSale} settings={settings} />
-                                </div>
+                        <div className="flex-1 bg-muted/40 p-4 overflow-y-auto flex justify-center">
+                            <div className="bg-white shadow-md h-fit">
+                                <ReceiptView saleDetails={completedSale} settings={settings} />
                             </div>
                         </div>
 
-                        {/* Prompt & Actions Area */}
-                        <div className="w-full md:w-72 p-6 flex flex-col justify-center items-center text-center space-y-8 bg-white">
-                            <div className="space-y-3">
-                                <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-2">
-                                    <Printer className="h-8 w-8 text-primary" />
-                                </div>
-                                <h2 className="text-2xl font-bold uppercase tracking-widest text-foreground">Print Receipt?</h2>
-                                <p className="text-muted-foreground text-sm leading-relaxed px-4">
-                                    Would you like to print a receipt for this transaction?
-                                </p>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 md:grid-cols-1 gap-4 w-full px-2">
-                                <Button 
-                                    variant="outline" 
-                                    size="lg" 
-                                    className="h-16 text-xl font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors" 
+                        {/* Actions */}
+                        <div className="p-4 border-t bg-background space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button
+                                    variant="outline"
+                                    size="lg"
+                                    className="h-14 text-base font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
                                     onClick={() => handleConfirmPrint(false)}
                                     ref={noButtonRef}
                                 >
-                                    No
+                                    No, Skip
                                 </Button>
-                                <Button 
-                                    size="lg" 
-                                    className="h-16 text-xl font-bold shadow-lg shadow-primary/20 transition-all active:scale-95" 
+                                <Button
+                                    size="lg"
+                                    className="h-14 text-base font-bold shadow-md shadow-primary/20 transition-all active:scale-95"
                                     onClick={() => handleConfirmPrint(true)}
                                     ref={yesButtonRef}
                                     autoFocus
                                 >
-                                    <Printer className="mr-2 h-6 w-6" />
-                                    Yes
+                                    <Printer className="mr-2 h-5 w-5" />
+                                    Yes, Print
                                 </Button>
                             </div>
-
-                            <div className="text-[10px] text-muted-foreground uppercase tracking-tighter">
-                                Use Arrow Keys to navigate • Press Y for Yes • Press N for No
-                            </div>
+                            <p className="text-center text-[10px] text-muted-foreground uppercase tracking-wider">
+                                Arrow keys to navigate • Y for Yes • N for No
+                            </p>
                         </div>
                     </div>
                 ) : (
                     <>
-                        <DialogHeader className="p-6 pb-0">
-                            <DialogTitle className="text-2xl font-bold">Tender Payment</DialogTitle>
-                            <DialogDescription className="text-muted-foreground">Finalize the transaction.</DialogDescription>
-                        </DialogHeader>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                        {/* Sticky Header */}
+                        <SheetHeader className="px-5 py-4 border-b bg-background text-left space-y-0.5">
+                            <SheetTitle className="text-xl font-bold flex items-center gap-2">
+                                <Wallet className="h-5 w-5 text-primary" />
+                                Tender Payment
+                            </SheetTitle>
+                            <SheetDescription className="text-muted-foreground text-sm">Finalize the transaction.</SheetDescription>
+                        </SheetHeader>
+
+                        {/* Scrollable Body */}
+                        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
                             {isChargePayment && (!customer || (customer as any).id === 'walk-in') && (
                                 <Alert className="bg-orange-50 border-orange-200 text-orange-900 border-2 animate-in fade-in slide-in-from-top-4 duration-500">
                                     <AlertCircle className="h-5 w-5 text-orange-600" />
@@ -772,14 +790,31 @@ export function TenderDialog({
                                 </Alert>
                             )}
 
+                            {/* Total Due hero */}
+                            <div className="rounded-2xl bg-primary/5 border-2 border-primary/10 p-5 text-center">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">Total Due</p>
+                                <p className="text-5xl font-black text-primary tabular-nums leading-none">₱{totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                {pointsToRedeemValue > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-primary/10 animate-in fade-in duration-300">
+                                        <div className="flex justify-between items-center text-foreground font-black text-base">
+                                            <span>Net Balance Due</span>
+                                            <span className="tabular-nums">₱{balanceRemaining.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Payment Method Selector */}
-                            <div className="space-y-3">
-                                <Label htmlFor="paymentMethod" className="text-lg font-medium">Payment Method</Label>
-                                <Select 
-                                    value={selectedMethod} 
+                            <div className="space-y-2">
+                                <Label htmlFor="paymentMethod" className="text-sm font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                                    <CreditCard className="h-4 w-4" />
+                                    Payment Method
+                                </Label>
+                                <Select
+                                    value={selectedMethod}
                                     onValueChange={setSelectedMethod}
                                 >
-                                    <SelectTrigger className="w-full h-12 text-lg" ref={paymentMethodRef}>
+                                    <SelectTrigger className="w-full h-12 text-base font-semibold" ref={paymentMethodRef}>
                                         <SelectValue placeholder="Select Payment Method" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -791,60 +826,133 @@ export function TenderDialog({
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="h-4" /> {/* Spacer */}
+
+                            {/* Amount Tendered Section - Always show for Points and Cash */}
+                            {(selectedMethod === 'CASH' || selectedMethod === 'POINTS' || (balanceRemaining > 0 && !isChargePayment)) && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="amountTendered" className="text-sm font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                                        <Banknote className="h-4 w-4" />
+                                        {selectedMethod === 'POINTS' ? 'Cash Balance Tendered' : 'Amount Tendered'}
+                                    </Label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-black text-muted-foreground pointer-events-none">₱</span>
+                                        <Input
+                                            id="amountTendered"
+                                            ref={amountTenderedRef}
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={amountTendered}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                                    setAmountTendered(value);
+                                                }
+                                            }}
+                                            placeholder="0.00"
+                                            className="h-16 text-3xl text-right font-black text-foreground [&:not(:placeholder-shown)]:text-foreground pl-10 pr-4 border-2 focus-visible:ring-primary/30"
+                                            style={{ color: 'hsl(var(--foreground))' }}
+                                            autoFocus={selectedMethod !== 'POINTS'}
+                                            onFocus={(e) => e.target.select()}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (!isProcessing) {
+                                                        handleConfirmPayment();
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    {/* Quick amounts directly under the amount field */}
+                                    {totalDue > 0 && selectedMethod === 'CASH' && (
+                                        <div className="grid grid-cols-4 gap-2 pt-1">
+                                            {getQuickAmounts(balanceRemaining || totalDue).map(amount => (
+                                                <Button key={amount} variant="outline" onClick={() => handleQuickAmount(amount)} className="h-10 font-bold text-sm">₱{amount}</Button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {selectedMethod === 'POINTS' && balanceRemaining > 0 && (
+                                        <p className="text-xs text-right text-muted-foreground mt-1 font-medium italic">
+                                            Enter the cash amount given by the customer for the remaining balance.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Reference Input */}
+                            {isReferenceRequired && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="referenceInput" className="text-sm text-red-600 font-bold uppercase tracking-wide">
+                                        Reference Number *
+                                    </Label>
+                                    <Input
+                                        id="referenceInput"
+                                        ref={referenceInputRef}
+                                        type="text"
+                                        value={referenceInput}
+                                        onChange={(e) => setReferenceInput(e.target.value)}
+                                        placeholder="Enter reference # (e.g. Check No., Trans ID)"
+                                        className="h-12 text-base"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleConfirmPayment();
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            )}
 
                             {/* Loyalty Points Redemption (Always available for valid customers with points) */}
                             {customer && (customer as any).id !== 'walk-in' && !(customer as any)?.isExpired && customerPoints > 0 && (
-                                <div className="space-y-4">
-                                    <div className="space-y-3 bg-purple-50 p-4 rounded-xl border border-purple-200 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <div className="flex justify-between items-center px-1">
-                                            <Label htmlFor="manualPoints" className="text-purple-900 font-bold text-base flex items-center gap-2">
-                                                <Star className="h-4 w-4 text-purple-600 fill-purple-600" />
-                                                Redeem Points
-                                            </Label>
-                                            <span className="text-[10px] font-bold text-purple-600 bg-white px-2 py-0.5 rounded-full border border-purple-100 shadow-sm">
-                                                Available: {customerPoints.toLocaleString()} (₱{customerPoints.toFixed(2)})
-                                            </span>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <div className="relative flex-1">
-                                                <Input
-                                                    id="manualPoints"
-                                                    ref={pointsInputRef}
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    value={pointsToRedeemInput}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                            setPointsToRedeemInput(val);
-                                                        }
-                                                    }}
-                                                    placeholder="0"
-                                                    className="h-12 text-xl font-bold border-purple-300 focus-visible:ring-purple-500 bg-white pl-4"
-                                                />
-                                            </div>
-                                            <Button 
-                                                variant="secondary"
-                                                className="bg-purple-600 text-white hover:bg-purple-700 h-12 px-6 font-bold shadow-md shadow-purple-100 transition-all active:scale-95"
-                                                onClick={() => {
-                                                    const maxPossibleValue = Math.min(totalDue, customerPoints);
-                                                    setPointsToRedeemInput(maxPossibleValue.toFixed(2));
-                                                }}
-                                            >
-                                                Redeem All
-                                            </Button>
-                                        </div>
-                                        <p className="text-[10px] text-purple-600 font-bold px-1 flex items-center gap-1">
-                                            <Info className="h-3 w-3" />
-                                            1 Point = ₱1.00 (Strict 1:1)
-                                        </p>
+                                <div className="space-y-3 bg-purple-50 p-4 rounded-xl border border-purple-200 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <div className="flex justify-between items-center px-1">
+                                        <Label htmlFor="manualPoints" className="text-purple-900 font-bold text-sm flex items-center gap-2">
+                                            <Star className="h-4 w-4 text-purple-600 fill-purple-600" />
+                                            Redeem Points
+                                        </Label>
+                                        <span className="text-[10px] font-bold text-purple-600 bg-white px-2 py-0.5 rounded-full border border-purple-100 shadow-sm">
+                                            Available: {customerPoints.toLocaleString()} (₱{customerPoints.toFixed(2)})
+                                        </span>
                                     </div>
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <Input
+                                                id="manualPoints"
+                                                ref={pointsInputRef}
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={pointsToRedeemInput}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                        setPointsToRedeemInput(val);
+                                                    }
+                                                }}
+                                                placeholder="0"
+                                                className="h-11 text-lg font-bold border-purple-300 focus-visible:ring-purple-500 bg-white pl-4"
+                                            />
+                                        </div>
+                                        <Button
+                                            variant="secondary"
+                                            className="bg-purple-600 text-white hover:bg-purple-700 h-11 px-5 font-bold shadow-md shadow-purple-100 transition-all active:scale-95"
+                                            onClick={() => {
+                                                const maxPossibleValue = Math.min(totalDue, customerPoints);
+                                                setPointsToRedeemInput(maxPossibleValue.toFixed(2));
+                                            }}
+                                        >
+                                            Redeem All
+                                        </Button>
+                                    </div>
+                                    <p className="text-[10px] text-purple-600 font-bold px-1 flex items-center gap-1">
+                                        <Info className="h-3 w-3" />
+                                        1 Point = ₱1.00 (Strict 1:1)
+                                    </p>
                                 </div>
                             )}
 
                             {isChargePayment && (
-                                <div className="space-y-4">
+                                <>
                                     {(!customer || (customer as any).id === 'walk-in') ? (
                                         <div className="bg-orange-50 p-6 rounded-xl border-2 border-dashed border-orange-200 flex flex-col items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
                                             <div className="p-3 bg-white rounded-full shadow-sm text-orange-600">
@@ -854,7 +962,7 @@ export function TenderDialog({
                                                 <p className="font-bold text-orange-900">Charge to Account requires a Customer</p>
                                                 <p className="text-sm text-orange-600/70">Please select a customer to proceed with charging.</p>
                                             </div>
-                                            <Button 
+                                            <Button
                                                 onClick={onTriggerCustomerSelection}
                                                 className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-8 shadow-lg shadow-orange-200"
                                             >
@@ -864,12 +972,12 @@ export function TenderDialog({
                                     ) : (
                                         <div className="space-y-3 bg-orange-50 p-4 rounded-xl border border-orange-200 animate-in fade-in slide-in-from-top-2 duration-300">
                                             <div className="flex justify-between items-center px-1">
-                                                <Label className="text-orange-900 font-bold text-base flex items-center gap-2">
+                                                <Label className="text-orange-900 font-bold text-sm flex items-center gap-2">
                                                     <Info className="h-4 w-4 text-orange-600" />
                                                     Account Details
                                                 </Label>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-2 gap-3">
                                                 <div className="bg-white p-3 rounded-lg border border-orange-100 shadow-sm">
                                                     <p className="text-[10px] text-orange-600 font-bold uppercase">Credit Limit</p>
                                                     <p className="text-lg font-black text-orange-900">₱{(customer as any).creditLimit?.toLocaleString() || '0.00'}</p>
@@ -885,98 +993,13 @@ export function TenderDialog({
                                             </p>
                                         </div>
                                     )}
-                                </div>
+                                </>
                             )}
-
-                            {/* Payment Summary Box */}
-                            <div className="space-y-4 pt-2">
-                                <div className="text-center p-6 bg-primary/5 rounded-2xl border-2 border-primary/10 mb-2">
-                                    <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Due</p>
-                                    <p className="text-5xl font-black text-primary">₱{totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    
-                                    {pointsToRedeemValue > 0 && (
-                                        <div className="mt-4 pt-4 border-t border-primary/10 text-sm space-y-2 animate-in fade-in duration-300">
-                                            <div className="flex justify-between items-center text-foreground font-black text-lg">
-                                                <span>Net Balance Due:</span>
-                                                <span>₱{balanceRemaining.toFixed(2)}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Amount Tendered Section - Always show for Points and Cash */}
-                            {(selectedMethod === 'CASH' || selectedMethod === 'POINTS' || (balanceRemaining > 0 && !isChargePayment)) && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="amountTendered" className="text-base font-bold">
-                                        {selectedMethod === 'POINTS' ? 'Cash Balance Tendered' : 'Amount Tendered'}
-                                    </Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="amountTendered"
-                                            ref={amountTenderedRef}
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={amountTendered}
-                                            onChange={(e) => {
-                                                const value = e.target.value;
-                                                if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                                                    setAmountTendered(value);
-                                                }
-                                            }}
-                                            placeholder="0.00"
-                                            className="h-14 text-3xl text-right font-black text-foreground [&:not(:placeholder-shown)]:text-foreground pr-4 border-2 focus-visible:ring-primary/30"
-                                            style={{ color: 'hsl(var(--foreground))' }}
-                                            autoFocus={selectedMethod !== 'POINTS'}
-                                            onFocus={(e) => e.target.select()}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    if (!isProcessing) {
-                                                        handleConfirmPayment();
-                                                    }
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                    {selectedMethod === 'POINTS' && balanceRemaining > 0 && (
-                                        <p className="text-xs text-right text-muted-foreground mt-1 font-medium italic">
-                                            Please enter the cash amount given by the customer for the remaining balance.
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-
-
-                            {/* Reference Input */}
-                            {isReferenceRequired && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="referenceInput" className="text-base text-red-600 font-bold">
-                                        Reference Number *
-                                    </Label>
-                                    <Input
-                                        id="referenceInput"
-                                        ref={referenceInputRef}
-                                        type="text"
-                                        value={referenceInput}
-                                        onChange={(e) => setReferenceInput(e.target.value)}
-                                        placeholder="Enter reference # (e.g. Check No., Trans ID)"
-                                        className="h-12 text-lg"
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                handleConfirmPayment();
-                                            }
-                                        }}
-                                    />
-                                </div>
-                            )}
-
 
                             {/* Added Payments List */}
                             {payments.length > 0 && (
-                                <div className="space-y-3 pt-4 border-t border-dashed border-gray-200">
-                                    <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Added Payments</Label>
+                                <div className="space-y-2 pt-1">
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Added Payments</Label>
                                     <div className="space-y-2">
                                         {payments.map(p => (
                                             <div key={p.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm animate-in fade-in slide-in-from-top-1">
@@ -984,8 +1007,8 @@ export function TenderDialog({
                                                     <span className="font-bold text-gray-900">{p.method}</span>
                                                     {p.reference && <span className="text-xs text-gray-500 font-medium">Ref: {p.reference}</span>}
                                                 </div>
-                                                <div className="flex items-center gap-4">
-                                                    <span className="font-black text-gray-900">₱{p.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="font-black text-gray-900 tabular-nums">₱{p.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                     <Button variant="ghost" size="sm" onClick={() => setPayments(payments.filter(x => x.id !== p.id))} className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2">
                                                         Remove
                                                     </Button>
@@ -996,48 +1019,50 @@ export function TenderDialog({
                                 </div>
                             )}
 
-                            {totalDue > 0 && selectedMethod === 'CASH' && (
-                                <div className="grid grid-cols-4 gap-2">
-                                    {getQuickAmounts(balanceRemaining || totalDue).map(amount => (
-                                        <Button key={amount} variant="outline" onClick={() => handleQuickAmount(amount)} className="h-10 font-bold">₱{amount}</Button>
-                                    ))}
-                                </div>
-                            )}
+                            {/* Add Split Payment */}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleAddPayment}
+                                disabled={amountTenderedNum <= 0 && !isChargePayment}
+                                className="w-full border-dashed font-bold text-muted-foreground hover:text-foreground"
+                            >
+                                + Add Split Payment
+                            </Button>
+                        </div>
 
-                            <div className="flex justify-end pt-2">
-                                <Button 
-                                    type="button" 
-                                    variant="secondary"
-                                    onClick={handleAddPayment}
-                                    disabled={amountTenderedNum <= 0 && !isChargePayment}
-                                    className="font-bold shadow-sm"
-                                >
-                                    + Add Split Payment
-                                </Button>
+                        {/* Sticky Footer with live Change / Balance */}
+                        <div className="border-t bg-background p-4 space-y-3">
+                            <div className="flex items-center justify-between px-1">
+                                <span className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                                    {change > 0 ? 'Change' : 'Balance Due'}
+                                </span>
+                                <span className={`text-2xl font-black tabular-nums ${change > 0 ? 'text-green-600' : 'text-foreground'}`}>
+                                    ₱{(change > 0 ? change : balanceRemaining).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
                             </div>
-
-                            <DialogFooter className="mt-6 sm:justify-between gap-4">
+                            <div className="grid grid-cols-[1fr_2fr] gap-3">
                                 <Button
                                     variant="outline"
                                     onClick={() => onOpenChange(false)}
                                     disabled={isProcessing || (selectedMethod === 'POINTS' && (customer as any)?.isExpired)}
-                                    className="w-full sm:w-auto text-muted-foreground hover:text-foreground"
+                                    className="h-12 font-bold text-muted-foreground hover:text-foreground"
                                     ref={cancelButtonRef}
                                 >
                                     Cancel
                                 </Button>
-                                <Button 
+                                <Button
                                     onClick={handleConfirmPayment}
                                     ref={confirmButtonRef}
                                     disabled={
-                                        isProcessing || 
-                                        (balanceRemaining > 0 && !amountTendered && !isChargePayment) || 
+                                        isProcessing ||
+                                        (balanceRemaining > 0 && !amountTendered && !isChargePayment) ||
                                         (payments.length === 0 && (selectedMethod === 'CASH' || selectedMethod === 'POINTS') && parseFloat(amountTendered) < balanceRemaining) ||
                                         (pointsToRedeemValue > (Number((customer as any)?.current_points || (customer as any)?.loyaltyPoints || 0) * pointsRate)) ||
                                         (payments.length === 0 && isReferenceRequired && !referenceInput.trim()) ||
                                         (isChargePayment && (!customer || (customer as any).id === 'walk-in'))
                                     }
-                                    className="w-full sm:w-auto min-w-[140px] font-bold text-lg h-12 shadow-md shadow-primary/20"
+                                    className="h-12 min-w-[140px] font-bold text-lg shadow-md shadow-primary/20"
                                 >
                                     {isProcessing ? (
                                         <>
@@ -1050,7 +1075,7 @@ export function TenderDialog({
                                         </>
                                     )}
                                 </Button>
-                            </DialogFooter>
+                            </div>
                         </div>
                     </>
                 )}
@@ -1058,7 +1083,7 @@ export function TenderDialog({
                 <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
                     {completedSale && <ReceiptView ref={receiptRef} saleDetails={completedSale} settings={settings} />}
                 </div>
-            </DialogContent>
-        </Dialog>
+            </SheetContent>
+        </Sheet>
     );
 };

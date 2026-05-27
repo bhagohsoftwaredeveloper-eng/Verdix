@@ -32,6 +32,9 @@ import {
   Percent,
   Tag,
   Pencil,
+  FilePenLine,
+  Banknote,
+  ArrowRight,
   ListOrdered,
   User,
   Star,
@@ -205,6 +208,15 @@ const initialItems: SaleItem[] = [];
 
 function CurrencyIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="M10 18v-4H6.816c-.422 0-.645-.24-.868-.617c-.223-.377-.28-.702-.28-1.383V7H4V5h4v4h3.184c.422 0 .645.24.868.617c-.223-.377-.28.702-.28 1.383v.831c0 .68-.057 1.006-.28 1.383c-.223.377-.446.617-.868.617H12v4zm2-6.831c0-.491.062-.83.184-1.018c.123-.188.31-.35.564-.515c.254-.166.52-.28.802-.344V7h2V5h-4v3.831c.491.062.83.184 1.018.366c.188.182.35.436.515.762c.166.326.28.675.344 1.047h2v2h-2c-.062.372-.184.72-.366 1.047c-.326-.182-.58-.436-.762-.762c-.182-.326-.304-.675-.366-1.047z" /></svg>
+}
+
+function CashTransferIcon({ className }: { className?: string }) {
+  return (
+    <span className={`relative inline-flex items-center justify-center ${className ?? ''}`}>
+      <Banknote className="h-full w-full" />
+      <ArrowRight className="absolute -bottom-1 -right-1 h-3 w-3 stroke-[3]" />
+    </span>
+  );
 }
 
 import { useProducts } from '@/hooks/use-api';
@@ -1648,27 +1660,27 @@ function POSPageContent() {
 
   // Header Actions
   const headerActions = [
-    { icon: Pencil, label: 'Edit Item', fKey: 'F1', action: handleOpenEditDialog, className: "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-100 hover:border-blue-200" },
-    { icon: X, label: 'Line Void', fKey: 'F2', action: handleCancelSale, className: "bg-red-50 text-red-700 hover:bg-red-100 border-red-100 hover:border-red-200" },
-    { icon: Percent, label: 'Discount', fKey: 'F3', action: handleOpenDiscountDialog, className: "bg-green-50 text-green-700 hover:bg-green-100 border-green-100 hover:border-green-200" },
-    { icon: Tag, label: 'Suspend', fKey: 'F4', action: handleHold, className: "bg-orange-50 text-orange-800 hover:bg-orange-100 border-orange-100 hover:border-orange-200" },
-    { icon: ListOrdered, label: 'Suspended', fKey: 'F5', action: () => setIsHeldTransOpen(true), className: "bg-orange-50 text-orange-800 hover:bg-orange-100 border-orange-100 hover:border-orange-200" },
-    { icon: Plus, label: 'Quantity', fKey: 'F6', action: handleOpenQuantityDialog, className: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100 hover:border-indigo-200" },
-    { icon: CurrencyIcon, label: 'Edit Price', fKey: 'F7', action: handleRequestPriceEdit, className: "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-100 hover:border-purple-200" },
-    { icon: Power, label: shiftActive ? 'Endorse/Out' : 'Shutdown', fKey: 'F8', action: handleShutdown, className: "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-100 hover:border-slate-200" },
+    { icon: Pencil, label: 'Edit Item', fKey: 'F1', action: handleOpenEditDialog, tint: 'text-blue-600' },
+    { icon: X, label: 'Line Void', fKey: 'F2', action: handleCancelSale, tint: 'text-rose-600' },
+    { icon: Percent, label: 'Discount', fKey: 'F3', action: handleOpenDiscountDialog, tint: 'text-emerald-600' },
+    { icon: Tag, label: 'Suspend', fKey: 'F4', action: handleHold, tint: 'text-orange-600' },
+    { icon: ListOrdered, label: 'Suspended', fKey: 'F5', action: () => setIsHeldTransOpen(true), tint: 'text-amber-600' },
+    { icon: Plus, label: 'Quantity', fKey: 'F6', action: handleOpenQuantityDialog, tint: 'text-indigo-600' },
+    { icon: FilePenLine, label: 'Edit Price', fKey: 'F7', action: handleRequestPriceEdit, tint: 'text-purple-600' },
+    { icon: Power, label: shiftActive ? 'Endorse/Out' : 'Shutdown', fKey: 'F8', action: handleShutdown, tint: 'text-slate-600' },
   ];
 
   const footerActions = [
-    { icon: Printer, label: 'Cash count', shortcut: 'Ctrl+1', action: handleOpenEndShift },
-    { icon: CurrencyIcon, label: 'Cash transfer', shortcut: 'Ctrl+2', action: () => setIsCashTransferOpen(true) },
-    { icon: User, label: 'Customer', shortcut: 'Ctrl+3', action: () => setIsCustomerSelectOpen(true) },
-    { icon: Star, label: 'Loyalty', shortcut: 'Ctrl+4', action: handleOpenLoyalty },
-    { icon: Clock, label: 'Recent Sales', shortcut: 'Ctrl+5', action: () => setIsRecentSalesOpen(true) },
-    { icon: Ban, label: 'Post Void', shortcut: 'Ctrl+6', action: () => setIsVoidSalesOpen(true) },
-    { icon: Undo, label: 'Merch Credit', shortcut: 'Ctrl+7', action: () => setIsReturnSalesOpen(true) },
-    { icon: Files, label: 'OVERALL', shortcut: 'Ctrl+8', action: handleOpenOverallReading },
-    { icon: BookOpen, label: 'Z-READING', shortcut: 'Ctrl+0', action: () => setIsZReadingOpen(true) },
-    { icon: Search, label: 'Price Inquiry', shortcut: 'Ctrl+P', action: () => setIsPriceInquiryOpen(true) },
+    { icon: Printer, label: 'Cash count', shortcut: 'Ctrl+1', action: handleOpenEndShift, tint: 'text-emerald-600' },
+    { icon: CashTransferIcon, label: 'Cash transfer', shortcut: 'Ctrl+2', action: () => setIsCashTransferOpen(true), tint: 'text-emerald-600' },
+    { icon: User, label: 'Customer', shortcut: 'Ctrl+3', action: () => setIsCustomerSelectOpen(true), tint: 'text-sky-600' },
+    { icon: Star, label: 'Loyalty', shortcut: 'Ctrl+4', action: handleOpenLoyalty, tint: 'text-sky-600' },
+    { icon: Clock, label: 'Recent Sales', shortcut: 'Ctrl+5', action: () => setIsRecentSalesOpen(true), tint: 'text-amber-600' },
+    { icon: Ban, label: 'Post Void', shortcut: 'Ctrl+6', action: () => setIsVoidSalesOpen(true), tint: 'text-rose-600' },
+    { icon: Undo, label: 'Merch Credit', shortcut: 'Ctrl+7', action: () => setIsReturnSalesOpen(true), tint: 'text-amber-600' },
+    { icon: Files, label: 'OVERALL', shortcut: 'Ctrl+8', action: handleOpenOverallReading, tint: 'text-purple-600' },
+    { icon: BookOpen, label: 'Z-READING', shortcut: 'Ctrl+0', action: () => setIsZReadingOpen(true), tint: 'text-purple-600' },
+    { icon: Search, label: 'Price Inquiry', shortcut: 'Ctrl+P', action: () => setIsPriceInquiryOpen(true), tint: 'text-fuchsia-600' },
   ];
 
   const paymentOptions = [
@@ -1678,11 +1690,6 @@ function POSPageContent() {
     { label: 'GIFT CHECK', value: 'GIFT_CHECK' },
     { label: 'POINTS', value: 'POINTS' },
   ];
-
-  const matteGreenButtons = ['Cash count', 'Cash transfer'];
-  const matteBlueButtons = ['Customer', 'Loyalty'];
-  const matteYellowButtons = ['Recent Sales', 'Post Void', 'Merch Credit'];
-  const mattePurpleButtons = ['Z-READING', 'Price Inquiry'];
 
 
 
@@ -1714,19 +1721,19 @@ function POSPageContent() {
           {/* Header Bar */}
           <header className="h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center px-4 gap-4 justify-between shrink-0 z-10">
              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mask-gradient-x flex-1">
-                {headerActions.map(({ icon: Icon, label, fKey, action, className }) => (
-                  <Button 
-                    key={label} 
-                    variant="ghost" 
+                {headerActions.map(({ icon: Icon, label, fKey, action, tint }) => (
+                  <Button
+                    key={label}
+                    variant="ghost"
                     size="sm"
-                    className={`relative flex flex-col gap-0.5 h-12 min-w-[4.5rem] px-2 transition-all font-normal border ${className}`} 
+                    className="group relative flex h-[3.25rem] min-w-[4.75rem] flex-col items-center justify-center gap-1 rounded-xl border border-border/60 bg-background px-2 font-normal shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/50 hover:shadow-md"
                     onClick={action}
                   >
-                    <Icon className="w-4 h-4 mb-0.5" />
-                    <span className="text-[10px] leading-none font-medium text-center">{label}</span>
-                    <span className="text-[9px] text-black leading-none font-mono opacity-100">{fKey}</span>
+                    <Icon className={`h-4 w-4 transition-transform group-hover:scale-110 ${tint}`} />
+                    <span className="text-[10px] leading-none font-medium text-center text-foreground">{label}</span>
+                    <kbd className="rounded bg-muted px-1 py-px text-[8px] font-mono font-semibold leading-none text-muted-foreground">{fKey}</kbd>
                     {label === 'Suspended' && heldTransactions.length > 0 && (
-                      <span className="absolute top-1 right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-white/50">
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-sm ring-2 ring-background">
                         {heldTransactions.length}
                       </span>
                     )}
@@ -1905,24 +1912,17 @@ function POSPageContent() {
              </div>
              
              {/* Footer Actions */}
-            <div className="grid grid-cols-9 gap-2 shrink-0 h-16">
-                {footerActions.map(({ icon: Icon, label, shortcut, action }) => (
+            <div className="grid grid-cols-10 gap-2 shrink-0">
+                {footerActions.map(({ icon: Icon, label, shortcut, action, tint }) => (
                     <Button
                         key={label}
-                        variant="secondary"
+                        variant="ghost"
                         onClick={action}
-                        className={`
-                            flex flex-col items-center justify-center gap-1 h-full text-xs font-medium border transition-all hover:-translate-y-0.5
-                            ${matteGreenButtons.includes(label) ? 'bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200' : ''}
-                            ${matteBlueButtons.includes(label) ? 'bg-sky-100 text-sky-800 border-sky-200 hover:bg-sky-200' : ''}
-                            ${matteYellowButtons.includes(label) ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200' : ''}
-                            ${mattePurpleButtons.includes(label) ? 'bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200' : ''}
-                            ${!matteGreenButtons.includes(label) && !matteBlueButtons.includes(label) && !matteYellowButtons.includes(label) && !mattePurpleButtons.includes(label) ? 'bg-background hover:bg-muted' : ''}
-                        `}
+                        className="group flex h-16 flex-col items-center justify-center gap-1 rounded-xl border border-border/60 bg-background px-1 text-xs font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/50 hover:shadow-md"
                     >
-                        <Icon className="w-5 h-5 opacity-80" />
-                        <span className="leading-tight text-center px-1">{label}</span>
-                        {shortcut && <span className="text-[9px] text-black font-mono">{shortcut}</span>}
+                        <Icon className={`h-5 w-5 transition-transform group-hover:scale-110 ${tint}`} />
+                        <span className="leading-tight text-center text-[11px] text-foreground">{label}</span>
+                        {shortcut && <kbd className="rounded bg-muted px-1 py-px text-[8px] font-mono font-semibold leading-none text-muted-foreground">{shortcut}</kbd>}
                     </Button>
                 ))}
             </div>
@@ -1932,110 +1932,103 @@ function POSPageContent() {
 
         {/* Right Section: Totals & Payments */}
         <div className="w-96 bg-background border-l shadow-2xl z-20 flex flex-col h-full">
-            {/* Cashier Profile */}
-            <div className="border-b flex flex-col items-center bg-muted/10">
-                 <div className="bg-primary text-white py-8 w-full flex items-center justify-center mb-6 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)]">
-                     <span className="text-4xl uppercase font-black leading-none tracking-widest text-center drop-shadow-lg">{businessSettings?.businessName || 'verdix'}</span>
-                 </div>
-                 <div className="text-center px-6 pb-6">
-                    <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>
-                    <p className="text-xs text-muted-foreground mt-1 font-mono">{currentTerminalName}</p>
-                 </div>
-            </div>
-
-            {/* Big Total */}
-            <div className="flex-1 flex flex-col p-6 gap-6 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
-                
-                <div className="space-y-2 text-center z-10">
-                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Total Amount Due</span>
-                    <div className="flex items-start justify-center text-7xl font-bold tracking-tighter text-primary">
-                        <span className="text-2xl mt-2 mr-1">₱</span>
-                        {totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </div>
-                    {/* Detailed Breakdown Card */}
-                    <Card className="mx-4 mt-12 bg-background border shadow-[4px_4px_0px_0px_rgba(0,0,0,0.05)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.05)]">
-                        <CardContent className="p-4">
-                            <div className="grid grid-cols-1 gap-y-2 text-sm text-muted-foreground">
-                                <div className="flex justify-between">
-                                    <span>Sub total:</span>
-                                    <span className="font-mono">{subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Vat Sales:</span>
-                                    <span className="font-mono">{vatSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Sub discount:</span>
-                                    {/* Placeholder logic for discount sum if needed, typically difference between gross and net if not per item stored */}
-                                    <span className="font-mono">{(items.reduce((acc, item) => acc + item.price * item.quantity, 0) - totalDue).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Vat amount:</span>
-                                    <span className="font-mono">{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                 </div>
-                                 <div className="flex justify-between font-bold text-foreground">
-                                    <span>Amount due:</span>
-                                    <span className="font-mono text-primary">{totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Non-vat sales:</span>
-                                    <span className="font-mono">{taxDetails.nonVatSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                                 <div className="flex justify-between">
-                                     {/* Divider / Spacer */}
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>No of Items:</span>
-                                    <span className="font-mono">{numberOfItems}</span>
-                                </div>
-                                
-                                 <div className="flex justify-between">
-                                    <span>Vat-Exempt sales:</span>
-                                    <span className="font-mono">{taxDetails.vatExemptSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                                 <div className="flex justify-between">
-                                     <span>Zero-Rated Sales:</span>
-                                     <span className="font-mono">{taxDetails.zeroRatedSales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    {businessSettings?.logoPath && (
-                        <div className="flex justify-center mt-4">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img 
-                                src={businessSettings.logoPath} 
-                                alt="Business Logo" 
-                                className="w-24 h-24 object-contain"
-                            />
+            {/* Branded Header + Cashier */}
+            <div className="bg-gradient-to-br from-primary to-primary/85 text-white px-5 py-4 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)]">
+                <div className="flex items-center gap-3">
+                    {businessSettings?.logoPath ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                            src={businessSettings.logoPath}
+                            alt="Business Logo"
+                            className="w-11 h-11 rounded-lg object-contain bg-white/15 p-1 shrink-0"
+                        />
+                    ) : (
+                        <div className="w-11 h-11 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                            <ShoppingCart className="w-6 h-6" />
                         </div>
                     )}
+                    <div className="min-w-0">
+                        <p className="text-xl font-black uppercase tracking-wide leading-none truncate drop-shadow-sm">{businessSettings?.businessName || 'Verdix'}</p>
+                        <p className="text-[11px] text-white/70 mt-1 font-mono truncate">{currentTerminalName}</p>
+                    </div>
+                </div>
+                <div className="mt-3 flex items-center gap-2.5 bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm">
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-[10px] uppercase tracking-wider text-white/60 leading-none">Cashier</p>
+                        <p className="font-bold text-sm leading-none mt-1 truncate">{currentUser?.displayName || 'Cashier Terminal'}</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Total Amount Due hero */}
+            <div className="px-6 py-6 text-center border-b bg-muted/20 relative overflow-hidden">
+                <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+                <span className="relative text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Amount Due</span>
+                <div className="relative flex items-start justify-center mt-1.5">
+                    <span className="text-3xl font-bold text-primary mt-2 mr-1">₱</span>
+                    <span className="text-6xl font-black tracking-tighter text-primary tabular-nums leading-none">
+                        {totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </span>
+                </div>
+                <p className="relative text-xs text-muted-foreground mt-2 font-medium">
+                    {numberOfItems} {numberOfItems === 1 ? 'item' : 'items'} in cart
+                </p>
+            </div>
+
+            {/* Breakdown (scrollable) */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                {/* Summary */}
+                <div className="space-y-2.5">
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">No. of Items</span>
+                        <span className="font-mono font-semibold tabular-nums">{numberOfItems}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-mono font-semibold tabular-nums">₱{subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Discount</span>
+                        <span className="font-mono font-semibold tabular-nums text-rose-600">
+                            −₱{(items.reduce((acc, item) => acc + item.price * item.quantity, 0) - totalDue).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                    <div className="h-px bg-border" />
+                    <div className="flex justify-between items-center pt-0.5">
+                        <span className="text-sm font-bold uppercase tracking-wide text-foreground">Amount Due</span>
+                        <span className="font-mono font-black text-lg text-primary tabular-nums">₱{totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
                 </div>
 
-                <div className="flex-1 flex flex-col justify-center gap-3">
-                    
-                     {/* Individual Payment Buttons Removed as per request to move selection to dialog */}
-                     {/* <div className="grid grid-cols-2 gap-3">
-                        {paymentMethods.filter(m => m.isActive).map((method) => (
-                            <Button
-                                key={method.id}
-                                variant="outline"
-                                onClick={() => handleOpenTender(method.name)}
-                                disabled={items.length === 0}
-                                className="h-16 flex flex-col items-center justify-center gap-1 border-muted-foreground/20 hover:border-primary hover:bg-primary/5 transition-all text-muted-foreground hover:text-primary"
-                            >
-                                <span className="font-semibold">{method.name}</span>
-                            </Button>
+                {/* Tax Breakdown */}
+                <div className="space-y-2.5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tax Breakdown</p>
+                    <div className="grid grid-cols-2 gap-2">
+                        {[
+                            { label: 'VATable Sales', value: vatSales },
+                            { label: 'VAT Amount', value: vatAmount },
+                            { label: 'VAT-Exempt', value: taxDetails.vatExemptSales },
+                            { label: 'Zero-Rated', value: taxDetails.zeroRatedSales },
+                            { label: 'Non-VAT Sales', value: taxDetails.nonVatSales },
+                        ].map((stat) => (
+                            <div key={stat.label} className="rounded-lg bg-muted/50 border border-border/50 px-3 py-2">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none">{stat.label}</p>
+                                <p className="font-mono font-semibold text-sm text-foreground tabular-nums mt-1">
+                                    ₱{stat.value.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
                         ))}
-                     </div> */}
+                    </div>
                 </div>
             </div>
 
             {/* Tender Button */}
-            <div className="p-6 bg-muted/10 border-t">
-                <Button 
-                    size="lg" 
+            <div className="p-5 bg-muted/10 border-t">
+                <Button
+                    size="lg"
                     className="w-full h-20 text-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-1 transition-all rounded-xl"
                     onClick={handleDefaultTender}
                     disabled={items.length === 0}

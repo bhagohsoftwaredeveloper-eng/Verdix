@@ -3,12 +3,12 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Printer, ArrowLeft, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -186,9 +186,9 @@ function ZReadingReportView({ onBack, printMode, terminalId, terminalName, initi
     if (isLoading) {
         return (
             <div className="flex flex-col h-full max-h-[85vh]">
-                <DialogHeader className="px-4 py-3 border-b flex-none">
-                    <DialogTitle>Z-READING REPORT</DialogTitle>
-                </DialogHeader>
+                <SheetHeader className="px-4 py-3 border-b flex-none text-left space-y-0">
+                    <SheetTitle>Z-READING REPORT</SheetTitle>
+                </SheetHeader>
                 <div className="flex flex-col items-center justify-center flex-1">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
                     <p className="text-muted-foreground">Generating Z-Reading Report...</p>
@@ -200,9 +200,9 @@ function ZReadingReportView({ onBack, printMode, terminalId, terminalName, initi
     if (!data) {
         return (
              <div className="flex flex-col h-full max-h-[85vh]">
-                <DialogHeader className="px-4 py-3 border-b flex-none">
-                    <DialogTitle>Z-READING REPORT</DialogTitle>
-                </DialogHeader>
+                <SheetHeader className="px-4 py-3 border-b flex-none text-left space-y-0">
+                    <SheetTitle>Z-READING REPORT</SheetTitle>
+                </SheetHeader>
                 <div className="flex flex-col items-center justify-center flex-1 p-6 text-center">
                     <p className="text-muted-foreground">No pending sales found for Z-Reading. All transactions might have been finalized already.</p>
                     <Button variant="outline" onClick={onBack} className="mt-4">
@@ -216,25 +216,18 @@ function ZReadingReportView({ onBack, printMode, terminalId, terminalName, initi
 
     return (
         <div className="flex flex-col h-full max-h-[85vh]">
-            <DialogHeader className="px-4 py-3 border-b flex-none flex flex-row items-center justify-between">
+            <SheetHeader className="px-4 py-3 border-b flex-none flex flex-row items-center justify-between space-y-0">
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8">
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
-                    <DialogTitle>Z-READING REPORT</DialogTitle>
+                    <SheetTitle>Z-READING REPORT</SheetTitle>
                 </div>
-                <div className="flex gap-2">
-                    {!isConnected && printMode !== 'browser' && (
-                        <Button variant="outline" size="sm" onClick={connect}>
-                            Connect Printer
-                        </Button>
-                    )}
-                    <Button size="sm" onClick={handlePrintAndFinalize} disabled={isPrinting}>
-                        {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
-                        Print Z-Reading
-                    </Button>
-                </div>
-            </DialogHeader>
+                <Button size="sm" onClick={handlePrintAndFinalize} disabled={isPrinting}>
+                    {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
+                    Print
+                </Button>
+            </SheetHeader>
 
             <div className="flex-1 overflow-auto p-4 bg-muted/20 flex justify-center">
                  <div className="max-w-[400px] w-full shadow-lg bg-white h-fit">
@@ -289,26 +282,26 @@ export function ZReadingDialog({
   };
 
   return (
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl p-0 overflow-hidden">
+      <Sheet open={isOpen} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="w-full sm:max-w-xl h-full p-0 gap-0 overflow-hidden flex flex-col [&>button]:hidden">
             {showReport ? (
                 <ZReadingReportView onBack={() => onOpenChange(false)} printMode={printMode} terminalId={terminalId} terminalName={terminalName} initialData={initialData} />
             ) : (
                 <div className="p-6">
-                    <DialogHeader>
-                        <DialogTitle>Z-Reading Authorization</DialogTitle>
-                        <DialogDescription>
+                    <SheetHeader className="text-left space-y-0.5">
+                        <SheetTitle>Z-Reading Authorization</SheetTitle>
+                        <SheetDescription>
                             Admin password is required to generate the final end-of-day report.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <AdminAuthDialog 
+                        </SheetDescription>
+                    </SheetHeader>
+                    <AdminAuthDialog
                         isOpen={isAuthDialogOpen}
                         onOpenChange={setIsAuthDialogOpen}
                         onSuccess={handleAdminAuthSuccess}
                     />
                 </div>
             )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
   );
 }

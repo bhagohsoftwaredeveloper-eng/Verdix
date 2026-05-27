@@ -3,14 +3,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import {
   Command,
   CommandDialog,
@@ -20,7 +19,6 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { Button } from '@/components/ui/button';
 import type { Product } from '@/lib/types';
 import { useProducts } from '@/hooks/use-api';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
@@ -98,16 +96,20 @@ export function ProductSearchDialog({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle>Search Product</DialogTitle>
-          <DialogDescription>
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetTrigger asChild>{children}</SheetTrigger>
+      <SheetContent
+        side="top"
+        className="h-[50vh] w-full flex flex-col p-0 gap-0"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        <SheetHeader className="px-6 py-4 border-b text-left space-y-0.5">
+          <SheetTitle>Search Product</SheetTitle>
+          <SheetDescription>
             Find a product by name or SKU and add it to the transaction.
-          </DialogDescription>
-        </DialogHeader>
-        <Command shouldFilter={false}>
+          </SheetDescription>
+        </SheetHeader>
+        <Command shouldFilter={false} className="flex-1 flex flex-col overflow-hidden rounded-none">
           <div className="relative">
             <CommandInput
               placeholder="Type a product name or Barcode..."
@@ -120,15 +122,15 @@ export function ProductSearchDialog({
               </div>
             )}
           </div>
-          <CommandList className="h-[400px] overflow-y-auto">
+          <CommandList className="flex-1 max-h-none overflow-y-auto">
             {error && <div className="p-4 text-center text-destructive">{error}</div>}
-            
+
             {displayedProducts.length === 0 && !loading && !error && (
-              <CommandEmpty className="flex h-[400px] items-center justify-center text-muted-foreground">
+              <CommandEmpty className="flex h-32 items-center justify-center text-muted-foreground">
                 No products found.
               </CommandEmpty>
             )}
-            
+
             <CommandGroup className={loading ? "opacity-50 transition-opacity" : "transition-opacity"}>
               {displayedProducts.map((product) => (
                 <CommandItem
@@ -160,12 +162,7 @@ export function ProductSearchDialog({
             </CommandGroup>
           </CommandList>
         </Command>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

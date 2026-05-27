@@ -1,12 +1,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Printer, Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -155,28 +155,23 @@ export function XReadingDialog({
   };
 
   return (
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+      <Sheet open={isOpen} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="w-full sm:max-w-xl h-full overflow-hidden flex flex-col p-0 gap-0 [&>button]:hidden">
             {showReport ? (
                 <>
-                <DialogHeader className="px-4 py-3 border-b flex-none flex flex-row items-center justify-between">
+                <SheetHeader className="px-4 py-3 border-b flex-none flex flex-row items-center justify-between space-y-0">
                     <div className="flex items-center gap-2">
                         <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-8 w-8">
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
-                        <DialogTitle>X-READING REPORT</DialogTitle>
+                        <SheetTitle>X-READING REPORT</SheetTitle>
                     </div>
-                    <DialogDescription className="hidden">Report Details</DialogDescription>
-                    <div className="flex gap-2">
-                         {!isConnected && (
-                             <Button variant="outline" size="sm" onClick={connect}>Connect Printer</Button>
-                         )}
-                         <Button size="sm" onClick={handlePrint} disabled={loading || isPrinting || !reportData}>
-                             {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
-                             Print
-                         </Button>
-                    </div>
-                </DialogHeader>
+                    <SheetDescription className="hidden">Report Details</SheetDescription>
+                    <Button size="sm" onClick={handlePrint} disabled={loading || isPrinting || !reportData}>
+                        {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
+                        Print
+                    </Button>
+                </SheetHeader>
 
                 <div className="flex-1 overflow-auto bg-muted/20 p-4 flex justify-center">
                      {loading ? (
@@ -201,10 +196,10 @@ export function XReadingDialog({
                 </>
             ) : (
                 <div className="p-6">
-                    <DialogHeader>
-                        <DialogTitle>X-Reading Authorization</DialogTitle>
-                         <DialogDescription>Admin password is required to generate the report preview.</DialogDescription>
-                    </DialogHeader>
+                    <SheetHeader className="text-left space-y-0.5">
+                        <SheetTitle>X-Reading Authorization</SheetTitle>
+                         <SheetDescription>Admin password is required to generate the report preview.</SheetDescription>
+                    </SheetHeader>
                     <AdminAuthDialog
                         isOpen={isAuthDialogOpen}
                         onOpenChange={setIsAuthDialogOpen}
@@ -212,7 +207,7 @@ export function XReadingDialog({
                     />
                 </div>
             )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
   );
 }

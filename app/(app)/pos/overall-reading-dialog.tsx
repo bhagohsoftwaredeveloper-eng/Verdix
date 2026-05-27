@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Printer, Loader2, X, RefreshCw } from 'lucide-react';
+import { Printer, Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { OverallReadingPreview, OverallReadingData } from '../sales/overall-reading/overall-reading-preview';
 import { getApiUrl } from '@/lib/api-config';
@@ -106,20 +105,20 @@ export function OverallReadingDialog({
   };
 
   return (
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
-            <DialogHeader className="px-4 py-3 border-b flex-none flex flex-row items-center justify-between">
-                <DialogTitle>OVERALL TERMINAL READING</DialogTitle>
-                <div className="flex gap-2 mr-6">
-                     <Button variant="ghost" size="icon" onClick={loadReportData} disabled={loading} className="h-8 w-8">
-                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                     </Button>
-                     <Button size="sm" onClick={handlePrint} disabled={loading || isPrinting || !reportData} className="bg-primary text-white">
-                         {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
-                         Print
-                     </Button>
+      <Sheet open={isOpen} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="w-full sm:max-w-xl h-full overflow-hidden flex flex-col p-0 gap-0 [&>button]:hidden">
+            <SheetHeader className="px-4 py-3 border-b flex-none flex flex-row items-center justify-between space-y-0">
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-8 w-8">
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <SheetTitle>OVERALL TERMINAL READING</SheetTitle>
                 </div>
-            </DialogHeader>
+                <Button size="sm" onClick={handlePrint} disabled={loading || isPrinting || !reportData}>
+                    {isPrinting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
+                    Print
+                </Button>
+            </SheetHeader>
 
             <div className="flex-1 overflow-auto bg-muted/20 p-4 flex justify-center">
                  {loading ? (
@@ -141,11 +140,7 @@ export function OverallReadingDialog({
                     </div>
                 )}
             </div>
-            
-            <div className="p-3 border-t bg-background flex justify-end">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-            </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
   );
 }

@@ -2,17 +2,16 @@
 
 import { useState, useMemo, useEffect, memo } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Banknote, Coins, CheckCircle2, AlertTriangle, Calculator, FileText, ArrowRight } from 'lucide-react';
@@ -63,29 +62,27 @@ const DenominationInput = memo(({
     ? denom.value.toString() 
     : denom.value.toFixed(2).substring(1); // .25, .05, etc.
 
+  const hasCount = (count || 0) > 0;
+
   return (
-    <div className="flex items-center gap-4 p-2 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
-      <div className={`w-12 h-10 rounded flex items-center justify-center font-bold text-xs ${color} border`}>
+    <div className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-2 shadow-sm transition-all hover:shadow ${hasCount ? 'border-slate-300 ring-1 ring-slate-100' : 'border-slate-200'}`}>
+      <div className={`flex h-9 min-w-[3.5rem] items-center justify-center rounded-lg border font-bold text-sm tabular-nums ${color}`}>
         {displayBadge}
       </div>
-      <div className="flex-1 min-w-0">
-        <Label htmlFor={`denom-${denom.value}`} className="text-sm font-semibold truncate block">
-          {denom.label}
-        </Label>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground text-xs uppercase font-bold">Qty</span>
-        <Input
-          id={`denom-${denom.value}`}
-          type="number"
-          placeholder="0"
-          value={count || ''}
-          onChange={(e) => onCountChange(denom.value, e.target.value)}
-          className="w-20 h-9 text-right font-mono"
-          autoFocus={denom.value === 1000}
-        />
-      </div>
-      <div className="w-28 text-right font-mono text-sm font-bold text-slate-700">
+      <Label htmlFor={`denom-${denom.value}`} className="flex-1 min-w-0 truncate text-sm font-medium text-slate-500">
+        {denom.label}
+      </Label>
+      <span className="text-slate-300 font-mono text-sm">×</span>
+      <Input
+        id={`denom-${denom.value}`}
+        type="number"
+        placeholder="0"
+        value={count || ''}
+        onChange={(e) => onCountChange(denom.value, e.target.value)}
+        className="w-16 h-9 text-center font-mono font-semibold"
+        autoFocus={denom.value === 1000}
+      />
+      <div className={`w-24 text-right font-mono text-sm font-bold tabular-nums ${hasCount ? 'text-slate-800' : 'text-slate-300'}`}>
         ₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(subtotal)}
       </div>
     </div>
@@ -152,69 +149,81 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
   }, [isOpen, handleEndShift]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl">
-        <DialogHeader>
-          <DialogTitle>End Current Shift</DialogTitle>
-          <DialogDescription>
-            Count the cash in your drawer and confirm the totals to end your shift.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid md:grid-cols-2 gap-8 mt-2">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 px-1">
-                <Calculator className="w-4 h-4 text-blue-500" />
-                <h3 className="font-bold text-slate-700">Denominations</h3>
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent side="top" className="h-screen w-full flex flex-col p-0 gap-0">
+        <SheetHeader className="px-6 py-4 border-b text-left space-y-0">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Calculator className="h-5 w-5" />
+            </div>
+            <div className="space-y-0.5">
+              <SheetTitle className="text-lg font-bold">End Current Shift</SheetTitle>
+              <SheetDescription>
+                Count the cash in your drawer and confirm the totals to end your shift.
+              </SheetDescription>
+            </div>
+          </div>
+        </SheetHeader>
+        <div className="flex-1 min-h-0 overflow-hidden px-6 py-5 grid lg:grid-cols-5 gap-6">
+            {/* Cash Drawer Count */}
+            <div className="lg:col-span-3 flex flex-col min-h-0 space-y-3">
+              <div className="flex items-center justify-between px-1 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-primary" />
+                  <h3 className="font-bold text-slate-700">Cash Drawer Count</h3>
+                </div>
+                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold font-mono text-white tabular-nums shadow-sm">
+                  ₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(countedCash)}
+                </span>
               </div>
-              <ScrollArea className="h-[450px] pr-4 border rounded-xl bg-white shadow-sm">
-                <div className="p-4 space-y-6">
+              <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border bg-slate-50/60 p-4 space-y-5">
                   <section className="space-y-2">
-                    <div className="flex items-center gap-2 mb-3 text-sm font-bold text-slate-400 uppercase tracking-tighter px-1">
-                      <Banknote className="w-4 h-4 text-emerald-500" />
+                    <div className="flex items-center gap-2 mb-1 text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                      <Banknote className="w-3.5 h-3.5 text-emerald-500" />
                       Bills
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {billDenominations.map(denom => (
-                        <DenominationInput 
-                          key={denom.value} 
-                          denom={denom} 
-                          color="bg-emerald-50 text-emerald-700 border-emerald-100" 
+                        <DenominationInput
+                          key={denom.value}
+                          denom={denom}
+                          color="bg-emerald-50 text-emerald-700 border-emerald-100"
                           count={counts[denom.value]}
                           onCountChange={handleCountChange}
                         />
                       ))}
                     </div>
                   </section>
-                  
+
                   <Separator />
-                  
+
                   <section className="space-y-2">
-                    <div className="flex items-center gap-2 mb-3 text-sm font-bold text-slate-400 uppercase tracking-tighter px-1">
-                      <Coins className="w-4 h-4 text-amber-500" />
+                    <div className="flex items-center gap-2 mb-1 text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                      <Coins className="w-3.5 h-3.5 text-amber-500" />
                       Coins
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {coinDenominations.map(denom => (
-                        <DenominationInput 
-                          key={denom.value} 
-                          denom={denom} 
-                          color="bg-amber-50 text-amber-700 border-amber-100" 
+                        <DenominationInput
+                          key={denom.value}
+                          denom={denom}
+                          color="bg-amber-50 text-amber-700 border-amber-100"
                           count={counts[denom.value]}
                           onCountChange={handleCountChange}
                         />
                       ))}
                     </div>
                   </section>
-                </div>
-              </ScrollArea>
+              </div>
             </div>
 
-            <div className="space-y-6">
+            {/* Shift Settlement */}
+            <div className="lg:col-span-2 flex flex-col min-h-0 overflow-y-auto space-y-4">
                 <div className="flex items-center gap-2 px-1">
-                  <FileText className="w-4 h-4 text-blue-500" />
-                  <h3 className="font-bold text-slate-700 text-lg">Shift Settlement Report</h3>
+                  <FileText className="w-4 h-4 text-primary" />
+                  <h3 className="font-bold text-slate-700 text-lg">Shift Settlement</h3>
                 </div>
-                
+
                 <div className="space-y-0 relative overflow-hidden rounded-2xl border shadow-sm bg-white pt-2">
                     <div className="px-6 py-4 space-y-4">
                         <div className="flex justify-between items-center group">
@@ -292,7 +301,7 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
                 </div>
             </div>
         </div>
-        <DialogFooter>
+        <SheetFooter className="px-6 py-4 border-t bg-background gap-2 sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             type="button"
@@ -301,8 +310,8 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
           >
             Confirm and End Shift
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
