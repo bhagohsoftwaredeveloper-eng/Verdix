@@ -1983,10 +1983,6 @@ function POSPageContent() {
                 {/* Summary */}
                 <div className="space-y-2.5">
                     <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">No. of Items</span>
-                        <span className="font-mono font-semibold tabular-nums">{numberOfItems}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Subtotal</span>
                         <span className="font-mono font-semibold tabular-nums">₱{subTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                     </div>
