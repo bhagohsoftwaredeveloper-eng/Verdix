@@ -130,7 +130,7 @@ function SalesOrderPrintView({ order, onBack }: { order: Sale; onBack: () => voi
           </div>
           <div className="flex items-center gap-2">
             <Logo className="size-7 text-primary" />
-            <h1 className="text-xl font-semibold font-headline text-primary">StockPilot</h1>
+            <h1 className="text-xl font-semibold font-headline text-primary">verdix</h1>
           </div>
         </div>
         <div className="flex justify-between text-sm text-muted-foreground pt-4">

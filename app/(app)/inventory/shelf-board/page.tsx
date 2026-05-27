@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import ShelfBoard from './ShelfBoard';
 
 export const metadata: Metadata = {
-  title: 'Shelf Transfer Board | StockPilot',
+  title: 'Shelf Transfer Board | verdix',
   description: 'Manage and transfer product shelf locations using a Kanban-style board.',
 };
 

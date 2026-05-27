@@ -179,7 +179,7 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
             </head>
             <body>
             <div class="header">
-                <div class="business-name">${settings?.businessName || 'StockPilot'}</div>
+                <div class="business-name">${settings?.businessName || 'verdix'}</div>
                 ${settings?.address ? `<div class="address">${settings.address}</div>` : ''}
                 ${settings?.contactNumber ? `<div class="address">${settings.contactNumber}</div>` : ''}
             </div>
@@ -320,7 +320,7 @@ function SalesInvoicePrintView({ order, title, settings, onBack }: { order: Sale
                             </div>
                         )}
                     </div>
-                    <h1 className="text-sm font-bold uppercase tracking-tight">{settings?.businessName || 'STOCKPILOT'}</h1>
+                    <h1 className="text-sm font-bold uppercase tracking-tight">{settings?.businessName || 'verdix'}</h1>
                     <p className="text-[9px] leading-tight text-slate-500 max-w-[150px]">{settings?.address}</p>
                 </div>
 

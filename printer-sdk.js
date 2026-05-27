@@ -234,7 +234,7 @@ function printData(bufferData) {
 
     // Define RAW document to bypass Windows GDI graphics processing
     const docInfo = {
-      pDocName: "StockPilot POS Receipt",
+      pDocName: "verdix POS Receipt",
       pOutputFile: null,
       pDatatype: "RAW"
     };

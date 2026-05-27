@@ -5,7 +5,7 @@ async function checkTable() {
         host: 'localhost',
         user: 'root',
         password: 'rootpassword',
-        database: 'stock_pilot'
+        database: 'verdix'
     });
 
     const [rows] = await connection.query('DESCRIBE purchase_order_items');

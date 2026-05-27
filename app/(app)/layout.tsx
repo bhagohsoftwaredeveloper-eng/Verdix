@@ -138,7 +138,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<{ email: string, permissions?: string[], userType?: string } | null>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);
-  const [businessName, setBusinessName] = useState<string>('Stockpilot');
+  const [businessName, setBusinessName] = useState<string>('verdix');
 
   const isPOSPage = pathname === '/pos' || pathname === '/pos/customer-display';
 

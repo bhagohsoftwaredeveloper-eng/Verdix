@@ -10,7 +10,7 @@ async function verifyOfflineSync() {
       port: 3306,
       user: 'root',
       password: 'rootpassword', // From run_migration.js
-      database: 'stock_pilot'
+      database: 'verdix'
     });
     
     console.log('Connected to MySQL.');

@@ -1,4 +1,4 @@
-# Stock Pilot — API Routes Reference
+# verdix — API Routes Reference
 
 > **Base URL:** `/api`  
 > All routes are Next.js App Router handlers located in `app/api/`.

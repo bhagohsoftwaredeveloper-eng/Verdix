@@ -82,7 +82,7 @@ export const printApproval = (data: ApprovalItem) => {
     <div class="document-container">
       <div class="doc-header">
         <div class="company-info">
-          <h1 class="company-title">STOCK PILOT</h1>
+          <h1 class="company-title">verdix</h1>
         </div>
         <div class="report-title">
           <h2 class="doc-type">TRANSACTION AUTHORIZATION</h2>
@@ -351,7 +351,7 @@ export const printApproval = (data: ApprovalItem) => {
     </div>
 
     <div class="footer">
-      OFFICIAL DOCUMENT - STOCK PILOT ERP SYSTEM - REF: ${data.id}<br>
+      OFFICIAL DOCUMENT - verdix ERP SYSTEM - REF: ${data.id}<br>
       Printed: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')} (EST)
     </div>
   `);

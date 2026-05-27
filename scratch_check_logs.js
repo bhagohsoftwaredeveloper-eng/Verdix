@@ -5,12 +5,12 @@ async function main() {
     host: '127.0.0.1',
     user: 'root',
     password: 'rootpassword',
-    database: 'stock_pilot'
+    database: 'verdix'
   });
 
   // Update pending logs to use the new endpoint
   const [updateResult] = await connection.query(
-    "UPDATE external_api_logs SET endpoint = 'https://stockpilot-production-52df.up.railway.app/api/sync/push' WHERE status = 'pending'"
+    "UPDATE external_api_logs SET endpoint = 'https://verdix-production-52df.up.railway.app/api/sync/push' WHERE status = 'pending'"
   );
   console.log('Update Result:', updateResult);
 

@@ -1,4 +1,4 @@
-# StockPilot API Endpoints
+# verdix API Endpoints
 
 All endpoints are prefixed with `/api`. The base URL in development is `http://localhost:3000`.  
 All responses return `{ success: boolean, data?: any, error?: string }`.

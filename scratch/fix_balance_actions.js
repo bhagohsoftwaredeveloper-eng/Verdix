@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = "d:\\BHAGOH PROJECT\\Stock_Pilot\\app\\(app)\\suppliers\\balance\\page.tsx";
+const path = "d:\\BHAGOH PROJECT\\verdix\\app\\(app)\\suppliers\\balance\\page.tsx";
 let content = fs.readFileSync(path, 'utf8');
 
 const target = `                            <DropdownMenuLabel>Actions</DropdownMenuLabel>

@@ -24,8 +24,8 @@ export function Logo({ className, enableLink = true, variant = 'default', size, 
       className
     )}>
       <Image 
-        src="/ljma_logo.png"
-        alt="LJMA"
+        src="/verdix_logo.png"
+        alt="verdix"
         width={currentSize} 
         height={isIcon ? currentSize : 80} 
         className={cn("object-contain", isIcon ? "p-0.5" : "p-1")}

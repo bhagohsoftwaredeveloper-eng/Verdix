@@ -305,7 +305,7 @@ export default function InventoryReportPage() {
               </div>
               <div className="text-right">
                   <p>Page 1 of 1</p>
-                  <p className="mt-1 font-bold text-primary/40">Powered by Stock Pilot</p>
+                  <p className="mt-1 font-bold text-primary/40">Powered by verdix</p>
               </div>
           </div>
       </div>

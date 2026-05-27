@@ -116,7 +116,7 @@ export class ReceiptGenerator {
         // ─── HEADER (centered) ───────────────────────────────────────────
 
 
-        const bizName = settings?.businessName?.trim() || 'STOCK PILOT';
+        const bizName = settings?.businessName?.trim() || 'verdix';
         const address = settings?.address?.trim() || 'General Merchandise';
         const minNumber = sale.terminalMin || settings?.minNumber || '1234567890';
         const serialNumber = sale.terminalSerialNumber || settings?.serialNumber || '0987654321-11';
@@ -286,7 +286,7 @@ export class ReceiptGenerator {
         // Matches: text-center mt-6
         enc.newline();
         enc.align('center');
-        enc.line('Shop smart, save more! Thank you for visiting LJMA Supermarket.');
+        enc.line('Shop smart, save more! Thank you for visiting verdix.');
         if (sale.isTrainingMode) {
             enc.newline();
             enc.line('THIS IS NOT A CASH SALE/');
@@ -334,7 +334,7 @@ export class ReceiptGenerator {
 
         const paymentDate = new Date(payment.date);
         const dateStr = format(paymentDate, 'PP p');
-        const bizName = settings?.businessName?.trim() || 'STOCK PILOT';
+        const bizName = settings?.businessName?.trim() || 'verdix';
         const address = settings?.address?.trim() || 'General Merchandise';
         const minNumber = settings?.minNumber || '';
         const serialNumber = settings?.serialNumber || '';

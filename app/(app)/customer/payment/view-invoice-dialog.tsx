@@ -138,7 +138,7 @@ export default function ViewInvoiceDialog({ invoiceId, children }: ViewInvoiceDi
         </div>
         <div class="brand-group">
            <!-- Placeholder for Logo if needed, using text for now -->
-          <h1 class="brand-text" style="color: #2563eb;">StockPilot</h1>
+          <h1 class="brand-text" style="color: #2563eb;">verdix</h1>
         </div>
       </div>
 

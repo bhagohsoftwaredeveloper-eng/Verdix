@@ -22,7 +22,7 @@ if (process.env.NODE_ENV === 'production') {
     port: parseInt(process.env.DB_PORT || '3306'),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'stock_pilot',
+    database: process.env.DB_NAME || 'verdix',
     waitForConnections: true,
     connectionLimit: 50, // Increased for production
     queueLimit: 0,
@@ -34,7 +34,7 @@ if (process.env.NODE_ENV === 'production') {
       port: parseInt(process.env.DB_PORT || '3306'),
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'stock_pilot',
+      database: process.env.DB_NAME || 'verdix',
       waitForConnections: true,
       connectionLimit: 20, // Moderate for development reloads
       queueLimit: 0,

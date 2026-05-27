@@ -3,13 +3,13 @@ import './globals.css';
 import ClientLayout from '../components/client-layout';
 
 export const metadata = {
-  title: 'LJMA SUPERMARKET',
+  title: 'verdix',
   description: 'Point of Sales + Inventory Management',
   icons: {
     icon: [
-      { url: '/ljma_logo.png' }
+      { url: '/verdix_logo.png' }
     ],
-    apple: '/ljma_logo.png',
+    apple: '/verdix_logo.png',
   },
 };
 

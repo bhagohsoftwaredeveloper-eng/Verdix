@@ -1935,7 +1935,7 @@ function POSPageContent() {
             {/* Cashier Profile */}
             <div className="border-b flex flex-col items-center bg-muted/10">
                  <div className="bg-primary text-white py-8 w-full flex items-center justify-center mb-6 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)]">
-                     <span className="text-4xl uppercase font-black leading-none tracking-widest text-center drop-shadow-lg">{businessSettings?.businessName || 'STOCK PILOT'}</span>
+                     <span className="text-4xl uppercase font-black leading-none tracking-widest text-center drop-shadow-lg">{businessSettings?.businessName || 'verdix'}</span>
                  </div>
                  <div className="text-center px-6 pb-6">
                     <h2 className="font-bold text-lg leading-none">{currentUser?.displayName || 'Cashier Terminal'}</h2>

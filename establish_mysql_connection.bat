@@ -1,5 +1,5 @@
 @echo off
-echo Establishing MySQL Connection for Stock Pilot
+echo Establishing MySQL Connection for verdix
 echo =============================================
 
 echo.
@@ -23,12 +23,12 @@ echo Please enter your MySQL root password when prompted.
 echo If you forgot your password, you'll need to reset it first.
 
 "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql" -u root -p -e "
-CREATE DATABASE IF NOT EXISTS stock_pilot;
-CREATE USER IF NOT EXISTS 'stockpilot'@'localhost' IDENTIFIED BY 'stock2025';
-GRANT ALL PRIVILEGES ON stock_pilot.* TO 'stockpilot'@'localhost';
+CREATE DATABASE IF NOT EXISTS verdix;
+CREATE USER IF NOT EXISTS 'verdix'@'localhost' IDENTIFIED BY 'stock2025';
+GRANT ALL PRIVILEGES ON verdix.* TO 'verdix'@'localhost';
 FLUSH PRIVILEGES;
 SHOW DATABASES;
-SELECT User, Host FROM mysql.user WHERE User = 'stockpilot';"
+SELECT User, Host FROM mysql.user WHERE User = 'verdix';"
 
 if %errorlevel% neq 0 (
     echo Failed to create user. Trying safe mode approach...
@@ -46,9 +46,9 @@ if %errorlevel% neq 0 (
     USE mysql;
     ALTER USER 'root'@'localhost' IDENTIFIED BY '';
     FLUSH PRIVILEGES;
-    CREATE DATABASE IF NOT EXISTS stock_pilot;
-    CREATE USER IF NOT EXISTS 'stockpilot'@'localhost' IDENTIFIED BY 'stock2025';
-    GRANT ALL PRIVILEGES ON stock_pilot.* TO 'stockpilot'@'localhost';
+    CREATE DATABASE IF NOT EXISTS verdix;
+    CREATE USER IF NOT EXISTS 'verdix'@'localhost' IDENTIFIED BY 'stock2025';
+    GRANT ALL PRIVILEGES ON verdix.* TO 'verdix'@'localhost';
     FLUSH PRIVILEGES;" 2>nul
 
     echo Stopping safe mode connections...

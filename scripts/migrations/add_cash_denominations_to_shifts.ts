@@ -10,7 +10,7 @@ const dbConfig = {
   host: 'localhost',
   user: 'root',
   password: 'rootpassword',
-  database: 'stock_pilot',
+  database: 'verdix',
 };
 
 async function migrate() {

@@ -6,7 +6,7 @@ async function checkData() {
     host: 'localhost',
     user: 'root',
     password: 'rootpassword',
-    database: 'stock_pilot'
+    database: 'verdix'
   });
 
   console.log('--- Stock Anomalies (String Concat check) ---');

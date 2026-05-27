@@ -27,7 +27,7 @@ export const CreditSlipView = forwardRef<HTMLDivElement, CreditSlipViewProps>(({
     return (
         <div ref={ref} className="printable-area bg-white text-black p-4 text-[10px] font-mono font-bold w-[58mm] mx-auto print:w-auto print:ml-1 print:mr-6 leading-tight">
             <div className="text-center mb-4">
-                <div className="font-bold text-lg mb-1">{settings?.businessName || 'STOCK PILOT'}</div>
+                <div className="font-bold text-lg mb-1">{settings?.businessName || 'verdix'}</div>
                 <div>{settings?.address || 'General Merchandise'}</div>
                 {settings?.contactNumber && <div>{settings.contactNumber}</div>}
                 {settings?.tin && <div>VAT REG TIN: {settings.tin}</div>}

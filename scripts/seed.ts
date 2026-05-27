@@ -11,10 +11,10 @@ import { query } from '../lib/mysql';
 async function createTables() {
   try {
     // Create database if it doesn't exist
-    await query('CREATE DATABASE IF NOT EXISTS stock_pilot');
+    await query('CREATE DATABASE IF NOT EXISTS verdix');
 
     // Use the database
-    await query('USE stock_pilot');
+    await query('USE verdix');
 
     // Create products table
     const createProductsTable = `

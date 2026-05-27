@@ -1,8 +1,8 @@
-# StockPilot — Architecture Reference
+# verdix — Architecture Reference
 
 ## Overview
 
-StockPilot is a **Next.js 16** web application that runs inside an **Electron 33** desktop shell. The web layer handles all UI and API logic; Electron provides the native windowing, printer access, and offline packaging.
+verdix is a **Next.js 16** web application that runs inside an **Electron 33** desktop shell. The web layer handles all UI and API logic; Electron provides the native windowing, printer access, and offline packaging.
 
 ---
 
@@ -32,7 +32,7 @@ StockPilot is a **Next.js 16** web application that runs inside an **Electron 33
 ## Directory Structure
 
 ```
-Stock_Pilot/
+verdix/
 ├── app/                        # Next.js App Router root
 │   ├── (app)/                  # Authenticated application shell
 │   │   ├── layout.tsx          # Sidebar, breadcrumbs, notif bell, auth guard
@@ -91,7 +91,7 @@ Stock_Pilot/
 │   ├── ui/                     # shadcn/ui primitives
 │   ├── approvals/              # Approval drawer & workflow settings drawer
 │   ├── app-breadcrumbs.tsx     # Auto-generated breadcrumbs
-│   ├── logo.tsx                # StockPilot logo component
+│   ├── logo.tsx                # verdix logo component
 │   └── window-controls.tsx     # Electron window min/max/close buttons
 ├── lib/                        # Server-side utilities & shared logic
 │   ├── mysql.ts                # Database connection pool
@@ -176,7 +176,7 @@ updateStock(productId, delta)
 
 ## Authentication
 
-StockPilot uses a **localStorage session** approach (suitable for a single-machine desktop app):
+verdix uses a **localStorage session** approach (suitable for a single-machine desktop app):
 
 1. On login, the server validates credentials and returns a user object.
 2. The client stores `mock-user-session` in `localStorage`.
@@ -190,13 +190,13 @@ StockPilot uses a **localStorage session** approach (suitable for a single-machi
 
 ## Database
 
-StockPilot uses **MySQL** (configured via `.env`):
+verdix uses **MySQL** (configured via `.env`):
 
 ```env
 MYSQL_HOST=localhost
-MYSQL_USER=stockpilot
+MYSQL_USER=verdix
 MYSQL_PASSWORD=<password>
-MYSQL_DATABASE=stockpilot_db
+MYSQL_DATABASE=verdix_db
 MYSQL_PORT=3306
 ```
 
@@ -229,8 +229,8 @@ Key tables:
 
 | Setting | Value |
 |---------|-------|
-| App ID | `com.stockpilot.pos` |
-| Product Name | Stock Pilot |
+| App ID | `com.verdix.pos` |
+| Product Name | verdix |
 | Target | Windows Portable (.exe) |
 | Main Entry | `main.js` |
 | Preload | `preload.js` |

@@ -1,4 +1,4 @@
-# MySQL Database Setup for Stock Pilot
+# MySQL Database Setup for verdix
 
 ## Prerequisites
 - MySQL Server installed and running (version 8.0+ recommended)
@@ -25,8 +25,8 @@ mysql -u root -p
 
 ### 4. Create Database User (Optional but recommended)
 ```sql
-CREATE USER 'stockpilot'@'localhost' IDENTIFIED BY 'your_password';
-GRANT ALL PRIVILEGES ON stock_pilot.* TO 'stockpilot'@'localhost';
+CREATE USER 'verdix'@'localhost' IDENTIFIED BY 'your_password';
+GRANT ALL PRIVILEGES ON verdix.* TO 'verdix'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -41,9 +41,9 @@ Update your `.env` file if you created a custom user:
 
 ```env
 DB_HOST=localhost
-DB_USER=stockpilot  # or 'root' if using root
+DB_USER=verdix  # or 'root' if using root
 DB_PASSWORD=your_password  # or '' for root with no password
-DB_NAME=stock_pilot
+DB_NAME=verdix
 ```
 
 ## Troubleshooting
@@ -67,8 +67,8 @@ If the seed script fails, you can create tables manually:
 
 ```sql
 -- Create database
-CREATE DATABASE stock_pilot;
-USE stock_pilot;
+CREATE DATABASE verdix;
+USE verdix;
 
 -- Create tables (see scripts/seed.ts for full schema)
 CREATE TABLE products (

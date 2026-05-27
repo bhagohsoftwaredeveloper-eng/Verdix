@@ -8,9 +8,9 @@ async function addSalesOrderFields() {
     connection = await mysql.createConnection({
       host: 'localhost',
       port: 3308,
-      user: 'stockpilot',
+      user: 'verdix',
       password: 'stock2025',
-      database: 'stock_pilot'
+      database: 'verdix'
     });
 
     console.log('Connected to database');

@@ -1,4 +1,4 @@
-# **App Name**: StockPilot
+# **App Name**: verdix
 
 ## Core Features:
 

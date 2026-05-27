@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { TransferBoard } from './TransferBoard';
 
 export const metadata: Metadata = {
-  title: 'Warehouse Transfer Board | StockPilot',
+  title: 'Warehouse Transfer Board | verdix',
   description: 'Manage and transfer products between warehouses.',
 };
 

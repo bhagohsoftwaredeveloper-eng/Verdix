@@ -8,7 +8,7 @@ async function checkUsersTable() {
       host: 'localhost',
       user: 'root',
       password: 'rootpassword',
-      database: 'stock_pilot'
+      database: 'verdix'
     });
 
     console.log('Connected to database');

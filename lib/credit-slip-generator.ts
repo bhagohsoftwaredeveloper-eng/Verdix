@@ -68,7 +68,7 @@ export class CreditSlipGenerator {
 
         const enc = this.encoder.initialize().codepage('cp437');
 
-        const bizName = settings?.businessName?.trim() || 'STOCK PILOT';
+        const bizName = settings?.businessName?.trim() || 'verdix';
         const address = settings?.address?.trim() || 'General Merchandise';
         const minNumber = settings?.minNumber || '1234567890';
         const serialNumber = settings?.serialNumber || '0987654321-11';

@@ -79,7 +79,7 @@ export default function DataManagementPage() {
     port: '3306',
     user: 'root',
     password: '',
-    database: 'stock_pilot'
+    database: 'verdix'
   });
 
   // Reset Data states
@@ -731,7 +731,7 @@ export default function DataManagementPage() {
                     name="database" 
                     value={dbConfig.database} 
                     onChange={handleInputChange} 
-                    placeholder="stock_pilot" 
+                    placeholder="verdix" 
                   />
                 </div>
               </div>

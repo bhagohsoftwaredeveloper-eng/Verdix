@@ -1,0 +1,60 @@
+-- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: verdix
+-- ------------------------------------------------------
+-- Server version	8.0.43
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `sales_order_items`
+--
+
+DROP TABLE IF EXISTS `sales_order_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `sales_order_items` (
+  `id` varchar(50) NOT NULL,
+  `sales_order_id` varchar(50) NOT NULL,
+  `product_id` varchar(50) NOT NULL,
+  `product_name` varchar(255) NOT NULL,
+  `quantity` int NOT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_sales_order_id` (`sales_order_id`),
+  KEY `idx_product_id` (`product_id`),
+  CONSTRAINT `sales_order_items_ibfk_1` FOREIGN KEY (`sales_order_id`) REFERENCES `sales_orders` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `sales_order_items_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `sales_order_items`
+--
+
+LOCK TABLES `sales_order_items` WRITE;
+/*!40000 ALTER TABLE `sales_order_items` DISABLE KEYS */;
+INSERT INTO `sales_order_items` VALUES ('SOI-1767009514364-1-hokgm','SO-1767009514355','UNI-PRO-I50IQU-1766806545173','MILO® Powder 1kg',1,50.00,'2025-12-29 11:58:34'),('SOI-1767919569982-1-668ki','SO-1767919569960','UNI-PRO-I50IQU-1766806545173','MILO® Powder 1kg',2,50.00,'2026-01-09 00:46:09'),('SOI-1767919570003-2-mybw5','SO-1767919569960','UNI-MIL-BIY3DC-1766806483584','MILO Powder 1kg',1,600.00,'2026-01-09 00:46:10'),('SOI-1767919570011-3-6vkom','SO-1767919569960','NES-NES-S236BH-1766803358930','NESCAFE BOX 35PACK',3,120.00,'2026-01-09 00:46:10'),('SOI-1767919570016-4-cqej0','SO-1767919569960','UNI-DOW-K8J8JB-1767612582041','DOWNY BOX 12S',1,150.00,'2026-01-09 00:46:10'),('SOI-1768541239049-1-d30oy','SO-1768541239031','LUC-PRO-X3CHYW-1768384349234','ODONG',1,5.00,'2026-01-16 05:27:19');
+/*!40000 ALTER TABLE `sales_order_items` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-01-22 18:11:09

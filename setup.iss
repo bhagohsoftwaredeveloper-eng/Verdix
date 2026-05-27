@@ -1,8 +1,8 @@
-; LJMA Supermarket Inno Setup Script
-#define AppName "LJMA SUPERMARKET"
+; verdix Inno Setup Script
+#define AppName "verdix"
 #define AppVersion "1.14"
 #define AppPublisher "BHAGOH SYSTEMS"
-#define AppExeName "Stock Pilot.exe"
+#define AppExeName "verdix.exe"
 
 [Setup]
 AppId={{D3F73FF9-A96F-4F5C-9E2B-62972F84B373}
@@ -11,7 +11,7 @@ AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
-OutputBaseFilename=LJMASupermarketSetup_{#AppVersion}
+OutputBaseFilename=verdixSetup_{#AppVersion}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -42,10 +42,10 @@ Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs
 
 
 [Icons]
-Name: "{autoprograms}\LJMA SUPERMARKET POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\ljma_logo.ico"
-Name: "{autodesktop}\LJMA SUPERMARKET POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\ljma_logo.ico"
-Name: "{userstartup}\LJMA SUPERMARKET POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\ljma_logo.ico"
-Name: "{commonstartup}\LJMA SUPERMARKET Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
+Name: "{autoprograms}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+Name: "{autodesktop}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+Name: "{userstartup}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+Name: "{commonstartup}\verdix Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
 
 
 [Run]

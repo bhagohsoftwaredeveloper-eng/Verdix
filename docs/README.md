@@ -1,8 +1,8 @@
-# StockPilot Enterprise — Documentation Index
+# verdix Enterprise — Documentation Index
 
 > **Version:** 0.1.0 · **Stack:** Next.js 16, Electron 33, MySQL 2, TypeScript 5
 
-StockPilot is a full-featured, offline-capable inventory and point-of-sale management system packaged as an Electron desktop application. Built for Philippine retail businesses, it ships with BIR-compliance features (RMO 24-2023), multi-level approval workflows, and a native thermal-receipt printer stack.
+verdix is a full-featured, offline-capable inventory and point-of-sale management system packaged as an Electron desktop application. Built for Philippine retail businesses, it ships with BIR-compliance features (RMO 24-2023), multi-level approval workflows, and a native thermal-receipt printer stack.
 
 ---
 
@@ -56,7 +56,7 @@ npm run electron-dev
 ## 🗺️ Module Overview
 
 ```
-StockPilot
+verdix
 ├── 🖥️  Point of Sale (POS)          → /pos
 ├── 📊  Dashboard                    → /dashboard
 ├── 📦  Products                     → /products

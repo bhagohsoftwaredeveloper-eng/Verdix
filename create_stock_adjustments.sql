@@ -1,4 +1,4 @@
-USE stock_pilot;
+USE verdix;
 
 CREATE TABLE IF NOT EXISTS stock_adjustments (
   id VARCHAR(50) PRIMARY KEY,

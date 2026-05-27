@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const filePath = 'd:/BHAGOH PROJECT/Stock_Pilot/app/(app)/products/actions.ts';
+const filePath = 'd:/BHAGOH PROJECT/verdix/app/(app)/products/actions.ts';
 let content = fs.readFileSync(filePath, 'utf8');
 
 // 1. Update hasActiveFilters in getProducts

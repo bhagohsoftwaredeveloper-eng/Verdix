@@ -46,7 +46,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
         const data = await response.json();
         if (data.success && data.data) {
           setSettings({
-            businessName: data.data.businessName || 'StockPilot',
+            businessName: data.data.businessName || 'verdix',
             logoPath: data.data.logoPath,
             address: data.data.address || '',
             contactNumber: data.data.contactNumber || '',
@@ -124,7 +124,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
               <div class="logo-placeholder">
                 ${settings.logoPath ? `<img src="${settings.logoPath}" alt="Logo">` : '<div style="width:100%;height:100%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:24px">📄</div>'}
               </div>
-              <div class="business-name">${settings.businessName || 'StockPilot'}</div>
+              <div class="business-name">${settings.businessName || 'verdix'}</div>
             </div>
             <div>
               <div class="doc-title">${documentTitle}</div>
@@ -245,7 +245,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
         </head>
         <body>
           <div class="header">
-            <div class="business-name">${settings.businessName || 'StockPilot'}</div>
+            <div class="business-name">${settings.businessName || 'verdix'}</div>
             ${settings.address ? `<div class="address">${settings.address}</div>` : ''}
             ${settings.contactNumber ? `<div class="address">${settings.contactNumber}</div>` : ''}
             ${settings.tin ? `<div class="address">TIN: ${settings.tin}</div>` : ''}
@@ -336,7 +336,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange, mode = 'order' }
                 )}
               </div>
               <h2 className="text-xl font-bold uppercase tracking-tight">
-                {settings.businessName || 'StockPilot'}
+                {settings.businessName || 'verdix'}
               </h2>
             </div>
 

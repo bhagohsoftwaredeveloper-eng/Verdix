@@ -6,7 +6,7 @@ const dbConfig = {
   port: 3306,
   user: 'root',
   password: 'rootpassword',
-  database: 'stock_pilot'
+  database: 'verdix'
 };
 
 async function runMigrations() {

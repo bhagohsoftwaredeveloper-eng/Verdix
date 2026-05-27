@@ -14,7 +14,7 @@ export function ReportHeader({
   title, 
   subtitle, 
   period,
-  businessName = 'Stockpilot',
+  businessName = 'verdix',
   address,
   contactNumber,
   tin

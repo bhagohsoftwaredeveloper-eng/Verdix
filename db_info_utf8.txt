@@ -1,100 +1,100 @@
 Tables:
 [
   {
-    "Tables_in_stock_pilot": "accounts"
+    "Tables_in_verdix": "accounts"
   },
   {
-    "Tables_in_stock_pilot": "brands"
+    "Tables_in_verdix": "brands"
   },
   {
-    "Tables_in_stock_pilot": "categories"
+    "Tables_in_verdix": "categories"
   },
   {
-    "Tables_in_stock_pilot": "conversion_factors"
+    "Tables_in_verdix": "conversion_factors"
   },
   {
-    "Tables_in_stock_pilot": "customer_loyalty"
+    "Tables_in_verdix": "customer_loyalty"
   },
   {
-    "Tables_in_stock_pilot": "customer_payments"
+    "Tables_in_verdix": "customer_payments"
   },
   {
-    "Tables_in_stock_pilot": "customers"
+    "Tables_in_verdix": "customers"
   },
   {
-    "Tables_in_stock_pilot": "loyalty_points_settings"
+    "Tables_in_verdix": "loyalty_points_settings"
   },
   {
-    "Tables_in_stock_pilot": "migrations"
+    "Tables_in_verdix": "migrations"
   },
   {
-    "Tables_in_stock_pilot": "payment_methods"
+    "Tables_in_verdix": "payment_methods"
   },
   {
-    "Tables_in_stock_pilot": "point_history"
+    "Tables_in_verdix": "point_history"
   },
   {
-    "Tables_in_stock_pilot": "pos_terminals"
+    "Tables_in_verdix": "pos_terminals"
   },
   {
-    "Tables_in_stock_pilot": "pos_transaction_items"
+    "Tables_in_verdix": "pos_transaction_items"
   },
   {
-    "Tables_in_stock_pilot": "pos_transactions"
+    "Tables_in_verdix": "pos_transactions"
   },
   {
-    "Tables_in_stock_pilot": "products"
+    "Tables_in_verdix": "products"
   },
   {
-    "Tables_in_stock_pilot": "purchase_order_items"
+    "Tables_in_verdix": "purchase_order_items"
   },
   {
-    "Tables_in_stock_pilot": "purchase_orders"
+    "Tables_in_verdix": "purchase_orders"
   },
   {
-    "Tables_in_stock_pilot": "sale_items"
+    "Tables_in_verdix": "sale_items"
   },
   {
-    "Tables_in_stock_pilot": "sales_invoice_items"
+    "Tables_in_verdix": "sales_invoice_items"
   },
   {
-    "Tables_in_stock_pilot": "sales_invoices"
+    "Tables_in_verdix": "sales_invoices"
   },
   {
-    "Tables_in_stock_pilot": "sales_order_items"
+    "Tables_in_verdix": "sales_order_items"
   },
   {
-    "Tables_in_stock_pilot": "sales_orders"
+    "Tables_in_verdix": "sales_orders"
   },
   {
-    "Tables_in_stock_pilot": "sales_persons"
+    "Tables_in_verdix": "sales_persons"
   },
   {
-    "Tables_in_stock_pilot": "sales_transactions"
+    "Tables_in_verdix": "sales_transactions"
   },
   {
-    "Tables_in_stock_pilot": "shifts"
+    "Tables_in_verdix": "shifts"
   },
   {
-    "Tables_in_stock_pilot": "stock_adjustments"
+    "Tables_in_verdix": "stock_adjustments"
   },
   {
-    "Tables_in_stock_pilot": "stock_movements"
+    "Tables_in_verdix": "stock_movements"
   },
   {
-    "Tables_in_stock_pilot": "subcategories"
+    "Tables_in_verdix": "subcategories"
   },
   {
-    "Tables_in_stock_pilot": "suppliers"
+    "Tables_in_verdix": "suppliers"
   },
   {
-    "Tables_in_stock_pilot": "units_of_measure"
+    "Tables_in_verdix": "units_of_measure"
   },
   {
-    "Tables_in_stock_pilot": "users"
+    "Tables_in_verdix": "users"
   },
   {
-    "Tables_in_stock_pilot": "warehouses"
+    "Tables_in_verdix": "warehouses"
   }
 ]
 

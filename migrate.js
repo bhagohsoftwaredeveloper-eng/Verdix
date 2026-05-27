@@ -1,5 +1,5 @@
 'use strict';
-// Stock Pilot v1.12 - Database Migration Runner
+// verdix v1.12 - Database Migration Runner
 // Runs all pending migrations and tracks them in the migrations table.
 
 const fs = require('fs');
@@ -356,7 +356,7 @@ const migrations = [
 ];
 
 async function run() {
-  console.log('Stock Pilot v1.12 - Database Migration');
+  console.log('verdix v1.12 - Database Migration');
   console.log('=======================================');
 
   const conn = await mysql.createConnection({
@@ -364,7 +364,7 @@ async function run() {
     port:     parseInt(process.env.DB_PORT || '3306'),
     user:     process.env.DB_USER     || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME     || 'stock_pilot',
+    database: process.env.DB_NAME     || 'verdix',
     multipleStatements: false,
   });
 

@@ -4,14 +4,14 @@
 const data = {
   targetUrl: "https://jsonplaceholder.typicode.com/posts",
   data: {
-    title: "Stock Pilot Product Update",
-    body: "Product data from Stock Pilot system",
+    title: "verdix Product Update",
+    body: "Product data from verdix system",
     userId: 1,
     timestamp: new Date().toISOString()
   }
 };
 
-console.log('Sending POST request to Stock Pilot API...');
+console.log('Sending POST request to verdix API...');
 console.log('Data:', JSON.stringify(data, null, 2));
 
 // Using fetch to test the forward endpoint

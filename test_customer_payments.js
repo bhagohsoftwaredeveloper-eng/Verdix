@@ -6,7 +6,7 @@ async function checkTable() {
       host: 'localhost',
       user: 'root',
       password: '1234',
-      database: 'stock_pilot'
+      database: 'verdix'
     });
 
     const [rows] = await connection.execute("SHOW TABLES LIKE 'customer_payments'");

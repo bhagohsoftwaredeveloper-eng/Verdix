@@ -4,9 +4,9 @@ require('dotenv').config();
 async function simulateParsing() {
     const connection = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'stockpilot',
-        password: process.env.DB_PASSWORD || 'stockpilot123',
-        database: process.env.DB_NAME || 'stockpilot',
+        user: process.env.DB_USER || 'verdix',
+        password: process.env.DB_PASSWORD || 'verdix123',
+        database: process.env.DB_NAME || 'verdix',
     });
 
     try {

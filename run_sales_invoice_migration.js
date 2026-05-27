@@ -10,7 +10,7 @@ async function runSalesInvoiceMigration() {
       port: 3306,
       user: 'root',
       password: 'rootpassword',
-      database: 'stock_pilot'
+      database: 'verdix'
     });
 
     console.log('Connected to MySQL');
