@@ -3,12 +3,12 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, Eye, EyeOff, Settings, XCircle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { AlertCircle, Loader2, Eye, EyeOff, Settings, User, Lock, ShieldCheck } from 'lucide-react';
+import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -71,64 +71,95 @@ export function PosLoginForm({ onLoginSuccess }: PosLoginFormProps) {
 
   return (
     <>
-      <Card className="mx-auto w-full max-w-sm">
-        <CardHeader className="text-center relative">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="absolute right-2 top-2 h-8 w-8"
+      <Card className="mx-auto w-full max-w-md overflow-hidden border-0 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+        {/* Brand Banner */}
+        <div className="relative bg-gradient-to-br from-primary via-primary to-primary/80 px-8 py-9 text-center text-white">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-3 top-3 h-9 w-9 text-white/70 hover:bg-white/15 hover:text-white"
             onClick={() => setIsSettingsOpen(true)}
             title="Connection Settings"
           >
             <Settings className="h-4 w-4" />
           </Button>
-          <CardTitle className="text-2xl flex items-center justify-center gap-2">
-            POS Login
+          <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-2xl shadow-lg ring-1 ring-white/25">
+            <Image
+              src="/verdix-icon.svg"
+              alt="Verdix"
+              width={64}
+              height={64}
+              className="h-full w-full object-contain"
+              priority
+            />
+          </div>
+          <h1 className="text-2xl font-black tracking-tight drop-shadow-sm">Verdix POS</h1>
+          <p className="mt-1 text-sm text-white/70">Point of Sale Terminal</p>
+        </div>
+
+        <CardContent className="px-8 py-7">
+          <div className="mb-5 text-center">
+            <h2 className="text-lg font-bold text-foreground">Cashier Login</h2>
+            <p className="text-sm text-muted-foreground">Enter your credentials to start your shift</p>
+          </div>
+
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {error && (
-              <Badge variant="destructive" className="px-2 py-0.5 animate-in zoom-in-95 duration-300">
-                <XCircle className="w-3 h-3 mr-1" />
-                Invalid
-              </Badge>
-            )}
-          </CardTitle>
-          <CardDescription>Enter your cashier credentials to proceed</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
-            {error && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2 duration-300">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Login Failed</AlertTitle>
-                <AlertDescription>
-                  {error}
-                </AlertDescription>
+                <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <div className="grid gap-2">
-              <Label htmlFor="username">Username</Label>
-              <Input id="username" type="text" placeholder="username" {...form.register('username')} />
+
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-sm font-semibold">Username</Label>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  autoComplete="username"
+                  autoFocus
+                  className="h-11 pl-10"
+                  {...form.register('username')}
+                />
+              </div>
               {form.formState.errors.username && <p className="text-sm font-medium text-destructive">{form.formState.errors.username.message}</p>}
             </div>
-            <div className="grid gap-2">
-              <div className="flex items-center">
-                <Label htmlFor="password">Password</Label>
-              </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-semibold">Password</Label>
               <div className="relative">
-                <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="password" {...form.register('password')} />
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  className="h-11 pl-10 pr-10"
+                  {...form.register('password')}
+                />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground"
+                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowPassword(prev => !prev)}
                 >
-                  {showPassword ? <EyeOff /> : <Eye />}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   <span className="sr-only">{showPassword ? 'Hide password' : 'Show password'}</span>
                 </Button>
               </div>
               {form.formState.errors.password && <p className="text-sm font-medium text-destructive">{form.formState.errors.password.message}</p>}
             </div>
-            <Button className="w-full" type="submit" disabled={isSubmitting}>
+
+            <Button
+              className="h-12 w-full text-base font-bold shadow-md shadow-primary/20 transition-all hover:shadow-lg hover:shadow-primary/30 active:scale-[0.99]"
+              type="submit"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -139,12 +170,17 @@ export function PosLoginForm({ onLoginSuccess }: PosLoginFormProps) {
               )}
             </Button>
           </form>
+
+          <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+            Secure cashier access
+          </p>
         </CardContent>
       </Card>
-      
-      <ConnectionSettingsDialog 
-        open={isSettingsOpen} 
-        onOpenChange={setIsSettingsOpen} 
+
+      <ConnectionSettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
       />
     </>
   );
