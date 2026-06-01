@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -78,14 +78,14 @@ export function HeldTransactionsDialog({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-extrabold text-slate-800">Suspended Transactions</DialogTitle>
-          <DialogDescription className="text-slate-500 font-medium">
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="sm:max-w-2xl" onInteractOutside={(e) => e.preventDefault()}>
+        <SheetHeader>
+          <SheetTitle className="text-2xl font-extrabold text-slate-800">Suspended Transactions</SheetTitle>
+          <SheetDescription className="text-slate-500 font-medium">
             Select a transaction to restore it to the cart or delete it. Use Up/Down arrows to navigate and Enter to select.
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
         <ScrollArea className="h-[500px]">
           <div className="space-y-4 p-6 pt-2">
             {heldTransactions.length > 0 ? (
@@ -177,12 +177,12 @@ export function HeldTransactionsDialog({
             )}
           </div>
         </ScrollArea>
-        <DialogFooter>
+        <SheetFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

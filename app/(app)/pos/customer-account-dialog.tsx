@@ -11,6 +11,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from '@/components/ui/sheet';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -408,13 +416,13 @@ export function CustomerAccountDialog({
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[1000px] h-[750px] overflow-hidden flex flex-col p-6">
-          <DialogHeader>
-            <DialogTitle className="sr-only">Customer Account Dialog</DialogTitle>
-            <DialogDescription className="sr-only">
+      <Sheet open={isOpen} onOpenChange={onOpenChange}>
+        <SheetContent side="top" className="h-[88vh] max-h-[88vh] w-full overflow-hidden flex flex-col p-6 rounded-b-2xl">
+          <SheetHeader>
+            <SheetTitle className="sr-only">Customer Account Dialog</SheetTitle>
+            <SheetDescription className="sr-only">
               View and manage customer account details, credit status, and transaction history.
-            </DialogDescription>
+            </SheetDescription>
             <div className="flex justify-between items-start">
               <div className="space-y-4 w-full">
                 <div className="flex items-end gap-3">
@@ -549,7 +557,7 @@ export function CustomerAccountDialog({
                 )}
               </div>
             </div>
-          </DialogHeader>
+          </SheetHeader>
 
           <div className="mt-4 flex-grow overflow-hidden flex flex-col">
             <Tabs defaultValue="transactions" className="w-full flex-grow flex flex-col">
@@ -810,12 +818,12 @@ export function CustomerAccountDialog({
             </Tabs>
           </div>
 
-          <DialogFooter className="mt-6">
+          <SheetFooter className="mt-6">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button onClick={handleSelect}>Confirm Selection</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       <AddCustomerDialog
         isOpen={isAddCustomerOpen}

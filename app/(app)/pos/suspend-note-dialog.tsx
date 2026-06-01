@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,23 +38,23 @@ export function SuspendNoteDialog({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-none shadow-2xl">
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="sm:max-w-[400px] p-0 overflow-hidden border-none shadow-2xl">
         <div className="bg-white p-6 space-y-6">
-          <DialogHeader className="space-y-3">
+          <SheetHeader className="space-y-3">
             <div className="flex justify-center">
               <div className="bg-orange-50 p-3 rounded-2xl">
                 <Tag className="w-8 h-8 text-orange-600" />
               </div>
             </div>
-            <DialogTitle className="text-2xl font-extrabold text-center text-slate-800">
+            <SheetTitle className="text-2xl font-extrabold text-center text-slate-800">
               Suspend Transaction
-            </DialogTitle>
-            <DialogDescription className="sr-only">Add a note to identify this suspended transaction later</DialogDescription>
+            </SheetTitle>
+            <SheetDescription className="sr-only">Add a note to identify this suspended transaction later</SheetDescription>
             <p className="text-sm text-slate-500 text-center px-4">
               Add a note or description to identify this transaction later.
             </p>
-          </DialogHeader>
+          </SheetHeader>
           
           <div className="space-y-4">
             <div className="space-y-2">
@@ -90,7 +90,7 @@ export function SuspendNoteDialog({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

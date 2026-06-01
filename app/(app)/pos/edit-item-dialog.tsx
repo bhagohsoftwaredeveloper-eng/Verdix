@@ -3,13 +3,13 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -89,10 +89,10 @@ export function EditItemDialog({
   if (!item) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className={`p-0 overflow-hidden border-none shadow-2xl ${mode === 'price-only' ? 'sm:max-w-[400px]' : 'sm:max-w-md'}`}>
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className={`p-0 overflow-hidden border-none shadow-2xl ${mode === 'price-only' ? 'sm:max-w-[400px]' : 'sm:max-w-md'}`}>
         <div className="bg-white p-6 space-y-6">
-          <DialogHeader className="space-y-3">
+          <SheetHeader className="space-y-3">
             <div className="flex justify-center">
               <div className={`${mode === 'price-only' ? 'bg-purple-50' : 'bg-blue-50'} p-3 rounded-2xl`}>
                 {mode === 'price-only' ? (
@@ -102,15 +102,15 @@ export function EditItemDialog({
                 )}
               </div>
             </div>
-            <DialogTitle className="text-2xl font-extrabold text-center text-slate-800">
+            <SheetTitle className="text-2xl font-extrabold text-center text-slate-800">
               {mode === 'price-only' ? 'Edit Unit Price' : 'Edit Item Details'}
-            </DialogTitle>
+            </SheetTitle>
             <p className="text-sm text-slate-500 text-center px-4">
               {mode === 'price-only' 
                 ? `Enter a temporary price for ${item.name}`
                 : 'Temporary changes for this transaction only.'}
             </p>
-          </DialogHeader>
+          </SheetHeader>
 
           <div className="space-y-4">
             {mode === 'price-only' ? (
@@ -202,7 +202,7 @@ export function EditItemDialog({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

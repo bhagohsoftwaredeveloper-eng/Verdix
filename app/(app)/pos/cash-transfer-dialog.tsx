@@ -7,13 +7,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   Form,
   FormControl,
@@ -114,14 +114,14 @@ export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, 
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Cash Transfer</DialogTitle>
-            <DialogDescription>
+      <Sheet open={isOpen} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="sm:max-w-[480px]">
+          <SheetHeader>
+            <SheetTitle>Cash Transfer</SheetTitle>
+            <SheetDescription>
               Record a cash deposit into or pickup from the drawer. Admin authentication is required.
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
           <div className="grid grid-cols-2 gap-2 pt-4">
               <Button variant={transferType === 'deposit' ? 'default' : 'outline'} onClick={() => setTransferType('deposit')}>
                   <Plus className="mr-2 h-4 w-4"/>
@@ -171,7 +171,7 @@ export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, 
               />
             </form>
           </Form>
-           <DialogFooter>
+           <SheetFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     Cancel
                 </Button>
@@ -185,9 +185,9 @@ export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, 
                     'Confirm Transfer'
                     )}
                 </Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       <AdminAuthDialog
         isOpen={isAuthDialogOpen}

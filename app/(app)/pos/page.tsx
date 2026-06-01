@@ -28,7 +28,6 @@ import {
   Power,
   X,
   Plus,
-  Minus,
   Percent,
   Tag,
   Pencil,
@@ -57,9 +56,7 @@ import Link from 'next/link';
 
 import { TenderDialog } from './tender-dialog';
 import { ProductSearchDialog } from './product-search-dialog';
-import { EditItemDialog } from './edit-item-dialog';
 import { HeldTransactionsDialog } from './held-transactions-dialog';
-import { AdjustQuantityDialog } from './adjust-quantity-dialog';
 import { StartShiftDialog } from './start-shift-dialog';
 import { PosLoginForm } from './login-form';
 import { AdminAuthDialog } from './admin-auth-dialog';
@@ -76,10 +73,8 @@ import { ZReadingDialog } from './z-reading-dialog';
 import { XReadingDialog } from './x-reading-dialog';
 import { OverallReadingDialog } from './overall-reading-dialog';
 
-import { CancelSaleDialog } from './cancel-sale-dialog';
 import { DiscountDialog } from './discount-dialog';
 import { SuspendNoteDialog } from './suspend-note-dialog';
-import { PriceEditDialog } from './price-edit-dialog';
 import { ShutdownConfirmationDialog } from './shutdown-confirmation-dialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -325,13 +320,10 @@ function POSPageContent() {
   const [tenderMethod, setTenderMethod] = useState<string | null>(null);
   const [heldTransactions, setHeldTransactions] = useState<SuspendedTransaction[]>([]);
   const [isSuspendNoteOpen, setIsSuspendNoteOpen] = useState(false);
-  const [isPriceEditOpen, setIsPriceEditOpen] = useState(false);
   const [shiftActive, setShiftActive] = useState(false);
   const [startingCash, setStartingCash] = useState(0);
   const [cashSales, setCashSales] = useState(0);
   const [isPosLoggedIn, setIsPosLoggedIn] = useState(false);
-  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
-  const [editDialogMode, setEditDialogMode] = useState<'full' | 'price-only'>('full');
   const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(WALK_IN_CUSTOMER);
   const [isLoyaltyOpen, setIsLoyaltyOpen] = useState(false);
@@ -372,14 +364,17 @@ function POSPageContent() {
     cdSend({ type: 'THEME', theme: resolvedTheme as 'light' | 'dark' });
   }, [resolvedTheme, cdSend]);
 
-  const [isEditItemOpen, setIsEditItemOpen] = useState(false);
-  const [isQuantityDialogOpen, setIsQuantityDialogOpen] = useState(false);
   const [isHeldTransOpen, setIsHeldTransOpen] = useState(false);
   const [isEndShiftOpen, setIsEndShiftOpen] = useState(false);
   const [isCashTransferOpen, setIsCashTransferOpen] = useState(false);
-  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  // Inline-edit state (replaces the Edit-item / Quantity / Price-edit / Line-void dialogs)
+  const [editingNameItemId, setEditingNameItemId] = useState<string | null>(null);
+  const [editingQtyItemId, setEditingQtyItemId] = useState<string | null>(null);
+  const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
+  const [pendingVoidItemId, setPendingVoidItemId] = useState<string | null>(null);
+  const [qtyDraft, setQtyDraft] = useState('');
   const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
   const [isCollisionOpen, setIsCollisionOpen] = useState(false);
   const [collisionShift, setCollisionShift] = useState<any>(null);
@@ -392,14 +387,10 @@ function POSPageContent() {
   
   // Sticky Focus Logic
   useEffect(() => {
-    const isAnyDialogOpen = 
+    const isAnyDialogOpen =
       isTenderDialogOpen ||
-      isEditItemOpen ||
-      isQuantityDialogOpen ||
-      isCancelDialogOpen ||
       isDiscountDialogOpen ||
       isHeldTransOpen ||
-      isAuthDialogOpen ||
       isLineVoidAuthOpen ||
       isEndShiftOpen ||
       isCashTransferOpen ||
@@ -426,8 +417,8 @@ function POSPageContent() {
       return () => clearTimeout(timer);
     }
   }, [
-      isTenderDialogOpen, isEditItemOpen, isQuantityDialogOpen, isCancelDialogOpen, isDiscountDialogOpen,
-      isHeldTransOpen, isAuthDialogOpen, isLineVoidAuthOpen, isEndShiftOpen, isCashTransferOpen,
+      isTenderDialogOpen, isDiscountDialogOpen,
+      isHeldTransOpen, isLineVoidAuthOpen, isEndShiftOpen, isCashTransferOpen,
       isCustomerSelectOpen, isLoyaltyOpen, isRecentSalesOpen, isVoidSalesOpen, isReturnSalesOpen,
       isPriceInquiryOpen, isZReadingOpen, isShutdownConfirmOpen, isInsufficientStockOpen, isProductSearchOpen,
       showEndShiftReport, isPosLoggedIn, shiftActive
@@ -479,6 +470,73 @@ function POSPageContent() {
       }
     }
   }, [selectedItemId]);
+
+  // Keep the inline quantity draft in sync with the selected row
+  useEffect(() => {
+    setQtyDraft(selectedItem ? String(selectedItem.quantity) : '');
+    // Selecting a *different* row cancels any in-progress inline edit,
+    // but preserve an edit we just started on the row being selected.
+    const keepIfCurrent = (prev: string | null) => (prev && prev !== selectedItemId ? null : prev);
+    setEditingNameItemId(keepIfCurrent);
+    setEditingQtyItemId(keepIfCurrent);
+    setEditingPriceItemId(keepIfCurrent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItemId, selectedItem?.quantity]);
+
+  // Focus an inline editor by id. Retries once after a delay so it survives
+  // focus restoration from a closing dialog (e.g. the price-edit auth dialog).
+  const focusInlineField = (prefix: string, itemId: string) => {
+    const tryFocus = () => {
+      const el = document.getElementById(`${prefix}-${itemId}`) as HTMLInputElement | null;
+      if (el) { el.focus(); el.select(); }
+    };
+    setTimeout(tryFocus, 0);
+    setTimeout(tryFocus, 130);
+  };
+
+  // Begin inline edit of a single field, clearing any other in-progress edit on the row
+  const startEditName = (itemId: string) => {
+    setSelectedItemId(itemId);
+    setEditingNameItemId(itemId);
+    setEditingQtyItemId(null);
+    setEditingPriceItemId(null);
+    focusInlineField('pos-name', itemId);
+  };
+
+  // Commit an inline name change (keeps qty/price/discount)
+  const commitInlineName = (itemId: string, rawValue: string) => {
+    const item = items.find(i => i.id === itemId);
+    if (item) {
+      const newName = rawValue.trim();
+      if (newName && newName !== item.name) {
+        handleUpdateItem(itemId, newName, item.quantity, item.price, item.discount);
+      }
+    }
+    setEditingNameItemId(null);
+  };
+
+  // Commit the inline quantity draft for a row
+  const commitQty = (itemId: string) => {
+    setEditingQtyItemId(null);
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    const q = parseFloat(qtyDraft);
+    if (isNaN(q) || q <= 0) {
+      setQtyDraft(String(item.quantity));
+      return;
+    }
+    if (q !== item.quantity) updateQuantity(itemId, q);
+  };
+
+  // Select a row and begin an inline price edit (honors price-edit auth)
+  const requestInlinePriceEdit = (itemId: string) => {
+    setSelectedItemId(itemId);
+    if (businessSettings?.enablePriceEditAuth) {
+      setIsPriceEditAuthOpen(true);
+    } else {
+      unlockInlinePrice(itemId);
+    }
+  };
 
   // Fetch POS settings - stable reference via useCallback so polling interval never resets
   const fetchSettings = useCallback(async (signal?: AbortSignal) => {
@@ -782,20 +840,21 @@ function POSPageContent() {
 
       switch (e.key) {
         case 'F1': handleOpenEditDialog(); break;
-        case 'F2': 
-          if (items.length > 0) {
-             if (enableLineVoidAuth) {
-                  setIsLineVoidAuthOpen(true);
-             } else {
-                  setIsCancelDialogOpen(true);
-             }
-          }
+        case 'F2':
+          e.preventDefault();
+          handleVoidLine(selectedItemId);
           break;
         case 'F3': handleOpenDiscountDialog(); break;
         case 'F4': handleHold(); break;
         case 'F5': setIsHeldTransOpen(true); break;
-        case 'F6': handleOpenQuantityDialog(); break;
-        case 'F7': handleRequestPriceEdit(); break;
+        case 'F6':
+          e.preventDefault();
+          focusInlineQuantity(selectedItemId);
+          break;
+        case 'F7':
+          e.preventDefault();
+          handleRequestPriceEdit();
+          break;
         case 'F8': setIsShutdownConfirmOpen(true); break;
         case '+':
           {
@@ -995,43 +1054,41 @@ function POSPageContent() {
     ));
   };
 
-  const handleCancelSale = () => {
-    if (items.length > 0) {
-      if (enableLineVoidAuth) {
-           setIsLineVoidAuthOpen(true);
-      } else {
-           setIsCancelDialogOpen(true);
-      }
+  // Inline line-void: remove a single line directly from the data table.
+  // Honors the optional Line-Void authorization flow.
+  const handleVoidLine = (itemId: string | null) => {
+    if (!itemId) {
+      toast({ title: "No Item Selected", description: "Please select an item to void.", variant: "destructive" });
+      return;
+    }
+    if (enableLineVoidAuth) {
+      setPendingVoidItemId(itemId);
+      setIsLineVoidAuthOpen(true);
     } else {
-      toast({
-        title: "Cart Empty",
-        description: "There are no items to cancel.",
-      });
+      performVoidLine(itemId);
     }
   };
 
-  const handleCancelSelected = (quantityToVoid: number) => {
-    if (selectedItemId) {
-      const item = items.find(i => i.id === selectedItemId);
-      if (item) {
-          if (quantityToVoid < item.quantity) {
-              // Partial Void
-              updateQuantity(selectedItemId, item.quantity - quantityToVoid);
-              toast({
-                  title: "Item Value Reduced",
-                  description: `Voided ${quantityToVoid} from ${item.name}`,
-              });
-          } else {
-              // Full Void
-              removeItem(selectedItemId);
-              setSelectedItemId(null);
-              toast({
-                  title: "Item Removed",
-                  description: "The selected item has been removed from the cart.",
-              });
-          }
-      }
+  const performVoidLine = (itemId: string) => {
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    removeItem(itemId);
+    if (selectedItemId === itemId) setSelectedItemId(null);
+    setPendingVoidItemId(null);
+    toast({ title: "Line Voided", description: `Removed ${item.name} from the cart.` });
+  };
+
+  // Begin inline quantity edit for the given row (F6) — shows the editor & focuses it
+  const focusInlineQuantity = (itemId: string | null) => {
+    if (!itemId) {
+      toast({ title: "No Item Selected", description: "Please select an item to adjust quantity.", variant: "destructive" });
+      return;
     }
+    setSelectedItemId(itemId);
+    setEditingQtyItemId(itemId);
+    setEditingNameItemId(null);
+    setEditingPriceItemId(null);
+    focusInlineField('pos-qty', itemId);
   };
 
   const handleCancelAll = () => {
@@ -1089,8 +1146,7 @@ function POSPageContent() {
 
   const handleOpenEditDialog = () => {
     if (selectedItem) {
-      setEditDialogMode('full');
-      setIsEditItemOpen(true);
+      startEditName(selectedItem.id);
     } else {
       toast({
         title: "No Item Selected",
@@ -1130,18 +1186,6 @@ function POSPageContent() {
     }
   };
 
-
-  const handleOpenQuantityDialog = () => {
-    if (selectedItem) {
-      setIsQuantityDialogOpen(true);
-    } else {
-      toast({
-        title: "No Item Selected",
-        description: "Please select an item to adjust quantity.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleHold = () => {
     if (items.length > 0) {
@@ -1499,7 +1543,7 @@ function POSPageContent() {
       if (businessSettings?.enablePriceEditAuth) {
           setIsPriceEditAuthOpen(true);
       } else {
-         setIsPriceEditOpen(true);
+         unlockInlinePrice(selectedItem.id);
       }
     } else {
       toast({
@@ -1510,15 +1554,30 @@ function POSPageContent() {
     }
   };
 
-  const handleAdminAuthSuccess = () => {
-    setIsAuthDialogOpen(false);
-    setEditDialogMode('price-only');
-    setIsEditItemOpen(true); // Open the edit dialog after successful auth
+  // Unlock + focus the inline price input for a row (F7 / clicking the price cell)
+  const unlockInlinePrice = (itemId: string) => {
+    setSelectedItemId(itemId);
+    setEditingPriceItemId(itemId);
+    setEditingNameItemId(null);
+    setEditingQtyItemId(null);
+    focusInlineField('pos-price', itemId);
+  };
+
+  // Commit an inline price change, preserving name/quantity/discount
+  const commitInlinePrice = (itemId: string, rawValue: string) => {
+    const item = items.find(i => i.id === itemId);
+    if (item) {
+      const newPrice = parseFloat(rawValue);
+      if (!isNaN(newPrice) && newPrice >= 0 && newPrice !== item.price) {
+        handleUpdateItem(itemId, item.name, item.quantity, newPrice, item.discount);
+      }
+    }
+    setEditingPriceItemId(null);
   };
 
   const handlePriceEditAuthSuccess = () => {
     setIsPriceEditAuthOpen(false);
-    setIsPriceEditOpen(true);
+    if (selectedItemId) unlockInlinePrice(selectedItemId);
   };
 
 
@@ -1661,11 +1720,11 @@ function POSPageContent() {
   // Header Actions
   const headerActions = [
     { icon: Pencil, label: 'Edit Item', fKey: 'F1', action: handleOpenEditDialog, tint: 'text-blue-600' },
-    { icon: X, label: 'Line Void', fKey: 'F2', action: handleCancelSale, tint: 'text-rose-600' },
+    { icon: X, label: 'Line Void', fKey: 'F2', action: () => handleVoidLine(selectedItemId), tint: 'text-rose-600' },
     { icon: Percent, label: 'Discount', fKey: 'F3', action: handleOpenDiscountDialog, tint: 'text-emerald-600' },
     { icon: Tag, label: 'Suspend', fKey: 'F4', action: handleHold, tint: 'text-orange-600' },
     { icon: ListOrdered, label: 'Suspended', fKey: 'F5', action: () => setIsHeldTransOpen(true), tint: 'text-amber-600' },
-    { icon: Plus, label: 'Quantity', fKey: 'F6', action: handleOpenQuantityDialog, tint: 'text-indigo-600' },
+    { icon: Plus, label: 'Quantity', fKey: 'F6', action: () => focusInlineQuantity(selectedItemId), tint: 'text-indigo-600' },
     { icon: FilePenLine, label: 'Edit Price', fKey: 'F7', action: handleRequestPriceEdit, tint: 'text-purple-600' },
     { icon: Power, label: shiftActive ? 'Endorse/Out' : 'Shutdown', fKey: 'F8', action: handleShutdown, tint: 'text-slate-600' },
   ];
@@ -1768,9 +1827,9 @@ function POSPageContent() {
           {/* Product Entry & List */}
           <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
              
-             {/* Customer & Search Bar */}
-             <div className="flex gap-3 shrink-0 z-0">
-                <div className="relative flex-1 group">
+             {/* Search Bar (full width, matches data table) */}
+             <div className="shrink-0 z-0">
+                <div className="relative w-full group">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
                      <Search className="w-4 h-4" />
                   </div>
@@ -1808,36 +1867,23 @@ function POSPageContent() {
                     </div>
                   </Button>
                 </div>
-
-                <div 
-                  className="flex items-center gap-2 bg-background border border-muted-foreground/20 rounded-md px-3 h-12 shadow-sm min-w-[200px] cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => setIsCustomerSelectOpen(true)}
-                >
-                    <User className="h-4 w-4 text-primary" />
-                    <div className="flex-1 overflow-hidden">
-                        <div className="flex items-center gap-1.5">
-                            <div className="text-xs text-muted-foreground">Customer</div>
-                        </div>
-                        <div className="text-sm font-medium truncate">{selectedCustomer?.name || 'Walk-in'}</div>
-                    </div>
-                    {selectedCustomer?.id !== 'walk-in' && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 -mr-1" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectCustomer(WALK_IN_CUSTOMER);
-                          }}
-                        >
-                            <X className="h-3 w-3" />
-                        </Button>
-                    )}
-                </div>
              </div>
 
              {/* Items Table */}
              <div className="flex-1 bg-background rounded-xl border shadow-sm flex flex-col overflow-hidden">
+                {items.length > 0 && (
+                    <div className="flex items-center justify-end border-b bg-muted/30 px-4 py-2 shrink-0">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            onClick={handleCancelAll}
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Clear all
+                        </Button>
+                    </div>
+                )}
                 <div className="overflow-y-auto flex-1 scroll-pt-12">
                   <table className="w-full caption-bottom text-sm">
                     <TableHeader className="sticky top-0 bg-muted z-20 shadow-sm">
@@ -1846,8 +1892,8 @@ function POSPageContent() {
                         <TableHead className="w-[40%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</TableHead>
                         <TableHead className="w-[10%] text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unit</TableHead>
                         <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Price</TableHead>
-                        <TableHead className="text-center w-32 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qty</TableHead>
-                        <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total</TableHead>
+                        <TableHead className="text-center w-36 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Qty</TableHead>
+                        <TableHead className="text-right pr-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1867,7 +1913,7 @@ function POSPageContent() {
                                     key={item.id}
                                     id={`pos-item-${item.id}`}
                                     className={`
-                                        cursor-pointer transition-colors border-b-border/40 last:border-0
+                                        group cursor-pointer transition-colors border-b-border/40 last:border-0
                                         ${selectedItemId === item.id ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/30'}
                                     `}
                                     onClick={() => {
@@ -1879,26 +1925,114 @@ function POSPageContent() {
                                         <div className={`w-2 h-2 rounded-full ${selectedItemId === item.id ? 'bg-primary' : 'bg-transparent border border-muted-foreground/30'}`} />
                                     </TableCell>
                                     <TableCell>
-                                        <div className="flex flex-col">
-                                            <span className="font-medium text-sm">{item.name}</span>
-                                            {item.discount > 0 && <span className="text-[10px] text-green-600 font-medium">Discount: {item.discount}%</span>}
-                                        </div>
+                                        {editingNameItemId === item.id ? (
+                                            <Input
+                                                id={`pos-name-${item.id}`}
+                                                defaultValue={item.name}
+                                                className="h-8 w-full text-sm"
+                                                onClick={(e) => e.stopPropagation()}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        commitInlineName(item.id, (e.target as HTMLInputElement).value);
+                                                        inputRef.current?.focus();
+                                                    } else if (e.key === 'Escape') {
+                                                        e.preventDefault();
+                                                        setEditingNameItemId(null);
+                                                        inputRef.current?.focus();
+                                                    }
+                                                }}
+                                                onBlur={(e) => commitInlineName(item.id, e.target.value)}
+                                            />
+                                        ) : (
+                                            <div className="flex flex-col">
+                                                <button
+                                                    type="button"
+                                                    className="text-left font-medium text-sm hover:text-primary"
+                                                    title="Edit name (F1)"
+                                                    onClick={(e) => { e.stopPropagation(); startEditName(item.id); }}
+                                                >
+                                                    {item.name}
+                                                </button>
+                                                {item.discount > 0 && <span className="text-[10px] text-green-600 font-medium">Discount: {item.discount}%</span>}
+                                            </div>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-left text-sm text-muted-foreground">
                                         {item.unitOfMeasure}
                                     </TableCell>
-                                    <TableCell className="text-right font-mono text-sm group">
-                                        <div className="flex flex-col items-end">
-                                            <span>₱{item.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                            {/* Tiered Pricing Label Removed */}
-                                        </div>
+                                    <TableCell className="text-right font-mono text-sm">
+                                        {editingPriceItemId === item.id ? (
+                                            <Input
+                                                id={`pos-price-${item.id}`}
+                                                type="text"
+                                                inputMode="decimal"
+                                                defaultValue={item.price}
+                                                className="ml-auto h-8 w-24 text-right font-mono"
+                                                onClick={(e) => e.stopPropagation()}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        commitInlinePrice(item.id, (e.target as HTMLInputElement).value);
+                                                        inputRef.current?.focus();
+                                                    } else if (e.key === 'Escape') {
+                                                        e.preventDefault();
+                                                        setEditingPriceItemId(null);
+                                                        inputRef.current?.focus();
+                                                    }
+                                                }}
+                                                onBlur={(e) => commitInlinePrice(item.id, e.target.value)}
+                                            />
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                className="ml-auto block rounded px-1 decoration-dotted underline-offset-2 hover:text-primary hover:underline"
+                                                title="Edit price (F7)"
+                                                onClick={(e) => { e.stopPropagation(); requestInlinePriceEdit(item.id); }}
+                                            >
+                                                ₱{item.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                            </button>
+                                        )}
                                     </TableCell>
                                     <TableCell className="p-0">
-                                        <div className="flex items-center justify-center gap-1 h-full">
-                                            <span className="w-8 text-center font-mono text-sm font-medium">{formatStockQuantity(item.quantity)}</span>
-                                        </div>
+                                        {editingQtyItemId === item.id ? (
+                                            <div className="flex items-center justify-center h-full" onClick={(e) => e.stopPropagation()}>
+                                                <Input
+                                                    id={`pos-qty-${item.id}`}
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    value={qtyDraft}
+                                                    className="h-8 w-20 px-2 text-center font-mono"
+                                                    onChange={(e) => setQtyDraft(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            commitQty(item.id);
+                                                            inputRef.current?.focus();
+                                                        } else if (e.key === 'Escape') {
+                                                            e.preventDefault();
+                                                            setQtyDraft(String(item.quantity));
+                                                            setEditingQtyItemId(null);
+                                                            inputRef.current?.focus();
+                                                        }
+                                                    }}
+                                                    onBlur={() => commitQty(item.id)}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full">
+                                                <button
+                                                    type="button"
+                                                    className="w-12 rounded py-0.5 text-center font-mono text-sm font-medium hover:bg-muted hover:text-primary"
+                                                    title="Edit quantity (F6)"
+                                                    onClick={(e) => { e.stopPropagation(); focusInlineQuantity(item.id); }}
+                                                >
+                                                    {formatStockQuantity(item.quantity)}
+                                                </button>
+                                            </div>
+                                        )}
                                     </TableCell>
-                                    <TableCell className="text-right font-mono font-medium">
+                                    <TableCell className="text-right pr-4 font-mono font-medium">
                                          ₱{(item.price * item.quantity * (1 - item.discount / 100)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                                     </TableCell>
                                 </TableRow>
@@ -1961,6 +2095,39 @@ function POSPageContent() {
                         <p className="font-bold text-sm leading-none mt-1 truncate">{currentUser?.displayName || 'Cashier Terminal'}</p>
                     </div>
                 </div>
+            </div>
+
+            {/* Customer selector card */}
+            <div className="px-4 pt-4 pb-3 border-b bg-muted/10">
+                <button
+                    type="button"
+                    onClick={() => setIsCustomerSelectOpen(true)}
+                    className="group flex w-full items-center gap-3 rounded-xl border border-border/60 bg-background px-4 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+                >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600 dark:bg-sky-950">
+                        <User className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none">Customer</p>
+                        <p className="mt-1 truncate text-sm font-semibold text-foreground">{selectedCustomer?.name || 'Walk-in Customer'}</p>
+                    </div>
+                    {selectedCustomer?.id !== 'walk-in' ? (
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-destructive"
+                            title="Reset to Walk-in"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectCustomer(WALK_IN_CUSTOMER);
+                            }}
+                        >
+                            <X className="h-4 w-4" />
+                        </span>
+                    ) : (
+                        <kbd className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] font-mono font-semibold text-muted-foreground">Ctrl+3</kbd>
+                    )}
+                </button>
             </div>
 
             {/* Total Amount Due hero */}
@@ -2098,15 +2265,6 @@ function POSPageContent() {
           }
         }}
       />
-      <EditItemDialog
-        isOpen={isEditItemOpen}
-        onOpenChange={setIsEditItemOpen}
-        item={selectedItem}
-        product={products?.find(p => p.id === selectedItemId)}
-        onUpdate={handleUpdateItem}
-        activeLevelId={activeLevelId}
-        defaultLevelId={defaultLevelId}
-      />
        {/* Product Search Dialog */}
       <ProductSearchDialog
         isOpen={isProductSearchOpen}
@@ -2117,19 +2275,6 @@ function POSPageContent() {
         defaultLevelId={defaultLevelId}
         activeLevelName={activeLevelName}
         warehouseId={inventoryLocation}
-      />
-      <AdjustQuantityDialog
-        isOpen={isQuantityDialogOpen}
-        onOpenChange={setIsQuantityDialogOpen}
-        item={selectedItem}
-        onUpdate={updateQuantity}
-      />
-      <CancelSaleDialog
-        isOpen={isCancelDialogOpen}
-        onOpenChange={setIsCancelDialogOpen}
-        onCancelSelected={handleCancelSelected}
-        onCancelAll={handleCancelAll}
-        selectedItem={selectedItem}
       />
       <DiscountDialog
         isOpen={isDiscountDialogOpen}
@@ -2150,17 +2295,6 @@ function POSPageContent() {
         onOpenChange={setIsSuspendNoteOpen}
         onConfirm={confirmHold}
       />
-      <PriceEditDialog
-        isOpen={isPriceEditOpen}
-        onOpenChange={setIsPriceEditOpen}
-        item={selectedItem}
-        onUpdate={handleUpdateItem}
-      />
-      <AdminAuthDialog
-        isOpen={isAuthDialogOpen}
-        onOpenChange={setIsAuthDialogOpen}
-        onSuccess={handleAdminAuthSuccess}
-      />
       <AdminAuthDialog
         isOpen={isPriceEditAuthOpen}
         onOpenChange={setIsPriceEditAuthOpen}
@@ -2168,6 +2302,7 @@ function POSPageContent() {
         description="Please provide credentials to edit item price"
         requiredCredentials={priceEditAuthCredentials}
         onSuccess={handlePriceEditAuthSuccess}
+        preventCloseAutoFocus
       />
 
       <AdminAuthDialog
@@ -2178,7 +2313,7 @@ function POSPageContent() {
         requiredCredentials={lineVoidAuthCredentials}
         onSuccess={() => {
              setIsLineVoidAuthOpen(false);
-             setIsCancelDialogOpen(true);
+             if (pendingVoidItemId) performVoidLine(pendingVoidItemId);
         }}
       />
       <AdminAuthDialog

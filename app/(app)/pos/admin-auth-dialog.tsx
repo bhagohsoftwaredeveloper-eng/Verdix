@@ -27,6 +27,9 @@ interface AdminAuthDialogProps {
   } | null;
   title?: string;
   description?: string;
+  /** When true, the dialog won't restore focus to the trigger on close
+   *  (lets the caller move focus to an inline editor instead). */
+  preventCloseAutoFocus?: boolean;
 }
 
 export function AdminAuthDialog({
@@ -36,6 +39,7 @@ export function AdminAuthDialog({
   requiredCredentials,
   title,
   description,
+  preventCloseAutoFocus,
 }: AdminAuthDialogProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -123,7 +127,10 @@ export function AdminAuthDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onCloseAutoFocus={preventCloseAutoFocus ? (e) => e.preventDefault() : undefined}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {title || 'Admin Authentication Required'}

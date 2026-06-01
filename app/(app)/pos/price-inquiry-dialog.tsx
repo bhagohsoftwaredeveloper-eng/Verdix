@@ -3,13 +3,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from '@/components/ui/sheet';
 import {
   Command,
   CommandEmpty,
@@ -70,14 +70,14 @@ export function PriceInquiryDialog({
 
   return (
     <>
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Price Inquiry</DialogTitle>
-          <DialogDescription>
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="sm:max-w-2xl">
+        <SheetHeader>
+          <SheetTitle>Price Inquiry</SheetTitle>
+          <SheetDescription>
             Find a product by name or Barcode to check its price.
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
         <Command shouldFilter={false} className="border rounded-md min-h-[400px]">
           <CommandInput
             placeholder="Type a product name or Barcode..."
@@ -113,20 +113,20 @@ export function PriceInquiryDialog({
             )}
           </CommandList>
         </Command>
-        <DialogFooter>
+        <SheetFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
 
     {/* Price Result Dialog - Sibling to main dialog */}
-    <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && closePriceDialog()}>
-        <DialogContent className="sm:max-w-md border-primary/20 shadow-2xl">
-            <DialogHeader>
-                <DialogTitle className="text-center text-xl">{selectedProduct?.name}</DialogTitle>
-            </DialogHeader>
+    <Sheet open={!!selectedProduct} onOpenChange={(open) => !open && closePriceDialog()}>
+        <SheetContent side="right" className="sm:max-w-md border-primary/20 shadow-2xl">
+            <SheetHeader>
+                <SheetTitle className="text-center text-xl">{selectedProduct?.name}</SheetTitle>
+            </SheetHeader>
             
             {selectedProduct && (
                 <div className="py-6 flex flex-col items-center animate-in zoom-in-95 duration-200">
@@ -155,13 +155,13 @@ export function PriceInquiryDialog({
                 </div>
             )}
 
-            <DialogFooter className="sm:justify-center">
+            <SheetFooter className="sm:justify-center">
                 <Button size="lg" className="w-full sm:w-auto min-w-[120px]" onClick={closePriceDialog}>
                     Done
                 </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
+            </SheetFooter>
+        </SheetContent>
+    </Sheet>
     </>
   );
 }

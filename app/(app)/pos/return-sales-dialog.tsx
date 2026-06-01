@@ -3,13 +3,13 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Undo, ArrowLeft, ChevronsRight, Search } from 'lucide-react';
+import { Undo, ArrowLeft, Search, AlertTriangle, Clock, User, Calendar, CreditCard, ShoppingBag, Loader2, ChevronRight, Printer, CheckCircle2, Minus, Plus } from 'lucide-react';
 import type { Sale, SaleItem } from '@/lib/types';
 import { format, subMinutes } from 'date-fns';
 import { AdminAuthDialog } from './admin-auth-dialog';
@@ -40,6 +40,32 @@ interface ReturnSalesDialogProps {
   currentUser?: any;
   terminalId?: string;
   printMode: 'browser' | 'escpos' | 'usb' | 'native';
+}
+
+const peso = (n: number) => `₱${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Compact selectable row used in the "recent transactions" quick-pick list
+function TransactionPickRow({ sale, onPick }: { sale: any, onPick: (s: any) => void }) {
+    return (
+        <button
+            onClick={() => onPick(sale)}
+            className="group flex w-full items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-primary/5"
+        >
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                    <span className="truncate font-mono text-sm font-semibold">{sale.orderNumber ? sale.orderNumber : sale.id?.substring(0, 7)}</span>
+                    <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{sale.paymentMethod || '-'}</span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="truncate">{sale.customer?.name || 'Walk-in'}</span>
+                    <span>·</span>
+                    <span className="shrink-0">{format(new Date(sale.date || new Date()), 'MMM d, p')}</span>
+                </div>
+            </div>
+            <span className="shrink-0 font-mono text-sm font-bold">{peso(sale.total)}</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </button>
+    );
 }
 
 const MOCK_RETURNABLE_SALES: Sale[] = [
@@ -112,79 +138,126 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
         onReturnItems(itemsToReturn);
     };
 
+    const allSelected = sale.items.length > 0 && selectedItems.size === sale.items.length;
+
+    const toggleAll = () => {
+        if (allSelected) {
+            setSelectedItems(new Set());
+            setReturnQuantities({});
+        } else {
+            const all = new Set<string>();
+            const q: Record<string, number> = {};
+            sale.items.forEach(it => { all.add(it.product.id); q[it.product.id] = it.quantity; });
+            setSelectedItems(all);
+            setReturnQuantities(q);
+        }
+    };
+
+    const step = (item: SaleItem, delta: number) => {
+        const current = returnQuantities[item.product.id] || 1;
+        const next = Math.min(item.quantity, Math.max(1, current + delta));
+        setReturnQuantities(prev => ({ ...prev, [item.product.id]: next }));
+    };
+
+    const creditTotal = sale.items.reduce((sum, item) => {
+        if (!selectedItems.has(item.product.id)) return sum;
+        const qty = returnQuantities[item.product.id] || item.quantity;
+        return sum + item.price * qty;
+    }, 0);
+    const totalReturnQty = sale.items.reduce((sum, item) => selectedItems.has(item.product.id) ? sum + (returnQuantities[item.product.id] || item.quantity) : sum, 0);
+
     return (
-        <>
-            <DialogHeader>
-                <div className="flex items-center gap-2 mb-2">
-                    <Button variant="outline" size="icon" onClick={onBack}>
-                        <ArrowLeft className="h-4 w-4" />
-                    </Button>
-                    <div>
-                        <DialogTitle>Select Items to Return</DialogTitle>
-                        <DialogDescription>
-                            From SO Number: {sale.orderNumber || sale.id}
-                        </DialogDescription>
-                    </div>
+        <div className="flex h-full flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-2 border-b pb-3 shrink-0">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
+                    <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div className="min-w-0">
+                    <h2 className="text-base font-semibold">Select Items to Return</h2>
+                    <p className="truncate text-xs text-muted-foreground">SO Number: <span className="font-mono">{sale.orderNumber || sale.id}</span></p>
                 </div>
-            </DialogHeader>
-            <ScrollArea className="h-80">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-12"></TableHead>
-                            <TableHead>Product</TableHead>
-                            <TableHead>Unit</TableHead>
-                            <TableHead className="text-right">Sold Qty</TableHead>
-                            <TableHead className="text-right">Return Qty</TableHead>
-                            <TableHead className="text-right">Price</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {sale.items.map((item, index) => (
-                            <TableRow key={index}>
-                                <TableCell>
-                                    <Checkbox
-                                        checked={selectedItems.has(item.product.id)}
-                                        onCheckedChange={() => handleItemToggle(item)}
-                                    />
-                                </TableCell>
-                                <TableCell>{item.product.name}</TableCell>
-                                <TableCell>{item.product.unitOfMeasure}</TableCell>
-                                <TableCell className="text-right">{formatQuantity(item.quantity)}</TableCell>
-                                <TableCell className="text-right">
-                                    {selectedItems.has(item.product.id) ? (
-                                        <Input 
-                                            type="number" 
-                                            min="1" 
+            </div>
+
+            {/* Select-all bar */}
+            <div className="mt-3 flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 shrink-0">
+                <button type="button" onClick={toggleAll} className="flex items-center gap-2 text-sm font-medium">
+                    <Checkbox checked={allSelected} />
+                    Select all items
+                </button>
+                <span className="text-xs text-muted-foreground">{selectedItems.size} of {sale.items.length} selected</span>
+            </div>
+
+            {/* Item list */}
+            <div className="mt-3 flex-1 overflow-hidden rounded-xl border">
+                <ScrollArea className="h-full">
+                    {sale.items.map((item, index) => {
+                        const checked = selectedItems.has(item.product.id);
+                        const rQty = returnQuantities[item.product.id] || item.quantity;
+                        return (
+                            <div
+                                key={index}
+                                className={`flex items-center gap-3 border-b border-border/50 px-3 py-3 transition-colors ${checked ? 'bg-amber-50/60 dark:bg-amber-950/20' : 'hover:bg-muted/40'}`}
+                            >
+                                <Checkbox checked={checked} onCheckedChange={() => handleItemToggle(item)} />
+                                <div className="min-w-0 flex-1 cursor-pointer" onClick={() => handleItemToggle(item)}>
+                                    <p className="truncate text-sm font-medium">{item.product.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Sold: {formatQuantity(item.quantity)} {item.product.unitOfMeasure || ''} · {peso(item.price)} ea
+                                    </p>
+                                </div>
+                                {checked ? (
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Button variant="outline" size="icon" className="h-7 w-7" disabled={rQty <= 1} onClick={() => step(item, -1)}>
+                                            <Minus className="h-3 w-3" />
+                                        </Button>
+                                        <Input
+                                            type="number"
+                                            min="1"
                                             max={item.quantity}
-                                            className="w-20 ml-auto h-8 text-right"
+                                            className="h-7 w-12 px-1 text-center font-mono"
                                             value={returnQuantities[item.product.id] || ''}
                                             onChange={(e) => handleQuantityChange(item, e.target.value)}
                                         />
-                                    ) : (
-                                        <span className="text-muted-foreground">-</span>
-                                    )}
-                                </TableCell>
-                                <TableCell className="text-right">₱{item.price.toFixed(2)}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </ScrollArea>
-             <DialogFooter>
+                                        <Button variant="outline" size="icon" className="h-7 w-7" disabled={rQty >= item.quantity} onClick={() => step(item, 1)}>
+                                            <Plus className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <span className="shrink-0 text-xs text-muted-foreground">Not returning</span>
+                                )}
+                                <div className="w-20 shrink-0 text-right font-mono text-sm font-semibold">
+                                    {checked ? peso(item.price * rQty) : '—'}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </ScrollArea>
+            </div>
+
+            {/* Live credit total */}
+            <div className="mt-3 flex items-center justify-between rounded-xl border bg-gradient-to-br from-amber-500/10 to-transparent px-4 py-3 shrink-0">
+                <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Merchandise Credit</p>
+                    <p className="text-xs text-muted-foreground">{totalReturnQty} {totalReturnQty === 1 ? 'item' : 'items'} to return</p>
+                </div>
+                <p className="font-mono text-2xl font-black tabular-nums text-amber-600">{peso(creditTotal)}</p>
+            </div>
+
+            <SheetFooter className="mt-4 shrink-0">
                 <Button variant="outline" onClick={onBack}>
                     Cancel
                 </Button>
                 <Button
-                    variant="destructive"
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
                     disabled={selectedItems.size === 0}
                     onClick={handleConfirmReturn}
                 >
                     <Undo className="mr-2 h-4 w-4" />
-                    Return Selected Items ({selectedItems.size})
+                    Issue Credit ({selectedItems.size})
                 </Button>
-            </DialogFooter>
-        </>
+            </SheetFooter>
+        </div>
     );
 }
 
@@ -202,65 +275,38 @@ const ReturnSuccessView = ({
     onPrint?: () => void
 }) => {
     return (
-        <>
-            <DialogHeader>
-                <div className="flex flex-col items-center justify-center space-y-2 mb-4">
-                    <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                        <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width="24" 
-                            height="24" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="2" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round" 
-                            className="text-green-600"
-                        >
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                        </svg>
-                    </div>
-                    <DialogTitle className="text-xl text-center">Return Successful</DialogTitle>
-                    <DialogDescription className="text-center">
-                        Items have been returned to inventory.
-                    </DialogDescription>
+        <div className="flex h-full flex-col">
+            <div className="flex flex-1 flex-col items-center justify-center text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-950">
+                    <CheckCircle2 className="h-9 w-9 text-green-600" />
                 </div>
-            </DialogHeader>
+                <h2 className="mt-4 text-xl font-bold">Return Successful</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Items have been returned to inventory.</p>
 
-            <div className="py-6 space-y-6">
-                <div className="bg-muted p-4 rounded-lg space-y-3">
-                    <p className="text-sm text-center text-muted-foreground font-medium uppercase tracking-wider">
+                <div className="mt-6 w-full max-w-xs rounded-2xl border bg-gradient-to-br from-amber-500/10 to-transparent p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         Merchandise Credit Issued
                     </p>
-                    <p className="text-4xl font-bold text-center text-primary">
-                        ₱{returnedTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <p className="mt-1 font-mono text-4xl font-black tabular-nums text-amber-600">
+                        {peso(returnedTotal)}
                     </p>
                 </div>
-                
-                <div className="text-center text-sm text-muted-foreground">
-                    <p>Reference Transaction: <span className="font-mono font-medium text-foreground">{saleId}</span></p>
-                </div>
+
+                <p className="mt-4 text-sm text-muted-foreground">
+                    Reference: <span className="font-mono font-medium text-foreground">{saleId}</span>
+                </p>
             </div>
 
-            <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button 
-                    className="w-full sm:w-auto" 
-                    variant="outline" 
-                    onClick={onPrint}
-                >
-                    <Search className="mr-2 h-4 w-4" /> {/* Using Search as generic icon placeholders if Printer not avail, but Printer is imported */}
+            <SheetFooter className="shrink-0 flex-col gap-2 sm:flex-row">
+                <Button className="w-full sm:w-auto" variant="outline" onClick={onPrint}>
+                    <Printer className="mr-2 h-4 w-4" />
                     Print Credit Slip
                 </Button>
-                <Button 
-                    className="w-full sm:w-auto" 
-                    onClick={onClose}
-                >
+                <Button className="w-full sm:w-auto" onClick={onClose}>
                     Close
                 </Button>
-            </DialogFooter>
-        </>
+            </SheetFooter>
+        </div>
     );
 };
 
@@ -281,6 +327,8 @@ export function ReturnSalesDialog({
   const [returnedItems, setReturnedItems] = useState<SaleItem[]>([]);
   const [posSettings, setPosSettings] = useState<any>(null);
   const [returnedTotal, setReturnedTotal] = useState(0);
+  const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [isRecentLoading, setIsRecentLoading] = useState(false);
   const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
   const { toast } = useToast();
   const authSucceededRef = useRef(false);
@@ -337,6 +385,24 @@ export function ReturnSalesDialog({
     }
   }, [isOpen]);
   
+  // Load recent transactions for the quick-pick list once we reach the search step
+  useEffect(() => {
+    if (isOpen && step === 'input_so') {
+        setIsRecentLoading(true);
+        fetch(getApiUrl(`/pos/recent-sales?_t=${Date.now()}`), { cache: 'no-store' })
+          .then(res => res.json())
+          .then(result => { if (result.success) setRecentSales(result.data || []); })
+          .catch(() => {})
+          .finally(() => setIsRecentLoading(false));
+    }
+  }, [isOpen, step]);
+
+  const handlePickSale = (sale: Sale) => {
+      setSelectedSale(sale);
+      setSearchError('');
+      setStep('select_items');
+  };
+
   const handleAuthSuccess = () => {
       authSucceededRef.current = true;
       setStep('input_so');
@@ -489,57 +555,89 @@ export function ReturnSalesDialog({
 
   return (
     <>
-      <Dialog open={isOpen && (step === 'input_so' || step === 'select_items' || step === 'success')} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
+      <Sheet open={isOpen && (step === 'input_so' || step === 'select_items' || step === 'success')} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="sm:max-w-xl w-full flex flex-col">
           {step === 'success' ? (
-              <ReturnSuccessView 
-                returnedTotal={returnedTotal} 
-                saleId={String(selectedSale?.orderNumber || selectedSale?.id || '')} 
+              <ReturnSuccessView
+                returnedTotal={returnedTotal}
+                saleId={String(selectedSale?.orderNumber || selectedSale?.id || '')}
                 onClose={handleCloseSuccess}
                 onPrint={handlePrintCredit}
               />
           ) : step === 'select_items' && selectedSale ? (
-            <SelectItemsView 
-                sale={selectedSale} 
-                onReturnItems={handleReturnItems} 
-                onBack={handleBackToSearch} 
+            <SelectItemsView
+                sale={selectedSale}
+                onReturnItems={handleReturnItems}
+                onBack={handleBackToSearch}
             />
           ) : (
-            <>
-              <DialogHeader>
-                <DialogTitle>Process a Return</DialogTitle>
-                <DialogDescription>
-                    Enter the SO Number of the transaction you want to return items from.
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="py-6 space-y-4">
-                  <div className="flex gap-2">
-                      <Input
-                          placeholder="Enter SO Number (e.g. 10001)"
-                          value={soNumber}
-                          onChange={(e) => setSoNumber(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSearchSO()}
-                          autoFocus
-                      />
-                      <Button onClick={handleSearchSO} disabled={isLoading || !soNumber.trim()}>
-                          {isLoading ? 'Searching...' : 'Search'}
+            <div className="flex h-full flex-col">
+              <SheetHeader className="shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-950">
+                        <Undo className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <SheetTitle>Merchandise Credit</SheetTitle>
+                        <SheetDescription>Search by SO number or pick a recent transaction</SheetDescription>
+                    </div>
+                </div>
+              </SheetHeader>
+
+              <div className="mt-4 shrink-0">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">SO Number</label>
+                  <div className="mt-1.5 flex gap-2">
+                      <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                              className="h-11 pl-9"
+                              placeholder="Enter SO Number (e.g. 10001)"
+                              value={soNumber}
+                              onChange={(e) => setSoNumber(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSearchSO()}
+                              autoFocus
+                          />
+                      </div>
+                      <Button className="h-11" onClick={handleSearchSO} disabled={isLoading || !soNumber.trim()}>
+                          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
                       </Button>
                   </div>
                   {searchError && (
-                      <p className="text-sm text-destructive">{searchError}</p>
+                      <p className="mt-2 flex items-center gap-1.5 text-sm text-destructive">
+                          <AlertTriangle className="h-4 w-4" /> {searchError}
+                      </p>
                   )}
               </div>
 
-              <DialogFooter>
+              <div className="mt-5 flex items-center gap-2 shrink-0">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold">Recent Transactions</span>
+              </div>
+              <div className="mt-2 flex-1 overflow-hidden rounded-xl border">
+                  <ScrollArea className="h-full">
+                      {isRecentLoading ? (
+                          <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                          </div>
+                      ) : recentSales.length > 0 ? (
+                          recentSales.map((sale: any) => (
+                              <TransactionPickRow key={sale.id} sale={sale} onPick={handlePickSale} />
+                          ))
+                      ) : (
+                          <div className="p-6 text-center text-sm text-muted-foreground">No recent transactions.</div>
+                      )}
+                  </ScrollArea>
+              </div>
+
+              <SheetFooter className="mt-4 shrink-0">
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
                     Cancel
                 </Button>
-              </DialogFooter>
-            </>
+              </SheetFooter>
+            </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
       
       <AdminAuthDialog
         isOpen={isOpen && step === 'auth'}

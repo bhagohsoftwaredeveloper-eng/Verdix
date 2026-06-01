@@ -3,13 +3,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -20,7 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Printer, ArrowLeft, Package2 } from 'lucide-react';
+import { Printer, ArrowLeft, Package2, User, CreditCard, Hash, Calendar, ChevronRight, Clock, ShoppingBag } from 'lucide-react';
 import type { Sale } from '@/lib/types';
 import { format } from 'date-fns';
 import { Logo } from '@/components/logo';
@@ -143,6 +143,156 @@ function ReceiptPrintView({
     );
 }
 
+function SaleDetailView({
+    sale,
+    onReprint,
+}: {
+    sale: any;
+    onReprint: () => void;
+}) {
+    const items = sale.items || [];
+    const gross = items.reduce((acc: number, it: any) => acc + it.price * it.quantity, 0);
+    const totalDiscount = items.reduce((acc: number, it: any) => acc + (it.discount || 0), 0);
+    const totalQty = items.reduce((acc: number, it: any) => acc + it.quantity, 0);
+    const tendered = sale.amountTendered ?? sale.total;
+    const change = sale.change ?? Math.max(0, tendered - sale.total);
+
+    return (
+        <div className="flex h-full flex-col">
+            {/* Top action bar */}
+            <div className="flex items-center justify-between gap-2 border-b pb-3 shrink-0">
+                <h2 className="text-sm font-semibold">Transaction Details</h2>
+                <Button size="sm" className="gap-1.5" onClick={onReprint}>
+                    <Printer className="h-4 w-4" />
+                    Reprint Receipt
+                </Button>
+            </div>
+
+            {/* Header summary */}
+            <div className="mt-4 rounded-xl border bg-gradient-to-br from-primary/5 to-transparent p-4 shrink-0">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Clock className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">SO Number</p>
+                            <p className="truncate font-mono text-lg font-bold leading-tight">{sale.orderNumber || sale.id?.substring(0, 8)}</p>
+                        </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total</p>
+                        <p className="font-mono text-2xl font-black tabular-nums text-primary leading-tight">₱{formatCurrency(sale.total)}</p>
+                    </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                    {[
+                        { icon: User, label: 'Customer', value: sale.customer?.name || 'Walk-in' },
+                        { icon: Calendar, label: 'Date & Time', value: format(new Date(sale.date || new Date()), 'MMM d, yyyy • p') },
+                        { icon: CreditCard, label: 'Payment', value: sale.paymentMethod || '-' },
+                        { icon: User, label: 'Cashier', value: sale.cashierName || sale.salesPerson || '-' },
+                        { icon: Hash, label: 'Reference', value: sale.paymentReference || '-' },
+                        { icon: Clock, label: 'Points Earned', value: String(sale.pointsEarned || 0) },
+                    ].map(({ icon: Icon, label, value }) => (
+                        <div key={label} className="flex items-start gap-2 min-w-0">
+                            <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <div className="min-w-0">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none">{label}</p>
+                                <p className="mt-0.5 truncate text-sm font-medium">{value}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Line items */}
+            <div className="mt-4 flex items-center gap-2 shrink-0">
+                <ShoppingBag className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold">Products</h3>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {items.length} {items.length === 1 ? 'line' : 'lines'} · {totalQty} {totalQty === 1 ? 'pc' : 'pcs'}
+                </span>
+            </div>
+
+            <div className="mt-2 flex-1 overflow-hidden rounded-xl border">
+                <ScrollArea className="h-full">
+                    <Table>
+                        <TableHeader className="sticky top-0 z-10 bg-muted">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="text-xs font-semibold uppercase tracking-wide">Product</TableHead>
+                                <TableHead className="text-center text-xs font-semibold uppercase tracking-wide">Qty</TableHead>
+                                <TableHead className="text-right text-xs font-semibold uppercase tracking-wide">Unit Price</TableHead>
+                                <TableHead className="text-right text-xs font-semibold uppercase tracking-wide">Disc</TableHead>
+                                <TableHead className="text-right text-xs font-semibold uppercase tracking-wide">Total</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {items.length > 0 ? items.map((it: any, idx: number) => {
+                                const lineGross = it.price * it.quantity;
+                                const lineTotal = lineGross - (it.discount || 0);
+                                return (
+                                    <TableRow key={idx} className="border-b-border/50">
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-sm leading-tight">{it.product?.name || it.name}</span>
+                                                {(it.product?.sku || it.product?.unitOfMeasure) && (
+                                                    <span className="text-[11px] text-muted-foreground">
+                                                        {it.product?.sku ? `${it.product.sku}` : ''}
+                                                        {it.product?.sku && it.product?.unitOfMeasure ? ' · ' : ''}
+                                                        {it.product?.unitOfMeasure || ''}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-center font-mono text-sm">{it.quantity}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm">₱{formatCurrency(it.price)}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm text-rose-600">
+                                            {it.discount ? `−₱${formatCurrency(it.discount)}` : '—'}
+                                        </TableCell>
+                                        <TableCell className="text-right font-mono text-sm font-semibold">₱{formatCurrency(lineTotal)}</TableCell>
+                                    </TableRow>
+                                );
+                            }) : (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                        No product lines on this transaction.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
+            </div>
+
+            {/* Totals */}
+            <div className="mt-4 space-y-2 rounded-xl border bg-muted/30 p-4 shrink-0">
+                <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-mono tabular-nums">₱{formatCurrency(gross)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Discount</span>
+                    <span className="font-mono tabular-nums text-rose-600">−₱{formatCurrency(totalDiscount)}</span>
+                </div>
+                <div className="h-px bg-border" />
+                <div className="flex justify-between">
+                    <span className="text-sm font-bold uppercase tracking-wide">Total</span>
+                    <span className="font-mono text-lg font-black tabular-nums text-primary">₱{formatCurrency(sale.total)}</span>
+                </div>
+                <div className="flex justify-between text-sm pt-1">
+                    <span className="flex items-center gap-1.5 text-muted-foreground"><Clock className="h-3.5 w-3.5" /> Tendered</span>
+                    <span className="font-mono tabular-nums">₱{formatCurrency(tendered)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Change</span>
+                    <span className="font-mono tabular-nums">₱{formatCurrency(change)}</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export function RecentSalesDialog({
   isOpen,
   onOpenChange,
@@ -151,6 +301,7 @@ export function RecentSalesDialog({
 }: RecentSalesDialogProps) {
   const [step, setStep] = useState<'loading' | 'auth' | 'list'>('loading');
   const [saleToPrint, setSaleToPrint] = useState<Sale | null>(null);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [posSettings, setPosSettings] = useState<SystemSettings | null>(initialSettings || null);
@@ -164,6 +315,7 @@ export function RecentSalesDialog({
         setStep('loading');
         setIsLoading(true);
         setSaleToPrint(null);
+        setSelectedSale(null);
         
         if (initialSettings) {
             setPosSettings(initialSettings);
@@ -209,6 +361,8 @@ export function RecentSalesDialog({
                 
                 if (result.success) {
                     setRecentSales(result.data);
+                    // Auto-select the most recent sale so the detail panel isn't empty
+                    setSelectedSale(prev => prev || result.data[0] || null);
                 } else {
                     console.error('Failed to fetch recent sales:', result.error);
                 }
@@ -291,99 +445,105 @@ export function RecentSalesDialog({
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setSaleToPrint(null);
+      setSelectedSale(null);
     }
     onOpenChange(open);
   }
 
   return (
     <>
-    <Dialog open={isOpen && (step === 'list')} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+    <Sheet open={isOpen && (step === 'list')} onOpenChange={handleOpenChange}>
+      <SheetContent side="right" className="sm:max-w-4xl w-full flex flex-col">
         {saleToPrint ? (
-            <ReceiptPrintView 
-                sale={saleToPrint} 
-                onBack={handleBackToList} 
+            <ReceiptPrintView
+                sale={saleToPrint}
+                onBack={handleBackToList}
                 onPrint={() => handlePrintReceiptAction(saleToPrint)}
                 settings={posSettings}
             />
         ) : (
         <>
-            <DialogHeader>
-            <div className="flex items-center justify-between">
+            <SheetHeader className="shrink-0">
+            <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Clock className="h-5 w-5" />
+                </div>
                 <div>
-                    <DialogTitle>Recent Transactions</DialogTitle>
-                    <DialogDescription>
-                        A list of the 20 most recent sales.
-                    </DialogDescription>
+                    <SheetTitle>Recent Transactions</SheetTitle>
+                    <SheetDescription>
+                        Select a transaction on the left to view its products
+                    </SheetDescription>
+                </div>
+            </div>
+            </SheetHeader>
+
+            <div className="mt-4 flex flex-1 gap-4 overflow-hidden">
+                {/* LEFT: transactions list */}
+                <div className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-xl border">
+                    <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 shrink-0">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transactions</span>
+                        {!isLoading && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{recentSales.length}</span>}
+                    </div>
+                    <ScrollArea className="flex-1">
+                        {isLoading ? (
+                            <div className="p-4 text-center text-sm text-muted-foreground">Loading recent sales...</div>
+                        ) : recentSales && recentSales.length > 0 ? (
+                            recentSales.map((sale: any) => {
+                                const isActive = selectedSale?.id === sale.id;
+                                return (
+                                    <button
+                                        key={sale.id}
+                                        onClick={() => setSelectedSale(sale)}
+                                        className={`w-full border-b border-border/50 px-3 py-2.5 text-left transition-colors ${isActive ? 'bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent hover:bg-muted/50'}`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="truncate font-mono text-sm font-semibold">{sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7)}</span>
+                                            <span className="shrink-0 font-mono text-sm font-bold">₱{sale.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                            <span className="truncate">{sale.customer?.name || 'Walk-in'}</span>
+                                            <span className="shrink-0">{format(new Date(sale.date || new Date()), 'p')}</span>
+                                        </div>
+                                        <div className="mt-1">
+                                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                                {sale.paymentMethod || '-'}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="p-4 text-center text-sm text-muted-foreground">No recent sales found.</div>
+                        )}
+                    </ScrollArea>
                 </div>
 
-            </div>
-            </DialogHeader>
-            <ScrollArea className="h-96">
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>SO Number</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead>Ref</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {isLoading && (
-                    <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
-                        Loading recent sales...
-                    </TableCell>
-                    </TableRow>
-                )}
-                {!isLoading && recentSales && recentSales.length > 0 ? (
-                    recentSales.map((sale: any) => (
-                    <TableRow key={sale.id}>
-                        <TableCell className="font-mono">{sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7)}</TableCell>
-                        <TableCell>{sale.customer.name || 'Walk-in'}</TableCell>
-                        <TableCell>{format(new Date(sale.date || new Date()), 'p')}</TableCell>
-                        <TableCell>{sale.paymentMethod || '-'}</TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{sale.paymentReference || '-'}</TableCell>
-                        <TableCell className="text-right">₱{sale.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                        <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                            <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePrintReceipt(sale)}
-                            >
-                            <Printer className="mr-2 h-4 w-4" />
-                            Reprint
-                            </Button>
+                {/* RIGHT: selected transaction contents */}
+                <div className="flex-1 overflow-hidden">
+                    {selectedSale ? (
+                        <SaleDetailView
+                            sale={selectedSale}
+                            onReprint={() => handlePrintReceipt(selectedSale)}
+                        />
+                    ) : (
+                        <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed text-center text-muted-foreground">
+                            <Clock className="mb-2 h-10 w-10 opacity-40" />
+                            <p className="text-sm font-medium">No transaction selected</p>
+                            <p className="text-xs">Pick a transaction from the list to see its products.</p>
                         </div>
-                        </TableCell>
-                    </TableRow>
-                    ))
-                ) : (
-                    !isLoading && (
-                        <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
-                            No recent sales found.
-                        </TableCell>
-                        </TableRow>
-                    )
-                )}
-                </TableBody>
-            </Table>
-            </ScrollArea>
-            <DialogFooter>
+                    )}
+                </div>
+            </div>
+
+            <SheetFooter className="shrink-0 mt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Close
             </Button>
-            </DialogFooter>
+            </SheetFooter>
         </>
         )}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
 
     <AdminAuthDialog
         isOpen={isOpen && step === 'auth'}
