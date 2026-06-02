@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import Link from 'next/link';
-import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart, Layers, CreditCard } from 'lucide-react';
+import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart, Layers, CreditCard, ShieldCheck, Landmark } from 'lucide-react';
 
 export default function ReportsPage() {
   return (
@@ -196,6 +196,30 @@ export default function ReportsPage() {
                   Split Payments Report
                 </CardTitle>
                 <CardDescription>Breakdown of sales transactions paid with multiple payment methods.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/discounts">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-blue-600" />
+                  Discount Report
+                </CardTitle>
+                <CardDescription>Senior Citizen, PWD, NAAC, and Solo Parent discounts with cardholder name and ID number (BIR).</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/sales/bir-summary">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full border-blue-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Landmark className="h-5 w-5 text-blue-700" />
+                  BIR Sales Summary
+                </CardTitle>
+                <CardDescription>Daily sales summary with VAT breakdown, deductions, and SC/PWD/NAAC/Solo Parent sales books (RR 16-2018).</CardDescription>
               </CardHeader>
             </Card>
           </Link>

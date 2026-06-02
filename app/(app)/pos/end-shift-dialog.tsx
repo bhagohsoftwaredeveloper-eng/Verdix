@@ -65,24 +65,24 @@ const DenominationInput = memo(({
   const hasCount = (count || 0) > 0;
 
   return (
-    <div className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-2 shadow-sm transition-all hover:shadow ${hasCount ? 'border-slate-300 ring-1 ring-slate-100' : 'border-slate-200'}`}>
+    <div className={`flex items-center gap-3 rounded-xl border bg-white dark:bg-slate-800/60 px-3 py-2 shadow-sm transition-all hover:shadow ${hasCount ? 'border-slate-300 ring-1 ring-slate-100 dark:border-slate-600 dark:ring-slate-700' : 'border-slate-200 dark:border-slate-700'}`}>
       <div className={`flex h-9 min-w-[3.5rem] items-center justify-center rounded-lg border font-bold text-sm tabular-nums ${color}`}>
         {displayBadge}
       </div>
-      <Label htmlFor={`denom-${denom.value}`} className="flex-1 min-w-0 truncate text-sm font-medium text-slate-500">
+      <Label htmlFor={`denom-${denom.value}`} className="flex-1 min-w-0 truncate text-sm font-medium text-slate-500 dark:text-slate-300">
         {denom.label}
       </Label>
-      <span className="text-slate-300 font-mono text-sm">×</span>
+      <span className="text-slate-300 dark:text-slate-600 font-mono text-sm">×</span>
       <Input
         id={`denom-${denom.value}`}
         type="number"
         placeholder="0"
         value={count || ''}
         onChange={(e) => onCountChange(denom.value, e.target.value)}
-        className="w-16 h-9 text-center font-mono font-semibold"
+        className="w-16 h-9 text-center font-mono font-semibold bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         autoFocus={denom.value === 1000}
       />
-      <div className={`w-24 text-right font-mono text-sm font-bold tabular-nums ${hasCount ? 'text-slate-800' : 'text-slate-300'}`}>
+      <div className={`w-24 text-right font-mono text-sm font-bold tabular-nums ${hasCount ? 'text-slate-800 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}>
         ₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(subtotal)}
       </div>
     </div>
@@ -170,15 +170,15 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
               <div className="flex items-center justify-between px-1 shrink-0">
                 <div className="flex items-center gap-2">
                   <Calculator className="w-4 h-4 text-primary" />
-                  <h3 className="font-bold text-slate-700">Cash Drawer Count</h3>
+                  <h3 className="font-bold text-slate-700 dark:text-slate-200">Cash Drawer Count</h3>
                 </div>
-                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold font-mono text-white tabular-nums shadow-sm">
+                <span className="rounded-full bg-slate-900 dark:bg-slate-700 px-3 py-1 text-xs font-bold font-mono text-white tabular-nums shadow-sm">
                   ₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(countedCash)}
                 </span>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border bg-slate-50/60 p-4 space-y-5">
+              <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border bg-slate-50/60 dark:bg-slate-800/40 p-4 space-y-5">
                   <section className="space-y-2">
-                    <div className="flex items-center gap-2 mb-1 text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                    <div className="flex items-center gap-2 mb-1 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">
                       <Banknote className="w-3.5 h-3.5 text-emerald-500" />
                       Bills
                     </div>
@@ -187,7 +187,7 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
                         <DenominationInput
                           key={denom.value}
                           denom={denom}
-                          color="bg-emerald-50 text-emerald-700 border-emerald-100"
+                          color="bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900"
                           count={counts[denom.value]}
                           onCountChange={handleCountChange}
                         />
@@ -198,7 +198,7 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
                   <Separator />
 
                   <section className="space-y-2">
-                    <div className="flex items-center gap-2 mb-1 text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                    <div className="flex items-center gap-2 mb-1 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">
                       <Coins className="w-3.5 h-3.5 text-amber-500" />
                       Coins
                     </div>
@@ -207,7 +207,7 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
                         <DenominationInput
                           key={denom.value}
                           denom={denom}
-                          color="bg-amber-50 text-amber-700 border-amber-100"
+                          color="bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900"
                           count={counts[denom.value]}
                           onCountChange={handleCountChange}
                         />
@@ -221,36 +221,36 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
             <div className="lg:col-span-2 flex flex-col min-h-0 overflow-y-auto space-y-4">
                 <div className="flex items-center gap-2 px-1">
                   <FileText className="w-4 h-4 text-primary" />
-                  <h3 className="font-bold text-slate-700 text-lg">Shift Settlement</h3>
+                  <h3 className="font-bold text-slate-700 dark:text-slate-200 text-lg">Shift Settlement</h3>
                 </div>
 
-                <div className="space-y-0 relative overflow-hidden rounded-2xl border shadow-sm bg-white pt-2">
+                <div className="space-y-0 relative overflow-hidden rounded-2xl border shadow-sm bg-white dark:bg-slate-800/60 pt-2">
                     <div className="px-6 py-4 space-y-4">
                         <div className="flex justify-between items-center group">
-                            <span className="text-slate-500 text-sm">Beginning Balance</span>
-                            <span className="font-mono font-medium">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(startingCash)}</span>
+                            <span className="text-slate-500 dark:text-slate-400 text-sm">Beginning Balance</span>
+                            <span className="font-mono font-medium dark:text-slate-100">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(startingCash)}</span>
                         </div>
                         <div className="flex justify-between items-center group">
-                            <span className="text-slate-500 text-sm">Cash Sales</span>
-                            <span className="font-mono font-medium text-emerald-600">+₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashSales)}</span>
+                            <span className="text-slate-500 dark:text-slate-400 text-sm">Cash Sales</span>
+                            <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">+₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashSales)}</span>
                         </div>
                         {(cashIn > 0 || cashOut > 0) && (
                             <>
                                 <div className="flex justify-between items-center group">
-                                    <span className="text-slate-500 text-sm">Cash Deposits (In)</span>
-                                    <span className="font-mono font-medium text-emerald-600">+₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashIn)}</span>
+                                    <span className="text-slate-500 dark:text-slate-400 text-sm">Cash Deposits (In)</span>
+                                    <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">+₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashIn)}</span>
                                 </div>
                                 <div className="flex justify-between items-center group">
-                                    <span className="text-slate-500 text-sm">Cash Pickups (Out)</span>
-                                    <span className="font-mono font-medium text-red-600">-₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashOut)}</span>
+                                    <span className="text-slate-500 dark:text-slate-400 text-sm">Cash Pickups (Out)</span>
+                                    <span className="font-mono font-medium text-red-600 dark:text-red-400">-₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(cashOut)}</span>
                                 </div>
                             </>
                         )}
-                        
-                        <Separator className="bg-slate-100" />
-                        
+
+                        <Separator className="bg-slate-100 dark:bg-slate-700" />
+
                         <div className="flex justify-between items-center py-2">
-                            <span className="text-slate-800 font-bold uppercase text-xs tracking-widest">Expected Transfer</span>
+                            <span className="text-slate-800 dark:text-slate-100 font-bold uppercase text-xs tracking-widest">Expected Transfer</span>
                             <span className="text-lg font-black font-mono">₱{new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(expectedCash)}</span>
                         </div>
                         
@@ -266,9 +266,9 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
                     </div>
 
                     <div className={`p-4 mt-2 border-t ${
-                        Math.round(variance * 100) === 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-100' :
-                        variance > 0 ? 'bg-blue-50 text-blue-800 border-blue-100' :
-                        'bg-red-50 text-red-800 border-red-100'
+                        Math.round(variance * 100) === 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900' :
+                        variance > 0 ? 'bg-blue-50 text-blue-800 border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900' :
+                        'bg-red-50 text-red-800 border-red-100 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900'
                     }`}>
                         <div className="flex items-center justify-center gap-3">
                             {Math.round(variance * 100) === 0 ? (
@@ -293,8 +293,8 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
                     </div>
                 </div>
 
-                <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                  <div className="flex gap-3 text-xs text-slate-500 italic">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                  <div className="flex gap-3 text-xs text-slate-500 dark:text-slate-400 italic">
                     <ArrowRight className="w-3 h-3 mt-0.5 flex-shrink-0" />
                     <p>Total counted cash will be transferred to the main vault upon submission. Please re-verify any shortage exceeding ₱50.00.</p>
                   </div>

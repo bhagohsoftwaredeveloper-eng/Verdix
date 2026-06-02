@@ -41,6 +41,7 @@ import { format, isPast } from 'date-fns';
 import RecordPaymentDialog from './record-payment-dialog';
 import ViewInvoiceDialog from './view-invoice-dialog';
 import ViewPaymentDialog from './view-payment-dialog';
+import { AddPaymentDialog } from './add-payment-dialog';
 import { printPaymentReceipt } from '@/lib/print-payment-receipt';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
@@ -630,7 +631,18 @@ function PaymentHistory() {
                                                 {payment.paymentType}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right font-bold text-green-600">{formatCurrency(Number(payment.amount))}</TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="font-bold text-green-600">{formatCurrency(Number(payment.amount))}</div>
+                                            {payment.allocationStatus && payment.allocationStatus !== 'Allocated' && (
+                                                <Badge
+                                                    variant={payment.allocationStatus === 'Unallocated' ? 'secondary' : 'outline'}
+                                                    className="mt-1 text-[10px] font-normal"
+                                                    title={`Allocated ${formatCurrency(Number(payment.allocated || 0))} of ${formatCurrency(Number(payment.amount))}`}
+                                                >
+                                                    {payment.allocationStatus === 'Unallocated' ? 'Unallocated' : `${formatCurrency(Number(payment.leftToAllocate || 0))} unapplied`}
+                                                </Badge>
+                                            )}
+                                        </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-1">
                                                 <Button 
@@ -1210,11 +1222,14 @@ function StatementOfAccount() {
 export default function CustomerPaymentPage() {
   return (
     <div className="space-y-6">
-       <div>
-            <h2 className="text-3xl font-bold tracking-tight">Customer Payments</h2>
-            <p className="text-muted-foreground">Manage invoices, payments, and statements.</p>
+       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h2 className="text-3xl font-bold tracking-tight">Customer Payments</h2>
+                <p className="text-muted-foreground">Manage invoices, payments, and statements.</p>
+            </div>
+            <AddPaymentDialog onSuccess={() => window.location.reload()} />
        </div>
-       
+
        <Tabs defaultValue="outstanding" className="space-y-4">
           <TabsList>
              <TabsTrigger value="outstanding">Outstanding Invoices</TabsTrigger>

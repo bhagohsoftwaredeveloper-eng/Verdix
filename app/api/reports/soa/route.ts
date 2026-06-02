@@ -57,45 +57,98 @@ export async function GET(request: NextRequest) {
     `;
     const invoices: any[] = await query(invoicesSql, [customerId, fromDate, toDate]);
 
-    // Payments
+    // Payments (one row per payment; allocations are expanded below)
     const paymentsSql = `
-        SELECT 
-            cp.id, 
+        SELECT
+            cp.id,
             cp.reference,
-            cp.payment_date as date, 
-            cp.payment_type as type, 
-            0 as amount, 
-            CASE WHEN UPPER(cp.payment_type) = 'CHARGE' THEN 0 ELSE cp.amount END as credit, 
-            'Paid' as status,
-            cp.reference as payment_ref,
-            si.reference as invoice_ref,
-            si.id as allocatedInvoiceId,
+            cp.payment_date as date,
+            cp.payment_type as type,
+            CASE WHEN UPPER(cp.payment_type) = 'CHARGE' THEN 0 ELSE cp.amount END as credit,
             cp.note
         FROM customer_payments cp
-        LEFT JOIN sales_invoices si ON cp.note LIKE CONCAT('%#', si.id, '.') OR cp.note LIKE CONCAT('%#', si.id) OR cp.note LIKE CONCAT('%#', si.id, '.%')
         WHERE cp.customer_id = ? AND cp.payment_date BETWEEN ? AND ?
     `;
     const payments: any[] = await query(paymentsSql, [customerId, fromDate, toDate]);
 
+    // Read real allocation links from the junction table (source of truth).
+    const paymentIds = payments.map(p => p.id);
+    let allocationsByPayment = new Map<string, any[]>();
+    if (paymentIds.length > 0) {
+        const placeholders = paymentIds.map(() => '?').join(',');
+        const allocationsSql = `
+            SELECT pa.payment_id, pa.invoice_id, pa.amount_allocated, si.reference as invoice_ref
+            FROM payment_allocations pa
+            LEFT JOIN sales_invoices si ON si.id = pa.invoice_id
+            WHERE pa.payment_id IN (${placeholders})
+        `;
+        try {
+            const allocationRows: any[] = await query(allocationsSql, paymentIds);
+            for (const row of allocationRows) {
+                const list = allocationsByPayment.get(row.payment_id) || [];
+                list.push(row);
+                allocationsByPayment.set(row.payment_id, list);
+            }
+        } catch (e) {
+            // payment_allocations table may not exist yet on a fresh DB — treat all payments as unallocated.
+            allocationsByPayment = new Map();
+        }
+    }
+
+    // Expand each payment into credit lines: one per allocation, plus any unallocated remainder.
+    const paymentLines = payments.flatMap(pay => {
+        const credit = parseFloat(pay.credit);
+        const allocs = allocationsByPayment.get(pay.id) || [];
+
+        if (allocs.length === 0 || credit === 0) {
+            return [{
+                ...pay,
+                type: 'Payment',
+                description: `Payment${pay.reference ? ` (Ref: ${pay.reference})` : ''}`,
+                allocatedInvoiceId: null,
+                invoice_ref: null,
+                debit: 0,
+                credit,
+            }];
+        }
+
+        const lines = allocs.map(a => ({
+            id: `${pay.id}__${a.invoice_id}`,
+            reference: pay.reference,
+            date: pay.date,
+            type: 'Payment',
+            note: pay.note,
+            description: `Payment - Invoice #${a.invoice_ref || a.invoice_id}${pay.reference ? ` (Ref: ${pay.reference})` : ''}`,
+            allocatedInvoiceId: a.invoice_id,
+            invoice_ref: a.invoice_ref,
+            debit: 0,
+            credit: parseFloat(a.amount_allocated),
+        }));
+
+        // Any portion of the payment not allocated to an invoice shows as an unallocated credit.
+        const allocatedTotal = allocs.reduce((sum, a) => sum + parseFloat(a.amount_allocated), 0);
+        const remainder = credit - allocatedTotal;
+        if (remainder > 0.005) {
+            lines.push({
+                id: `${pay.id}__unallocated`,
+                reference: pay.reference,
+                date: pay.date,
+                type: 'Payment',
+                note: pay.note,
+                description: `Payment${pay.reference ? ` (Ref: ${pay.reference})` : ''}`,
+                allocatedInvoiceId: null,
+                invoice_ref: null,
+                debit: 0,
+                credit: remainder,
+            });
+        }
+        return lines;
+    });
+
     // 3. Combine and Sort
     const transactions = [
         ...invoices.map(inv => ({ ...inv, debit: parseFloat(inv.amount), credit: 0 })),
-        ...payments.map(pay => {
-            let description = 'Payment';
-            if (pay.invoice_ref) {
-                description += ` - Invoice #${pay.invoice_ref}`;
-            }
-            if (pay.payment_ref) {
-                description += ` (Ref: ${pay.payment_ref})`;
-            }
-            return {
-                ...pay,
-                type: 'Payment',
-                description,
-                debit: 0,
-                credit: parseFloat(pay.credit)
-            };
-        })
+        ...paymentLines
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // 4. Calculate Running Balance

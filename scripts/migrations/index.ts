@@ -76,6 +76,7 @@ import './075_add_warehouse_id_to_stock_movements';
 import './076_add_warehouse_to_purchase_orders';
 import './077_add_subtotal_to_purchase_order_items';
 import './078_alter_stock_precision';
+import './079_create_payment_allocations_table';
 
 
 // Import runner functions

@@ -1,5 +1,7 @@
-import { Dialog } from "@/components/ui/dialog";
-import { AdjustPointsDialogContent } from "../customer/loyalty/adjust-points-dialog";
+'use client';
+
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { AdjustPointsForm } from "../customer/loyalty/adjust-points-dialog";
 import { Customer } from "@/lib/types";
 
 interface LoyaltyRewardsDialogProps {
@@ -8,24 +10,35 @@ interface LoyaltyRewardsDialogProps {
   customer: Customer | null;
 }
 
-export function LoyaltyRewardsDialog({ 
-  isOpen, 
-  onOpenChange, 
-  customer 
+export function LoyaltyRewardsDialog({
+  isOpen,
+  onOpenChange,
+  customer
 }: LoyaltyRewardsDialogProps) {
-  // Prepare customer object with loyalty points default if needed, 
+  // Prepare customer object with loyalty points default if needed,
   // and handle walk-in check similar to how it was done in the parent page
   const customerData = customer && customer.id !== 'walk-in'
     ? { ...customer, loyaltyPoints: customer.loyaltyPoints || 0 }
     : null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <AdjustPointsDialogContent
-        customer={customerData}
-        onFinished={() => onOpenChange(false)}
-        hideAdjustments
-      />
-    </Dialog>
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="sm:max-w-md w-full p-0 flex flex-col gap-0 overflow-hidden border-l"
+      >
+        {/* Gradient accent strip */}
+        <div className="h-1.5 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600 shrink-0" />
+
+        {/* Scrollable drawer body */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+          <AdjustPointsForm
+            customer={customerData}
+            onFinished={() => onOpenChange(false)}
+            hideAdjustments
+          />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -3,6 +3,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/mysql';
 import { v4 as uuidv4 } from 'uuid';
 
+// Ensure the allocation junction table exists so JOINs below never fail on a fresh DB.
+async function ensurePaymentAllocationsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS payment_allocations (
+      id VARCHAR(255) PRIMARY KEY,
+      payment_id VARCHAR(255) NOT NULL,
+      invoice_id VARCHAR(255) NOT NULL,
+      amount_allocated DECIMAL(10,2) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_payment_id (payment_id),
+      INDEX idx_invoice_id (invoice_id),
+      CONSTRAINT fk_pa_payment FOREIGN KEY (payment_id) REFERENCES customer_payments(id) ON DELETE CASCADE
+    )
+  `);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -15,6 +31,8 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const offset = (page - 1) * limit;
 
+    await ensurePaymentAllocationsTable();
+
     let sql = `
       SELECT
         cp.id,
@@ -25,9 +43,15 @@ export async function GET(request: NextRequest) {
         cp.amount,
         cp.reference,
         cp.note,
-        cp.created_at
+        cp.created_at,
+        COALESCE(pa.total_allocated, 0) as total_allocated
       FROM customer_payments cp
       LEFT JOIN customers c ON cp.customer_id = c.id
+      LEFT JOIN (
+        SELECT payment_id, SUM(amount_allocated) as total_allocated
+        FROM payment_allocations
+        GROUP BY payment_id
+      ) pa ON pa.payment_id = cp.id
       WHERE 1=1
     `;
 
@@ -69,17 +93,23 @@ export async function GET(request: NextRequest) {
     const payments = await query(sql, params);
 
     // Format for frontend
-    const formattedPayments = payments.map((row: any) => ({
-      id: row.id,
-      customerName: row.customer_name || 'Unknown Customer',
-      amount: parseFloat(row.amount),
-      allocated: parseFloat(row.amount), // Placeholder: assuming full allocation for now as we don't have allocation tracking yet
-      leftToAllocate: 0, // Placeholder
-      paymentType: row.payment_type,
-      paymentDate: row.payment_date,
-      reference: row.reference,
-      note: row.note,
-    }));
+    const formattedPayments = payments.map((row: any) => {
+      const amount = parseFloat(row.amount);
+      const allocated = parseFloat(row.total_allocated || 0);
+      const leftToAllocate = Math.max(0, amount - allocated);
+      return {
+        id: row.id,
+        customerName: row.customer_name || 'Unknown Customer',
+        amount,
+        allocated,
+        leftToAllocate,
+        allocationStatus: allocated <= 0 ? 'Unallocated' : leftToAllocate > 0 ? 'Partial' : 'Allocated',
+        paymentType: row.payment_type,
+        paymentDate: row.payment_date,
+        reference: row.reference,
+        note: row.note,
+      };
+    });
 
     return NextResponse.json({
       success: true,

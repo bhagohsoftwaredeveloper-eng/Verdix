@@ -8,7 +8,6 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
-  SheetFooter,
 } from '@/components/ui/sheet';
 import {
   Command,
@@ -22,9 +21,9 @@ import { Button } from '@/components/ui/button';
 import type { Product } from '@/lib/types';
 import { useProducts } from '@/hooks/use-api';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
-import { ArrowLeft } from 'lucide-react';
+import { Search, Tag } from 'lucide-react';
 import { calculateEffectivePrice } from '@/lib/pricing';
-import { formatQuantity, formatStockQuantity } from '@/lib/utils';
+import { formatStockQuantity } from '@/lib/utils';
 
 interface PriceInquiryDialogProps {
   isOpen: boolean;
@@ -34,8 +33,8 @@ interface PriceInquiryDialogProps {
   activeLevelName?: string;
 }
 
-export function PriceInquiryDialog({ 
-  isOpen, 
+export function PriceInquiryDialog({
+  isOpen,
   onOpenChange,
   activeLevelId,
   defaultLevelId,
@@ -64,104 +63,100 @@ export function PriceInquiryDialog({
     }
   };
 
-  const closePriceDialog = () => {
-      setSelectedProduct(null);
-  }
-
   return (
-    <>
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="sm:max-w-2xl">
-        <SheetHeader>
+      <SheetContent side="right" className="sm:max-w-4xl w-full p-0 flex flex-col gap-0">
+        <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle>Price Inquiry</SheetTitle>
           <SheetDescription>
             Find a product by name or Barcode to check its price.
           </SheetDescription>
         </SheetHeader>
-        <Command shouldFilter={false} className="border rounded-md min-h-[400px]">
-          <CommandInput
-            placeholder="Type a product name or Barcode..."
-            value={searchTerm}
-            onValueChange={setSearchTerm}
-            autoFocus
-          />
-          <CommandList>
-            {loading && <div className="p-4 text-center text-muted-foreground">Loading products...</div>}
-            {error && <div className="p-4 text-center text-destructive">{error}</div>}
-            {!loading && !error && (
-              <>
-                <CommandEmpty>No products found.</CommandEmpty>
-                <CommandGroup>
-                  {products.map((product) => (
-                    <CommandItem
-                      key={product.id}
-                      value={`${product.name} ${product.barcode || product.sku}`}
-                      onSelect={() => handleSelect(product.id)}
-                      className="flex items-center justify-between cursor-pointer p-3"
-                    >
-                      <div className="flex items-center">
-                        <div>
-                          <p className="font-medium">{product.name}</p>
-                          <p className="text-sm text-muted-foreground">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
-                        </div>
-                      </div>
-                       <Button size="sm" variant="secondary">Check Price</Button>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </>
+
+        <div className="flex flex-1 min-h-0">
+          {/* Left column: product list */}
+          <div className="w-1/2 border-r flex flex-col min-h-0">
+            <Command shouldFilter={false} className="flex flex-col flex-1 min-h-0 rounded-none border-0 bg-transparent">
+              <CommandInput
+                placeholder="Type a product name or Barcode..."
+                value={searchTerm}
+                onValueChange={setSearchTerm}
+                autoFocus
+              />
+              <CommandList className="flex-1 max-h-none">
+                {loading && <div className="p-4 text-center text-muted-foreground">Loading products...</div>}
+                {error && <div className="p-4 text-center text-destructive">{error}</div>}
+                {!loading && !error && (
+                  <>
+                    <CommandEmpty>No products found.</CommandEmpty>
+                    <CommandGroup>
+                      {products.map((product) => {
+                        const isActive = selectedProduct?.id === product.id;
+                        return (
+                          <CommandItem
+                            key={product.id}
+                            value={`${product.name} ${product.barcode || product.sku}`}
+                            onSelect={() => handleSelect(product.id)}
+                            className={`flex items-center justify-between cursor-pointer p-3 ${isActive ? 'bg-primary/10 data-[selected=true]:bg-primary/10' : ''}`}
+                          >
+                            <div className="min-w-0">
+                              <p className={`font-medium truncate ${isActive ? 'text-primary' : ''}`}>{product.name}</p>
+                              <p className="text-sm text-muted-foreground truncate">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
+                            </div>
+                            {isActive && <Tag className="h-4 w-4 text-primary shrink-0" />}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </>
+                )}
+              </CommandList>
+            </Command>
+          </div>
+
+          {/* Right column: price detail */}
+          <div className="w-1/2 flex flex-col min-h-0 overflow-y-auto">
+            {selectedProduct ? (
+              <div className="flex flex-col items-center justify-center flex-1 p-6 animate-in fade-in-50 zoom-in-95 duration-200">
+                <h3 className="text-xl font-bold text-center mb-2">{selectedProduct.name}</h3>
+
+                <div className="text-xs text-muted-foreground mb-6 font-mono bg-muted px-2 py-1 rounded">
+                  {selectedProduct.barcode || selectedProduct.sku}
+                </div>
+
+                <div className="text-center w-full bg-primary/5 py-8 rounded-xl border-2 border-primary/10 shadow-sm relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+                  <div className="text-xs font-bold text-primary/70 uppercase tracking-widest mb-1">{activeLevelName} Price</div>
+                  <div className="text-5xl font-black text-primary tracking-tighter drop-shadow-sm">
+                    ₱{calculateEffectivePrice(selectedProduct, 1, activeLevelId, defaultLevelId).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+
+                {selectedProduct.stock !== undefined && (
+                  <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border">
+                    <span>Available Stock:</span>
+                    <span className={`font-bold ${selectedProduct.stock > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                      {formatStockQuantity(selectedProduct.stock)} {selectedProduct.unitOfMeasure}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center flex-1 p-6 text-center text-muted-foreground">
+                <Search className="h-12 w-12 mb-3 opacity-20" />
+                <p className="font-medium">Select a product</p>
+                <p className="text-sm opacity-70">Pick a product on the left to see its price here.</p>
+              </div>
             )}
-          </CommandList>
-        </Command>
-        <SheetFooter>
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t px-4 py-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-        </SheetFooter>
+        </div>
       </SheetContent>
     </Sheet>
-
-    {/* Price Result Dialog - Sibling to main dialog */}
-    <Sheet open={!!selectedProduct} onOpenChange={(open) => !open && closePriceDialog()}>
-        <SheetContent side="right" className="sm:max-w-md border-primary/20 shadow-2xl">
-            <SheetHeader>
-                <SheetTitle className="text-center text-xl">{selectedProduct?.name}</SheetTitle>
-            </SheetHeader>
-            
-            {selectedProduct && (
-                <div className="py-6 flex flex-col items-center animate-in zoom-in-95 duration-200">
-
-                    
-                    <div className="text-xs text-muted-foreground mb-4 font-mono bg-muted px-2 py-1 rounded">
-                        {selectedProduct.barcode || selectedProduct.sku}
-                    </div>
-
-                    <div className="text-center w-full bg-primary/5 py-8 rounded-xl border-2 border-primary/10 shadow-sm relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
-                         <div className="text-xs font-bold text-primary/70 uppercase tracking-widest mb-1">{activeLevelName} Price</div>
-                         <div className="text-5xl font-black text-primary tracking-tighter drop-shadow-sm">
-                            ₱{calculateEffectivePrice(selectedProduct, 1, activeLevelId, defaultLevelId).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                         </div>
-                    </div>
-
-                    {selectedProduct.stock !== undefined && (
-                       <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border">
-                          <span>Available Stock:</span>
-                          <span className={`font-bold ${selectedProduct.stock > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {formatStockQuantity(selectedProduct.stock)} {selectedProduct.unitOfMeasure}
-                          </span>
-                       </div>
-                    )}
-                </div>
-            )}
-
-            <SheetFooter className="sm:justify-center">
-                <Button size="lg" className="w-full sm:w-auto min-w-[120px]" onClick={closePriceDialog}>
-                    Done
-                </Button>
-            </SheetFooter>
-        </SheetContent>
-    </Sheet>
-    </>
   );
 }

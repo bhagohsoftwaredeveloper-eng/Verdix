@@ -253,6 +253,24 @@ export class ReceiptGenerator {
             enc.bold(true).line(this.row('CHANGE:', this.fmt(change), COLS)).bold(false);
         }
 
+        // ─── STATUTORY DISCOUNT HOLDER (SC/PWD/NAAC/Solo Parent) ──────────
+        // Required on the OR for BIR compliance.
+        const statutoryLabels: Record<string, string> = {
+            senior: 'SENIOR CITIZEN',
+            pwd: 'PWD',
+            naac: 'NAAC',
+            solo_parent: 'SOLO PARENT',
+        };
+        const discountHolderItem = items.find(item => item.discountIdNumber || item.discountHolderName);
+        if (discountHolderItem && (discountHolderItem.discountIdNumber || discountHolderItem.discountHolderName)) {
+            const discTypeLabel = discountHolderItem.discountType ? statutoryLabels[discountHolderItem.discountType] : undefined;
+            enc.line('-'.repeat(COLS));
+            enc.raw([0x1b, 0x61, 0x31]).line(discTypeLabel ? `${discTypeLabel} DISCOUNT` : 'DISCOUNT DETAILS').raw([0x1b, 0x61, 0x30]);
+            enc.line(`NAME: ${discountHolderItem.discountHolderName || ''}`);
+            enc.line(`ID NO.: ${discountHolderItem.discountIdNumber || ''}`);
+            enc.line('SIGNATURE: ____________');
+        }
+
         // ─── TAX BREAKDOWN (dashed border above) ─────────────────────────
         if (taxBreakdown) {
             enc.line('-'.repeat(COLS));

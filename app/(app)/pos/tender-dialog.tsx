@@ -402,8 +402,10 @@ export function TenderDialog({
                         price: item.price,
                         discount: item.discount,
                         discountType: item.discountType,
+                        discountIdNumber: item.discountIdNumber,
+                        discountHolderName: item.discountHolderName,
                         taxType: item.taxType || mapTax(item.vatStatus),
-                        cost: item.cost 
+                        cost: item.cost
                     })),
 
                     customer: customer || { id: 'walk-in', name: 'Walk-in Customer' },

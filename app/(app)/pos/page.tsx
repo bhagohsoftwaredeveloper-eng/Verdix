@@ -190,10 +190,12 @@ const MOCK_PRODUCTS: Product[] = [
 
 
 
-export type SaleItem = Product & { 
-    quantity: number; 
-    discount: number; 
+export type SaleItem = Product & {
+    quantity: number;
+    discount: number;
     discountType?: string;
+    discountIdNumber?: string;
+    discountHolderName?: string;
     name: string;
     taxType?: 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT';
 };
@@ -1168,16 +1170,18 @@ function POSPageContent() {
     }
   };
 
-  const handleApplyDiscount = (itemId: string | 'ALL', percentage: number, discountType?: string) => {
+  const handleApplyDiscount = (itemId: string | 'ALL', percentage: number, discountType?: string, discountDetails?: { idNumber?: string; holderName?: string }) => {
+    const discountIdNumber = discountDetails?.idNumber || undefined;
+    const discountHolderName = discountDetails?.holderName || undefined;
     if (itemId === 'ALL') {
-      setItems(items.map(item => ({ ...item, discount: percentage, discountType })));
+      setItems(items.map(item => ({ ...item, discount: percentage, discountType, discountIdNumber, discountHolderName })));
       toast({
         title: "Global Discount Applied",
         description: `Applied ${percentage.toFixed(2)}% discount to all items.`,
       });
     } else {
       setItems(items.map(item =>
-        item.id === itemId ? { ...item, discount: percentage, discountType } : item
+        item.id === itemId ? { ...item, discount: percentage, discountType, discountIdNumber, discountHolderName } : item
       ));
       toast({
         title: "Discount Applied",

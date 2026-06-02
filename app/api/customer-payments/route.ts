@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/mysql';
 import { v4 as uuidv4 } from 'uuid';
 
+// Ensure the junction table that links a payment to the invoice(s) it was applied to.
+// This is the source of truth for allocation tracking (replaces fragile note-string parsing).
+async function ensurePaymentAllocationsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS payment_allocations (
+      id VARCHAR(255) PRIMARY KEY,
+      payment_id VARCHAR(255) NOT NULL,
+      invoice_id VARCHAR(255) NOT NULL,
+      amount_allocated DECIMAL(10,2) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_payment_id (payment_id),
+      INDEX idx_invoice_id (invoice_id),
+      CONSTRAINT fk_pa_payment FOREIGN KEY (payment_id) REFERENCES customer_payments(id) ON DELETE CASCADE
+    )
+  `);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -14,6 +31,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    await ensurePaymentAllocationsTable();
 
     return await withTransaction(async (connection) => {
         // Check if customer exists
@@ -67,23 +86,37 @@ export async function POST(request: NextRequest) {
 
                 // 1. Get current invoice details (using FOR UPDATE to lock row during transaction)
                 const [invoiceResult]: any = await connection.query(
-                    'SELECT total, amount_paid FROM sales_invoices WHERE id = ? FOR UPDATE', 
+                    'SELECT total, amount_paid FROM sales_invoices WHERE id = ? FOR UPDATE',
                     [alloc.invoiceId]
                 );
 
                 if (!invoiceResult || invoiceResult.length === 0) continue;
-                
+
                 const invoice = invoiceResult[0];
                 const currentAmountPaid = Number(invoice.amount_paid || 0);
-                const newAmountPaid = currentAmountPaid + Number(alloc.amountAllocated);
-                const newStatus = newAmountPaid >= Number(invoice.total) ? 'Paid' : 'Pending';
+                const invoiceTotal = Number(invoice.total);
+                const remainingBalance = invoiceTotal - currentAmountPaid;
+
+                // Never allocate more than what the invoice still owes
+                const appliedAmount = Math.min(Number(alloc.amountAllocated), remainingBalance);
+                if (appliedAmount <= 0) continue;
+
+                const newAmountPaid = currentAmountPaid + appliedAmount;
+                const newStatus = newAmountPaid >= invoiceTotal ? 'Paid' : 'Pending';
 
                 // 2. Update invoice amount_paid and status
                 await connection.query(
-                    `UPDATE sales_invoices 
+                    `UPDATE sales_invoices
                      SET amount_paid = ?, status = ?, updated_at = NOW()
                      WHERE id = ?`,
                     [newAmountPaid, newStatus, alloc.invoiceId]
+                );
+
+                // 3. Record the allocation link (audit trail / source of truth)
+                await connection.query(
+                    `INSERT INTO payment_allocations (id, payment_id, invoice_id, amount_allocated)
+                     VALUES (?, ?, ?, ?)`,
+                    [uuidv4(), paymentId, alloc.invoiceId, appliedAmount]
                 );
             }
         }

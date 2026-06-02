@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -10,7 +10,6 @@ import {
   SheetDescription,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandDialog,
@@ -24,7 +23,7 @@ import type { Product } from '@/lib/types';
 import { useProducts } from '@/hooks/use-api';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
 import { useDebounce } from '@/hooks/use-debounce';
-import { Loader2, Check, Package2 } from 'lucide-react';
+import { Loader2, Package2 } from 'lucide-react';
 import { calculateEffectivePrice } from '@/lib/pricing';
 import { formatQuantity, formatStockQuantity } from '@/lib/utils';
 
@@ -55,10 +54,6 @@ export function ProductSearchDialog({
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const { products, loading, error, refetch: refetchProducts } = useProducts(debouncedSearchTerm, 'Available', undefined, warehouseId);
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
-  // Multi-add session feedback
-  const [addedCount, setAddedCount] = useState(0);
-  const [flashId, setFlashId] = useState<string | null>(null);
-  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Update displayed products only when not loading or when loading starts to keep previous results
   useEffect(() => {
@@ -74,12 +69,8 @@ export function ProductSearchDialog({
   useEffect(() => {
     if (isOpen) {
       setSearchTerm('');
-      setAddedCount(0);
-      setFlashId(null);
     }
   }, [isOpen, activeLevelId]);
-
-  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current); }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -96,16 +87,12 @@ export function ProductSearchDialog({
     }
   }, [isOpen, onOpenChange]);
 
-  // Add the item but keep the drawer open so the cashier can add several in a row.
-  // Gives quick "Added" feedback and a running count; close with Done / Esc / F9.
+  // Pure selection: add the item and close the drawer immediately.
   const handleSelect = (productId: string) => {
     const product = displayedProducts.find(p => p.id === productId);
     if (product) {
       onSelectProduct(product);
-      setAddedCount(c => c + 1);
-      setFlashId(productId);
-      if (flashTimer.current) clearTimeout(flashTimer.current);
-      flashTimer.current = setTimeout(() => setFlashId(null), 900);
+      onOpenChange(false);
     }
   };
 
@@ -153,14 +140,13 @@ export function ProductSearchDialog({
 
             <CommandGroup className={loading ? "opacity-50 transition-opacity" : "transition-opacity"}>
               {displayedProducts.map((product) => {
-                const isFlash = flashId === product.id;
                 const outOfStock = product.stock <= 0;
                 return (
                 <CommandItem
                   key={product.id}
                   value={`${product.name} ${product.barcode || ''} ${product.sku}`}
                   onSelect={() => handleSelect(product.id)}
-                  className={`group mx-2 my-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${isFlash ? 'bg-emerald-50 ring-1 ring-emerald-400 dark:bg-emerald-950/30' : ''}`}
+                  className="group mx-2 my-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
                 >
                   {/* Thumbnail */}
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
@@ -192,15 +178,9 @@ export function ProductSearchDialog({
                     <p className="font-mono font-bold text-primary">
                       ₱{calculateEffectivePrice(product, 1, activeLevelId, defaultLevelId).toFixed(2)}
                     </p>
-                    {isFlash ? (
-                      <span className="flex items-center justify-end gap-1 text-[11px] font-medium text-emerald-600">
-                        <Check className="h-3 w-3" /> Added
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100">
-                        Enter ↵ to add
-                      </span>
-                    )}
+                    <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100">
+                      Enter ↵ to add
+                    </span>
                   </div>
                 </CommandItem>
                 );
@@ -209,22 +189,14 @@ export function ProductSearchDialog({
           </CommandList>
         </Command>
 
-        {/* Footer: keyboard hints, price level, running count, Done */}
-        <div className="flex items-center justify-between border-t bg-muted/20 px-6 py-3 shrink-0">
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="hidden items-center gap-1 sm:flex"><kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono">↑↓</kbd> navigate</span>
-            <span className="flex items-center gap-1"><kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono">↵</kbd> add</span>
-            <span className="flex items-center gap-1"><kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono">Esc</kbd> close</span>
-            <span className="hidden text-muted-foreground/70 md:inline">Prices: {activeLevelName}</span>
-          </div>
+        {/* Footer: keyboard hints + active price level */}
+        <div className="flex items-center justify-between border-t bg-muted/20 px-6 py-3 shrink-0 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-3">
-            {addedCount > 0 && (
-              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                <Check className="h-3.5 w-3.5" /> {addedCount} added
-              </span>
-            )}
-            <Button size="sm" onClick={() => onOpenChange(false)}>Done</Button>
+            <span className="hidden items-center gap-1 sm:flex"><kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono">↑↓</kbd> navigate</span>
+            <span className="flex items-center gap-1"><kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono">↵</kbd> select</span>
+            <span className="flex items-center gap-1"><kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono">Esc</kbd> close</span>
           </div>
+          <span className="text-muted-foreground/70">Prices: {activeLevelName}</span>
         </div>
       </SheetContent>
     </Sheet>

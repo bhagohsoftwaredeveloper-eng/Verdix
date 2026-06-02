@@ -68,6 +68,18 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
     const formatCurrency = (amount: number) => amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const currentDate = saleDetails.transactionDate ? new Date(saleDetails.transactionDate) : new Date();
 
+    // Statutory discount (SC/PWD/NAAC/Solo Parent) cardholder details — required on the OR for BIR compliance.
+    const statutoryLabels: Record<string, string> = {
+        senior: 'SENIOR CITIZEN',
+        pwd: 'PWD',
+        naac: 'NAAC',
+        solo_parent: 'SOLO PARENT',
+    };
+    const discountHolderItem = items.find(item => item.discountIdNumber || item.discountHolderName);
+    const discountHolderName = discountHolderItem?.discountHolderName;
+    const discountIdNumber = discountHolderItem?.discountIdNumber;
+    const discountTypeLabel = discountHolderItem?.discountType ? statutoryLabels[discountHolderItem.discountType] : undefined;
+
     const paperWidth = settings?.paperSize === '80mm' ? 'w-[80mm]' : 'w-[58mm]';
 
     return (
@@ -200,6 +212,26 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                     </div>
                 )}
             </div>
+
+            {(discountHolderName || discountIdNumber) && (
+                <div className="border-t border-dashed border-black mt-2 pt-2 space-y-1">
+                    <div className="text-center font-bold">
+                        {discountTypeLabel ? `${discountTypeLabel} DISCOUNT` : 'DISCOUNT DETAILS'}
+                    </div>
+                    <div className="flex justify-between">
+                        <span>NAME:</span>
+                        <span className="text-right break-all">{discountHolderName || '____________'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>ID NO.:</span>
+                        <span className="text-right break-all">{discountIdNumber || '____________'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>SIGNATURE:</span>
+                        <span>____________</span>
+                    </div>
+                </div>
+            )}
 
             {saleDetails.taxBreakdown ? (
                 <div className="border-t border-dashed border-black mt-2 pt-2 space-y-1">

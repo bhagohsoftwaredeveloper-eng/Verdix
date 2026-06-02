@@ -1,6 +1,22 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction } from '@/lib/mysql';
+import { query, withTransaction } from '@/lib/mysql';
+
+// Ensure the allocation junction table exists (shared source of truth with /customer-payments).
+async function ensurePaymentAllocationsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS payment_allocations (
+      id VARCHAR(255) PRIMARY KEY,
+      payment_id VARCHAR(255) NOT NULL,
+      invoice_id VARCHAR(255) NOT NULL,
+      amount_allocated DECIMAL(10,2) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_payment_id (payment_id),
+      INDEX idx_invoice_id (invoice_id),
+      CONSTRAINT fk_pa_payment FOREIGN KEY (payment_id) REFERENCES customer_payments(id) ON DELETE CASCADE
+    )
+  `);
+}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -19,6 +35,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // In this simplified version, we'll assume full payment for now as the UI restricts it,
     // but the backend logic can technically handle partials if we wanted.
     // However, the prompt just said "function", so I'll implement the recording logic.
+
+    await ensurePaymentAllocationsTable();
 
     return await withTransaction(async (connection) => {
         // 1. Verify invoice exists and get current details
@@ -89,11 +107,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const newStatus = newAmountPaid >= Number(invoice.total) ? 'Paid' : 'Pending';
         
         const updateInvoiceSql = `
-            UPDATE sales_invoices 
+            UPDATE sales_invoices
             SET amount_paid = ?, status = ?, updated_at = NOW()
             WHERE id = ?
         `;
         await connection.query(updateInvoiceSql, [newAmountPaid, newStatus, invoiceId]);
+
+        // 5. Record the allocation link to the clicked invoice (source of truth for SOA / Payment History)
+        const allocationId = `pa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await connection.query(
+            `INSERT INTO payment_allocations (id, payment_id, invoice_id, amount_allocated)
+             VALUES (?, ?, ?, ?)`,
+            [allocationId, paymentId, invoiceId, paymentAmount]
+        );
 
         return NextResponse.json({
             success: true,

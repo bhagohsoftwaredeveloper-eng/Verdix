@@ -69,7 +69,7 @@ export function SuspendNoteDialog({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleConfirm();
                 }}
-                className="h-12 bg-slate-50 border-slate-200 focus-visible:ring-orange-500 rounded-xl px-4"
+                className="h-12 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-orange-500 rounded-xl px-4"
               />
             </div>
           </div>

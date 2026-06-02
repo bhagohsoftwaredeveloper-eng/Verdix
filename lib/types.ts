@@ -508,6 +508,9 @@ export interface POSSaleItem extends Product {
     quantity: number;
     discount: number;
     name: string;
+    discountType?: string;
+    discountIdNumber?: string;
+    discountHolderName?: string;
     taxType?: 'VAT' | 'NON_VAT' | 'ZERO_RATED' | 'VAT_EXEMPT';
 }
 

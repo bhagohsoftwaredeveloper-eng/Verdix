@@ -47,7 +47,7 @@ type PointsFormValues = z.infer<typeof pointsSchema>;
 type CardInputFormValues = z.infer<typeof cardInputSchema>;
 type LoyaltyView = 'menu' | 'add' | 'withdraw' | 'balance' | 'input-card';
 
-function AdjustPointsForm({
+export function AdjustPointsForm({
   customer: initialCustomer,
   onFinished,
   hideAdjustments,
@@ -214,9 +214,9 @@ function AdjustPointsForm({
           <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             Loyalty Rewards
           </DialogTitle>
-          <DialogDescription className="font-medium text-slate-500">
+          <DialogDescription className="font-medium text-slate-500 dark:text-slate-400">
             {customer ? (
-              <>Managing rewards for <span className="text-slate-900 font-bold">{customer.name}</span></>
+              <>Managing rewards for <span className="text-slate-900 dark:text-slate-100 font-bold">{customer.name}</span></>
             ) : (
               "Identify a customer to manage rewards"
             )}
@@ -227,7 +227,7 @@ function AdjustPointsForm({
           {!hideAdjustments && (
             <>
               {customer?.isExpired && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 font-bold flex items-center gap-3">
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl mb-4 font-bold flex items-center gap-3">
                   <div className="bg-red-500 text-white p-1 rounded-full">
                     <Minus className="w-4 h-4" />
                   </div>
@@ -235,7 +235,7 @@ function AdjustPointsForm({
                 </div>
               )}
               <Button 
-                className="h-16 justify-between px-6 text-base font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 group transition-all"
+                className="h-16 justify-between px-6 text-base font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-900 group transition-all"
                 variant="outline"
                 onClick={() => handleActionClick('add')}
                 disabled={customer?.isExpired}
@@ -250,7 +250,7 @@ function AdjustPointsForm({
               </Button>
 
               <Button 
-                className="h-16 justify-between px-6 text-base font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 group transition-all"
+                className="h-16 justify-between px-6 text-base font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 dark:text-amber-300 dark:border-amber-900 group transition-all"
                 variant="outline"
                 onClick={() => handleActionClick('withdraw')}
                 disabled={customer?.isExpired}
@@ -267,7 +267,7 @@ function AdjustPointsForm({
           )}
 
           <Button 
-            className="h-16 justify-between px-6 text-base font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 group transition-all"
+            className="h-16 justify-between px-6 text-base font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 dark:text-blue-300 dark:border-blue-900 group transition-all"
             variant="outline"
             onClick={() => handleActionClick('balance')}
           >
@@ -386,9 +386,9 @@ function AdjustPointsForm({
           {view === 'add' ? 'Grant bonus points to this customer.' : 'Deduct points from this customer for rewards.'}
         </DialogDescription>
         {customer && (
-          <div className="mt-2 flex items-center justify-between p-3 bg-slate-50 rounded-lg border">
+          <div className="mt-2 flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg border">
             <span className="font-semibold text-primary">{customer.name}</span>
-            <span className="text-sm font-medium text-slate-500">Current Balance: <span className="text-slate-900 font-bold">{customer.loyaltyPoints}</span></span>
+            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Current Balance: <span className="text-slate-900 dark:text-slate-100 font-bold">{customer.loyaltyPoints}</span></span>
           </div>
         )}
       </DialogHeader>
@@ -398,7 +398,7 @@ function AdjustPointsForm({
           onSubmit={pointsForm.handleSubmit(onPointsSubmit)}
           className={cn(
             'space-y-4 rounded-2xl border p-6 mt-4 transition-all',
-            view === 'add' ? 'bg-emerald-50/50 border-emerald-200' : 'bg-amber-50/50 border-amber-200'
+            view === 'add' ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900' : 'bg-amber-50/50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900'
           )}
         >
           <FormField
@@ -406,13 +406,13 @@ function AdjustPointsForm({
             name="points"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-slate-600 font-bold">Amount of Points</FormLabel>
+                <FormLabel className="text-slate-600 dark:text-slate-300 font-bold">Amount of Points</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <Input 
-                      type="number" 
+                    <Input
+                      type="number"
                       placeholder="Enter amount"
-                      className="text-2xl h-16 font-black pl-12 bg-white placeholder:text-slate-200 placeholder:font-normal" 
+                      className="text-2xl h-16 font-black pl-12 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-200 dark:placeholder:text-slate-600 placeholder:font-normal"
                       {...field} 
                       value={field.value === undefined ? '' : field.value}
                       autoFocus
@@ -429,11 +429,11 @@ function AdjustPointsForm({
             name="reason"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-slate-600 font-bold">Reason / Notes</FormLabel>
+                <FormLabel className="text-slate-600 dark:text-slate-300 font-bold">Reason / Notes</FormLabel>
                 <FormControl>
-                  <Input 
-                    placeholder={view === 'add' ? 'e.g. Purchase Bonus' : 'e.g. Item Redemption'} 
-                    className="h-12 bg-white"
+                  <Input
+                    placeholder={view === 'add' ? 'e.g. Purchase Bonus' : 'e.g. Item Redemption'}
+                    className="h-12 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     {...field} 
                   />
                 </FormControl>

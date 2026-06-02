@@ -19,6 +19,14 @@ async function ensurePosTransactionItemsSchema() {
       await query("ALTER TABLE pos_transaction_items ADD COLUMN tax_type VARCHAR(50) DEFAULT 'VAT'");
       console.log('✅ Added tax_type column to pos_transaction_items');
     }
+    if (!existingColumns.has('discount_id_number')) {
+      await query("ALTER TABLE pos_transaction_items ADD COLUMN discount_id_number VARCHAR(100) DEFAULT NULL");
+      console.log('✅ Added discount_id_number column to pos_transaction_items');
+    }
+    if (!existingColumns.has('discount_holder_name')) {
+      await query("ALTER TABLE pos_transaction_items ADD COLUMN discount_holder_name VARCHAR(255) DEFAULT NULL");
+      console.log('✅ Added discount_holder_name column to pos_transaction_items');
+    }
   } catch (error) {
     console.error('Error ensuring pos_transaction_items schema:', error);
   }
@@ -323,21 +331,23 @@ export async function POST(request: NextRequest) {
 
         await connection.query(`
           INSERT INTO pos_transaction_items (
-            id, pos_transaction_id, sale_item_id, product_id, product_name, 
-            quantity, unit_price, discount_percentage, discount_amount, 
-            discount_type, tax_type, line_total, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            id, pos_transaction_id, sale_item_id, product_id, product_name,
+            quantity, unit_price, discount_percentage, discount_amount,
+            discount_type, discount_id_number, discount_holder_name, tax_type, line_total, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         `, [
-          posItemId, 
-          posTransId, 
-          itemId, 
-          item.id, 
-          item.name, 
-          item.quantity, 
+          posItemId,
+          posTransId,
+          itemId,
+          item.id,
+          item.name,
+          item.quantity,
           originalPrice,
           discountPercent,
           discAmount,
           item.discountType || 'percent',
+          item.discountIdNumber || null,
+          item.discountHolderName || null,
           item.taxType || 'VAT',
           lTotal
         ]);
