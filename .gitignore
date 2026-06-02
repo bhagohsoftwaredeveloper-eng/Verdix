@@ -54,3 +54,8 @@ firestore-debug.log
 /scratch/
 *.log
 DB_BACK_UP5112026.sql
+
+# Licensing — signing keys & installed license must never be committed
+/license-generator/keys/
+license.dat
+*.license

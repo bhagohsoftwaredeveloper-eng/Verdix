@@ -43,12 +43,14 @@ export async function GET(request: NextRequest) {
 
     // Invoices
     const invoicesSql = `
-        SELECT 
-            id, 
+        SELECT
+            id,
             reference,
-            invoice_date as date, 
-            'Invoice' as type, 
-            total as amount, 
+            invoice_date as date,
+            due_date as dueDate,
+            'Invoice' as type,
+            total as amount,
+            amount_paid as amountPaid,
             0 as credit,
             status,
             notes as description
@@ -147,7 +149,7 @@ export async function GET(request: NextRequest) {
 
     // 3. Combine and Sort
     const transactions = [
-        ...invoices.map(inv => ({ ...inv, debit: parseFloat(inv.amount), credit: 0 })),
+        ...invoices.map(inv => ({ ...inv, debit: parseFloat(inv.amount), amountPaid: parseFloat(inv.amountPaid || 0), credit: 0 })),
         ...paymentLines
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 

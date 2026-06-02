@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return await withTransaction(async (connection) => {
         // 1. Verify invoice exists and get current details
-        const [invoiceResult]: any = await connection.query('SELECT total, status, amount_paid FROM sales_invoices WHERE id = ?', [invoiceId]);
+        const [invoiceResult]: any = await connection.query('SELECT reference, total, status, amount_paid FROM sales_invoices WHERE id = ?', [invoiceId]);
 
         if (!invoiceResult || invoiceResult.length === 0) {
             throw new Error('Invoice not found');
@@ -93,6 +93,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // It's probably better to use the payment reference for external refs and link to invoice via notes or a new joining table if needed.
         // For this task, we'll store the provided reference.
         
+        // Use the human-readable invoice number (reference) in the note, not the internal id.
+        const invoiceNumber = invoice.reference || invoiceId;
+
         await connection.query(insertPaymentSql, [
             paymentId,
             customerId,
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             new Date(paymentDate || Date.now()),
             amount,
             finalReference,
-            `Payment for Invoice #${invoiceId}.`,
+            `Payment for Invoice #${invoiceNumber}.`,
         ]);
 
         // 4. Update Invoice Status

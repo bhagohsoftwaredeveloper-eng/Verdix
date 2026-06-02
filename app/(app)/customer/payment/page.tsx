@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef, Fragment } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -48,7 +48,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye, Check, ChevronsUpDown, ArrowUpRight, ArrowDownRight, Scale, Receipt, FileSpreadsheet, Loader2, Filter, X } from 'lucide-react';
+import { CalendarIcon, TrendingUp, AlertCircle, FileText, Search, MoreHorizontal, Printer, FileDown, Banknote, Eye, Check, ChevronsUpDown, Receipt, FileSpreadsheet, Loader2, Filter, X } from 'lucide-react';
 
 
 import { cn, formatCurrency } from '@/lib/utils';
@@ -763,6 +763,7 @@ function StatementOfAccount() {
         if (!soaData) return;
         
         const customer = customers.find(c => c.id === selectedCustomer);
+        const invoiceGroupsP = groupedTransactions.groups.filter((g: any) => g.type === 'Invoice' || g.type === 'Sales');
         const printWindow = window.open('', '', 'height=800,width=800');
         if (!printWindow) return;
 
@@ -783,14 +784,30 @@ function StatementOfAccount() {
             .info-box h3 { margin: 0 0 8px 0; font-size: 12px; color: #888; text-transform: uppercase; }
             .info-box p { margin: 2px 0; font-size: 14px; font-weight: 500; }
             
-            .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; background: #f9fafb; }
-            .summary-table td { padding: 12px; border: 1px solid #e5e7eb; font-size: 13px; }
-            .summary-label { color: #666; }
-            .summary-value { text-align: right; font-weight: 600; }
-            
-            table.main-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            table.main-table th { background-color: #f3f4f6; color: #374151; font-weight: 600; font-size: 12px; text-transform: uppercase; padding: 10px; border: 1px solid #e5e7eb; text-align: left; }
-            table.main-table td { padding: 10px; border: 1px solid #e5e7eb; font-size: 12px; }
+            .due-hero { display: flex; justify-content: space-between; align-items: center; gap: 24px; border: 1px solid #e5e7eb; background: #f8fafc; border-radius: 12px; padding: 20px 24px; margin-bottom: 32px; }
+            .due-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; margin: 0; }
+            .due-value { font-size: 34px; font-weight: 800; color: #0f172a; margin: 4px 0 0 0; }
+            .summary-lines { font-size: 13px; min-width: 260px; }
+            .summary-lines .line { display: flex; justify-content: space-between; gap: 24px; padding: 3px 0; }
+            .summary-lines .muted { color: #666; }
+            .summary-lines .pay { color: #059669; }
+            .summary-lines .total { border-top: 1px solid #cbd5e1; margin-top: 4px; padding-top: 6px; font-weight: 700; }
+
+            .inv-card { border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 16px; overflow: hidden; page-break-inside: avoid; }
+            .inv-head { display: flex; justify-content: space-between; align-items: flex-start; background: #f9fafb; padding: 12px 18px; border-bottom: 1px solid #e5e7eb; }
+            .inv-title { font-weight: 700; font-size: 14px; margin: 0; }
+            .inv-sub { font-size: 11px; color: #777; margin: 2px 0 0 0; }
+            .inv-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; }
+            .badge-paid { background: #dcfce7; color: #166534; }
+            .badge-out { background: #f1f5f9; color: #475569; }
+            .badge-over { background: #fee2e2; color: #b91c1c; }
+            .inv-row { display: flex; justify-content: space-between; padding: 8px 18px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+            .inv-row.payment { background: #f0fdf4; color: #555; }
+            .inv-row .pay-amt { color: #059669; font-weight: 600; }
+            .inv-balance { display: flex; justify-content: space-between; padding: 12px 18px; background: #f8fafc; font-weight: 700; }
+            .inv-balance .amt-due { color: #b91c1c; font-size: 16px; }
+            .inv-balance .amt-paid { color: #059669; font-size: 16px; }
+            .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; margin: 28px 0 10px 0; }
             .text-right { text-align: right; }
             .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
             
@@ -829,72 +846,63 @@ function StatementOfAccount() {
                     </div>
                 </div>
 
-                <table class="summary-table">
-                    <tr>
-                        <td class="summary-label">Opening Balance</td>
-                        <td class="summary-value">${formatCurrency(Number(soaData.startingBalance))}</td>
-                        <td class="summary-label">Total Charges</td>
-                        <td class="summary-value">${formatCurrency(summary?.totalDebit || 0)}</td>
-                    </tr>
-                    <tr>
-                        <td class="summary-label">Total Payments</td>
-                        <td class="summary-value">${formatCurrency(summary?.totalCredit || 0)}</td>
-                        <td class="summary-label" style="background:#edf2f7">Ending Balance</td>
-                        <td class="summary-value" style="background:#edf2f7; font-size: 16px;">${formatCurrency(Number(soaData.endingBalance))}</td>
-                    </tr>
-                </table>
+                <div class="due-hero">
+                    <div>
+                        <p class="due-label">Amount Due</p>
+                        <p class="due-value">${formatCurrency(Number(soaData.endingBalance))}</p>
+                    </div>
+                    <div class="summary-lines">
+                        <div class="line"><span class="muted">Previous Balance</span><span>${formatCurrency(Number(soaData.startingBalance))}</span></div>
+                        <div class="line"><span class="muted">New Charges (${invoiceGroupsP.length} ${invoiceGroupsP.length === 1 ? 'invoice' : 'invoices'})</span><span>${formatCurrency(summary?.totalDebit || 0)}</span></div>
+                        <div class="line pay"><span>Payments Received</span><span>&minus;${formatCurrency(summary?.totalCredit || 0)}</span></div>
+                        <div class="line total"><span>Amount Due</span><span>${formatCurrency(Number(soaData.endingBalance))}</span></div>
+                    </div>
+                </div>
 
-                <table class="main-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Description</th>
-                            <th>Reference</th>
-                            <th class="text-right">Debit</th>
-                            <th class="text-right">Credit</th>
-                            <th class="text-right">Balance</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="5" style="background: #fdfdfd">Beginning Balance</td>
-                            <td class="text-right" style="background: #fdfdfd; font-weight: 600;">${formatCurrency(Number(soaData.startingBalance))}</td>
-                        </tr>
-                        ${groupedTransactions.groups.map((group: any) => `
-                            <tr style="background: #f9fafb;">
-                                <td>${format(new Date(group.date), 'MMM dd, yyyy')}</td>
-                                <td><strong>${group.type}</strong>${group.description ? ` - ${group.description}` : ''}</td>
-                                <td class="font-mono">${group.reference || group.id.substring(0, 8)}</td>
-                                <td class="text-right">${group.debit > 0 ? formatCurrency(Number(group.debit)) : '-'}</td>
-                                <td class="text-right">-</td>
-                                <td class="text-right" style="font-weight: 600;">${formatCurrency(Number(group.runningBalance))}</td>
-                            </tr>
-                            ${group.payments.map((p: any) => `
-                                <tr>
-                                    <td style="padding-left: 25px; color: #666;">${format(new Date(p.date), 'MMM dd, yyyy')}</td>
-                                    <td style="padding-left: 25px; color: #666;">└─ Payment: ${p.type} ${p.invoice_ref ? `(Invoice #${p.invoice_ref})` : (p.note ? `(${p.note})` : '')}</td>
-                                    <td class="font-mono" style="color: #666;">${p.reference || p.id.substring(0, 8)}</td>
-                                    <td class="text-right">-</td>
-                                    <td class="text-right" style="color: #059669;">${formatCurrency(Number(p.credit))}</td>
-                                    <td class="text-right" style="color: #666;">${formatCurrency(Number(p.runningBalance))}</td>
-                                </tr>
-                            `).join('')}
+                <div class="section-title">Invoices in this period</div>
+                ${invoiceGroupsP.length === 0 ? '<p style="font-size:13px;color:#777;">No invoices in this period.</p>' : ''}
+                ${invoiceGroupsP.map((inv: any) => {
+                    const invoiceAmount = Number(inv.debit);
+                    const balance = invoiceAmount - Number(inv.amountPaid || 0);
+                    const isPaid = balance <= 0.005;
+                    const dueDate = inv.dueDate ? new Date(inv.dueDate) : null;
+                    const isOverdue = !isPaid && dueDate && isPast(dueDate);
+                    const badgeClass = isPaid ? 'badge-paid' : isOverdue ? 'badge-over' : 'badge-out';
+                    const badgeText = isPaid ? 'Paid' : isOverdue ? 'Overdue' : 'Outstanding';
+                    return `
+                    <div class="inv-card">
+                        <div class="inv-head">
+                            <div>
+                                <p class="inv-title">Invoice ${inv.reference || inv.id.substring(0, 8)}</p>
+                                <p class="inv-sub">Issued ${format(new Date(inv.date), 'PP')}${dueDate ? ` &middot; Due ${format(dueDate, 'PP')}` : ''}</p>
+                            </div>
+                            <span class="inv-badge ${badgeClass}">${badgeText}</span>
+                        </div>
+                        <div class="inv-row"><span style="color:#666;">Invoice amount</span><span>${formatCurrency(invoiceAmount)}</span></div>
+                        ${inv.payments.map((p: any) => `
+                            <div class="inv-row payment">
+                                <span>&#8627; ${format(new Date(p.date), 'PP')} &middot; Payment (${p.type}) <span class="font-mono" style="font-size:11px;">${p.reference || p.id.substring(0, 8)}</span></span>
+                                <span class="pay-amt">&minus;${formatCurrency(Number(p.credit))}</span>
+                            </div>
                         `).join('')}
-                        ${groupedTransactions.unallocated.length > 0 ? `
-                            <tr><td colspan="6" style="background: #f3f4f6; font-size: 10px; font-weight: bold; text-transform: uppercase;">Unallocated Payments</td></tr>
-                            ${groupedTransactions.unallocated.map((p: any) => `
-                                <tr>
-                                    <td>${format(new Date(p.date), 'MMM dd, yyyy')}</td>
-                                    <td>${p.type} ${p.description ? ` - ${p.description}` : ''}</td>
-                                    <td class="font-mono">${p.reference || p.id.substring(0, 8)}</td>
-                                    <td class="text-right">-</td>
-                                    <td class="text-right" style="color: #059669;">${formatCurrency(Number(p.credit))}</td>
-                                    <td class="text-right">${formatCurrency(Number(p.runningBalance))}</td>
-                                </tr>
-                            `).join('')}
-                        ` : ''}
-                    </tbody>
-                </table>
+                        <div class="inv-balance">
+                            <span>Balance on this invoice</span>
+                            <span class="${isPaid ? 'amt-paid' : 'amt-due'}">${formatCurrency(Math.max(0, balance))}</span>
+                        </div>
+                    </div>`;
+                }).join('')}
+
+                ${groupedTransactions.unallocated.length > 0 ? `
+                    <div class="section-title">Payments not applied to a specific invoice</div>
+                    <div class="inv-card">
+                        ${groupedTransactions.unallocated.map((p: any) => `
+                            <div class="inv-row payment">
+                                <span>${format(new Date(p.date), 'PP')} &middot; Payment (${p.type}) <span class="font-mono" style="font-size:11px;">${p.reference || p.id.substring(0, 8)}</span></span>
+                                <span class="pay-amt">&minus;${formatCurrency(Number(p.credit))}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
 
                 <div class="footer">
                     <p style="font-size: 11px; color: #666; font-style: italic;">Note: Please review this statement and notify us of any discrepancies within 7 days.</p>
@@ -1019,201 +1027,151 @@ function StatementOfAccount() {
                 </CardContent>
             </Card>
 
-            {soaData && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="grid gap-4 md:grid-cols-4">
-                        <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/10 border-blue-100 dark:border-blue-900/20">
-                            <CardContent className="p-4 flex items-center gap-4">
-                                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg w-9 h-9 flex items-center justify-center">
-                                    <span className="text-xl font-bold text-blue-600 dark:text-blue-400">₱</span>
-                                </div>
-                                <div>
-                                    <p className="text-xs font-medium text-muted-foreground uppercase">Beginning</p>
-                                    <p className="text-lg font-bold">{formatCurrency(Number(soaData.startingBalance))}</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card className="bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/10 border-orange-100 dark:border-orange-900/20">
-                            <CardContent className="p-4 flex items-center gap-4">
-                                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-                                    <ArrowUpRight className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-medium text-muted-foreground uppercase">Total Charges</p>
-                                    <p className="text-lg font-bold">{formatCurrency(summary?.totalDebit || 0)}</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card className="bg-gradient-to-br from-green-50 to-white dark:from-green-900/10 border-green-100 dark:border-green-900/20">
-                            <CardContent className="p-4 flex items-center gap-4">
-                                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                                    <ArrowDownRight className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-medium text-muted-foreground uppercase">Total Payments</p>
-                                    <p className="text-lg font-bold text-green-600 dark:text-green-400">-{formatCurrency(summary?.totalCredit || 0)}</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card className="bg-gradient-to-br from-primary/5 to-white dark:from-primary/10 border-primary/20">
-                            <CardContent className="p-4 flex items-center gap-4">
-                                <div className="p-2 bg-primary/10 rounded-lg">
-                                    <Scale className="h-5 w-5 text-primary" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-medium text-muted-foreground uppercase">Net Ending</p>
-                                    <p className="text-lg font-bold text-primary">{formatCurrency(Number(soaData.endingBalance))}</p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+            {soaData && (() => {
+                const customerName = customers.find(c => c.id === selectedCustomer)?.name || 'Valued Customer';
+                const invoiceGroups = groupedTransactions.groups.filter((g: any) => g.type === 'Invoice' || g.type === 'Sales');
+                const amountDue = Number(soaData.endingBalance);
 
-                    <Card className="border-none shadow-xl bg-white/50 backdrop-blur-sm">
-                        <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+                return (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* --- Summary header with prominent Amount Due --- */}
+                    <Card className="overflow-hidden border-none shadow-lg">
+                        <CardHeader className="flex flex-row items-start justify-between border-b bg-muted/30 pb-4">
                             <div>
-                                <CardTitle className="text-xl">Statement Preview</CardTitle>
-                                <CardDescription>Period: {format(new Date(soaData.period.from), 'PP')} - {format(new Date(soaData.period.to), 'PP')}</CardDescription>
+                                <CardTitle className="text-xl">Statement of Account</CardTitle>
+                                <CardDescription className="mt-1">
+                                    For <span className="font-medium text-foreground">{customerName}</span> · {format(new Date(soaData.period.from), 'PP')} – {format(new Date(soaData.period.to), 'PP')}
+                                </CardDescription>
                             </div>
                             <Button variant="outline" onClick={handlePrint} className="shadow-sm hover:bg-primary hover:text-white transition-all">
-                                <Printer className="mr-2 h-4 w-4" /> Print SOA
+                                <Printer className="mr-2 h-4 w-4" /> Print
                             </Button>
                         </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
-                                            <TableHead className="w-[120px] font-semibold py-4 pl-6">Date</TableHead>
-                                            <TableHead className="font-semibold py-4">Description</TableHead>
-                                            <TableHead className="w-[150px] font-semibold py-4">Reference</TableHead>
-                                            <TableHead className="text-right font-semibold py-4">Debit</TableHead>
-                                            <TableHead className="text-right font-semibold py-4">Credit</TableHead>
-                                            <TableHead className="text-right font-semibold py-4 pr-6">Balance</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        <TableRow className="bg-gray-50/30 hover:bg-gray-50/50">
-                                            <TableCell className="pl-6 text-muted-foreground">-</TableCell>
-                                            <TableCell className="font-medium">Beginning Balance</TableCell>
-                                            <TableCell className="text-muted-foreground">-</TableCell>
-                                            <TableCell className="text-right">-</TableCell>
-                                            <TableCell className="text-right">-</TableCell>
-                                            <TableCell className="text-right font-bold pr-6">{formatCurrency(Number(soaData.startingBalance))}</TableCell>
-                                        </TableRow>
-                                        {groupedTransactions.groups.map((group: any, i: number) => (
-                                            <Fragment key={group.id}>
-                                                <TableRow className="group hover:bg-muted/30 transition-colors bg-blue-50/20">
-                                                    <TableCell className="pl-6 py-4 text-muted-foreground font-medium text-xs">
-                                                        {format(new Date(group.date), 'MMM dd, yyy')}
-                                                    </TableCell>
-                                                    <TableCell className="py-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="w-2 h-2 rounded-full bg-orange-400" />
-                                                            <span className="font-semibold text-foreground">{group.type}</span>
-                                                            {group.description && <span className="text-muted-foreground hidden sm:inline text-xs">- {group.description}</span>}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="py-4 font-mono text-[10px]">
-                                                        <ViewInvoiceDialog invoiceId={group.id}>
-                                                            <Button variant="link" className="h-auto p-0 text-blue-600 hover:text-blue-800 font-mono text-xs">
-                                                                {group.reference || group.id.substring(0, 8)}
-                                                            </Button>
-                                                        </ViewInvoiceDialog>
-                                                    </TableCell>
-                                                    <TableCell className="text-right py-4 font-semibold text-sm">
-                                                        {formatCurrency(Number(group.debit))}
-                                                    </TableCell>
-                                                    <TableCell className="text-right py-4">-</TableCell>
-                                                    <TableCell className="text-right py-4 font-bold pr-6">
-                                                        {formatCurrency(Number(group.runningBalance))}
-                                                    </TableCell>
-                                                </TableRow>
-                                                {group.payments.map((p: any) => (
-                                                    <TableRow key={p.id} className="border-l-2 border-l-green-400/30 hover:bg-green-50/10 transition-colors">
-                                                        <TableCell className="pl-8 py-2 text-muted-foreground font-medium text-[10px]">
-                                                            {format(new Date(p.date), 'MMM dd, yyy')}
-                                                        </TableCell>
-                                                        <TableCell className="py-2">
-                                                            <div className="flex items-center gap-2 pl-4">
-                                                                <span className="text-muted-foreground text-xs opacity-50">└─</span>
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                                                                <span className="font-medium text-foreground text-xs">Payment: {p.type}</span>
-                                                                {p.invoice_ref ? (
-                                                                    <span className="text-muted-foreground text-[10px] italic ml-1"> (for Invoice #{p.invoice_ref})</span>
-                                                                ) : p.note && (
-                                                                    <span className="text-muted-foreground text-[10px] italic">({p.note})</span>
-                                                                )}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="py-2 font-mono text-[10px]">
-                                                            <ViewPaymentDialog payment={{id: p.id, reference: p.reference, amount: p.credit, paymentDate: p.date, customerName: customers.find(c => c.id === selectedCustomer)?.name || 'Valued Customer', paymentType: p.type}}>
-                                                                <Button variant="link" className="h-auto p-0 text-green-600 hover:text-green-800 font-mono text-[10px]">
-                                                                    {p.reference || p.id.substring(0, 8)}
-                                                                </Button>
-                                                            </ViewPaymentDialog>
-                                                        </TableCell>
-                                                        <TableCell className="text-right py-2">-</TableCell>
-                                                        <TableCell className="text-right py-2 font-medium text-green-600 text-sm">
-                                                            {formatCurrency(Number(p.credit))}
-                                                        </TableCell>
-                                                        <TableCell className="text-right py-2 font-medium pr-6 text-muted-foreground text-xs">
-                                                            {formatCurrency(Number(p.runningBalance))}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </Fragment>
-                                        ))}
-                                        {groupedTransactions.unallocated.length > 0 && (
-                                            <Fragment key="unallocated-section">
-                                                <TableRow className="bg-gray-100/50">
-                                                    <TableCell colSpan={6} className="text-[10px] font-bold uppercase tracking-wider pl-6 py-2 text-muted-foreground">Unallocated Payments</TableCell>
-                                                </TableRow>
-                                                {groupedTransactions.unallocated.map((p: any) => (
-                                                    <TableRow key={p.id} className="group hover:bg-muted/30 transition-colors">
-                                                        <TableCell className="pl-6 py-4 text-muted-foreground font-medium text-xs">
-                                                            {format(new Date(p.date), 'MMM dd, yyy')}
-                                                        </TableCell>
-                                                        <TableCell className="py-4">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="w-2 h-2 rounded-full bg-green-400" />
-                                                                <span className="font-medium text-foreground">{p.type}</span>
-                                                                {p.description && <span className="text-muted-foreground hidden sm:inline text-xs">- {p.description}</span>}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="py-4 font-mono text-[10px]">
-                                                           <ViewPaymentDialog payment={{id: p.id, reference: p.reference, amount: p.credit, paymentDate: p.date, customerName: customers.find(c => c.id === selectedCustomer)?.name || 'Valued Customer', paymentType: p.type}}>
-                                                                <Button variant="link" className="h-auto p-0 text-green-600 hover:text-green-800 font-mono text-xs">
-                                                                    {p.reference || p.id.substring(0, 8)}
-                                                                </Button>
-                                                            </ViewPaymentDialog>
-                                                        </TableCell>
-                                                        <TableCell className="text-right py-4">-</TableCell>
-                                                        <TableCell className="text-right py-4 font-medium text-green-600">
-                                                            {formatCurrency(Number(p.credit))}
-                                                        </TableCell>
-                                                        <TableCell className="text-right py-4 font-bold pr-6">
-                                                            {formatCurrency(Number(p.runningBalance))}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </Fragment>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                            <div className="p-6 bg-muted/20 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
-                                <div className="text-xs text-muted-foreground italic">
-                                    Generated on {format(new Date(), 'PPpp')}
+                        <CardContent className="p-6">
+                            <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between rounded-xl border bg-primary/5 p-6">
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Amount Due</p>
+                                    <p className={cn("text-4xl font-extrabold", amountDue > 0 ? "text-primary" : "text-green-600")}>
+                                        {formatCurrency(amountDue)}
+                                    </p>
+                                    {amountDue <= 0 && <p className="mt-1 text-sm font-medium text-green-600">Account fully settled — thank you!</p>}
                                 </div>
-                                <div className="flex items-center gap-2 text-xl font-bold">
-                                    <span className="text-sm font-medium text-muted-foreground uppercase">Statement Ending Balance:</span>
-                                    <span className="text-primary">{formatCurrency(Number(soaData.endingBalance))}</span>
+                                <div className="space-y-1.5 text-sm sm:min-w-[260px]">
+                                    <div className="flex justify-between gap-6">
+                                        <span className="text-muted-foreground">Previous Balance</span>
+                                        <span className="font-medium">{formatCurrency(Number(soaData.startingBalance))}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-6">
+                                        <span className="text-muted-foreground">New Charges ({invoiceGroups.length} {invoiceGroups.length === 1 ? 'invoice' : 'invoices'})</span>
+                                        <span className="font-medium">{formatCurrency(summary?.totalDebit || 0)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-6 text-green-600">
+                                        <span>Payments Received</span>
+                                        <span className="font-medium">−{formatCurrency(summary?.totalCredit || 0)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-6 border-t pt-1.5 font-bold">
+                                        <span>Amount Due</span>
+                                        <span>{formatCurrency(amountDue)}</span>
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* --- Per-invoice breakdown --- */}
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Invoices in this period</h3>
+                        {invoiceGroups.length === 0 && (
+                            <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No invoices in this period.</CardContent></Card>
+                        )}
+                        {invoiceGroups.map((inv: any) => {
+                            const invoiceAmount = Number(inv.debit);
+                            const balance = invoiceAmount - Number(inv.amountPaid || 0);
+                            const isPaid = balance <= 0.005;
+                            const dueDate = inv.dueDate ? new Date(inv.dueDate) : null;
+                            const isOverdue = !isPaid && dueDate && isPast(dueDate);
+                            return (
+                                <Card key={inv.id} className={cn("overflow-hidden", isPaid ? "border-green-200 dark:border-green-900/40" : isOverdue ? "border-destructive/40" : "")}>
+                                    <CardHeader className="flex flex-row items-start justify-between gap-4 border-b bg-muted/20 py-4">
+                                        <div className="space-y-0.5">
+                                            <ViewInvoiceDialog invoiceId={inv.id}>
+                                                <Button variant="link" className="h-auto p-0 text-base font-bold text-foreground hover:text-primary">
+                                                    Invoice {inv.reference || inv.id.substring(0, 8)}
+                                                </Button>
+                                            </ViewInvoiceDialog>
+                                            <p className="text-xs text-muted-foreground">
+                                                Issued {format(new Date(inv.date), 'PP')}
+                                                {dueDate && <> · Due {format(dueDate, 'PP')}</>}
+                                            </p>
+                                        </div>
+                                        <Badge variant={isPaid ? 'default' : isOverdue ? 'destructive' : 'secondary'} className={isPaid ? 'bg-green-600 hover:bg-green-600' : ''}>
+                                            {isPaid ? 'Paid' : isOverdue ? 'Overdue' : 'Outstanding'}
+                                        </Badge>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        <div className="divide-y text-sm">
+                                            <div className="flex items-center justify-between px-6 py-2.5">
+                                                <span className="text-muted-foreground">Invoice amount</span>
+                                                <span className="font-medium">{formatCurrency(invoiceAmount)}</span>
+                                            </div>
+                                            {inv.payments.map((p: any) => (
+                                                <div key={p.id} className="flex items-center justify-between bg-green-50/40 px-6 py-2.5 dark:bg-green-900/10">
+                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                        <span className="text-green-500">↳</span>
+                                                        <span>{format(new Date(p.date), 'PP')} · Payment</span>
+                                                        <Badge variant="outline" className="font-normal">{p.type}</Badge>
+                                                        <ViewPaymentDialog payment={{id: p.id, reference: p.reference, amount: p.credit, paymentDate: p.date, customerName, paymentType: p.type}}>
+                                                            <Button variant="link" className="h-auto p-0 font-mono text-[11px] text-green-600 hover:text-green-800">{p.reference || p.id.substring(0, 8)}</Button>
+                                                        </ViewPaymentDialog>
+                                                    </div>
+                                                    <span className="font-medium text-green-600">−{formatCurrency(Number(p.credit))}</span>
+                                                </div>
+                                            ))}
+                                            <div className="flex items-center justify-between bg-muted/30 px-6 py-3">
+                                                <span className="font-bold">Balance on this invoice</span>
+                                                <span className={cn("text-lg font-extrabold", isPaid ? "text-green-600" : "text-destructive")}>
+                                                    {formatCurrency(Math.max(0, balance))}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+                    </div>
+
+                    {/* --- Unallocated payments / credits --- */}
+                    {groupedTransactions.unallocated.length > 0 && (
+                        <Card>
+                            <CardHeader className="border-b py-4">
+                                <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Payments not applied to a specific invoice</CardTitle>
+                                <CardDescription>These are advance payments or credits on the account.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <div className="divide-y text-sm">
+                                    {groupedTransactions.unallocated.map((p: any) => (
+                                        <div key={p.id} className="flex items-center justify-between px-6 py-3">
+                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                <span>{format(new Date(p.date), 'PP')} · Payment</span>
+                                                <Badge variant="outline" className="font-normal">{p.type}</Badge>
+                                                <ViewPaymentDialog payment={{id: p.id, reference: p.reference, amount: p.credit, paymentDate: p.date, customerName, paymentType: p.type}}>
+                                                    <Button variant="link" className="h-auto p-0 font-mono text-[11px] text-green-600 hover:text-green-800">{p.reference || p.id.substring(0, 8)}</Button>
+                                                </ViewPaymentDialog>
+                                            </div>
+                                            <span className="font-medium text-green-600">−{formatCurrency(Number(p.credit))}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    <p className="px-1 text-center text-xs italic text-muted-foreground">
+                        Generated on {format(new Date(), 'PPpp')} · Please notify us of any discrepancies within 7 days.
+                    </p>
                 </div>
-            )}
+                );
+            })()}
         </div>
     )
 }

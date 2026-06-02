@@ -9,6 +9,7 @@ const Toaster = dynamic(
 );
 
 import { ThemeProvider } from '@/components/theme-provider';
+import { LicenseGate } from '@/components/license-gate';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -18,7 +19,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       enableSystem
       disableTransitionOnChange
     >
-      {children}
+      <LicenseGate>{children}</LicenseGate>
       <Toaster />
     </ThemeProvider>
   );

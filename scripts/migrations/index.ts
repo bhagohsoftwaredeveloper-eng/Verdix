@@ -77,6 +77,8 @@ import './076_add_warehouse_to_purchase_orders';
 import './077_add_subtotal_to_purchase_order_items';
 import './078_alter_stock_precision';
 import './079_create_payment_allocations_table';
+import './080_backfill_payment_allocations';
+import './081_normalize_payment_invoice_notes';
 
 
 // Import runner functions
