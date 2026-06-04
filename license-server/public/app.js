@@ -1,9 +1,24 @@
 /* Verdix LMS dashboard logic (vanilla JS). */
 
 let customersCache = [];
+let licensesCache = [];
+let activationsCache = [];
 let signLicenseId = null;
 
+// Case-insensitive substring match across the given fields.
+function matchesQuery(obj, fields, q) {
+  if (!q) return true;
+  const needle = q.trim().toLowerCase();
+  return fields.some((f) => String(obj[f] == null ? '' : obj[f]).toLowerCase().includes(needle));
+}
+function setCount(id, shown, total) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = shown === total ? `(${total})` : `(${shown} of ${total})`;
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+function val(id) { const el = document.getElementById(id); return el ? el.value : ''; }
 async function api(path, opts) {
   const res = await fetch(path, opts);
   if (res.status === 401) { location.href = '/login'; throw new Error('Not authenticated'); }
@@ -47,8 +62,15 @@ async function loadStats() {
 async function loadCustomers() {
   const { data } = await api('/api/customers');
   customersCache = data;
+  renderCustomers();
+}
+function renderCustomers() {
   const el = document.getElementById('customers-table');
-  if (!data.length) { el.innerHTML = '<div class="empty">No customers yet. Click “New Customer”.</div>'; return; }
+  if (!customersCache.length) { setCount('customers-count', 0, 0); el.innerHTML = '<div class="empty">No customers yet. Click “New Customer”.</div>'; return; }
+  const q = val('customers-search');
+  const data = customersCache.filter((c) => matchesQuery(c, ['business_name', 'contact_name', 'email', 'phone'], q));
+  setCount('customers-count', data.length, customersCache.length);
+  if (!data.length) { el.innerHTML = '<div class="empty">No customers match your search.</div>'; return; }
   el.innerHTML = `<table><thead><tr><th>Business</th><th>Contact</th><th>Email</th><th>Phone</th><th>Licenses</th><th>Added</th></tr></thead><tbody>${
     data.map((c) => `<tr>
       <td><strong>${esc(c.business_name)}</strong></td>
@@ -67,8 +89,8 @@ function openCustomerModal() {
 }
 async function saveCustomer() {
   const body = {
-    business_name: c_business.value, contact_name: c_contact.value, phone: c_phone.value,
-    email: c_email.value, address: c_address.value, notes: c_notes.value,
+    business_name: val('c-business'), contact_name: val('c-contact'), phone: val('c-phone'),
+    email: val('c-email'), address: val('c-address'), notes: val('c-notes'),
   };
   const err = document.getElementById('c-err');
   if (!body.business_name.trim()) { err.textContent = 'Business name is required.'; err.classList.add('show'); return; }
@@ -80,8 +102,16 @@ async function saveCustomer() {
 // ── licenses ─────────────────────────────────────────────────────────────────
 async function loadLicenses() {
   const { data } = await api('/api/licenses');
+  licensesCache = data;
+  renderLicenses();
+}
+function renderLicenses() {
   const el = document.getElementById('licenses-table');
-  if (!data.length) { el.innerHTML = '<div class="empty">No licenses yet. Click “Issue License”.</div>'; return; }
+  if (!licensesCache.length) { setCount('licenses-count', 0, 0); el.innerHTML = '<div class="empty">No licenses yet. Click “Issue License”.</div>'; return; }
+  const q = val('licenses-search');
+  const data = licensesCache.filter((l) => matchesQuery(l, ['product_key', 'business_name', 'edition', 'status', 'type'], q));
+  setCount('licenses-count', data.length, licensesCache.length);
+  if (!data.length) { el.innerHTML = '<div class="empty">No licenses match your search.</div>'; return; }
   el.innerHTML = `<table><thead><tr><th>Product Key</th><th>Customer</th><th>Edition</th><th>Type</th><th>Expires</th><th>Seats</th><th>Status</th><th></th></tr></thead><tbody>${
     data.map((l) => `<tr>
       <td><code class="key">${esc(l.product_key)}</code></td>
@@ -101,28 +131,28 @@ async function loadLicenses() {
   }</tbody></table>`;
 }
 function toggleExpiry() {
-  document.getElementById('l-expiry-wrap').classList.toggle('hidden', l_type.value !== 'subscription');
+  document.getElementById('l-expiry-wrap').classList.toggle('hidden', val('l-type') !== 'subscription');
 }
 function openLicenseModal() {
   if (!customersCache.length) { alert('Create a customer first.'); return; }
-  l_customer.innerHTML = customersCache.map((c) => `<option value="${c.id}">${esc(c.business_name)}</option>`).join('');
-  l_edition.value = 'standard'; l_type.value = 'perpetual'; l_days.value = ''; l_expires.value = '';
-  l_seats.value = '1'; l_features.value = ''; l_notes.value = '';
+  $('l-customer').innerHTML = customersCache.map((c) => `<option value="${c.id}">${esc(c.business_name)}</option>`).join('');
+  $('l-edition').value = 'standard'; $('l-type').value = 'perpetual'; $('l-days').value = ''; $('l-expires').value = '';
+  $('l-seats').value = '1'; $('l-features').value = ''; $('l-notes').value = '';
   document.getElementById('l-err').classList.remove('show');
   toggleExpiry();
   show('license-modal');
 }
 async function saveLicense() {
-  const type = l_type.value;
+  const type = val('l-type');
   const body = {
-    customer_id: l_customer.value, edition: l_edition.value, type,
-    max_activations: parseInt(l_seats.value || '1', 10),
-    features: l_features.value.split(',').map((f) => f.trim()).filter(Boolean),
-    notes: l_notes.value,
+    customer_id: val('l-customer'), edition: val('l-edition'), type,
+    max_activations: parseInt(val('l-seats') || '1', 10),
+    features: val('l-features').split(',').map((f) => f.trim()).filter(Boolean),
+    notes: val('l-notes'),
   };
   if (type === 'subscription') {
-    if (l_expires.value) body.expires_at = l_expires.value;
-    else if (l_days.value) body.expires_at = new Date(Date.now() + parseInt(l_days.value, 10) * 86400000).toISOString();
+    if (val('l-expires')) body.expires_at = val('l-expires');
+    else if (val('l-days')) body.expires_at = new Date(Date.now() + parseInt(val('l-days'), 10) * 86400000).toISOString();
   }
   const err = document.getElementById('l-err');
   if (type === 'subscription' && !body.expires_at) { err.textContent = 'Set a duration or expiry date.'; err.classList.add('show'); return; }
@@ -143,7 +173,7 @@ async function setStatus(id, status) {
 function openSignModal(licenseId, productKey, business) {
   signLicenseId = licenseId;
   document.getElementById('sign-context').textContent = business + ' • ' + productKey;
-  s_machine.value = ''; s_label.value = '';
+  $('s-machine').value = ''; $('s-label').value = '';
   document.getElementById('s-err').classList.remove('show');
   document.getElementById('s-keyout').classList.add('hidden');
   document.getElementById('s-gen-btn').classList.remove('hidden');
@@ -153,10 +183,10 @@ function openSignModal(licenseId, productKey, business) {
 async function generateKey() {
   const err = document.getElementById('s-err');
   err.classList.remove('show');
-  if (!s_machine.value.trim()) { err.textContent = 'Machine ID is required.'; err.classList.add('show'); return; }
+  if (!val('s-machine').trim()) { err.textContent = 'Machine ID is required.'; err.classList.add('show'); return; }
   const res = await api('/api/licenses/' + signLicenseId + '/sign', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ machineId: s_machine.value, machineLabel: s_label.value }),
+    body: JSON.stringify({ machineId: val('s-machine'), machineLabel: val('s-label') }),
   });
   if (!res.success) { err.textContent = res.error; err.classList.add('show'); return; }
   document.getElementById('s-key').textContent = res.data.signedLicense;
@@ -173,8 +203,16 @@ async function copyKey() {
 // ── activations ──────────────────────────────────────────────────────────────
 async function loadActivations() {
   const { data } = await api('/api/activations');
+  activationsCache = data;
+  renderActivations();
+}
+function renderActivations() {
   const el = document.getElementById('activations-table');
-  if (!data.length) { el.innerHTML = '<div class="empty">No activations yet.</div>'; return; }
+  if (!activationsCache.length) { setCount('activations-count', 0, 0); el.innerHTML = '<div class="empty">No activations yet.</div>'; return; }
+  const q = val('activations-search');
+  const data = activationsCache.filter((a) => matchesQuery(a, ['business_name', 'product_key', 'machine_id', 'machine_label', 'status'], q));
+  setCount('activations-count', data.length, activationsCache.length);
+  if (!data.length) { el.innerHTML = '<div class="empty">No activations match your search.</div>'; return; }
   el.innerHTML = `<table><thead><tr><th>Customer</th><th>Product Key</th><th>Machine</th><th>Label</th><th>Status</th><th>Activated</th><th></th></tr></thead><tbody>${
     data.map((a) => `<tr>
       <td>${esc(a.business_name)}</td>

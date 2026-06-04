@@ -23,8 +23,13 @@
     .stat { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px; }
     .stat .n { font-size:30px; font-weight:800; }
     .stat .l { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-top:4px; }
-    .bar { display:flex; align-items:center; justify-content:space-between; margin:18px 0 12px; }
+    .bar { display:flex; align-items:center; gap:10px; margin:18px 0 12px; }
     .bar h2 { font-size:16px; margin:0; }
+    .bar .spacer { flex:1; }
+    .search { background:var(--panel2); border:1px solid var(--border); border-radius:9px; color:var(--text); padding:8px 12px 8px 32px; font-size:13px; width:240px; outline:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b93a7' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:10px center; }
+    .search:focus { border-color:var(--accent); }
+    .count { font-size:12px; color:var(--muted); margin-left:2px; }
     .btn { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border:none; padding:9px 15px; border-radius:9px; cursor:pointer; font-weight:600; font-size:13px; }
     .btn.ghost { background:var(--panel2); border:1px solid var(--border); color:var(--text); }
     .btn.sm { padding:5px 10px; font-size:12px; }
@@ -83,17 +88,32 @@
     </section>
 
     <section id="tab-customers" class="hidden">
-      <div class="bar"><h2>Customers</h2><button class="btn" onclick="openCustomerModal()">+ New Customer</button></div>
+      <div class="bar">
+        <h2>Customers</h2><span class="count" id="customers-count"></span>
+        <div class="spacer"></div>
+        <input class="search" id="customers-search" placeholder="Search name, contact, email…" oninput="renderCustomers()" />
+        <button class="btn" onclick="openCustomerModal()">+ New Customer</button>
+      </div>
       <div id="customers-table"></div>
     </section>
 
     <section id="tab-licenses" class="hidden">
-      <div class="bar"><h2>Licenses</h2><button class="btn" onclick="openLicenseModal()">+ Issue License</button></div>
+      <div class="bar">
+        <h2>Licenses</h2><span class="count" id="licenses-count"></span>
+        <div class="spacer"></div>
+        <input class="search" id="licenses-search" placeholder="Search key, customer, status…" oninput="renderLicenses()" />
+        <button class="btn" onclick="openLicenseModal()">+ Issue License</button>
+      </div>
       <div id="licenses-table"></div>
     </section>
 
     <section id="tab-activations" class="hidden">
-      <div class="bar"><h2>Activations</h2><button class="btn ghost" onclick="loadActivations()">Refresh</button></div>
+      <div class="bar">
+        <h2>Activations</h2><span class="count" id="activations-count"></span>
+        <div class="spacer"></div>
+        <input class="search" id="activations-search" placeholder="Search customer, key, machine…" oninput="renderActivations()" />
+        <button class="btn ghost" onclick="loadActivations()">Refresh</button>
+      </div>
       <div id="activations-table"></div>
     </section>
   </main>
