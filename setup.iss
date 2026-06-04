@@ -21,6 +21,12 @@ DisableFinishedPage=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Dirs]
+; License store — lives OUTSIDE {app} so it survives uninstall/updates.
+; Pre-created with user-modify rights so the POS server (running as the
+; logged-in user) can write C:\ProgramData\Verdix\license.dat after activation.
+Name: "{commonappdata}\Verdix"; Permissions: users-modify
+
 [Files]
 ; App Files
 Source: "dist\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

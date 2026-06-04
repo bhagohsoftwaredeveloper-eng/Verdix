@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verdix LMS — Sign in</title>
+  <style>
+    :root { --bg:#0f1117; --panel:#181b24; --border:#2a2f3a; --muted:#8b93a7; --text:#e6e9f0; --accent:#6366f1; --accent2:#8b5cf6; --bad:#ef4444; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:'Segoe UI',system-ui,sans-serif; color:var(--text);
+      background:radial-gradient(1200px 600px at 50% -10%,#1c2030 0%,var(--bg) 55%);
+      display:flex; align-items:center; justify-content:center; padding:16px; }
+    .card { width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:32px; }
+    .brand { display:flex; align-items:center; gap:12px; margin-bottom:24px; }
+    .logo { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; font-weight:800; font-size:20px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2)); }
+    h1 { font-size:18px; margin:0; }
+    p.sub { margin:2px 0 0; font-size:12px; color:var(--muted); }
+    label { display:block; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:16px 0 6px; }
+    input { width:100%; padding:11px 12px; background:#11141c; border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; outline:none; }
+    input:focus { border-color:var(--accent); }
+    button { margin-top:22px; width:100%; padding:12px; border:none; border-radius:11px; cursor:pointer; font-size:15px; font-weight:700; color:#fff;
+      background:linear-gradient(135deg,var(--accent),var(--accent2)); }
+    button:disabled { opacity:.5; }
+    .err { display:none; margin-top:14px; padding:10px 12px; border-radius:10px; font-size:13px; color:#fca5a5; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.4); }
+    .err.show { display:block; }
+  </style>
+</head>
+<body>
+  <form class="card" onsubmit="return doLogin(event)">
+    <div class="brand">
+      <div class="logo">V</div>
+      <div><h1>Verdix LMS</h1><p class="sub">License Management System</p></div>
+    </div>
+    <label>Username</label>
+    <input id="username" autocomplete="username" autofocus />
+    <label>Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <button id="btn" type="submit">Sign in</button>
+    <div id="err" class="err"></div>
+  </form>
+  <script>
+    async function doLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn');
+      const err = document.getElementById('err');
+      err.classList.remove('show');
+      btn.disabled = true; btn.textContent = 'Signing in…';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.value, password: password.value })
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Login failed');
+        location.href = '/';
+      } catch (ex) {
+        err.textContent = ex.message; err.classList.add('show');
+        btn.disabled = false; btn.textContent = 'Sign in';
+      }
+      return false;
+    }
+  </script>
+</body>
+</html>

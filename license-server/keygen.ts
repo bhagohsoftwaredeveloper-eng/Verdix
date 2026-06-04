@@ -2,16 +2,16 @@
  * keygen — one-time setup for the Verdix license system.
  * ----------------------------------------------------------------------------
  * Generates a fresh Ed25519 key pair and:
- *   1. writes the PRIVATE key to license-generator/keys/private-key.pem
- *      (gitignored — this is the master signing secret, guard it carefully)
- *   2. writes the PUBLIC key to license-generator/keys/public-key.pem
+ *   1. writes the PRIVATE key to license-server/keys/private-key.pem
+ *      (gitignored — master signing secret; on Railway this is an ENV var)
+ *   2. writes the PUBLIC key to license-server/keys/public-key.pem
  *   3. embeds the PUBLIC key into lib/licensing/public-key.ts so the POS can
  *      verify licenses without any extra wiring.
  *
  * Run from the repo root:  npm run license:keygen
  *
- * ⚠️  Running this AGAIN creates a NEW pair and INVALIDATES every license
- *     already issued with the old key. Only re-run if you intend to rotate.
+ * ⚠️  Re-running creates a NEW pair and INVALIDATES every license already
+ *     issued with the old key. Only re-run with --force to intentionally rotate.
  */
 import fs from 'fs';
 import path from 'path';
@@ -28,7 +28,7 @@ function main() {
       '\n❌ A private key already exists at:\n   ' +
         privatePath +
         '\n\n   Re-running keygen would INVALIDATE all existing licenses.\n' +
-        '   If you really want to rotate keys, run:  npm run license:keygen -- --force\n'
+        '   To intentionally rotate keys, run:  npm run license:keygen -- --force\n'
     );
     process.exit(1);
   }
@@ -46,8 +46,8 @@ function main() {
  *
  * This is the public half of the key pair — it can ONLY verify signatures, not
  * create them, so it is safe to ship inside the POS. The matching PRIVATE key
- * lives exclusively in \`license-generator/keys/private-key.pem\` (gitignored)
- * and must never be distributed.
+ * lives exclusively on the license server (gitignored / env secret) and must
+ * never be distributed.
  */
 export const PUBLIC_KEY_PEM = \`${publicKey.trim()}\`;
 `;
@@ -57,7 +57,7 @@ export const PUBLIC_KEY_PEM = \`${publicKey.trim()}\`;
   console.log('   Private key : ' + privatePath + '   (KEEP SECRET — gitignored)');
   console.log('   Public key  : ' + publicPath);
   console.log('   Embedded in : ' + posPublicKeyTs);
-  console.log('\n   The POS will now verify licenses signed by this key.\n');
+  console.log('\n   For Railway: set LICENSE_PRIVATE_KEY to the contents of private-key.pem\n');
 }
 
 main();

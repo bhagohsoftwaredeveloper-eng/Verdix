@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verdix LMS — Dashboard</title>
+  <style>
+    :root { --bg:#0f1117; --panel:#181b24; --panel2:#11141c; --border:#2a2f3a; --muted:#8b93a7; --text:#e6e9f0;
+      --accent:#6366f1; --accent2:#8b5cf6; --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; color:var(--text); background:var(--bg); }
+    header { display:flex; align-items:center; gap:14px; padding:14px 24px; border-bottom:1px solid var(--border); background:var(--panel); position:sticky; top:0; z-index:5; }
+    .logo { width:36px; height:36px; border-radius:10px; display:grid; place-items:center; font-weight:800;
+      background:linear-gradient(135deg,var(--accent),var(--accent2)); }
+    header h1 { font-size:16px; margin:0; flex:1; }
+    header .who { font-size:13px; color:var(--muted); }
+    header button.logout { background:none; border:1px solid var(--border); color:var(--muted); padding:7px 12px; border-radius:8px; cursor:pointer; font-size:13px; }
+    .tabs { display:flex; gap:6px; padding:14px 24px 0; }
+    .tabs button { background:none; border:none; color:var(--muted); padding:10px 16px; border-radius:9px 9px 0 0; cursor:pointer; font-size:14px; font-weight:600; }
+    .tabs button.active { color:var(--text); background:var(--panel); }
+    main { padding:20px 24px 60px; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:8px; }
+    .stat { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px; }
+    .stat .n { font-size:30px; font-weight:800; }
+    .stat .l { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-top:4px; }
+    .bar { display:flex; align-items:center; justify-content:space-between; margin:18px 0 12px; }
+    .bar h2 { font-size:16px; margin:0; }
+    .btn { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border:none; padding:9px 15px; border-radius:9px; cursor:pointer; font-weight:600; font-size:13px; }
+    .btn.ghost { background:var(--panel2); border:1px solid var(--border); color:var(--text); }
+    .btn.sm { padding:5px 10px; font-size:12px; }
+    .btn.danger { background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.4); color:#fca5a5; }
+    table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    th, td { text-align:left; padding:11px 14px; font-size:13px; border-bottom:1px solid var(--border); }
+    th { color:var(--muted); text-transform:uppercase; font-size:11px; letter-spacing:.5px; }
+    tr:last-child td { border-bottom:none; }
+    .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+    .pill.active { background:rgba(34,197,94,.15); color:#86efac; }
+    .pill.suspended { background:rgba(245,158,11,.15); color:#fcd34d; }
+    .pill.revoked { background:rgba(239,68,68,.15); color:#fca5a5; }
+    .pill.perpetual { background:rgba(99,102,241,.15); color:#a5b4fc; }
+    .pill.subscription { background:rgba(139,92,246,.15); color:#c4b5fd; }
+    code.key { font-family:ui-monospace,monospace; font-size:12px; color:#c7d2fe; }
+    .empty { padding:40px; text-align:center; color:var(--muted); }
+    /* Modal */
+    .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:20; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
+    .overlay.show { display:flex; }
+    .modal { width:100%; max-width:520px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:24px; }
+    .modal h3 { margin:0 0 16px; font-size:17px; }
+    label { display:block; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin:14px 0 6px; }
+    input, select, textarea { width:100%; padding:10px 12px; background:var(--panel2); border:1px solid var(--border); border-radius:9px; color:var(--text); font-size:14px; outline:none; font-family:inherit; }
+    input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+    textarea { resize:vertical; font-family:ui-monospace,monospace; font-size:12px; }
+    .row { display:flex; gap:12px; } .row > div { flex:1; }
+    .modal-actions { display:flex; gap:10px; margin-top:22px; }
+    .modal-actions .btn { flex:1; }
+    .keyout { margin-top:14px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; }
+    .keyout code { display:block; word-break:break-all; font-family:ui-monospace,monospace; font-size:12px; line-height:1.6; color:#c7d2fe; }
+    .err { display:none; margin-top:12px; padding:9px 12px; border-radius:9px; font-size:13px; color:#fca5a5; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.4); }
+    .err.show { display:block; }
+    .hidden { display:none !important; }
+    .muted { color:var(--muted); font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">V</div>
+    <h1>Verdix License Management</h1>
+    <span class="who" id="who"></span>
+    <button class="logout" onclick="logout()">Sign out</button>
+  </header>
+
+  <div class="tabs">
+    <button data-tab="overview" class="active" onclick="showTab('overview')">Overview</button>
+    <button data-tab="customers" onclick="showTab('customers')">Customers</button>
+    <button data-tab="licenses" onclick="showTab('licenses')">Licenses</button>
+    <button data-tab="activations" onclick="showTab('activations')">Activations</button>
+  </div>
+
+  <main>
+    <section id="tab-overview">
+      <div class="stats" id="stats"></div>
+      <p class="muted">Welcome to the Verdix License Management System. Create customers, issue product keys, and generate machine-bound license keys.</p>
+    </section>
+
+    <section id="tab-customers" class="hidden">
+      <div class="bar"><h2>Customers</h2><button class="btn" onclick="openCustomerModal()">+ New Customer</button></div>
+      <div id="customers-table"></div>
+    </section>
+
+    <section id="tab-licenses" class="hidden">
+      <div class="bar"><h2>Licenses</h2><button class="btn" onclick="openLicenseModal()">+ Issue License</button></div>
+      <div id="licenses-table"></div>
+    </section>
+
+    <section id="tab-activations" class="hidden">
+      <div class="bar"><h2>Activations</h2><button class="btn ghost" onclick="loadActivations()">Refresh</button></div>
+      <div id="activations-table"></div>
+    </section>
+  </main>
+
+  <!-- Customer modal -->
+  <div class="overlay" id="customer-modal">
+    <div class="modal">
+      <h3>New Customer</h3>
+      <label>Business Name *</label><input id="c-business" />
+      <div class="row">
+        <div><label>Contact Name</label><input id="c-contact" /></div>
+        <div><label>Phone</label><input id="c-phone" /></div>
+      </div>
+      <label>Email</label><input id="c-email" type="email" />
+      <label>Address</label><input id="c-address" />
+      <label>Notes</label><textarea id="c-notes" rows="2"></textarea>
+      <div class="err" id="c-err"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="closeModal('customer-modal')">Cancel</button>
+        <button class="btn" onclick="saveCustomer()">Save Customer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- License modal -->
+  <div class="overlay" id="license-modal">
+    <div class="modal">
+      <h3>Issue License</h3>
+      <label>Customer *</label>
+      <select id="l-customer"></select>
+      <div class="row">
+        <div><label>Edition</label>
+          <select id="l-edition"><option>standard</option><option>enterprise</option><option>trial</option></select>
+        </div>
+        <div><label>Type</label>
+          <select id="l-type" onchange="toggleExpiry()"><option value="perpetual">Perpetual</option><option value="subscription">Subscription</option></select>
+        </div>
+      </div>
+      <div id="l-expiry-wrap" class="hidden">
+        <div class="row">
+          <div><label>Duration (days)</label><input id="l-days" type="number" min="1" placeholder="365" /></div>
+          <div><label>or Expiry Date</label><input id="l-expires" type="date" /></div>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>Seats (max activations)</label><input id="l-seats" type="number" min="1" value="1" /></div>
+        <div><label>Features (comma-sep)</label><input id="l-features" placeholder="reports, multi-terminal" /></div>
+      </div>
+      <label>Notes</label><textarea id="l-notes" rows="2"></textarea>
+      <div class="err" id="l-err"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="closeModal('license-modal')">Cancel</button>
+        <button class="btn" onclick="saveLicense()">Issue License</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sign (generate key) modal -->
+  <div class="overlay" id="sign-modal">
+    <div class="modal">
+      <h3>Generate License Key</h3>
+      <p class="muted" id="sign-context"></p>
+      <label>Customer's Machine ID *</label>
+      <textarea id="s-machine" rows="2" placeholder="ABCD-1234-EF56-... (from the POS activation screen)"></textarea>
+      <label>Machine Label (optional)</label><input id="s-label" placeholder="e.g. Front Counter PC" />
+      <div class="err" id="s-err"></div>
+      <div class="keyout hidden" id="s-keyout"><code id="s-key"></code></div>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="closeModal('sign-modal')">Close</button>
+        <button class="btn" id="s-gen-btn" onclick="generateKey()">Generate Key</button>
+        <button class="btn hidden" id="s-copy-btn" onclick="copyKey()">Copy Key</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
