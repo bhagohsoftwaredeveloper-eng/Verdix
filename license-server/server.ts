@@ -22,6 +22,13 @@ import {
   verifySession,
   touchLogin,
   anyAdminExists,
+  createAdmin,
+  listAdmins,
+  deleteAdmin,
+  updateAdminPassword,
+  countAdmins,
+  getAdminById,
+  updateAdmin,
   SessionPayload,
 } from './auth';
 import * as svc from './service';
@@ -145,6 +152,62 @@ async function handle(req: Req, res: Res) {
     return sendJson(res, 200, { success: true });
   }
 
+  // --- PUBLIC: POS online activation (no admin auth) ---
+  // The POS calls this with a Product Key + its Machine ID; we validate, enforce
+  // seats/expiry/status, sign a machine-bound license, record the activation,
+  // and return the signed key.
+  if (method === 'POST' && p === '/api/activate') {
+    const ip = clientIp(req);
+    try {
+      const body = await readBody(req);
+      const productKey = String(body.productKey || '').trim();
+      const machineId = String(body.machineId || '').trim();
+      if (!productKey || !machineId)
+        return sendJson(res, 400, { success: false, error: 'Product key and Machine ID are required.' });
+
+      const license = await svc.getLicenseByProductKey(productKey);
+      if (!license) {
+        await svc.log(null, machineId, 'activate.fail', 'Unknown product key ' + productKey, ip);
+        return sendJson(res, 404, { success: false, error: 'Invalid product key. Please check and try again.' });
+      }
+      if (license.status !== 'active') {
+        await svc.log(license.id, machineId, 'activate.fail', 'License ' + license.status, ip);
+        return sendJson(res, 403, { success: false, error: `This license has been ${license.status}. Contact your vendor.` });
+      }
+      if (license.expires_at && new Date(license.expires_at).getTime() < Date.now()) {
+        await svc.log(license.id, machineId, 'activate.fail', 'Expired', ip);
+        return sendJson(res, 403, { success: false, error: 'This license has expired. Please renew.' });
+      }
+
+      // Seat enforcement (a machine that's already activated can re-fetch freely).
+      const already = await svc.machineAlreadyActivated(license.id, machineId);
+      if (!already) {
+        const used = await svc.countActiveActivations(license.id);
+        if (used >= license.max_activations)
+          return sendJson(res, 403, {
+            success: false,
+            error: `Activation limit reached (${used}/${license.max_activations}). Contact your vendor to add seats or release one.`,
+          });
+      }
+
+      const { signedLicense, payload } = await svc.issueSignedLicense(license, machineId, {
+        machineLabel: body.machineLabel,
+        appVersion: body.appVersion,
+        ip,
+      });
+      await svc.log(license.id, payload.machineId, 'activate.online', 'Online activation', ip);
+
+      return sendJson(res, 200, {
+        success: true,
+        signedLicense,
+        info: { customer: payload.customer, edition: payload.edition, expires: payload.expires },
+      });
+    } catch (e: any) {
+      console.error('Activation error:', e);
+      return sendJson(res, 500, { success: false, error: 'Activation failed on the server.' });
+    }
+  }
+
   // --- Everything below requires a valid session ---
   const session = getSession(req);
   if (p.startsWith('/api/')) {
@@ -233,6 +296,77 @@ async function handle(req: Req, res: Res) {
       if (method === 'POST' && relMatch) {
         await svc.releaseActivation(relMatch[1]);
         return sendJson(res, 200, { success: true });
+      }
+
+      // Admin user management (administrators only)
+      if (p.startsWith('/api/users')) {
+        if (session.role !== 'admin')
+          return sendJson(res, 403, { success: false, error: 'Only administrators can manage users.' });
+
+        if (method === 'GET' && p === '/api/users') {
+          return sendJson(res, 200, { success: true, data: await listAdmins() });
+        }
+        if (method === 'POST' && p === '/api/users') {
+          const body = await readBody(req);
+          const username = String(body.username || '').trim().toLowerCase();
+          const password = String(body.password || '');
+          const role = ['admin', 'manager', 'staff'].includes(body.role) ? body.role : 'admin';
+          if (!username || password.length < 6)
+            return sendJson(res, 400, { success: false, error: 'Username and a password (min 6 characters) are required.' });
+          if (await getAdminByUsername(username))
+            return sendJson(res, 400, { success: false, error: 'That username already exists.' });
+          await createAdmin(username, password, role);
+          return sendJson(res, 200, { success: true });
+        }
+        // Update username/role (and optional password) of an existing user.
+        const updMatch = p.match(/^\/api\/users\/([^/]+)$/);
+        if (method === 'POST' && updMatch) {
+          const id = updMatch[1];
+          const target = await getAdminById(id);
+          if (!target) return sendJson(res, 404, { success: false, error: 'User not found.' });
+
+          const body = await readBody(req);
+          const username = String(body.username || '').trim().toLowerCase();
+          const role = ['admin', 'manager', 'staff'].includes(body.role) ? body.role : target.role;
+          if (!username) return sendJson(res, 400, { success: false, error: 'Username is required.' });
+
+          if (username !== target.username && (await getAdminByUsername(username)))
+            return sendJson(res, 400, { success: false, error: 'That username already exists.' });
+
+          // Never let the last administrator lose admin rights (lock-out guard).
+          if (target.role === 'admin' && role !== 'admin') {
+            const admins = (await listAdmins()).filter((u) => u.role === 'admin');
+            if (admins.length <= 1)
+              return sendJson(res, 400, { success: false, error: 'Cannot remove the last administrator.' });
+          }
+
+          if (body.password) {
+            if (String(body.password).length < 6)
+              return sendJson(res, 400, { success: false, error: 'Password must be at least 6 characters.' });
+            await updateAdminPassword(id, body.password);
+          }
+          await updateAdmin(id, { username, role });
+          return sendJson(res, 200, { success: true });
+        }
+        const um = p.match(/^\/api\/users\/([^/]+)\/(password|delete)$/);
+        if (method === 'POST' && um) {
+          const [, id, action] = um;
+          if (action === 'password') {
+            const body = await readBody(req);
+            if (String(body.password || '').length < 6)
+              return sendJson(res, 400, { success: false, error: 'Password must be at least 6 characters.' });
+            await updateAdminPassword(id, body.password);
+            return sendJson(res, 200, { success: true });
+          }
+          if (action === 'delete') {
+            if (id === session.uid)
+              return sendJson(res, 400, { success: false, error: 'You cannot delete your own account.' });
+            if ((await countAdmins()) <= 1)
+              return sendJson(res, 400, { success: false, error: 'Cannot delete the last administrator.' });
+            await deleteAdmin(id);
+            return sendJson(res, 200, { success: true });
+          }
+        }
       }
 
       return sendJson(res, 404, { success: false, error: 'Unknown endpoint.' });

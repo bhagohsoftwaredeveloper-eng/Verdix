@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck, ShieldAlert, Copy, Check, KeyRound, Loader2, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Copy, Check, KeyRound, Loader2, AlertTriangle, Globe, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -106,7 +106,9 @@ function ActivationScreen({
   info: LicenseInfo | null;
   onActivated: () => void;
 }) {
+  const [mode, setMode] = useState<'online' | 'offline'>('online');
   const [key, setKey] = useState('');
+  const [productKey, setProductKey] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -125,7 +127,7 @@ function ActivationScreen({
     }
   };
 
-  const activate = async () => {
+  const activateOffline = async () => {
     setSubmitting(true);
     setError(null);
     try {
@@ -135,17 +137,39 @@ function ActivationScreen({
         body: JSON.stringify({ key }),
       });
       const json = await res.json();
-      if (json?.success) {
-        onActivated();
-      } else {
-        setError(json?.error || 'Activation failed.');
-      }
+      if (json?.success) onActivated();
+      else setError(json?.error || 'Activation failed.');
     } catch {
       setError('Could not reach the server. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const activateOnline = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/license/activate-online', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productKey }),
+      });
+      const json = await res.json();
+      if (json?.success) onActivated();
+      else setError(json?.error || 'Online activation failed.');
+    } catch {
+      setError('Could not reach the server. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const tabBtn = (m: 'online' | 'offline') =>
+    'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg transition-colors ' +
+    (mode === m
+      ? 'bg-primary text-primary-foreground shadow-sm'
+      : 'text-muted-foreground hover:text-foreground');
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/40 p-4 overflow-auto">
@@ -173,55 +197,91 @@ function ActivationScreen({
               <CardDescription>{meta.title}</CardDescription>
             </div>
           </div>
+
+          {/* Online / Offline tabs */}
+          <div className="flex gap-1 rounded-xl border bg-muted/40 p-1">
+            <button type="button" className={tabBtn('online')} onClick={() => { setMode('online'); setError(null); }}>
+              <Globe className="h-4 w-4" /> Online
+            </button>
+            <button type="button" className={tabBtn('offline')} onClick={() => { setMode('offline'); setError(null); }}>
+              <HardDrive className="h-4 w-4" /> Offline
+            </button>
+          </div>
         </CardHeader>
 
         <CardContent className="space-y-5">
           {status === 'expired' && info?.customer && (
             <p className="text-sm text-muted-foreground">
               The license for <span className="font-semibold">{info.customer}</span> has expired.
-              Enter a renewed license key below to continue.
+              Enter a renewed license below to continue.
             </p>
           )}
           {status === 'wrong-machine' && (
             <p className="text-sm text-muted-foreground">
-              The installed key was issued for another computer. Send the Machine ID below to your
-              vendor to receive a key for this machine.
+              The installed key was issued for another computer. Use the Machine ID below to obtain a
+              key for this machine.
             </p>
           )}
 
-          {/* Machine ID — the customer sends this to the vendor */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Your Machine ID
-            </label>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 select-all rounded-md border bg-muted/50 px-3 py-2 font-mono text-sm break-all">
-                {machineId || '—'}
-              </code>
-              <Button type="button" variant="outline" size="icon" onClick={copyMachineId} title="Copy">
-                {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Send this ID to your software vendor. They will issue a license key locked to this
-              computer.
-            </p>
-          </div>
+          {mode === 'online' ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Enter the <span className="font-semibold">Product Key</span> from your vendor. The POS
+                will activate automatically over the internet.
+              </p>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Product Key
+                </label>
+                <input
+                  value={productKey}
+                  onChange={(e) => setProductKey(e.target.value.toUpperCase())}
+                  placeholder="VRDX-XXXX-XXXX-XXXX"
+                  spellCheck={false}
+                  className="w-full rounded-md border bg-background px-3 py-2.5 font-mono text-sm tracking-wider outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                This computer:{' '}
+                <code className="font-mono">{machineId || '—'}</code>
+              </p>
+            </>
+          ) : (
+            <>
+              {/* Machine ID — the customer sends this to the vendor */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Your Machine ID
+                </label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 select-all rounded-md border bg-muted/50 px-3 py-2 font-mono text-sm break-all">
+                    {machineId || '—'}
+                  </code>
+                  <Button type="button" variant="outline" size="icon" onClick={copyMachineId} title="Copy">
+                    {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Send this ID to your vendor. They will issue a license key locked to this computer.
+                </p>
+              </div>
 
-          {/* License key entry */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              License Key
-            </label>
-            <textarea
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="Paste your license key here (VRDX1.…)"
-              rows={4}
-              spellCheck={false}
-              className="w-full resize-none rounded-md border bg-background px-3 py-2 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring break-all"
-            />
-          </div>
+              {/* License key entry */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  License Key
+                </label>
+                <textarea
+                  value={key}
+                  onChange={(e) => setKey(e.target.value)}
+                  placeholder="Paste your license key here (VRDX1.…)"
+                  rows={4}
+                  spellCheck={false}
+                  className="w-full resize-none rounded-md border bg-background px-3 py-2 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring break-all"
+                />
+              </div>
+            </>
+          )}
 
           {error && (
             <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -232,14 +292,17 @@ function ActivationScreen({
         </CardContent>
 
         <CardFooter className="flex-col items-stretch gap-3">
-          <Button onClick={activate} disabled={submitting || !key.trim()} className="w-full">
-            {submitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <KeyRound className="h-4 w-4" />
-            )}
-            Activate License
-          </Button>
+          {mode === 'online' ? (
+            <Button onClick={activateOnline} disabled={submitting || !productKey.trim()} className="w-full">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+              Activate Online
+            </Button>
+          ) : (
+            <Button onClick={activateOffline} disabled={submitting || !key.trim()} className="w-full">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+              Activate License
+            </Button>
+          )}
           <p className="text-center text-[11px] text-muted-foreground">
             Verdix POS is protected by per-machine licensing. Keys are cryptographically signed and
             cannot be transferred between computers.

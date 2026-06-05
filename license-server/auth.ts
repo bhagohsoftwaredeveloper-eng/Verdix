@@ -61,6 +61,46 @@ export async function touchLogin(id: string): Promise<void> {
   await query(`UPDATE admin_users SET last_login_at = NOW() WHERE id = ?`, [id]);
 }
 
+export async function listAdmins(): Promise<
+  { id: string; username: string; role: string; created_at: string; last_login_at: string | null }[]
+> {
+  return query(
+    `SELECT id, username, role, created_at, last_login_at FROM admin_users ORDER BY created_at ASC`
+  );
+}
+
+export async function countAdmins(): Promise<number> {
+  const rows = await query<any[]>(`SELECT COUNT(*) AS n FROM admin_users`);
+  return Number(rows[0]?.n || 0);
+}
+
+export async function getAdminById(id: string): Promise<AdminUser | null> {
+  const rows = await query<AdminUser[]>(`SELECT * FROM admin_users WHERE id = ?`, [id]);
+  return rows[0] || null;
+}
+
+export async function updateAdmin(
+  id: string,
+  fields: { username?: string; role?: string }
+): Promise<void> {
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (fields.username !== undefined) { sets.push('username = ?'); vals.push(fields.username); }
+  if (fields.role !== undefined) { sets.push('role = ?'); vals.push(fields.role); }
+  if (!sets.length) return;
+  vals.push(id);
+  await query(`UPDATE admin_users SET ${sets.join(', ')} WHERE id = ?`, vals);
+}
+
+export async function deleteAdmin(id: string): Promise<void> {
+  await query(`DELETE FROM admin_users WHERE id = ?`, [id]);
+}
+
+export async function updateAdminPassword(id: string, newPassword: string): Promise<void> {
+  const hash = await hashPassword(newPassword);
+  await query(`UPDATE admin_users SET password_hash = ? WHERE id = ?`, [hash, id]);
+}
+
 // ── Stateless signed session tokens ──────────────────────────────────────────
 function b64url(buf: Buffer): string {
   return buf.toString('base64url');

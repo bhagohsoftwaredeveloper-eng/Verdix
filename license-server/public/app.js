@@ -3,7 +3,9 @@
 let customersCache = [];
 let licensesCache = [];
 let activationsCache = [];
+let usersCache = [];
 let signLicenseId = null;
+let editUserId = null;
 
 // Case-insensitive substring match across the given fields.
 function matchesQuery(obj, fields, q) {
@@ -14,6 +16,22 @@ function matchesQuery(obj, fields, q) {
 function setCount(id, shown, total) {
   const el = document.getElementById(id);
   if (el) el.textContent = shown === total ? `(${total})` : `(${shown} of ${total})`;
+}
+
+// ── Skeleton loaders (shimmer placeholders shown while fetching) ──────────────
+function skeletonStats() {
+  return Array.from({ length: 4 }).map(() => `<div class="stat">
+      <span class="skel" style="width:38px;height:38px;border-radius:11px;margin-bottom:14px"></span>
+      <span class="skel" style="width:54px;height:28px;margin-bottom:8px"></span>
+      <span class="skel" style="width:80px"></span>
+    </div>`).join('');
+}
+function skeletonTable(cols, rows = 6) {
+  const head = Array.from({ length: cols }).map(() => '<th></th>').join('');
+  const body = Array.from({ length: rows }).map(() => `<tr class="skel-row">${
+    Array.from({ length: cols }).map((_, i) => `<td><span class="skel" style="width:${i === 0 ? '72%' : '52%'}"></span></td>`).join('')
+  }</tr>`).join('');
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -33,33 +51,52 @@ function show(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 // ── tabs ─────────────────────────────────────────────────────────────────────
+const TAB_META = {
+  overview: ['Overview', 'License management at a glance'],
+  customers: ['Customers', 'Businesses you sell licenses to'],
+  licenses: ['Licenses', 'Issue and manage product keys'],
+  activations: ['Activations', 'Machines currently using your licenses'],
+  users: ['Team', 'Administrators who can access this dashboard'],
+};
 function showTab(tab) {
-  ['overview', 'customers', 'licenses', 'activations'].forEach((t) => {
+  ['overview', 'customers', 'licenses', 'activations', 'users'].forEach((t) => {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
     document.querySelector('[data-tab="' + t + '"]').classList.toggle('active', t === tab);
   });
+  const m = TAB_META[tab];
+  if (m) { $('page-title').textContent = m[0]; $('page-sub').textContent = m[1]; }
   if (tab === 'overview') loadStats();
   if (tab === 'customers') loadCustomers();
   if (tab === 'licenses') loadLicenses();
   if (tab === 'activations') loadActivations();
+  if (tab === 'users') loadUsers();
 }
 
 // ── overview ─────────────────────────────────────────────────────────────────
 async function loadStats() {
+  $('stats').innerHTML = skeletonStats();
   const { data } = await api('/api/stats');
   const cards = [
-    { n: data.customers, l: 'Customers' },
-    { n: data.licenses, l: 'Licenses' },
-    { n: data.activations, l: 'Active Machines' },
-    { n: data.revoked, l: 'Revoked' },
+    { n: data.customers, l: 'Customers', g: 'linear-gradient(90deg,#6366f1,#8b5cf6)', gb: 'rgba(99,102,241,.15)', gc: '#a5b4fc',
+      ic: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>' },
+    { n: data.licenses, l: 'Licenses', g: 'linear-gradient(90deg,#8b5cf6,#d946ef)', gb: 'rgba(139,92,246,.15)', gc: '#c4b5fd',
+      ic: '<path d="M15.5 7.5 19 4M21 2l-2 2M2 22l8.5-8.5"/><circle cx="7.5" cy="15.5" r="5.5"/>' },
+    { n: data.activations, l: 'Active Machines', g: 'linear-gradient(90deg,#10b981,#22c55e)', gb: 'rgba(34,197,94,.15)', gc: '#86efac',
+      ic: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>' },
+    { n: data.revoked, l: 'Revoked', g: 'linear-gradient(90deg,#ef4444,#f97316)', gb: 'rgba(239,68,68,.15)', gc: '#fca5a5',
+      ic: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>' },
   ];
   document.getElementById('stats').innerHTML = cards
-    .map((c) => `<div class="stat"><div class="n">${c.n}</div><div class="l">${c.l}</div></div>`)
+    .map((c) => `<div class="stat" style="--g:${c.g};--gb:${c.gb};--gc:${c.gc}">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${c.ic}</svg></div>
+        <div class="n">${c.n}</div><div class="l">${c.l}</div>
+      </div>`)
     .join('');
 }
 
 // ── customers ────────────────────────────────────────────────────────────────
 async function loadCustomers() {
+  $('customers-table').innerHTML = skeletonTable(6);
   const { data } = await api('/api/customers');
   customersCache = data;
   renderCustomers();
@@ -101,6 +138,7 @@ async function saveCustomer() {
 
 // ── licenses ─────────────────────────────────────────────────────────────────
 async function loadLicenses() {
+  $('licenses-table').innerHTML = skeletonTable(8);
   const { data } = await api('/api/licenses');
   licensesCache = data;
   renderLicenses();
@@ -112,7 +150,7 @@ function renderLicenses() {
   const data = licensesCache.filter((l) => matchesQuery(l, ['product_key', 'business_name', 'edition', 'status', 'type'], q));
   setCount('licenses-count', data.length, licensesCache.length);
   if (!data.length) { el.innerHTML = '<div class="empty">No licenses match your search.</div>'; return; }
-  el.innerHTML = `<table><thead><tr><th>Product Key</th><th>Customer</th><th>Edition</th><th>Type</th><th>Expires</th><th>Seats</th><th>Status</th><th></th></tr></thead><tbody>${
+  el.innerHTML = `<table><thead><tr><th>Product Key</th><th>Customer</th><th>Edition</th><th>Type</th><th>Expires</th><th>Computers</th><th>Status</th><th></th></tr></thead><tbody>${
     data.map((l) => `<tr>
       <td><code class="key">${esc(l.product_key)}</code></td>
       <td>${esc(l.business_name)}</td>
@@ -202,6 +240,7 @@ async function copyKey() {
 
 // ── activations ──────────────────────────────────────────────────────────────
 async function loadActivations() {
+  $('activations-table').innerHTML = skeletonTable(7);
   const { data } = await api('/api/activations');
   activationsCache = data;
   renderActivations();
@@ -232,12 +271,108 @@ async function release(id) {
   loadActivations();
 }
 
+// ── users / team ─────────────────────────────────────────────────────────────
+async function loadUsers() {
+  $('users-table').innerHTML = skeletonTable(5);
+  const { data } = await api('/api/users');
+  usersCache = data || [];
+  renderUsers();
+}
+function renderUsers() {
+  const el = $('users-table');
+  if (!usersCache.length) { setCount('users-count', 0, 0); el.innerHTML = '<div class="empty">No users yet.</div>'; return; }
+  const q = val('users-search');
+  const data = usersCache.filter((u) => matchesQuery(u, ['username', 'role'], q));
+  setCount('users-count', data.length, usersCache.length);
+  if (!data.length) { el.innerHTML = '<div class="empty">No users match your search.</div>'; return; }
+  el.innerHTML = `<table><thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Last Login</th><th></th></tr></thead><tbody>${
+    data.map((u) => `<tr>
+      <td><strong>${esc(u.username)}</strong></td>
+      <td><span class="pill perpetual">${esc(u.role)}</span></td>
+      <td>${fmtDate(u.created_at)}</td>
+      <td>${u.last_login_at ? fmtDate(u.last_login_at) : '—'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn sm ghost" onclick="openEditUser('${u.id}')">Edit</button>
+        <button class="btn sm ghost" onclick="resetUserPassword('${u.id}','${esc(u.username)}')">Reset Password</button>
+        <button class="btn sm danger" onclick="deleteUser('${u.id}','${esc(u.username)}')">Delete</button>
+      </td>
+    </tr>`).join('')
+  }</tbody></table>`;
+}
+function openUserModal() {
+  editUserId = null;
+  $('u-title').textContent = 'New User';
+  $('u-subtitle').textContent = 'Create a dashboard login';
+  $('u-pass-hint').textContent = '* (min 6 characters)';
+  $('u-save-btn').textContent = 'Create User';
+  $('u-username').value = ''; $('u-password').value = ''; $('u-role').value = 'admin';
+  $('u-password').placeholder = '';
+  $('u-err').classList.remove('show');
+  show('user-modal');
+}
+function openEditUser(id) {
+  const u = usersCache.find((x) => x.id === id);
+  if (!u) return;
+  editUserId = id;
+  $('u-title').textContent = 'Edit User';
+  $('u-subtitle').textContent = 'Update username, role or password';
+  $('u-pass-hint').textContent = '(leave blank to keep current)';
+  $('u-save-btn').textContent = 'Save Changes';
+  $('u-username').value = u.username;
+  $('u-role').value = u.role;
+  $('u-password').value = '';
+  $('u-password').placeholder = '••••••••';
+  $('u-err').classList.remove('show');
+  show('user-modal');
+}
+async function saveUser() {
+  const username = val('u-username');
+  const password = val('u-password');
+  const role = val('u-role');
+  const err = $('u-err'); err.classList.remove('show');
+
+  if (!username.trim()) { err.textContent = 'Username is required.'; err.classList.add('show'); return; }
+  // On create, a password is required. On edit it is optional.
+  if (!editUserId && password.length < 6) {
+    err.textContent = 'A password of at least 6 characters is required.'; err.classList.add('show'); return;
+  }
+  if (password && password.length < 6) {
+    err.textContent = 'Password must be at least 6 characters.'; err.classList.add('show'); return;
+  }
+
+  const url = editUserId ? '/api/users/' + editUserId : '/api/users';
+  const body = editUserId ? { username, role, ...(password ? { password } : {}) } : { username, password, role };
+  const res = await api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.success) { err.textContent = res.error; err.classList.add('show'); return; }
+  closeModal('user-modal'); loadUsers();
+}
+async function resetUserPassword(id, username) {
+  const pw = prompt(`New password for "${username}" (min 6 characters):`);
+  if (pw == null) return;
+  if (pw.length < 6) { alert('Password must be at least 6 characters.'); return; }
+  const res = await api('/api/users/' + id + '/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+  if (!res.success) { alert(res.error); return; }
+  alert('Password updated for ' + username + '.');
+}
+async function deleteUser(id, username) {
+  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  const res = await api('/api/users/' + id + '/delete', { method: 'POST' });
+  if (!res.success) { alert(res.error); return; }
+  loadUsers();
+}
+
 // ── boot ─────────────────────────────────────────────────────────────────────
 async function logout() { await api('/api/logout', { method: 'POST' }); location.href = '/login'; }
 (async function init() {
   try {
     const me = await api('/api/me');
-    if (me.success) document.getElementById('who').textContent = me.data.username;
+    if (me.success) {
+      $('who').textContent = me.data.username;
+      const av = $('user-av');
+      if (av) av.textContent = (me.data.username || 'A').charAt(0).toUpperCase();
+      // Only administrators can manage the team.
+      if (me.data.role !== 'admin') { const nav = $('nav-users'); if (nav) nav.style.display = 'none'; }
+    }
   } catch {}
   loadStats();
 })();
