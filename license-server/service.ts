@@ -299,6 +299,74 @@ export async function listActivations(licenseId?: string): Promise<any[]> {
   );
 }
 
+export async function getActivation(licenseId: string, machineId: string): Promise<any | null> {
+  const rows = await query<any[]>(
+    `SELECT * FROM activations WHERE license_id = ? AND machine_id = ?`,
+    [licenseId, normalizeMachineId(machineId)]
+  );
+  return rows[0] || null;
+}
+
+export async function touchActivation(
+  licenseId: string,
+  machineId: string,
+  opts: { appVersion?: string; ip?: string } = {}
+): Promise<void> {
+  await query(
+    `UPDATE activations
+        SET last_seen_at = NOW(),
+            app_version  = COALESCE(?, app_version),
+            ip_address   = COALESCE(?, ip_address)
+      WHERE license_id = ? AND machine_id = ?`,
+    [opts.appVersion || null, opts.ip || null, licenseId, normalizeMachineId(machineId)]
+  );
+}
+
+export type HeartbeatStatus =
+  | 'active'
+  | 'revoked'
+  | 'suspended'
+  | 'released'
+  | 'expired'
+  | 'invalid';
+
+export interface HeartbeatResult {
+  status: HeartbeatStatus;
+  signedLicense?: string;
+  expires?: string | null;
+}
+
+/**
+ * Source-of-truth status check for an already-activated machine. Updates the
+ * "last seen" timestamp and, when still active, returns a freshly-signed
+ * license so renewals/extensions propagate without re-activation.
+ */
+export async function validateHeartbeat(
+  licenseId: string,
+  machineId: string,
+  opts: { appVersion?: string; ip?: string } = {}
+): Promise<HeartbeatResult> {
+  const license = await getLicense(licenseId);
+  if (!license) return { status: 'invalid' };
+
+  const activation = await getActivation(licenseId, machineId);
+  if (activation) await touchActivation(licenseId, machineId, opts);
+  await log(licenseId, machineId, 'heartbeat', 'license=' + license.status, opts.ip);
+
+  if (license.status === 'revoked') return { status: 'revoked' };
+  if (license.status === 'suspended') return { status: 'suspended' };
+  if (!activation || activation.status === 'released') return { status: 'released' };
+
+  const expires = license.expires_at ? new Date(license.expires_at).toISOString() : null;
+  if (license.expires_at && new Date(license.expires_at).getTime() < Date.now()) {
+    return { status: 'expired', expires };
+  }
+
+  // Still valid — re-sign (propagates renewed expiry/features) without adding a row.
+  const { signedLicense } = await issueSignedLicense(license, machineId, { record: false });
+  return { status: 'active', signedLicense, expires };
+}
+
 export async function releaseActivation(activationId: string): Promise<void> {
   const rows = await query<any[]>(`SELECT license_id, machine_id FROM activations WHERE id = ?`, [
     activationId,

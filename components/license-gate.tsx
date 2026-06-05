@@ -68,6 +68,24 @@ export function LicenseGate({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
+  // Heartbeat: once licensed, re-validate against the license server in the
+  // background. Enforces remote revocation and pulls renewals. Offline-safe —
+  // the route never locks on a network error, only on an explicit revoke.
+  useEffect(() => {
+    if (!info?.licensed) return;
+    let cancelled = false;
+    fetch('/api/license/heartbeat', { method: 'POST' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!cancelled && j?.changed) refresh();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // Run when we transition into a licensed state.
+  }, [info?.licensed, refresh]);
+
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">

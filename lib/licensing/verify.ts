@@ -15,6 +15,7 @@ import {
   verifyLicenseSignature,
   normalizeMachineId,
   PRODUCT_ID,
+  LicensePayload,
 } from './core';
 import { PUBLIC_KEY_PEM } from './public-key';
 import { getMachineId } from './machine';
@@ -158,4 +159,16 @@ export function evaluateLicenseKey(key: string | null): LicenseInfo {
 /** Status of the currently installed license. */
 export function getLicenseInfo(): LicenseInfo {
   return evaluateLicenseKey(readLicenseKey());
+}
+
+/**
+ * Decode the installed license's payload (only if its signature is authentic).
+ * Used by the heartbeat to learn the license id + bound machine. Returns null
+ * when there is no license or the signature is invalid.
+ */
+export function readLicensePayload(): LicensePayload | null {
+  const key = readLicenseKey();
+  if (!key) return null;
+  const res = verifyLicenseSignature(key, PUBLIC_KEY_PEM);
+  return res.valid && res.payload ? res.payload : null;
 }

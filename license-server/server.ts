@@ -208,6 +208,29 @@ async function handle(req: Req, res: Res) {
     }
   }
 
+  // --- PUBLIC: POS heartbeat / revocation check (no admin auth) ---
+  // An activated POS periodically calls this with its license id + machine id.
+  // We return the current status (so revocation/suspension is enforced) and,
+  // when still active, a freshly-signed license so renewals propagate.
+  if (method === 'POST' && p === '/api/validate') {
+    try {
+      const body = await readBody(req);
+      const licenseId = String(body.licenseId || '').trim();
+      const machineId = String(body.machineId || '').trim();
+      if (!licenseId || !machineId)
+        return sendJson(res, 400, { success: false, error: 'licenseId and machineId are required.' });
+
+      const result = await svc.validateHeartbeat(licenseId, machineId, {
+        appVersion: body.appVersion,
+        ip: clientIp(req),
+      });
+      return sendJson(res, 200, { success: true, ...result });
+    } catch (e: any) {
+      console.error('Validate error:', e);
+      return sendJson(res, 500, { success: false, error: 'Validation failed on the server.' });
+    }
+  }
+
   // --- Everything below requires a valid session ---
   const session = getSession(req);
   if (p.startsWith('/api/')) {

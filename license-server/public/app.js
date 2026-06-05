@@ -47,6 +47,16 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function fmtDate(s) { return s ? new Date(s).toLocaleDateString() : '—'; }
+function relTime(s) {
+  if (!s) return 'never';
+  const diff = Date.now() - new Date(s).getTime();
+  if (diff < 60000) return 'just now';
+  const m = Math.floor(diff / 60000); if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+  const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+  return new Date(s).toLocaleDateString();
+}
+function isOnline(s) { return s && (Date.now() - new Date(s).getTime()) < 15 * 60000; }
 function show(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
@@ -240,7 +250,7 @@ async function copyKey() {
 
 // ── activations ──────────────────────────────────────────────────────────────
 async function loadActivations() {
-  $('activations-table').innerHTML = skeletonTable(7);
+  $('activations-table').innerHTML = skeletonTable(8);
   const { data } = await api('/api/activations');
   activationsCache = data;
   renderActivations();
@@ -252,13 +262,16 @@ function renderActivations() {
   const data = activationsCache.filter((a) => matchesQuery(a, ['business_name', 'product_key', 'machine_id', 'machine_label', 'status'], q));
   setCount('activations-count', data.length, activationsCache.length);
   if (!data.length) { el.innerHTML = '<div class="empty">No activations match your search.</div>'; return; }
-  el.innerHTML = `<table><thead><tr><th>Customer</th><th>Product Key</th><th>Machine</th><th>Label</th><th>Status</th><th>Activated</th><th></th></tr></thead><tbody>${
+  el.innerHTML = `<table><thead><tr><th>Customer</th><th>Product Key</th><th>Machine</th><th>Label</th><th>Status</th><th>Last Seen</th><th>Activated</th><th></th></tr></thead><tbody>${
     data.map((a) => `<tr>
       <td>${esc(a.business_name)}</td>
       <td><code class="key">${esc(a.product_key)}</code></td>
       <td><code class="key">${esc(a.machine_id).slice(0,20)}…</code></td>
       <td>${esc(a.machine_label) || '—'}</td>
       <td><span class="pill ${a.status === 'active' ? 'active' : 'suspended'}">${a.status}</span></td>
+      <td><span style="display:inline-flex;align-items:center;gap:7px">
+        <span title="${isOnline(a.last_seen_at) ? 'Online' : 'Offline'}" style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${isOnline(a.last_seen_at) ? '#22c55e' : '#475569'};${isOnline(a.last_seen_at) ? 'box-shadow:0 0 7px #22c55e' : ''}"></span>
+        ${relTime(a.last_seen_at)}</span></td>
       <td>${fmtDate(a.activated_at)}</td>
       <td>${a.status === 'active' ? `<button class="btn sm danger" onclick="release('${a.id}')">Release</button>` : ''}</td>
     </tr>`).join('')
