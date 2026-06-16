@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
       { name: 'overall_reading_auth_password', type: 'VARCHAR(255) NULL' },
       { name: 'enable_customer_display', type: 'TINYINT(1) DEFAULT 0' },
       { name: 'customer_display_message', type: "VARCHAR(255) DEFAULT 'Welcome! Thank you for shopping.'" },
-      { name: 'customer_display_show_logo', type: 'TINYINT(1) DEFAULT 1' }
+      { name: 'customer_display_show_logo', type: 'TINYINT(1) DEFAULT 1' },
+      { name: 'vat_registration', type: "VARCHAR(20) DEFAULT 'VAT'" }
     ];
 
     const currentColumnsResult = await query(
@@ -123,7 +124,8 @@ export async function GET(request: NextRequest) {
         overall_reading_auth_password AS overallReadingAuthPassword,
         enable_customer_display AS enableCustomerDisplay,
         customer_display_message AS customerDisplayMessage,
-        customer_display_show_logo AS customerDisplayShowLogo
+        customer_display_show_logo AS customerDisplayShowLogo,
+        vat_registration AS vatRegistration
       FROM pos_settings
       LIMIT 1
     `;
@@ -339,7 +341,8 @@ export async function POST(request: NextRequest) {
         overallReadingAuthPassword: 'overall_reading_auth_password',
         enableCustomerDisplay: 'enable_customer_display',
         customerDisplayMessage: 'customer_display_message',
-        customerDisplayShowLogo: 'customer_display_show_logo'
+        customerDisplayShowLogo: 'customer_display_show_logo',
+        vatRegistration: 'vat_registration'
       };
 
       const updates: string[] = [];

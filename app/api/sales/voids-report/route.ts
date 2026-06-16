@@ -36,12 +36,16 @@ export async function GET(request: NextRequest) {
 
     const params: any[] = [];
 
+    // Filter by VOID date (st.updated_at) — i.e. when the transaction was voided,
+    // not when the sale was originally made. Range is kept sargable (no DATE()
+    // wrapper on the column) so it can use an index, and the end date is made
+    // inclusive of the whole day via < endDate + 1 day.
     if (startDate) {
-      sql += ' AND DATE(st.created_at) >= ?';
-      params.push(startDate);
+      sql += ' AND st.updated_at >= ?';
+      params.push(`${startDate} 00:00:00`);
     }
     if (endDate) {
-      sql += ' AND DATE(st.created_at) <= ?';
+      sql += ' AND st.updated_at < DATE_ADD(?, INTERVAL 1 DAY)';
       params.push(endDate);
     }
 

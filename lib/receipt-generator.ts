@@ -124,9 +124,10 @@ export class ReceiptGenerator {
         enc.raw([0x1b, 0x61, 0x31]); // Native Center
         enc.line(bizName);
         enc.line(address);
-        
+
+        const tinLabel = settings?.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN';
         if (settings?.contactNumber) enc.line(settings.contactNumber);
-        if (settings?.tin)           enc.line(`VAT REG TIN: ${settings.tin}`);
+        if (settings?.tin)           enc.line(`${tinLabel}: ${settings.tin}`);
         enc.line(`MIN: ${minNumber}`);
         enc.line(`S/N: ${serialNumber}`);
         enc.line(dateStr);
@@ -358,11 +359,12 @@ export class ReceiptGenerator {
         const serialNumber = settings?.serialNumber || '';
 
         // HEADER
+        const tinLabel = settings?.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN';
         enc.raw([0x1b, 0x61, 0x31]); // Native Center
         enc.line(bizName);
         enc.line(address);
         if (settings?.contactNumber) enc.line(settings.contactNumber);
-        if (settings?.tin)           enc.line(`VAT REG TIN: ${settings.tin}`);
+        if (settings?.tin)           enc.line(`${tinLabel}: ${settings.tin}`);
         enc.line(`MIN: ${minNumber}`);
         enc.line(`S/N: ${serialNumber}`);
         enc.line(dateStr);
@@ -444,7 +446,7 @@ export class ReceiptGenerator {
         enc.line(bizName);
         if (settings?.operatedBy) enc.line(`Operated by: ${settings.operatedBy}`);
         enc.line(address);
-        enc.line(`VAT REG TIN: ${tin}`);
+        enc.line(`${settings?.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: ${tin}`);
         if (settings?.contactNumber) enc.line(`Contact: ${settings.contactNumber}`);
         if (settings?.email) enc.line(settings.email);
         enc.line(`MIN: ${minNumber}`)

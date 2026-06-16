@@ -100,7 +100,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 <div className="font-bold text-lg mb-1">{settings?.businessName?.trim() || 'verdix'}</div>
                 <div>{settings?.address?.trim() || 'General Merchandise'}</div>
                 {settings?.contactNumber && <div>{settings.contactNumber}</div>}
-                {settings?.tin && <div>VAT REG TIN: {settings.tin}</div>}
+                {settings?.tin && <div>{settings?.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: {settings.tin}</div>}
                 <div>MIN: {saleDetails.terminalMin || settings?.minNumber || '1234567890'}</div>
                 <div>S/N: {saleDetails.terminalSerialNumber || settings?.serialNumber || '0987654321-11'}</div>
                 <div className="text-[10px]">{format(currentDate, 'PP p')}</div>

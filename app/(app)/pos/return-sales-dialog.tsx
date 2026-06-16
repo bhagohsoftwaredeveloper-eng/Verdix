@@ -181,10 +181,10 @@ function SelectItemsView({ sale, onReturnItems, onBack }: { sale: Sale, onReturn
 
             {/* Select-all bar */}
             <div className="mt-3 flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 shrink-0">
-                <button type="button" onClick={toggleAll} className="flex items-center gap-2 text-sm font-medium">
+                <div role="button" tabIndex={0} onClick={toggleAll} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAll(); } }} className="flex cursor-pointer items-center gap-2 text-sm font-medium">
                     <Checkbox checked={allSelected} />
                     Select all items
-                </button>
+                </div>
                 <span className="text-xs text-muted-foreground">{selectedItems.size} of {sale.items.length} selected</span>
             </div>
 

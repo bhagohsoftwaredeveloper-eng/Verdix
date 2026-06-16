@@ -53,6 +53,7 @@ export type BusinessSettings = {
   address: string;
   contactNumber: string;
   tin: string;
+  vatRegistration?: 'VAT' | 'NON_VAT';
   logoPath?: string;
   operatedBy?: string;
   minNumber?: string;

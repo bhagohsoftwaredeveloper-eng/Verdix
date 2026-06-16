@@ -352,6 +352,7 @@ export interface SystemSettings {
   contactNumber?: string;
   tin?: string;
   email?: string;
+  vatRegistration?: 'VAT' | 'NON_VAT';
   minNumber?: string | null;
   serialNumber?: string | null;
   logoPath?: string;
@@ -603,6 +604,7 @@ export interface XReadingData {
   operatedBy?: string | null;
   address?: string;
   tin?: string;
+  vatRegistration?: 'VAT' | 'NON_VAT';
   contactNumber?: string;
   email?: string;
   zCounter?: number;

@@ -124,7 +124,7 @@ export function XReadingPreview({ data, printerFormat = '58mm', businessSettings
             <div style={{ fontSize: '10px' }}>Operated by: {businessSettings.operatedBy}</div>
         )}
         <div style={{ fontSize: '10px' }}>{businessSettings?.address || 'Address'}</div>
-        <div style={{ fontSize: '10px' }}>VAT REG TIN: {businessSettings?.tin || '000-000-000-000'}</div>
+        <div style={{ fontSize: '10px' }}>{businessSettings?.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: {businessSettings?.tin || '000-000-000-000'}</div>
         <div style={{ fontSize: '10px' }}>MIN: {data.min || '0987654321'}</div>
         <div style={{ fontSize: '10px' }}>S/N: {data.sn || '1234567890-01'}</div>
         {data.terminalName && <div style={{ fontSize: '10px' }}>Terminal: {data.terminalName}</div>}

@@ -104,7 +104,7 @@ export default function VoidedSalesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  const { data: records = [], isLoading } = useQuery<VoidRecord[]>({
+  const { data: records = [], isLoading, isError, error } = useQuery<VoidRecord[]>({
     queryKey: ['voids', queryDates.from?.toISOString(), queryDates.to?.toISOString()],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -114,8 +114,14 @@ export default function VoidedSalesPage() {
       if (!response.ok) throw new Error(`API error ${response.status}`);
       const result = await response.json();
       if (result.success) return result.data;
-      return [];
+      throw new Error(result.error || 'Failed to load voided sales.');
     },
+    // Don't retry 3x with backoff on failure — that makes a failed request look
+    // like a multi-second "hang" before the table silently goes empty.
+    retry: 1,
+    // Keep showing the previous results while a new date range loads instead of
+    // blanking the whole table.
+    placeholderData: (prev) => prev,
   });
 
   const totals = useMemo(
@@ -739,6 +745,10 @@ export default function VoidedSalesPage() {
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                     Loading...
                   </div>
+                ) : isError ? (
+                  <span className="text-destructive">
+                    Failed to load: {error instanceof Error ? error.message : 'Unknown error'}
+                  </span>
                 ) : (
                   'No voided sales found for the selected date range.'
                 )}
@@ -789,6 +799,10 @@ export default function VoidedSalesPage() {
                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                             Loading...
                           </div>
+                        ) : isError ? (
+                          <span className="text-destructive">
+                            Failed to load: {error instanceof Error ? error.message : 'Unknown error'}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">
                             No voided sales found for the selected date range.

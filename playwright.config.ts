@@ -1,0 +1,51 @@
+import { defineConfig, devices } from '@playwright/test';
+
+/**
+ * Playwright config para sa Verdix POS (Next.js web app).
+ *
+ * Isolation: ang tests modagan batok sa usa ka dedicated nga dev server sa port
+ * 3100 nga naka-point sa `verdix_test` database (DILI sa dev `verdix` sa 3000).
+ * Mao nga luwas modagan bisan naa'y dev server nga gigamit sa port 3000.
+ *
+ * Global setup (tests/e2e/setup/global-setup.ts) mo-recreate + mo-seed sa
+ * verdix_test kada run para deterministic.
+ */
+const TEST_PORT = 3100;
+const BASE_URL = `http://localhost:${TEST_PORT}`;
+
+export default defineConfig({
+  testDir: './tests/e2e',
+  globalSetup: './tests/e2e/setup/global-setup.ts',
+  // Pugngan ang dungan-dungan nga write sa parehas nga test DB.
+  fullyParallel: false,
+  workers: 1,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  reporter: [['html', { open: 'never' }], ['list']],
+
+  // Ang Next.js dev mode mahal mo-compile ug routes sa unang hit (especially /pos),
+  // mao nga ginhawaan nato ang assertion timeout.
+  expect: { timeout: 15_000 },
+
+  use: {
+    baseURL: BASE_URL,
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+  },
+
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+
+  webServer: {
+    command: `next dev -p ${TEST_PORT}`,
+    url: BASE_URL,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    // I-point ang app under test sa isolated nga test database.
+    env: { ...process.env, DB_NAME: 'verdix_test' },
+  },
+});

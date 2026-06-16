@@ -7,7 +7,14 @@
       "PowerShell(netsh advfirewall firewall show rule name=\"Next.js\" 2>$null)",
       "PowerShell(netsh advfirewall firewall show rule dir=in protocol=TCP localport=3000)",
       "PowerShell(New-NetFirewallRule -DisplayName \"verdix - Port 3000\" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Any)",
-      "PowerShell(Get-ChildItem .next -Directory | ForEach-Object { $size = \\(Get-ChildItem $_.FullName -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum\\).Sum / 1MB; \"{0,-30} {1,10:N1} MB\" -f $_.Name, $size })"
+      "PowerShell(Get-ChildItem .next -Directory | ForEach-Object { $size = \\(Get-ChildItem $_.FullName -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum\\).Sum / 1MB; \"{0,-30} {1,10:N1} MB\" -f $_.Name, $size })",
+      "Bash(npx playwright *)",
+      "Bash(head -30 scripts/migrations/init-scheduler.ts)",
+      "Bash(find lib *)",
+      "Bash(DB_NAME=verdix_test npx tsx tests/e2e/setup/prepare-test-db.ts)",
+      "Bash(mysql -h127.0.0.1 -uroot -prootpassword verdix -e \"SHOW COLUMNS FROM users;\")",
+      "Bash(mysql -h127.0.0.1 -uroot -prootpassword verdix -e \"SELECT COUNT\\(*\\) AS tables FROM information_schema.tables WHERE table_schema='verdix';\")",
+      "Bash(mysql -h127.0.0.1 -uroot -prootpassword verdix_test -e \"SELECT username,user_type,LEFT\\(password,7\\) AS pw FROM users; SELECT id,name,price,stock FROM products; SELECT business_name FROM pos_settings; SELECT COUNT\\(*\\) AS tables FROM information_schema.tables WHERE table_schema='verdix_test';\")"
     ]
   }
 }

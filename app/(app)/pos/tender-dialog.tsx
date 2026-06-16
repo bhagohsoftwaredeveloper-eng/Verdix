@@ -932,7 +932,7 @@ export function TenderDialog({
                                                     }
                                                 }}
                                                 placeholder="0"
-                                                className="h-11 text-lg font-bold border-purple-300 focus-visible:ring-purple-500 bg-white pl-4"
+                                                className="h-11 text-lg font-bold border-purple-300 focus-visible:ring-purple-500 bg-white text-purple-900 placeholder:text-purple-400 pl-4"
                                             />
                                         </div>
                                         <Button

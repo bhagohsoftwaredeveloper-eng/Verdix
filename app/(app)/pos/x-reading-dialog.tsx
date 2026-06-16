@@ -132,6 +132,7 @@ export function XReadingDialog({
               operatedBy: businessSettings?.operatedBy,
               address: businessSettings?.address,
               tin: businessSettings?.tin,
+              vatRegistration: businessSettings?.vatRegistration,
               contactNumber: businessSettings?.contactNumber,
               email: businessSettings?.email,
               terminalName: terminalName,

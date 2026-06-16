@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cutEpsonPaper: () => ipcRenderer.invoke('epson-printer:cut'),
   openEpsonDrawer: () => ipcRenderer.invoke('epson-printer:open-drawer'),
 
+  // Clears the Chromium HTTP/asset cache (does NOT touch the database)
+  clearCache: () => ipcRenderer.invoke('cache:clear'),
+
   minimize: () => ipcRenderer.invoke('window:minimize'),
   maximize: () => ipcRenderer.invoke('window:maximize'),
   close: () => ipcRenderer.invoke('window:close'),

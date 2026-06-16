@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, screen, session } = require('electron');
 const path = require('path');
 const printerSdk = require('./printer-sdk');
 const epsonSdk = require('./epson-sdk');
@@ -277,6 +277,22 @@ ipcMain.handle('window:close-customer-display', () => {
     customerDisplayWindow.close();
   }
   return { success: true };
+});
+
+// Cache IPC Handler — clears the Chromium HTTP/asset cache only.
+// This does NOT touch the MySQL database or localStorage (handled in the renderer).
+ipcMain.handle('cache:clear', async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const ses = win ? win.webContents.session : session.defaultSession;
+    // Clear HTTP cache (cached responses, JS/CSS assets)
+    await ses.clearCache();
+    // Clear in-memory code/render caches without removing cookies or storage
+    await ses.clearCodeCaches({ urls: [] });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err && err.message ? err.message : String(err) };
+  }
 });
 
 // Printer SDK IPC Handlers

@@ -26,6 +26,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AddTaxRateDialog } from './add-tax-rate-dialog';
 import { EditTaxRateDialog } from './edit-tax-rate-dialog';
 import { AdminAuthDialog } from '../../pos/admin-auth-dialog';
@@ -43,6 +45,8 @@ export default function TaxRatesPage() {
   const [selectedTaxRate, setSelectedTaxRate] = useState<TaxRate | null>(null);
   const [taxRateToDelete, setTaxRateToDelete] = useState<TaxRate | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [vatRegistration, setVatRegistration] = useState<'VAT' | 'NON_VAT'>('VAT');
+  const [isSavingVat, setIsSavingVat] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -59,7 +63,8 @@ export default function TaxRatesPage() {
       if (settingsResult.success) {
         const settings = settingsResult.data;
         setPosSettings(settings);
-        
+        setVatRegistration(settings.vatRegistration || 'VAT');
+
         if (settings.enableTaxRatesAuth) {
           setShowAuthDialog(true);
         } else {
@@ -135,6 +140,42 @@ export default function TaxRatesPage() {
     }
   };
 
+  const handleSaveVatRegistration = async (value: 'VAT' | 'NON_VAT') => {
+    const previous = vatRegistration;
+    setVatRegistration(value);
+    try {
+      setIsSavingVat(true);
+      const response = await fetch(getApiUrl('/pos-settings'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vatRegistration: value }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        setPosSettings((prev: any) => (prev ? { ...prev, vatRegistration: value } : prev));
+        // Notify POS page (other tabs/windows) that settings changed
+        localStorage.setItem('pos_settings_version', Date.now().toString());
+        toast({
+          title: 'Saved',
+          description: 'VAT registration has been updated.',
+        });
+      } else {
+        throw new Error(result.error || 'Failed to update VAT registration');
+      }
+    } catch (error) {
+      console.error('Error saving VAT registration:', error);
+      setVatRegistration(previous);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update VAT registration',
+      });
+    } finally {
+      setIsSavingVat(false);
+    }
+  };
+
   if (isAuthLoading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -187,6 +228,36 @@ export default function TaxRatesPage() {
         </div>
         <AddTaxRateDialog onTaxRateAdded={fetchTaxRates} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>VAT Registration</CardTitle>
+          <CardDescription>
+            Determines the TIN label shown on the receipt header
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 max-w-sm">
+            <Label htmlFor="vatRegistration">Registration Type</Label>
+            <Select
+              value={vatRegistration}
+              onValueChange={(value) => handleSaveVatRegistration(value as 'VAT' | 'NON_VAT')}
+              disabled={isSavingVat}
+            >
+              <SelectTrigger id="vatRegistration">
+                <SelectValue placeholder="Select registration type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="VAT">VAT Registered</SelectItem>
+                <SelectItem value="NON_VAT">Non-VAT Registered</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Shown on the receipt header (e.g. &quot;VAT REG TIN&quot; or &quot;NON-VAT REG TIN&quot;)
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

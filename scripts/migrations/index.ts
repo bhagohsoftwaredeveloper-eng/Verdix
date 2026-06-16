@@ -79,6 +79,7 @@ import './078_alter_stock_precision';
 import './079_create_payment_allocations_table';
 import './080_backfill_payment_allocations';
 import './081_normalize_payment_invoice_notes';
+import './082_alter_pos_settings_add_vat_registration';
 
 
 // Import runner functions

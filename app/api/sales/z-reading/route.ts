@@ -624,15 +624,15 @@ export async function POST(request: NextRequest) {
             parseFloat(returnsResult?.total_returns || 0), parseFloat(salesResult?.total_discounts || 0), finalNetSales, vatAmount,
             JSON.stringify(paymentMethods), parseInt(salesResult?.transaction_count || 0), startingCash, cashSales, cashInDrawer,
             salesResult?.min_sale_id || '000000', salesResult?.max_sale_id || '000000', voidSeqResult?.min_void_id || '000000', voidSeqResult?.max_void_id || '000000',
-            returnSeqResult?.min_return_id || '000000', returnSeqResult?.max_return_id || '000000', (termResult?.z_counter || 0) + 1, termResult?.reset_counter || 0,
+            returnSeqResult?.min_return_id || '000000', returnSeqResult?.max_return_id || '000000', (termResult?.z_counter || 0), termResult?.reset_counter || 0,
             previousReading, runningTotal, vatableSales, vatExemptSales, zeroRatedSales, nonVatSales,
             JSON.stringify(discountSummary), JSON.stringify(salesAdjustment), vatAdjustmentAmount, voidAmount,
             actualCash, cashVariance
         ]);
 
-        // Increment Z-Counter in pos_terminals
-        await query(`UPDATE pos_terminals SET z_counter = z_counter + 1 WHERE id = ?`, [terminalId]);
-
+        // NOTE: z_counter is already incremented atomically by getNextZReadingNumber()
+        // above (see lib/mysql.ts). Do NOT increment again here, otherwise the Z Counter
+        // advances by 2 per reading and no longer matches the reading number / preview.
 
         const [settingsResult] = await query(`SELECT business_name, address FROM pos_settings LIMIT 1`) as any[];
         const generatedReading = {
@@ -653,7 +653,7 @@ export async function POST(request: NextRequest) {
             nonVat: nonVatSales,
             actualCash,
             variance: cashVariance,
-            zCounter: (termResult?.z_counter || 0) + 1, resetCounter: termResult?.reset_counter || 0
+            zCounter: (termResult?.z_counter || 0), resetCounter: termResult?.reset_counter || 0
         };
 
 

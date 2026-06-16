@@ -27,6 +27,7 @@ interface PosSettings {
   contactNumber: string | null;
   tin: string | null;
   email: string | null;
+  vatRegistration?: 'VAT' | 'NON_VAT';
   currentTerminalId?: string | null;
   currentTerminalName?: string | null;
   enableLineVoidAuth?: boolean;
@@ -85,6 +86,7 @@ export default function PosSetupPage() {
     contactNumber: '',
     tin: '',
     email: '',
+    vatRegistration: 'VAT',
     currentTerminalId: null,
     currentTerminalName: null,
     enableLineVoidAuth: false,

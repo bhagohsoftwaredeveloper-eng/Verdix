@@ -38,6 +38,7 @@ export class XReadingGenerator {
             operatedBy,
             address,
             tin,
+            vatRegistration,
             contactNumber,
             email
         } = data;
@@ -61,7 +62,7 @@ export class XReadingGenerator {
         enc.line(businessName?.toUpperCase() || 'POS SYSTEM');
         if (operatedBy) enc.line(`Operated by: ${operatedBy}`);
         if (address) enc.line(address);
-        if (tin) enc.line(`VAT REG TIN: ${tin}`);
+        if (tin) enc.line(`${vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: ${tin}`);
         if (contactNumber) enc.line(contactNumber);
         if (email) enc.line(email);
         
