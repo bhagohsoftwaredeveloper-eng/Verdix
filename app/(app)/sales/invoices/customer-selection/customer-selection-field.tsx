@@ -6,7 +6,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { useCustomerSelection } from './use-customer-selection';
-import AddCustomerDialog from '../../customer/list/add-customer-dialog';
+import AddCustomerDialog from '../../../customer/list/add-customer-dialog';
 
 interface CustomerSelectionFieldProps {
   control: Control<any>;
