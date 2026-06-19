@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Truck, Calendar, ShoppingCart, CheckCircle2, Loader2 } from 'lucide-react';
 import { getSuppliers } from '../products/actions';
-import { AddPurchaseOrderDialog } from '../purchases/add-purchase-order-dialog';
+import { AddPurchaseOrderDialog } from '../purchases/add-purchase-order/add-purchase-order-dialog';
 import { Supplier } from '@/lib/types';
 
 export function SupplierScheduleCard() {

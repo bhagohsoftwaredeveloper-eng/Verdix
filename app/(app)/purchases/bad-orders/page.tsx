@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -16,20 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, MoreHorizontal, X, Printer, Eye } from 'lucide-react';
-import { useBadOrders } from '@/hooks/use-api';
-import { format } from 'date-fns';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import {
   Select,
   SelectContent,
@@ -37,76 +24,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ViewBadOrderDialog } from './view-bad-order-dialog';
-import { RecordBadOrderDialog } from './record-bad-order-dialog';
-import { BadOrderStats } from './bad-order-stats';
-import { useBadOrderStats } from '@/hooks/use-api';
-import { printBadOrder } from '@/lib/print-bad-order';
+import { Search, X } from 'lucide-react';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 
-function BadOrderSkeleton() {
-  return (
-    <TableRow>
-      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-      <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-      <TableCell className="text-right"><Skeleton className="h-9 w-20 ml-auto" /></TableCell>
-    </TableRow>
-  );
-}
+import { BadOrderStats } from './bad-order-stats';
+import { RecordBadOrderDialog } from './record-bad-order-dialog';
+import { ViewBadOrderDialog } from './view-bad-order-dialog';
+import { BadOrderSkeleton } from './bad-order-skeleton';
+import { BadOrderRow } from './bad-order-row';
+import { useBadOrdersPage } from './use-bad-orders-page';
 
 export default function BadOrdersPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [viewingOrder, setViewingOrder] = useState<any | null>(null);
-  const [pageSize, setPageSize] = useState(10);
+  const {
+    badOrders,
+    loading,
+    refetch,
+    pagination,
 
-  const { badOrders, loading, refetch, pagination } = useBadOrders(
-    searchTerm,
-    statusFilter || undefined,
-    currentPage,
-    pageSize
-  );
-  const { stats } = useBadOrderStats();
+    searchQuery, setSearchQuery,
+    statusFilter, setStatusFilter,
+    currentPage, setCurrentPage,
+    pageSize, setPageSize,
+    viewingOrder, setViewingOrder,
+    hasActiveFilters,
 
-  const handleSearch = () => {
-    setSearchTerm(searchQuery);
-    setCurrentPage(1);
-  };
-
-  const resetFilters = () => {
-    setSearchTerm('');
-    setSearchQuery('');
-    setStatusFilter('');
-    setCurrentPage(1);
-  };
-
-  const statusVariant = (status: string) => {
-    switch (status) {
-      case 'Resolved':
-      case 'Replaced':
-      case 'Credited':
-        return 'default';
-      case 'Reported':
-        return 'destructive';
-      case 'Return Requested':
-        return 'secondary';
-      default:
-        return 'secondary';
-    }
-  };
-
-  const hasActiveFilters = searchTerm || statusFilter;
+    handleSearch,
+    resetFilters,
+  } = useBadOrdersPage();
 
   return (
     <div className="space-y-4">
       <BadOrderStats />
-      
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
@@ -118,6 +67,7 @@ export default function BadOrdersPage() {
             </div>
             <RecordBadOrderDialog onSuccess={refetch} />
           </div>
+
           <div className="flex items-center justify-between gap-4 pt-4">
             <div className="relative flex items-center gap-2">
               <div className="relative">
@@ -135,6 +85,7 @@ export default function BadOrdersPage() {
                 Search
               </Button>
             </div>
+
             <div className="flex items-center gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[180px]">
@@ -158,6 +109,7 @@ export default function BadOrdersPage() {
             </div>
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
           <Table wrapperClassName="max-h-[calc(100vh-400px)] overflow-auto relative m-4 border rounded-md">
             <TableHeader className="sticky top-0 z-30 bg-background shadow-sm">
@@ -168,7 +120,7 @@ export default function BadOrdersPage() {
                 <TableHead className="font-semibold text-foreground text-right">Total Value</TableHead>
                 <TableHead className="font-semibold text-foreground text-center">Status</TableHead>
                 <TableHead className="font-semibold text-foreground">Reported By</TableHead>
-                <TableHead className="w-8"></TableHead>
+                <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -186,46 +138,11 @@ export default function BadOrdersPage() {
                 </TableRow>
               ) : (
                 badOrders.map((order) => (
-                  <TableRow key={order.id} className="text-xs group hover:bg-muted/50">
-                    <TableCell className="font-medium">
-                      {order.id.substring(0, 8).toUpperCase()}
-                    </TableCell>
-                    <TableCell>{order.supplierName || '-'}</TableCell>
-                    <TableCell>{format(new Date(order.reportDate), 'MMM dd, yyyy')}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      ₱{order.totalAffectedValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={
-                        order.status === 'Resolved' || order.status === 'Replaced' || order.status === 'Credited' ? 'secondary' :
-                        order.status === 'Return Requested' ? 'default' :
-                        'outline'
-                      } className="rounded-sm font-normal text-[10px] h-5">
-                        {order.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{order.reportedBy || '-'}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setViewingOrder(order)}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => printBadOrder(order)}>
-                            <Printer className="mr-2 h-4 w-4" />
-                            Print Report
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
+                  <BadOrderRow
+                    key={order.id}
+                    order={order}
+                    onView={setViewingOrder}
+                  />
                 ))
               )}
             </TableBody>

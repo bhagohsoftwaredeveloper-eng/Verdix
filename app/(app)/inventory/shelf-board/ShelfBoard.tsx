@@ -31,7 +31,7 @@ import {
 import { getApiUrl } from '@/lib/api-config';
 import { cn, formatStockQuantity } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ManageShelfLocationsDialog } from '../../products/ManageShelfLocationsDialog';
+import { ManageShelfLocationsDialog } from '../../products/shelf-locations/ManageShelfLocationsDialog';
 import { updateProductShelfLocations } from '../../products/actions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { v4 as uuidv4 } from 'uuid';

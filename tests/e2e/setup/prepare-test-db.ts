@@ -18,7 +18,23 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 
-import { TEST_USERS, TEST_PRODUCTS, BUSINESS_NAME, TEST_TERMINAL, TEST_PAYMENT_METHOD } from '../fixtures/test-data';
+import {
+  TEST_USERS,
+  TEST_PRODUCTS,
+  BUSINESS_NAME,
+  TEST_TERMINAL,
+  TEST_PAYMENT_METHOD,
+  TEST_BRAND,
+  TEST_CATEGORY,
+  TEST_UNIT,
+  TEST_PRICE_LEVEL,
+  EDITABLE_PRODUCT,
+  DELETABLE_PRODUCT,
+  INVENTORY_PRODUCT,
+  TEST_SUPPLIER,
+  TEST_WAREHOUSE,
+  PO_PRODUCT,
+} from '../fixtures/test-data';
 
 dotenv.config();
 
@@ -125,6 +141,26 @@ async function seedFixtures(): Promise<void> {
     );
   }
 
+  // --- dedicated products para sa edit/delete/inventory tests (kompleto ang fields) ---
+  for (const p of [EDITABLE_PRODUCT, DELETABLE_PRODUCT, INVENTORY_PRODUCT]) {
+    await conn.query(
+      `INSERT INTO products (id, name, price, stock, sku, description, brand, category, unit_of_measure, availability)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
+      [p.id, p.name, p.price, p.stock, p.sku, p.description, p.brand, p.category, p.unitOfMeasure],
+    );
+  }
+
+  // --- supplier + warehouse (para sa purchase-order test) ---
+  await conn.query('INSERT INTO suppliers (id, name) VALUES (?, ?)', [TEST_SUPPLIER.id, TEST_SUPPLIER.name]);
+  await conn.query('INSERT INTO warehouses (id, name) VALUES (?, ?)', [TEST_WAREHOUSE.id, TEST_WAREHOUSE.name]);
+
+  // Product nga naka-link sa supplier (ang PO product selector mo-filter by supplier).
+  await conn.query(
+    `INSERT INTO products (id, name, price, cost, stock, sku, supplier_id, availability)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'Available')`,
+    [PO_PRODUCT.id, PO_PRODUCT.name, PO_PRODUCT.price, PO_PRODUCT.cost, PO_PRODUCT.stock, PO_PRODUCT.sku, PO_PRODUCT.supplierId],
+  );
+
   // --- pos_terminals (gikinahanglan sa POS shift + sale flow) ---
   await conn.query(
     `INSERT INTO pos_terminals (id, name, location, ip_address, is_active, x_counter, z_counter, or_next_reference)
@@ -148,10 +184,30 @@ async function seedFixtures(): Promise<void> {
      VALUES (1, '1000','1000','1000','1000','1000','1000','1000','1000','1000','000000')`,
   );
 
+  // --- product-option master data (para sa Add Product form dropdowns) ---
+  await conn.query('INSERT INTO brands (id, name) VALUES (?, ?)', [TEST_BRAND.id, TEST_BRAND.name]);
+  // markup_percentage 25 → ang Add Product form mo-auto-calculate ug price gikan sa
+  // cost (walay standalone price input; price gikan sa markup o price levels).
+  await conn.query('INSERT INTO categories (id, name, markup_percentage) VALUES (?, ?, 25.00)', [
+    TEST_CATEGORY.id,
+    TEST_CATEGORY.name,
+  ]);
+  await conn.query('INSERT INTO units_of_measure (id, name, abbreviation) VALUES (?, ?, ?)', [
+    TEST_UNIT.id,
+    TEST_UNIT.name,
+    TEST_UNIT.abbreviation,
+  ]);
+  await conn.query(
+    `INSERT INTO price_levels (id, name, calculation_base, is_default, percentage_adjustment)
+     VALUES (?, ?, 'retail', 1, 100.00)`,
+    [TEST_PRICE_LEVEL.id, TEST_PRICE_LEVEL.name],
+  );
+
   await conn.end();
   console.log(
-    `✅ Seeded: ${Object.keys(TEST_USERS).length} users, ${TEST_PRODUCTS.length} products, ` +
-      `1 terminal, 1 payment method, pos_settings, transaction_references`,
+    `✅ Seeded: ${Object.keys(TEST_USERS).length} users, ${TEST_PRODUCTS.length + 3} products, ` +
+      `1 terminal, 1 payment method, 1 supplier, 1 warehouse, ` +
+      `1 brand/category/unit/price-level, pos_settings, transaction_references`,
   );
 }
 

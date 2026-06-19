@@ -1,6 +1,10 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  // Tugoti ang separate dist dir (env-driven) aron ang e2e test server makasabay
+  // sa usa ka running nga dev server (lahi ang Next dev singleton lock). Default
+  // gihapon '.next' kung walay env — walay kausaban sa normal nga dev/build.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   output: 'standalone',
   /* config options here */
   typescript: {

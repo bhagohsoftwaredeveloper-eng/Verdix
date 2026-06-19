@@ -364,7 +364,7 @@ export default function ZReadingPage() {
             </div>
             <div className="flex-1 overflow-auto bg-gray-50 p-4 flex justify-center">
               <div ref={previewRef} className="bg-white shadow-sm h-fit">
-                <ZReadingPreview data={selectedReading} printerFormat={printerFormat} businessSettings={businessSettings} />
+                <ZReadingPreview data={selectedReading} printerFormat={printerFormat} businessSettings={businessSettings ?? null} />
               </div>
             </div>
             <div className="px-4 py-3 border-t bg-gray-50 flex justify-between items-center">

@@ -26,7 +26,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { Separator } from '@/components/ui/separator';
-import { EditProductDialog } from '../../products/edit-product-dialog';
+import { EditProductDialog } from '../../products/edit-product/edit-product-dialog';
 import { formatQuantity } from '@/lib/utils';
 
 

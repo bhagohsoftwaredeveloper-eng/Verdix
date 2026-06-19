@@ -1740,10 +1740,10 @@ export async function getDepartments(): Promise<Department[]> {
   }
 }
 
-export async function addDepartment(name: string) {
+export async function addDepartment(name: string, markupPercentage?: number) {
   try {
     const id = `dept_${Date.now()}`;
-    await query('INSERT INTO departments (id, name) VALUES (?, ?)', [id, name]);
+    await query('INSERT INTO departments (id, name, markup_percentage) VALUES (?, ?, ?)', [id, name, markupPercentage || null]);
     return { success: true, message: 'Department added successfully.' };
   } catch (error) {
     console.error('Error adding department:', error);
@@ -1751,9 +1751,9 @@ export async function addDepartment(name: string) {
   }
 }
 
-export async function updateDepartment(id: string, name: string) {
+export async function updateDepartment(id: string, name: string, markupPercentage?: number) {
   try {
-    await query('UPDATE departments SET name = ? WHERE id = ?', [name, id]);
+    await query('UPDATE departments SET name = ?, markup_percentage = ? WHERE id = ?', [name, markupPercentage || null, id]);
     return { success: true, message: 'Department updated successfully.' };
   } catch (error) {
     console.error('Error updating department:', error);

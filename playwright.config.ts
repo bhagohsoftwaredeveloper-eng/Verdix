@@ -45,7 +45,16 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    // I-point ang app under test sa isolated nga test database.
-    env: { ...process.env, DB_NAME: 'verdix_test' },
+    // I-point ang app under test sa isolated nga test database, ug i-align ang
+    // client API base sa test server (3100) aron dili mag-"Failed to fetch" ang
+    // logActivity (nga naka-hardcode sa 3000 gikan sa .env).
+    env: {
+      ...process.env,
+      DB_NAME: 'verdix_test',
+      NEXT_PUBLIC_API_BASE_URL: `${BASE_URL}/api`,
+      // Separate dist dir aron makasabay sa usa ka running nga dev server (3000)
+      // nga adunay kaugalingong Next dev singleton lock sa `.next`.
+      NEXT_DIST_DIR: '.next-test',
+    },
   },
 });

@@ -4,6 +4,10 @@ import { getApiUrl } from '@/lib/api-config';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
 import { useQuery } from '@tanstack/react-query';
 
+// Stable nga empty array — likayan ang bag-ong `[]` matag render nga makahimo ug
+// unstable hook output kung gigamit isip effect/memo dependency (infinite-loop risk).
+const EMPTY_PRODUCTS: Product[] = [];
+
 
 export interface UseProductsResult {
   products: Product[];
@@ -72,9 +76,9 @@ export function useProducts(search?: string, availability?: string, supplierId?:
 
   useLiveRefresh(refetch);
 
-  return { 
-    products: data || [], 
-    loading: isLoading, 
+  return {
+    products: data || EMPTY_PRODUCTS,
+    loading: isLoading,
     error: error instanceof Error ? error.message : null, 
     refetch 
   };

@@ -1,181 +1,50 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { breakPack, searchProducts, getUnitsOfMeasure } from '../../products/actions';
-import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Package, ArrowRight, CheckCircle2, Info, Wand2 } from 'lucide-react';
 import { cn, formatQuantity } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 
-type Step = 'source' | 'target' | 'calculate' | 'summary';
-
-type SearchResult = {
-  id: string;
-  name: string;
-  sku: string;
-  barcode: string;
-  stock: number;
-  unitOfMeasure: string;
-  price: number;
-  cost?: number;
-  conversionFactors?: { unit: string; factor: number }[];
-};
+import { useRepackagingForm } from './use-repackaging-form';
 
 export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
-  const [step, setStep] = useState<Step>('source');
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
-
-  // Source State
-  const [sourceSearch, setSourceSearch] = useState('');
-  const [sourceResults, setSourceResults] = useState<SearchResult[]>([]);
-  const [selectedSource, setSelectedSource] = useState<SearchResult | null>(null);
-  const [qtyToUse, setQtyToUse] = useState('1');
-
-  // Target State
-  const [targetType, setTargetType] = useState<'search' | 'create'>('search');
-  const [targetSearch, setTargetSearch] = useState('');
-  const [targetResults, setTargetResults] = useState<SearchResult[]>([]);
-  const [selectedTarget, setSelectedTarget] = useState<SearchResult | null>(null);
-
-  // New Product State
-  const [newName, setNewName] = useState('');
-  const [newUnit, setNewUnit] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-  const [newCost, setNewCost] = useState('');
-  const [newBarcode, setNewBarcode] = useState('');
-  const [units, setUnits] = useState<{ id: string; name: string }[]>([]);
-
-  // Fetch Units
-  useEffect(() => {
-    getUnitsOfMeasure().then(setUnits);
-  }, []);
-
-  const generateBarcode = useCallback(() => {
-    const randomNumber = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-    setNewBarcode(randomNumber);
-  }, []);
-
-  // Auto-generate barcode when switching to create mode
-  useEffect(() => {
-    if (targetType === 'create' && !newBarcode) {
-      generateBarcode();
-    }
-  }, [targetType, newBarcode, generateBarcode]);
-
-  // Auto-calculate Price & Cost
-  useEffect(() => {
-    if (targetType === 'create' && newUnit && selectedSource) {
-      const cf = selectedSource.conversionFactors?.find(f => f.unit === newUnit);
-      if (cf && cf.factor > 0) {
-        const factor = cf.factor;
-        const suggestedPrice = (selectedSource.price / factor).toFixed(2);
-        const suggestedCost = selectedSource.cost ? (selectedSource.cost / factor).toFixed(2) : '';
-        
-        setNewPrice(suggestedPrice);
-        setNewCost(suggestedCost);
-        
-        // Also suggest a name if empty
-        if (!newName) {
-          setNewName(`${selectedSource.name} ${newUnit}`);
-        }
-      }
-    }
-  }, [newUnit, selectedSource, targetType, newName]);
-
-  // Counting State
-  const [packsProduced, setPacksProduced] = useState('');
-
-  // Search Logic
-  useEffect(() => {
-    const query = step === 'source' ? sourceSearch : targetSearch;
-    if (query.trim().length < 2) {
-      if (step === 'source') setSourceResults([]);
-      else setTargetResults([]);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        const results = await searchProducts(query);
-        const filteredResults = results.filter((r: SearchResult) => r.id !== selectedSource?.id);
-        if (step === 'source') setSourceResults(filteredResults);
-        else setTargetResults(filteredResults);
-      } catch (err) {
-        console.error('Search error:', err);
-      }
-    }, 400);
-
-    return () => clearTimeout(timer);
-  }, [sourceSearch, targetSearch, step, selectedSource?.id]);
-
-  const handleProcess = async () => {
-    if (!selectedSource) return;
-    const bulkQty = parseFloat(qtyToUse);
-    const producedQty = parseFloat(packsProduced);
-
-    if (!bulkQty || bulkQty <= 0) {
-      toast({ variant: 'destructive', title: 'Invalid Quantity', description: 'Please enter how many source units you used.' });
-      return;
-    }
-    if (!producedQty || producedQty <= 0) {
-      toast({ variant: 'destructive', title: 'Invalid Count', description: 'Please enter how many packs were produced.' });
-      return;
-    }
-
-    const factor = producedQty / bulkQty;
-
-    setIsLoading(true);
-    try {
-      let result;
-      if (targetType === 'search' && selectedTarget) {
-        result = await breakPack(selectedSource.id, selectedTarget.id, bulkQty, factor);
-      } else if (targetType === 'create') {
-        result = await breakPack(selectedSource.id, null, bulkQty, undefined, {
-          name: newName,
-          unitOfMeasure: newUnit,
-          conversionFactor: factor,
-          price: parseFloat(newPrice),
-          cost: newCost ? parseFloat(newCost) : undefined,
-          barcode: newBarcode
-        });
-      } else {
-         toast({ variant: 'destructive', title: 'Target Missing', description: 'Please select or create a target product.' });
-         setIsLoading(false);
-         return;
-      }
-
-      if (result.success) {
-        if ((result as any).pendingApproval) {
-          toast({ title: '⏳ Submitted for Approval', description: result.message });
-        } else {
-          toast({ title: '✅ Repackaging Complete', description: result.message });
-          dispatchStockUpdate();
-          onSuccess?.();
-        }
-        setStep('source');
-        setSelectedSource(null);
-        setSelectedTarget(null);
-        setQtyToUse('1');
-        setPacksProduced('');
-        setSourceSearch('');
-        setTargetSearch('');
-      } else {
-        toast({ variant: 'destructive', title: 'Error', description: result.message });
-      }
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to process repackaging.' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    step,
+    setStep,
+    isLoading,
+    sourceSearch,
+    setSourceSearch,
+    sourceResults,
+    selectedSource,
+    setSelectedSource,
+    qtyToUse,
+    setQtyToUse,
+    targetType,
+    setTargetType,
+    targetSearch,
+    setTargetSearch,
+    targetResults,
+    selectedTarget,
+    setSelectedTarget,
+    newName,
+    setNewName,
+    newUnit,
+    setNewUnit,
+    newPrice,
+    setNewPrice,
+    newCost,
+    setNewCost,
+    newBarcode,
+    setNewBarcode,
+    units,
+    packsProduced,
+    setPacksProduced,
+    generateBarcode,
+    handleProcess,
+  } = useRepackagingForm({ onSuccess });
 
   return (
     <div className="space-y-8 max-w-2xl mx-auto py-4">
@@ -381,8 +250,8 @@ export function RepackagingForm({ onSuccess }: { onSuccess?: () => void }) {
                     <div className="relative">
                       <Input value={newBarcode} onChange={(e) => setNewBarcode(e.target.value)} placeholder="Barcode" className="pr-10" />
                       <Button
-                        variant="ghost" 
-                        size="icon" 
+                        variant="ghost"
+                        size="icon"
                         className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground"
                         onClick={generateBarcode}
                         type="button"

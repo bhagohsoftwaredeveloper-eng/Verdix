@@ -32,7 +32,7 @@ import {
 import { getSuppliersWithBalance, SupplierWithBalance, SupplierFilters } from '../actions';
 import { addSupplier, updateSupplier, deleteSupplier } from '../../products/actions';
 import { MakePaymentDialog } from '../payment-dialog';
-import { SupplierFormDialog } from '../../products/ManageSuppliersDialog';
+import { SupplierFormDialog } from '../../products/suppliers/ManageSuppliersDialog';
 import { useToast } from '@/hooks/use-toast';
 import { logActivity } from '@/lib/client-activity-logger';
 import { useBusinessProfile } from '@/hooks/use-api';
