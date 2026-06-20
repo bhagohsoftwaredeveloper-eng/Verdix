@@ -29,7 +29,7 @@ import { ManagePriceLevelsDialog } from './price-levels/ManagePriceLevelsDialog'
 import { ManageSuppliersDialog } from './suppliers/ManageSuppliersDialog';
 import { ManageShelfLocationsDialog } from './shelf-locations/ManageShelfLocationsDialog';
 import { ManageUnitOfMeasureDialog } from './units-of-measure/ManageUnitOfMeasureDialog';
-import { ManageWarehousesDialog } from '../sales/ManageWarehousesDialog';
+import { ManageWarehousesDialog } from '../sales/manage-warehouses/ManageWarehousesDialog';
 
 import { Search, ChevronDown, Trash2, PlusCircle, Settings, ShoppingCart, MoreVertical, Edit, Eye, Copy, AlertTriangle, Printer } from 'lucide-react';
 import { PrintBarcodeDialog } from './print-barcode/print-barcode-dialog';

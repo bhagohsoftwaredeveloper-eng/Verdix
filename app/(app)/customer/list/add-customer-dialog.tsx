@@ -37,7 +37,7 @@ import { PlusCircle, Loader2, Wand2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { logActivity } from '@/lib/client-activity-logger';
 import { getApiUrl } from '@/lib/api-config';
-import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms-dialog';
+import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms/ManagePaymentTermsDialog';
 
 interface LoyaltySetting {
   id: string;

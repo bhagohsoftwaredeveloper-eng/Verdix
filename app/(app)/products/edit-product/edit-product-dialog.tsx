@@ -23,7 +23,7 @@ import { ManageDepartmentsDialog } from '../departments/ManageDepartmentsDialog'
 import { ManageSubcategoriesDialog } from '../subcategories/ManageSubcategoriesDialog';
 import { ManageUnitOfMeasureDialog } from '../units-of-measure/ManageUnitOfMeasureDialog';
 import { ManageSuppliersDialog } from '../suppliers/ManageSuppliersDialog';
-import { ManageWarehousesDialog } from '../../sales/ManageWarehousesDialog';
+import { ManageWarehousesDialog } from '../../sales/manage-warehouses/ManageWarehousesDialog';
 import { ManageShelfLocationsDialog } from '../shelf-locations/ManageShelfLocationsDialog';
 
 import { useEditProductForm } from './use-edit-product-form';

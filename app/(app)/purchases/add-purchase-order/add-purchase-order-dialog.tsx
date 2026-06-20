@@ -45,8 +45,8 @@ import {
 } from '@/components/ui/table';
 import { Loader2, Trash2, Search, ArrowRight, Wand2 } from 'lucide-react';
 
-import { ManagePaymentMethodsDialog } from '../../sales/ManagePaymentMethodsDialog';
-import { ManageWarehousesDialog } from '../../sales/ManageWarehousesDialog';
+import { ManagePaymentMethodsDialog } from '../../sales/manage-payment-methods/ManagePaymentMethodsDialog';
+import { ManageWarehousesDialog } from '../../sales/manage-warehouses/ManageWarehousesDialog';
 import { SupplierFormDialog } from '../../products/suppliers/ManageSuppliersDialog';
 
 import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purchase-utils';

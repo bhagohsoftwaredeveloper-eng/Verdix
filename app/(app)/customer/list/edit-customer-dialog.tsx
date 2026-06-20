@@ -74,7 +74,7 @@ interface EditCustomerDialogProps {
 
 import { AddSalesAreaDialog } from './add-sales-area-dialog';
 import { AddSalesGroupDialog } from './add-sales-group-dialog';
-import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms-dialog';
+import { ManagePaymentTermsDialog } from '../../settings/pos-setup/manage-payment-terms/ManagePaymentTermsDialog';
 
 export default function EditCustomerDialog({ customer, onSave, children, open: controlledOpen, onOpenChange: setControlledOpen }: EditCustomerDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);

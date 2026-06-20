@@ -20,7 +20,7 @@ import { ManageBrandsDialog } from '../brands/ManageBrandsDialog';
 import { ManageDepartmentsDialog } from '../departments/ManageDepartmentsDialog';
 import { ManageSubcategoriesDialog } from '../subcategories/ManageSubcategoriesDialog';
 import { ManageUnitOfMeasureDialog } from '../units-of-measure/ManageUnitOfMeasureDialog';
-import { ManageWarehousesDialog } from '../../sales/ManageWarehousesDialog';
+import { ManageWarehousesDialog } from '../../sales/manage-warehouses/ManageWarehousesDialog';
 import { ManageSuppliersDialog } from '../suppliers/ManageSuppliersDialog';
 import { ManageShelfLocationsDialog } from '../shelf-locations/ManageShelfLocationsDialog';
 
