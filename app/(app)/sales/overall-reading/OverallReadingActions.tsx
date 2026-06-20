@@ -1,0 +1,48 @@
+'use client';
+
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Eye, FileText, Printer } from 'lucide-react';
+import type { PrinterFormat } from './overall-reading-types';
+
+interface Props {
+  printerFormat: PrinterFormat;
+  setPrinterFormat: (format: PrinterFormat) => void;
+  setModalMode: (mode: 'view' | 'print') => void;
+  setIsPreviewOpen: (open: boolean) => void;
+  handleExportPDF: () => void;
+}
+
+export function OverallReadingActions({ printerFormat, setPrinterFormat, setModalMode, setIsPreviewOpen, handleExportPDF }: Props) {
+  return (
+    <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">Print Format:</span>
+        <Select value={printerFormat} onValueChange={(value) => setPrinterFormat(value as PrinterFormat)}>
+          <SelectTrigger className="w-[100px] h-8 text-xs bg-slate-50 border-none">
+            <SelectValue placeholder="Format" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="58mm">58mm</SelectItem>
+            <SelectItem value="80mm">80mm</SelectItem>
+            <SelectItem value="A4">A4 (Simple)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex gap-3">
+        <Button variant="outline" size="sm" onClick={() => { setModalMode('view'); setIsPreviewOpen(true); }} className="gap-2 border-slate-200 hover:bg-slate-50">
+          <Eye className="h-4 w-4 text-slate-600" />
+          View Receipt
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-2 border-slate-200 hover:bg-slate-50">
+          <FileText className="h-4 w-4 text-slate-600" />
+          Export PDF
+        </Button>
+        <Button size="sm" onClick={() => { setModalMode('print'); setIsPreviewOpen(true); }} className="gap-2 bg-primary hover:bg-primary/90 text-white">
+          <Printer className="h-4 w-4" />
+          Print Report
+        </Button>
+      </div>
+    </div>
+  );
+}
