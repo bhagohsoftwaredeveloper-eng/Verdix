@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import {
@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tag } from 'lucide-react';
-import type { SaleItem } from './page';
+import type { SaleItem } from './pos-content/pos-types';
 
 interface PriceEditDialogProps {
   isOpen: boolean;
@@ -111,3 +111,5 @@ export function PriceEditDialog({
     </Dialog>
   );
 }
+
+

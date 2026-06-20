@@ -78,9 +78,9 @@ export function DetailsTable({ table, isLoading, expandedRows, onToggleRow }: Pr
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map(hg => (
-            <TableRow key={hg.id} className="bg-primary hover:bg-primary">
+            <TableRow key={hg.id} className="[&>th]:bg-primary [&>th]:text-primary-foreground [&>th]:font-semibold hover:bg-primary">
               {hg.headers.map(header => (
-                <TableHead key={header.id} className="text-primary-foreground">
+                <TableHead key={header.id}>
                   {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </TableHead>
               ))}

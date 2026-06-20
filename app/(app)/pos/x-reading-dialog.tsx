@@ -1,4 +1,4 @@
-
+﻿
 import { useState, useEffect, useRef } from 'react';
 import {
   Sheet,
@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Printer, Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { AdminAuthDialog } from './admin-auth-dialog';
+import { AdminAuthDialog } from './admin-auth/AdminAuthDialog';
 import { XReadingPreview } from '../sales/x-reading/x-reading-preview';
 import { BusinessSettings } from '../sales/z-reading/z-reading-preview';
 import { XReadingData } from '@/lib/types';
@@ -212,3 +212,4 @@ export function XReadingDialog({
       </Sheet>
   );
 }
+

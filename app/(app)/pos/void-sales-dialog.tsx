@@ -1,4 +1,4 @@
-
+﻿
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -25,7 +25,7 @@ import { Ban, ArrowLeft, Search, AlertTriangle, Clock, User, Calendar, CreditCar
 import type { Sale, SaleItem } from '@/lib/types';
 import { format, subMinutes } from 'date-fns';
 import { formatQuantity } from '@/lib/utils';
-import { AdminAuthDialog } from './admin-auth-dialog';
+import { AdminAuthDialog } from './admin-auth/AdminAuthDialog';
 import { getApiUrl } from '@/lib/api-config';
 import { usePrinter } from '@/lib/use-printer';
 import { VoidSlipGenerator } from '@/lib/void-slip-generator';
@@ -432,3 +432,4 @@ export function VoidSalesDialog({
     </>
   );
 }
+

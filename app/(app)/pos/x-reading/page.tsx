@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import {
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Printer, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { AdminAuthDialog } from '../admin-auth-dialog';
+import { AdminAuthDialog } from '../admin-auth/AdminAuthDialog';
 import { Separator } from '@/components/ui/separator';
 import { getApiUrl } from '@/lib/api-config';
 
@@ -302,3 +302,4 @@ export default function XReadingPage() {
         </>
     );
 }
+

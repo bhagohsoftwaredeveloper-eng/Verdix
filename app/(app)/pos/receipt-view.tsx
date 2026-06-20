@@ -1,6 +1,6 @@
-import React, { forwardRef } from 'react';
+﻿import React, { forwardRef } from 'react';
 import { format } from 'date-fns';
-import { SaleItem, mapVatStatusToTaxType } from './page';
+import { SaleItem, mapVatStatusToTaxType } from './pos-content/pos-types';
 import { Customer } from '@/lib/types';
 
 import { SystemSettings } from '@/lib/types';
@@ -302,3 +302,5 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
 });
 
 ReceiptView.displayName = 'ReceiptView';
+
+

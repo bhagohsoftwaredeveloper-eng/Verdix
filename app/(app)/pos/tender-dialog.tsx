@@ -1,4 +1,4 @@
-
+﻿
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
     Sheet,
@@ -19,8 +19,8 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Printer, User, Star, Info, AlertCircle, CheckCircle2, Wallet, CreditCard, Banknote } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { SaleItem, mapVatStatusToTaxType } from './page';
-import { mapVatStatusToTaxType as mapTax } from './page';
+import type { SaleItem, mapVatStatusToTaxType } from './pos-content/pos-types';
+import { mapVatStatusToTaxType as mapTax } from './pos-content/pos-types';
 import type { Customer } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
@@ -1089,3 +1089,5 @@ export function TenderDialog({
         </Sheet>
     );
 };
+
+

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ManageWarehousesDialog } from '../../manage-warehouses/ManageWarehousesDialog';
 import { ManagePaymentMethodsDialog } from '../../manage-payment-methods/ManagePaymentMethodsDialog';
-import { ManageSalesPersonsDialog } from '@/app/(app)/settings/pos-setup/manage-sales-persons-dialog';
+import { ManageSalesPersonsDialog } from '@/app/(app)/settings/pos-setup/manage-sales-persons/ManageSalesPersonsDialog';
 import { CustomerSelectionField } from '../../invoices/customer-selection/customer-selection-field';
 import type { SalesOrderFormValues } from './add-order-types';
 import type { Customer, PaymentMethod, Warehouse, SalesPerson } from '@/lib/types';

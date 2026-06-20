@@ -1,4 +1,4 @@
-
+﻿
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Printer, ArrowLeft, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { AdminAuthDialog } from './admin-auth-dialog';
+import { AdminAuthDialog } from './admin-auth/AdminAuthDialog';
 import { ZReadingPreview, BusinessSettings } from '../sales/z-reading/z-reading-preview';
 import { ZReadingData } from '@/lib/types';
 import { usePrinter } from '@/lib/use-printer';
@@ -305,3 +305,4 @@ export function ZReadingDialog({
       </Sheet>
   );
 }
+

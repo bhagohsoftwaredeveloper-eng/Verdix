@@ -1,4 +1,4 @@
-
+﻿
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -24,14 +24,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Undo, ArrowLeft, Search, AlertTriangle, Clock, User, Calendar, CreditCard, ShoppingBag, Loader2, ChevronRight, Printer, CheckCircle2, Minus, Plus } from 'lucide-react';
 import type { Sale, SaleItem } from '@/lib/types';
 import { format, subMinutes } from 'date-fns';
-import { AdminAuthDialog } from './admin-auth-dialog';
+import { AdminAuthDialog } from './admin-auth/AdminAuthDialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { usePrinter } from '@/lib/use-printer';
 import { CreditSlipGenerator, CreditSlipData } from '@/lib/credit-slip-generator';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
 import { useReactToPrint } from 'react-to-print';
-import { CreditSlipView } from './credit-slip-view';
+import { CreditSlipView } from './credit-slip/CreditSlipView';
 import { formatQuantity } from '@/lib/utils';
 
 interface ReturnSalesDialogProps {
@@ -671,3 +671,5 @@ export function ReturnSalesDialog({
     </>
   );
 }
+
+

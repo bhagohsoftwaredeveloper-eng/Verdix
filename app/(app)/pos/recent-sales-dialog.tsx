@@ -1,4 +1,4 @@
-
+﻿
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -25,7 +25,7 @@ import type { Sale } from '@/lib/types';
 import { format } from 'date-fns';
 import { Logo } from '@/components/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { AdminAuthDialog } from './admin-auth-dialog';
+import { AdminAuthDialog } from './admin-auth/AdminAuthDialog';
 import { usePrinter } from '@/lib/use-printer';
 import { ReceiptGenerator } from '@/lib/receipt-generator';
 import { useToast } from '@/hooks/use-toast';
@@ -559,3 +559,4 @@ export function RecentSalesDialog({
     </>
   );
 }
+

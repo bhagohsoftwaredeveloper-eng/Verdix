@@ -1,4 +1,4 @@
-
+﻿
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { User, PlusCircle, Loader2 } from 'lucide-react';
 import type { Customer } from '@/lib/types';
-import { AddCustomerDialog } from './add-customer-dialog';
+import { AddCustomerDialog } from './add-customer/AddCustomerDialog';
 import { getApiUrl } from '@/lib/api-config';
 
 export const WALK_IN_CUSTOMER: Customer = {
@@ -188,3 +188,4 @@ function SearchDebounce({ query, onSearch }: { query: string; onSearch: (q: stri
     }, [query]);
     return null;
 }
+

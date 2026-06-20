@@ -1,84 +1,23 @@
+'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { getApiUrl } from '@/lib/api-config';
+import { Button } from '@/components/ui/button';
+import { Loader2, Plus } from 'lucide-react';
+import { useAddTaxRate } from './use-add-tax-rate';
+import { TaxRateFormFields } from './TaxRateFormFields';
 
-interface AddTaxRateDialogProps {
-  onTaxRateAdded: () => void;
-}
+interface Props { onTaxRateAdded: () => void; }
 
-export function AddTaxRateDialog({ onTaxRateAdded }: AddTaxRateDialogProps) {
+export function AddTaxRateDialog({ onTaxRateAdded }: Props) {
   const [open, setOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const { formData, set, isLoading, handleSubmit } = useAddTaxRate(onTaxRateAdded);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    rate: '',
-    description: '',
-    isDefault: false,
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(getApiUrl('/settings/tax-rates'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          rate: parseFloat(formData.rate),
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create tax rate');
-      }
-
-      toast({
-        title: 'Success',
-        description: 'Tax rate created successfully',
-      });
-
-      setFormData({
-        name: '',
-        rate: '',
-        description: '',
-        isDefault: false,
-      });
-      setOpen(false);
-      onTaxRateAdded();
-    } catch (error) {
-      console.error('Error creating tax rate:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to create tax rate',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+  const onSubmit = async (e: React.FormEvent) => {
+    const ok = await handleSubmit(e);
+    if (ok) setOpen(false);
   };
 
   return (
@@ -92,50 +31,10 @@ export function AddTaxRateDialog({ onTaxRateAdded }: AddTaxRateDialogProps) {
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Add Tax Rate</DialogTitle>
-          <DialogDescription>
-            Create a new tax rate configuration.
-          </DialogDescription>
+          <DialogDescription>Create a new tax rate configuration.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Tax Name</Label>
-            <Input
-              id="name"
-              placeholder="e.g., VAT, Sales Tax"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rate">Rate (%)</Label>
-            <Input
-              id="rate"
-              type="number"
-              step="0.01"
-              placeholder="e.g., 12"
-              value={formData.rate}
-              onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description (Optional)</Label>
-            <Textarea
-              id="description"
-              placeholder="Additional details about this tax rate"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="isDefault"
-              checked={formData.isDefault}
-              onCheckedChange={(checked) => setFormData({ ...formData, isDefault: checked as boolean })}
-            />
-            <Label htmlFor="isDefault">Set as default tax rate</Label>
-          </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <TaxRateFormFields formData={formData} set={set} idPrefix="add-" />
           <DialogFooter>
             <Button type="submit" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

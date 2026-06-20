@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { AdminAuthDialog } from '../admin-auth-dialog';
+import { AdminAuthDialog } from '../admin-auth/AdminAuthDialog';
 import { ZReadingPreview, ZReadingData } from '../../sales/z-reading/z-reading-preview';
 import { usePrinter } from '@/lib/use-printer';
 import { getApiUrl } from '@/lib/api-config';
@@ -175,3 +175,4 @@ export default function ZReadingPage() {
         </>
     );
 }
+

@@ -3,10 +3,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, CreditCard, Users } from 'lucide-react';
-import { ManageTransactionReferenceDialog } from './manage-transaction-reference-dialog';
+import { ManageTransactionReferenceDialog } from './manage-transaction-reference/ManageTransactionReferenceDialog';
 import { ManagePaymentTermsDialog } from './manage-payment-terms/ManagePaymentTermsDialog';
 import { ManagePaymentMethodsDialog } from '../../sales/manage-payment-methods/ManagePaymentMethodsDialog';
-import { ManageSalesPersonsDialog } from './manage-sales-persons-dialog';
+import { ManageSalesPersonsDialog } from './manage-sales-persons/ManageSalesPersonsDialog';
 
 interface Props { onRefresh: () => void; }
 
