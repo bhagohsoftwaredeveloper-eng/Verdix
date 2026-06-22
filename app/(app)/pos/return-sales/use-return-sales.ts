@@ -1,0 +1,281 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { format } from 'date-fns';
+import type { Sale, SaleItem } from '@/lib/types';
+import { usePrinter } from '@/lib/use-printer';
+import { useToast } from '@/hooks/use-toast';
+import { CreditSlipGenerator, CreditSlipData } from '@/lib/credit-slip-generator';
+import { getApiUrl } from '@/lib/api-config';
+import { useReactToPrint } from 'react-to-print';
+
+type Options = {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentUser?: any;
+  terminalId?: string;
+  printMode: 'browser' | 'escpos' | 'usb' | 'native';
+  creditSlipRef?: React.RefObject<HTMLDivElement>;
+};
+
+export function useReturnSales({
+  isOpen,
+  onOpenChange,
+  currentUser,
+  terminalId,
+  printMode,
+  creditSlipRef
+}: Options) {
+  const [step, setStep] = useState<'loading' | 'auth' | 'input_so' | 'select_items' | 'success'>('loading');
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [soNumber, setSoNumber] = useState('');
+  const [searchError, setSearchError] = useState('');
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [itemsToReturn, setItemsToReturn] = useState<SaleItem[]>([]);
+  const [returnedItems, setReturnedItems] = useState<SaleItem[]>([]);
+  const [posSettings, setPosSettings] = useState<any>(null);
+  const [returnedTotal, setReturnedTotal] = useState(0);
+  const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [isRecentLoading, setIsRecentLoading] = useState(false);
+  const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
+  const { toast } = useToast();
+  const authSucceededRef = useRef(false);
+
+  const handleBrowserPrint = useReactToPrint({
+    contentRef: creditSlipRef,
+    documentTitle: `CreditSlip-${new Date().getTime()}`,
+    pageStyle: `
+      @page {
+        size: 58mm auto;
+        margin: 0;
+      }
+      @media print {
+        body {
+          -webkit-print-color-adjust: exact;
+        }
+      }
+    `
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      authSucceededRef.current = false;
+      setStep('loading');
+      setIsLoading(false);
+      setSoNumber('');
+      setSearchError('');
+      setSelectedSale(null);
+      setReturnedTotal(0);
+      setReturnedItems([]);
+
+      fetch(getApiUrl(`/pos-settings?_t=${Date.now()}`), { cache: 'no-store' })
+        .then(res => res.json())
+        .then(result => {
+          if (result.success) {
+            const settings = result.data;
+            setPosSettings(settings);
+
+            if (settings.enableReturnAuth) {
+              setStep('auth');
+            } else {
+              setStep('input_so');
+            }
+          } else {
+            setStep('input_so');
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          setStep('input_so');
+        });
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && step === 'input_so') {
+      setIsRecentLoading(true);
+      fetch(getApiUrl(`/pos/recent-sales?_t=${Date.now()}`), { cache: 'no-store' })
+        .then(res => res.json())
+        .then(result => { if (result.success) setRecentSales(result.data || []); })
+        .catch(() => {})
+        .finally(() => setIsRecentLoading(false));
+    }
+  }, [isOpen, step]);
+
+  const handlePickSale = useCallback((sale: Sale) => {
+    setSelectedSale(sale);
+    setSearchError('');
+    setStep('select_items');
+  }, []);
+
+  const handleAuthSuccess = useCallback(() => {
+    authSucceededRef.current = true;
+    setStep('input_so');
+  }, []);
+
+  const handleAuthClose = useCallback((open: boolean) => {
+    if (!open && !authSucceededRef.current) {
+      onOpenChange(false);
+    }
+    authSucceededRef.current = false;
+  }, [onOpenChange]);
+
+  const handleSearchSO = useCallback(async () => {
+    const term = soNumber.trim();
+    if (!term) return;
+
+    setIsLoading(true);
+    setSearchError('');
+
+    try {
+      const response = await fetch(getApiUrl(`/pos/recent-sales?query=${encodeURIComponent(term)}`));
+      if (!response.ok) throw new Error(`API error ${response.status}`);
+      const result = await response.json();
+
+      if (result.success && result.data && result.data.length > 0) {
+        const found = result.data.find((s: any) => String(s.orderNumber) === term || s.id === term) || result.data[0];
+        setSelectedSale(found);
+        setStep('select_items');
+      } else {
+        setSearchError('Transaction not found. Please check the SO Number.');
+      }
+    } catch (err) {
+      console.error('Search error', err);
+      setSearchError('Error searching transaction.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [soNumber]);
+
+  const handleReturnItems = useCallback(async (items: SaleItem[]) => {
+    if (selectedSale && items.length > 0) {
+      setIsLoading(true);
+      try {
+        const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        const response = await fetch(getApiUrl('/sales/returns'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            saleId: selectedSale.id,
+            items: items.map(item => ({
+              productId: item.product.id,
+              productName: item.product.name,
+              quantity: item.quantity,
+              price: item.price
+            })),
+            terminalId: terminalId || posSettings?.terminalId,
+            userId: currentUser?.uid || currentUser?.id || null,
+            reason: 'Merchandise Credit',
+            totalAmount
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          setReturnedTotal(totalAmount);
+          setReturnedItems(items);
+          setStep('success');
+        } else {
+          setSearchError(result.error || 'Failed to process return');
+        }
+      } catch (err) {
+        console.error('Error processing return:', err);
+        setSearchError('Error processing return. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, [selectedSale, terminalId, posSettings, currentUser]);
+
+  const handleBackToSearch = useCallback(() => {
+    setStep('input_so');
+    setSelectedSale(null);
+    setSoNumber('');
+  }, []);
+
+  const handleCloseSuccess = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handlePrintCredit = useCallback(async () => {
+    if (!selectedSale || returnedItems.length === 0) return;
+
+    const now = new Date();
+    const expiryDate = new Date(now);
+    expiryDate.setDate(expiryDate.getDate() + 30);
+    const creditSlipId = `MC-${selectedSale.orderNumber || selectedSale.id.slice(-6)}-${format(now, 'yyMMddHHmm')}`.toUpperCase();
+
+    if (printMode === 'browser') {
+      handleBrowserPrint();
+      return;
+    }
+
+    if (!isConnected) {
+      const success = await connect();
+      if (!success) return;
+    }
+
+    try {
+      const generator = new CreditSlipGenerator();
+      const slipData: CreditSlipData = {
+        creditSlipId,
+        originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
+        customerName: selectedSale.customer?.name || 'Walk-in Customer',
+        date: now.toISOString(),
+        expiryDate: expiryDate.toISOString(),
+        cashierName: currentUser?.name || currentUser?.displayName || currentUser?.username || 'Cashier',
+        items: returnedItems.map(item => ({
+          name: item.product.name,
+          quantity: item.quantity,
+          unitOfMeasure: item.product.unitOfMeasure,
+          price: item.price,
+          total: item.quantity * item.price
+        })),
+        totalAmount: returnedTotal,
+        businessSettings: {
+          businessName: posSettings?.businessName,
+          address: posSettings?.address,
+          contactNumber: posSettings?.contactNumber,
+          tin: posSettings?.tin,
+          minNumber: posSettings?.minNumber,
+          serialNumber: posSettings?.serialNumber,
+          currencySymbol: posSettings?.currencySymbol || '₱',
+          currencyCode: posSettings?.currencyCode || 'PHP',
+          timezone: posSettings?.timezone || 'Asia/Manila',
+          dateFormat: posSettings?.dateFormat || 'MM/dd/yyyy'
+        }
+      };
+
+      const bytes = generator.generate(slipData);
+      await print(bytes);
+      toast({ title: "Success", description: "Credit slip sent to printer." });
+    } catch (err) {
+      console.error("Print error", err);
+      toast({ title: "Print Failed", description: "Could not send data to printer.", variant: "destructive" });
+    }
+  }, [selectedSale, returnedItems, returnedTotal, printMode, isConnected, connect, print, posSettings, currentUser, handleBrowserPrint, toast]);
+
+  return {
+    step,
+    isLoading,
+    soNumber,
+    setSoNumber,
+    searchError,
+    selectedSale,
+    returnedItems,
+    returnedTotal,
+    recentSales,
+    isRecentLoading,
+    posSettings,
+    handlePickSale,
+    handleAuthSuccess,
+    handleAuthClose,
+    handleSearchSO,
+    handleReturnItems,
+    handleBackToSearch,
+    handleCloseSuccess,
+    handlePrintCredit,
+  };
+}

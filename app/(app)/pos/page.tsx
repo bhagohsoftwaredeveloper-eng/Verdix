@@ -2,8 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PosLoginForm } from './login-form/PosLoginForm';
-import { StartShiftDialog } from './start-shift-dialog';
-import { ShiftTakeoverDialog } from './shift-takeover-dialog';
+import { StartShiftDialog } from './start-shift/StartShiftDialog';
+import { ShiftTakeoverDialog } from './shift-takeover/ShiftTakeoverDialog';
 import { AdminAuthDialog } from './admin-auth/AdminAuthDialog';
 import { PosHeader } from './pos-content/PosHeader';
 import { PosCartTable } from './pos-content/PosCartTable';
@@ -158,6 +158,7 @@ function POSContent() {
     </>
   );
 }
+
 
 
 

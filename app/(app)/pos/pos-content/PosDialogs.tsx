@@ -1,23 +1,23 @@
 ﻿'use client';
 
-import { TenderDialog } from '../tender-dialog';
-import { ProductSearchDialog } from '../product-search-dialog';
+import { TenderDialog } from '../tender/TenderDialog';
+import { ProductSearchDialog } from '../product-search/ProductSearchDialog';
 import { HeldTransactionsDialog } from '../held-transactions/HeldTransactionsDialog';
 import { DiscountDialog } from '../discount/DiscountDialog';
-import { SuspendNoteDialog } from '../suspend-note-dialog';
+import { SuspendNoteDialog } from '../suspend-note/SuspendNoteDialog';
 import { AdminAuthDialog } from '../admin-auth/AdminAuthDialog';
 import { EndShiftDialog } from '../end-shift/EndShiftDialog';
 import { CashTransferDialog } from '../cash-transfer/CashTransferDialog';
 import { CustomerAccountDialog } from '../customer-account/CustomerAccountDialog';
 import { LoyaltyRewardsDialog } from '../loyalty-rewards/LoyaltyRewardsDialog';
-import { RecentSalesDialog } from '../recent-sales-dialog';
-import { VoidSalesDialog } from '../void-sales-dialog';
-import { ReturnSalesDialog } from '../return-sales-dialog';
-import { PriceInquiryDialog } from '../price-inquiry-dialog';
-import { ZReadingDialog } from '../z-reading-dialog';
-import { XReadingDialog } from '../x-reading-dialog';
-import { OverallReadingDialog } from '../overall-reading-dialog';
-import { ShutdownConfirmationDialog } from '../shutdown-confirmation-dialog';
+import { RecentSalesDialog } from '../recent-sales/RecentSalesDialog';
+import { VoidSalesDialog } from '../void-sales/VoidSalesDialog';
+import { ReturnSalesDialog } from '../return-sales/ReturnSalesDialog';
+import { PriceInquiryDialog } from '../price-inquiry/PriceInquiryDialog';
+import { ZReadingDialog } from '../z-reading-report/ZReadingDialog';
+import { XReadingDialog } from '../x-reading-report/XReadingDialog';
+import { OverallReadingDialog } from '../overall-reading/OverallReadingDialog';
+import { ShutdownConfirmationDialog } from '../shutdown-confirmation/ShutdownConfirmationDialog';
 import { InsufficientStockDialog } from '../insufficient-stock/InsufficientStockDialog';
 import { usePOS } from './use-pos';
 
@@ -208,6 +208,8 @@ export function PosDialogs(pos: Props) {
     </>
   );
 }
+
+
 
 
 
