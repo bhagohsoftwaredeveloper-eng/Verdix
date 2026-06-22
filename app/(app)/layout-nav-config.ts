@@ -1,10 +1,20 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, DefaultOptions } from '@tanstack/react-query';
 import {
   LayoutDashboard, Package, ClipboardCheck, BarChart3,
   Users, Settings,
 } from 'lucide-react';
 
-export const queryClient = new QueryClient();
+const queryConfig: DefaultOptions = {
+  queries: {
+    staleTime: 30 * 1000, // Data is considered stale after 30 seconds
+    gcTime: 5 * 60 * 1000, // Cache is garbage collected after 5 minutes
+    retry: 1, // Retry failed requests once
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnReconnect: true, // Refetch when reconnecting to network
+  },
+};
+
+export const queryClient = new QueryClient({ defaultOptions: queryConfig });
 
 export const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', permission: 'view_dashboard' },

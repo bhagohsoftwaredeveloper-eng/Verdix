@@ -1,9 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -34,7 +30,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import {
   Table,
   TableBody,
@@ -43,13 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getApiUrl } from '@/lib/api-config';
-
-const salesGroupSchema = z.object({
-  name: z.string().min(1, 'Group name is required'),
-});
-
-type SalesGroupFormValues = z.infer<typeof salesGroupSchema>;
+import { useAddSalesGroup } from './use-add-sales-group';
 
 interface AddSalesGroupDialogProps {
   onGroupAdded: (group: { id: string; name: string }) => void;
@@ -57,116 +46,18 @@ interface AddSalesGroupDialogProps {
 }
 
 export function AddSalesGroupDialog({ onGroupAdded, onSalesGroupsUpdated }: AddSalesGroupDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [salesGroups, setSalesGroups] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [groupToDelete, setGroupToDelete] = useState<{ id: string; name: string } | null>(null);
-  const { toast } = useToast();
-
-  const form = useForm<SalesGroupFormValues>({
-    resolver: zodResolver(salesGroupSchema),
-    defaultValues: {
-      name: '',
-    },
-  });
-
-  const fetchSalesGroups = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(getApiUrl('/sales-groups'));
-      if (!response.ok) throw new Error(`API error ${response.status}`);
-      const result = await response.json();
-      if (result.success) {
-        setSalesGroups(result.data);
-      }
-    } catch (error) {
-      console.error('Error fetching sales groups:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (open) {
-      fetchSalesGroups();
-    }
-  }, [open]);
-
-  async function onSubmit(values: SalesGroupFormValues) {
-    setIsSaving(true);
-    try {
-      const response = await fetch(getApiUrl('/sales-groups'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        toast({
-          title: 'Sales Group Added',
-          description: `Sales group "${values.name}" has been successfully added.`,
-        });
-        onGroupAdded(result.data);
-        form.reset();
-        fetchSalesGroups(); // Refresh the list
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: result.error || 'Failed to add sales group.',
-        });
-      }
-    } catch (error) {
-      console.error('Error adding sales group:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to add sales group. Please try again.',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!groupToDelete) return;
-
-    try {
-      const response = await fetch(getApiUrl(`/sales-groups?id=${groupToDelete.id}`), {
-        method: 'DELETE',
-      });
-      const result = await response.json();
-
-      if (result.success) {
-        toast({
-          title: 'Sales Group Deleted',
-          description: `Sales group "${groupToDelete.name}" has been successfully deleted.`,
-        });
-        fetchSalesGroups();
-        if (onSalesGroupsUpdated) {
-          onSalesGroupsUpdated();
-        }
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: result.error || 'Failed to delete sales group.',
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting sales group:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to delete sales group. Please try again.',
-      });
-    } finally {
-      setGroupToDelete(null);
-    }
-  }
+  const {
+    open,
+    setOpen,
+    isSaving,
+    salesGroups,
+    isLoading,
+    groupToDelete,
+    setGroupToDelete,
+    form,
+    handleSubmit,
+    handleConfirmDelete,
+  } = useAddSalesGroup({ onGroupAdded, onSalesGroupsUpdated });
 
   return (
     <>
@@ -187,7 +78,7 @@ export function AddSalesGroupDialog({ onGroupAdded, onSalesGroupsUpdated }: AddS
           {/* Add Group Form */}
           <div className="py-4 border-b">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-end gap-2">
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="flex items-end gap-2">
                 <FormField
                   control={form.control}
                   name="name"
@@ -280,7 +171,7 @@ export function AddSalesGroupDialog({ onGroupAdded, onSalesGroupsUpdated }: AddS
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={(e) => { e.stopPropagation(); confirmDelete(); }} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={(e) => { e.stopPropagation(); handleConfirmDelete(); }} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

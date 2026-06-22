@@ -3,7 +3,9 @@
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import {
   Select,
   SelectContent,
@@ -38,6 +40,9 @@ export function ConnectionSettingsDialog({ open, onOpenChange }: ConnectionSetti
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[780px] w-full p-0 gap-0 overflow-hidden">
+        <VisuallyHidden>
+          <DialogTitle>POS Terminal Settings</DialogTitle>
+        </VisuallyHidden>
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b">
           <Settings className="h-5 w-5 text-muted-foreground" />

@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
-import type { SaleItem } from './pos-content/pos-types';
-import { mapVatStatusToTaxType as mapTax } from './pos-content/pos-types';
+import type { SaleItem } from '../pos-content/pos-types';
+import { mapVatStatusToTaxType as mapTax } from '../pos-content/pos-types';
 import type { Customer, SystemSettings } from '@/lib/types';
 import type { ViewType, Payment, CompletedSale } from './tender-types';
 
@@ -314,8 +314,8 @@ export function useTender({
         pointsUsedCount: pointsToRedeemCount,
         pointsUsedValue: pointsToRedeemValue,
         pointsBalance: result.data.pointsRemaining,
-        terminalMin: terminalMin || settings?.minNumber,
-        terminalSerialNumber: terminalSerialNumber || settings?.serialNumber,
+        terminalMin: terminalMin ?? settings?.minNumber ?? undefined,
+        terminalSerialNumber: terminalSerialNumber ?? settings?.serialNumber ?? undefined,
         terminalName: terminalName,
         isTrainingMode: isTrainingMode,
         taxBreakdown: {
@@ -418,5 +418,6 @@ export function useTender({
     handleAddPayment,
     handleConfirmPayment,
     getQuickAmounts,
+    pointsRate,
   };
 }

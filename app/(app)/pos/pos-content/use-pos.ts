@@ -9,7 +9,7 @@ import { useLiveRefresh, dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { calculateEffectivePrice } from '@/lib/pricing';
 import { getApiUrl } from '@/lib/api-config';
 import { formatStockQuantity } from '@/lib/utils';
-import { WALK_IN_CUSTOMER } from '../customer-account-dialog';
+import { WALK_IN_CUSTOMER } from '../customer-account/customer-account-types';
 import { type SaleItem, type SuspendedTransaction, mapVatStatusToTaxType } from './pos-types';
 import type { Customer, ZReadingData, SystemSettings } from '@/lib/types';
 

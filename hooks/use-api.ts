@@ -26,6 +26,8 @@ export interface UseSalesInvoicesResult {
 export function useProducts(search?: string, availability?: string, supplierId?: string, warehouseId?: string): UseProductsResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['products', search, availability, supplierId, warehouseId],
+    staleTime: 15 * 1000, // Consider data stale after 15 seconds
+    refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
@@ -94,6 +96,8 @@ export interface UseCustomersResult {
 export function useSalesInvoices(): UseSalesInvoicesResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['salesInvoices'],
+    staleTime: 15 * 1000, // Consider data stale after 15 seconds
+    refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds
     queryFn: async () => {
       const response = await fetch(getApiUrl('/sales'), { cache: 'no-store' });
       if (!response.ok) throw new Error(`API error ${response.status}`);
@@ -111,6 +115,8 @@ export function useSalesInvoices(): UseSalesInvoicesResult {
 export function useCustomers(search?: string): UseCustomersResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['customers', search],
+    staleTime: 20 * 1000, // Consider data stale after 20 seconds
+    refetchInterval: 45 * 1000, // Auto-refetch every 45 seconds
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
@@ -155,6 +161,8 @@ export interface UsePaymentMethodsResult {
 export function usePaymentMethods(search?: string): UsePaymentMethodsResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['paymentMethods', search],
+    staleTime: 30 * 1000, // Consider data stale after 30 seconds
+    refetchInterval: 60 * 1000, // Auto-refetch every 60 seconds
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
@@ -195,6 +203,8 @@ export interface UsePurchaseOrdersResult {
 export function usePurchaseOrders(search?: string, status?: string, page: number = 1, limit: number = 10, startDate?: string, endDate?: string, supplierId?: string): UsePurchaseOrdersResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['purchaseOrders', search, status, page, limit, startDate, endDate, supplierId],
+    staleTime: 20 * 1000, // Consider data stale after 20 seconds
+    refetchInterval: 60 * 1000, // Auto-refetch every 60 seconds
     queryFn: async () => {
       const offset = (page - 1) * limit;
       const params = new URLSearchParams();
@@ -245,6 +255,8 @@ export interface UseBusinessProfileResult {
 export function useBusinessProfile(): UseBusinessProfileResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['businessProfile'],
+    staleTime: 60 * 1000, // Consider data stale after 60 seconds (settings change less frequently)
+    refetchInterval: 120 * 1000, // Auto-refetch every 2 minutes
     queryFn: async () => {
       const response = await fetch(getApiUrl('/pos-settings'), { cache: 'no-store' });
       if (!response.ok) throw new Error(`API error ${response.status}`);
@@ -275,6 +287,8 @@ export interface UseBadOrdersResult {
 export function useBadOrders(search?: string, status?: string, page: number = 1, limit: number = 10): UseBadOrdersResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['badOrders', search, status, page, limit],
+    staleTime: 20 * 1000, // Consider data stale after 20 seconds
+    refetchInterval: 60 * 1000, // Auto-refetch every 60 seconds
     queryFn: async () => {
       const offset = (page - 1) * limit;
       const params = new URLSearchParams();
@@ -318,6 +332,8 @@ export interface BadOrderStatsData {
 export function useBadOrderStats() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['badOrderStats'],
+    staleTime: 20 * 1000, // Consider data stale after 20 seconds
+    refetchInterval: 60 * 1000, // Auto-refetch every 60 seconds
     queryFn: async () => {
       const response = await fetch(getApiUrl('/bad-orders/stats'), { cache: 'no-store' });
       if (!response.ok) throw new Error(`API error ${response.status}`);
@@ -357,6 +373,8 @@ export interface UseSuppliersResult {
 export function useSuppliers(search?: string, page: number = 1, limit: number = 100): UseSuppliersResult {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['suppliers', search, page, limit],
+    staleTime: 30 * 1000, // Consider data stale after 30 seconds
+    refetchInterval: 120 * 1000, // Auto-refetch every 2 minutes
     queryFn: async () => {
       const offset = (page - 1) * limit;
       const params = new URLSearchParams();

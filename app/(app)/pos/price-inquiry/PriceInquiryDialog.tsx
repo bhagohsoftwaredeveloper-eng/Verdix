@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useEffect, useState } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -34,6 +35,43 @@ export function PriceInquiryDialog({
     activeLevelId,
   });
 
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen || loading || products.length === 0) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? 0 : (prev + 1) % products.length));
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? products.length - 1 : (prev - 1 + products.length) % products.length));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (highlightedIndex !== null) {
+            handleSelect(products[highlightedIndex].id);
+          }
+          break;
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, products, highlightedIndex, loading, handleSelect]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setHighlightedIndex(null);
+    }
+  }, [isOpen]);
+
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="sm:max-w-4xl w-full p-0 flex flex-col gap-0">
@@ -54,24 +92,27 @@ export function PriceInquiryDialog({
                 onValueChange={setSearchTerm}
                 autoFocus
               />
-              <CommandList className="flex-1 max-h-none">
+              <CommandList className="flex-1 max-h-none" ref={listRef}>
                 {loading && <div className="p-4 text-center text-muted-foreground">Loading products...</div>}
                 {error && <div className="p-4 text-center text-destructive">{error}</div>}
                 {!loading && !error && (
                   <>
                     <CommandEmpty>No products found.</CommandEmpty>
                     <CommandGroup>
-                      {products.map((product) => {
+                      {products.map((product, index) => {
                         const isActive = selectedProduct?.id === product.id;
+                        const isHighlighted = highlightedIndex !== null && index === highlightedIndex;
                         return (
                           <CommandItem
                             key={product.id}
                             value={`${product.name} ${product.barcode || product.sku}`}
                             onSelect={() => handleSelect(product.id)}
-                            className={`flex items-center justify-between cursor-pointer p-3 ${isActive ? 'bg-primary/10 data-[selected=true]:bg-primary/10' : ''}`}
+                            className={`flex items-center justify-between cursor-pointer p-3 data-[selected]:bg-transparent ${
+                              isHighlighted ? 'bg-primary/20 ring-2 ring-primary' : isActive ? 'bg-primary/10' : ''
+                            }`}
                           >
                             <div className="min-w-0">
-                              <p className={`font-medium truncate ${isActive ? 'text-primary' : ''}`}>{product.name}</p>
+                              <p className={`font-medium truncate ${isActive || isHighlighted ? 'text-primary' : ''}`}>{product.name}</p>
                               <p className="text-sm text-muted-foreground truncate">{product.barcode || product.sku} • {product.unitOfMeasure}</p>
                             </div>
                             {isActive && <Tag className="h-4 w-4 text-primary shrink-0" />}

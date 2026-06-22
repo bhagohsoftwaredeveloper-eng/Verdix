@@ -1,6 +1,7 @@
 ﻿
 'use client';
 
+import { useRef, useEffect, useState } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -35,6 +36,28 @@ const peso = (n: number) => `₱${(n || 0).toLocaleString('en-US', { minimumFrac
 
 function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError }: { sale: Sale, onVoidTransaction: () => void, onBack: () => void, isVoiding: boolean, voidError?: string }) {
     const itemCount = sale.items.reduce((a, i) => a + i.quantity, 0);
+
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (isVoiding) return;
+
+        switch (e.key) {
+          case 'Enter':
+            e.preventDefault();
+            onVoidTransaction();
+            break;
+          case 'Backspace':
+          case 'Escape':
+            e.preventDefault();
+            onBack();
+            break;
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isVoiding, onVoidTransaction, onBack]);
+
     return (
         <div className="flex h-full flex-col">
             {/* Header */}
@@ -142,12 +165,13 @@ function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError
 }
 
 // Compact selectable row used in the "recent transactions" quick-pick lists
-function TransactionPickRow({ sale, onPick, accent = 'primary' }: { sale: any, onPick: (s: any) => void, accent?: 'primary' | 'rose' }) {
+function TransactionPickRow({ sale, onPick, accent = 'primary', isHighlighted = false }: { sale: any, onPick: (s: any) => void, accent?: 'primary' | 'rose', isHighlighted?: boolean }) {
     const hover = accent === 'rose' ? 'hover:bg-rose-50 dark:hover:bg-rose-950/30' : 'hover:bg-primary/5';
+    const highlightClass = isHighlighted ? 'bg-rose-100/50 dark:bg-rose-950/50 ring-2 ring-rose-500' : '';
     return (
         <button
             onClick={() => onPick(sale)}
-            className={`group flex w-full items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left transition-colors ${hover}`}
+            className={`group flex w-full items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left transition-colors ${hover} ${highlightClass}`}
         >
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -187,6 +211,44 @@ export function VoidSalesDialog(props: VoidSalesDialogProps) {
     handleVoidTransaction,
     handleBackToSearch,
   } = useVoidSales({ isOpen, onOpenChange });
+
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen || step !== 'input_so' || isRecentLoading || selectedSale) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          if (recentSales.length === 0) return;
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? 0 : (prev + 1) % recentSales.length));
+          break;
+        case 'ArrowUp':
+          if (recentSales.length === 0) return;
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? recentSales.length - 1 : (prev - 1 + recentSales.length) % recentSales.length));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (highlightedIndex !== null) {
+            handlePickSale(recentSales[highlightedIndex]);
+          }
+          break;
+      }
+    };
+
+    if (isOpen && step === 'input_so') {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, step, recentSales, highlightedIndex, isRecentLoading, selectedSale, handlePickSale]);
+
+  useEffect(() => {
+    if (!isOpen || step !== 'input_so') {
+      setHighlightedIndex(null);
+    }
+  }, [isOpen, step]);
 
   return (
     <>
@@ -250,8 +312,8 @@ export function VoidSalesDialog(props: VoidSalesDialogProps) {
                                     <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                                 </div>
                             ) : recentSales.length > 0 ? (
-                                recentSales.map((sale: any) => (
-                                    <TransactionPickRow key={sale.id} sale={sale} onPick={handlePickSale} accent="rose" />
+                                recentSales.map((sale: any, index: number) => (
+                                    <TransactionPickRow key={sale.id} sale={sale} onPick={handlePickSale} accent="rose" isHighlighted={highlightedIndex === index} />
                                 ))
                             ) : (
                                 <div className="p-6 text-center text-sm text-muted-foreground">No recent transactions.</div>

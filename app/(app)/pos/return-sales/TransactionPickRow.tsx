@@ -9,13 +9,16 @@ import { peso } from './return-sales-utils';
 interface TransactionPickRowProps {
   sale: Sale;
   onPick: (s: Sale) => void;
+  isHighlighted?: boolean;
 }
 
-export function TransactionPickRow({ sale, onPick }: TransactionPickRowProps) {
+export function TransactionPickRow({ sale, onPick, isHighlighted = false }: TransactionPickRowProps) {
   return (
     <button
       onClick={() => onPick(sale)}
-      className="group flex w-full items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-primary/5"
+      className={`group flex w-full items-center gap-3 border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-primary/5 ${
+        isHighlighted ? 'bg-primary/20 ring-2 ring-primary' : ''
+      }`}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

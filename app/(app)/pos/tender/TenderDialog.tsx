@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import {
     Sheet,
     SheetContent,
@@ -24,7 +24,7 @@ import type { SaleItem } from '../pos-content/pos-types';
 import type { SystemSettings } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useReactToPrint } from 'react-to-print';
-import { ReceiptView } from './receipt-view';
+import { ReceiptView } from '../receipt/ReceiptView';
 import { usePrinter } from '@/lib/use-printer';
 import { ReceiptGenerator } from '@/lib/receipt-generator';
 import { useTender } from './use-tender';
@@ -66,7 +66,7 @@ function ReceiptActionView({
 
 
 export function TenderDialog(props: TenderDialogProps) {
-    const { isOpen, onOpenChange, printMode, settings } = props;
+    const { isOpen, onOpenChange, printMode, settings, customer, totalDue, paymentMethods, onTriggerCustomerSelection } = props;
     const { isPrinting, isConnected, connect, print } = usePrinter(printMode, settings?.nativePrinterName);
     const {
         selectedMethod,
@@ -86,14 +86,18 @@ export function TenderDialog(props: TenderDialogProps) {
         pointsInputRef,
         isCashPayment,
         isChargePayment,
+        customerPoints,
         pointsToRedeemValue,
         pointsToRedeemCount,
+        amountTenderedNum,
+        totalAddedPayments,
         balanceRemaining,
         change,
         isReferenceRequired,
         handleAddPayment,
         handleConfirmPayment,
         getQuickAmounts,
+        pointsRate,
     } = useTender(props);
 
 
@@ -168,7 +172,7 @@ export function TenderDialog(props: TenderDialogProps) {
 
         if (shouldPrint) {
             await handlePrintReceipt(completedSale);
-            
+
             // If the setting is enabled, print a second copy
             if (settings?.printTwoReceipts) {
                 // Short delay to allow the printer/buffer to breathe
@@ -178,11 +182,11 @@ export function TenderDialog(props: TenderDialogProps) {
 
             // Small delay to ensure print command is sent
             setTimeout(() => {
-                onSuccess(selectedMethod, totalDue);
+                props.onSuccess(selectedMethod, props.totalDue);
                 onOpenChange(false);
             }, 500);
         } else {
-            onSuccess(selectedMethod, totalDue);
+            props.onSuccess(selectedMethod, props.totalDue);
             onOpenChange(false);
         }
     };
@@ -196,14 +200,9 @@ export function TenderDialog(props: TenderDialogProps) {
     useEffect(() => {
         if (isOpen) {
             setView('tender');
-            setCompletedSale(null);
-            setIsProcessing(false);
-            setPointsToRedeemInput(''); 
-            setAmountTendered(totalDue.toFixed(2));
-            setReferenceInput('');
-            // Auto-confirm removed to allow amount entry for all methods
+            // Hook manages initialization already
         }
-    }, [isOpen]);
+    }, [isOpen, setView]);
 
     const handleQuickAmount = (amount: number) => {
         setAmountTendered(amount.toString());
@@ -282,25 +281,6 @@ export function TenderDialog(props: TenderDialogProps) {
         }
     };
 
-    const getQuickAmounts = (total: number) => {
-        const amounts = new Set<number>();
-        amounts.add(Math.ceil(total));
-        if (total < 50) {
-            amounts.add(50);
-            amounts.add(100);
-        } else if (total < 100) {
-            amounts.add(Math.ceil(total / 50) * 50);
-            amounts.add(Math.ceil(total / 50) * 50 + 50);
-        } else if (total < 1000) {
-            amounts.add(Math.ceil(total / 100) * 100);
-            amounts.add(Math.ceil(total / 100) * 100 + 100);
-        }
-        amounts.add(1000);
-
-        return Array.from(amounts).filter(a => a >= total).sort((a, b) => a - b).slice(0, 4);
-    }
-
-    const amountTenderedFloat = parseFloat(amountTendered) || 0;
 
     return (
         <Sheet open={isOpen} onOpenChange={onOpenChange}>

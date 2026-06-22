@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ export function ReturnSalesDialog({
   printMode
 }: ReturnSalesDialogProps) {
   const creditSlipRef = useRef<HTMLDivElement>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
 
   const {
     step,
@@ -52,6 +53,42 @@ export function ReturnSalesDialog({
     printMode,
     creditSlipRef,
   });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen || step !== 'input_so' || isRecentLoading || selectedSale) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          if (recentSales.length === 0) return;
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? 0 : (prev + 1) % recentSales.length));
+          break;
+        case 'ArrowUp':
+          if (recentSales.length === 0) return;
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? recentSales.length - 1 : (prev - 1 + recentSales.length) % recentSales.length));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (highlightedIndex !== null) {
+            handlePickSale(recentSales[highlightedIndex]);
+          }
+          break;
+      }
+    };
+
+    if (isOpen && step === 'input_so') {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, step, recentSales, highlightedIndex, isRecentLoading, selectedSale, handlePickSale]);
+
+  useEffect(() => {
+    if (!isOpen || step !== 'input_so') {
+      setHighlightedIndex(null);
+    }
+  }, [isOpen, step]);
 
   return (
     <>
@@ -120,8 +157,8 @@ export function ReturnSalesDialog({
                       <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                     </div>
                   ) : recentSales.length > 0 ? (
-                    recentSales.map((sale: any) => (
-                      <TransactionPickRow key={sale.id} sale={sale} onPick={handlePickSale} />
+                    recentSales.map((sale: any, index: number) => (
+                      <TransactionPickRow key={sale.id} sale={sale} onPick={handlePickSale} isHighlighted={highlightedIndex === index} />
                     ))
                   ) : (
                     <div className="p-6 text-center text-sm text-muted-foreground">No recent transactions.</div>

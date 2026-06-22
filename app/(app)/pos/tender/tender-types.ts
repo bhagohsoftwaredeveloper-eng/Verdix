@@ -1,4 +1,4 @@
-import type { SaleItem } from './pos-content/pos-types';
+import type { SaleItem } from '../pos-content/pos-types';
 import type { Customer, SystemSettings } from '@/lib/types';
 
 export interface TenderDialogProps {

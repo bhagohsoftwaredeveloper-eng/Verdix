@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,6 +20,7 @@ interface SelectItemsViewProps {
 export function SelectItemsView({ sale, onReturnItems, onBack }: SelectItemsViewProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
 
   const handleItemToggle = (item: SaleItem) => {
     const itemId = item.product.id;
@@ -56,6 +57,49 @@ export function SelectItemsView({ sale, onReturnItems, onBack }: SelectItemsView
 
     onReturnItems(itemsToReturn);
   };
+
+  // Move keyboard handler after handleConfirmReturn is defined
+  const handleKeyboardConfirmReturn = () => {
+    if (selectedItems.size > 0) {
+      handleConfirmReturn();
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? 0 : (prev + 1) % sale.items.length));
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? sale.items.length - 1 : (prev - 1 + sale.items.length) % sale.items.length));
+          break;
+        case ' ':
+        case 'Space':
+          e.preventDefault();
+          if (highlightedIndex !== null) {
+            handleItemToggle(sale.items[highlightedIndex]);
+          }
+          break;
+        case 'Enter':
+          if (selectedItems.size > 0) {
+            e.preventDefault();
+            handleKeyboardConfirmReturn();
+          }
+          break;
+        case 'Backspace':
+        case 'Escape':
+          e.preventDefault();
+          onBack();
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItems, highlightedIndex, handleConfirmReturn, onBack, sale.items]);
 
   const allSelected = sale.items.length > 0 && selectedItems.size === sale.items.length;
 
@@ -113,10 +157,13 @@ export function SelectItemsView({ sale, onReturnItems, onBack }: SelectItemsView
           {sale.items.map((item, index) => {
             const checked = selectedItems.has(item.product.id);
             const rQty = returnQuantities[item.product.id] || item.quantity;
+            const isHighlighted = highlightedIndex === index;
             return (
               <div
                 key={index}
-                className={`flex items-center gap-3 border-b border-border/50 px-3 py-3 transition-colors ${checked ? 'bg-amber-50/60 dark:bg-amber-950/20' : 'hover:bg-muted/40'}`}
+                className={`flex items-center gap-3 border-b border-border/50 px-3 py-3 transition-colors ${
+                  isHighlighted ? 'bg-amber-100/70 dark:bg-amber-950/40 ring-2 ring-amber-500' : checked ? 'bg-amber-50/60 dark:bg-amber-950/20' : 'hover:bg-muted/40'
+                }`}
               >
                 <Checkbox checked={checked} onCheckedChange={() => handleItemToggle(item)} />
                 <div className="min-w-0 flex-1 cursor-pointer" onClick={() => handleItemToggle(item)}>

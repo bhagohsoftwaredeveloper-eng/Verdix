@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getApiUrl } from '@/lib/api-config';
 import { usePrinter } from '@/lib/use-printer';
 import { OverallReadingGenerator } from '@/lib/overall-reading-generator';
-import { OverallReadingPreview, OverallReadingData } from '../sales/overall-reading/overall-reading-preview';
+import { OverallReadingPreview, OverallReadingData } from '../../sales/overall-reading/overall-reading-preview';
 
 type Props = {
   isOpen: boolean;

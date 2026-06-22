@@ -1,14 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
 import {
-  ColumnDef,
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
-  SortingState,
   useReactTable,
-  PaginationState,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -22,23 +18,10 @@ import { Button } from '@/components/ui/button';
 import { Customer } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Pencil, Trash2, MoreHorizontal, CreditCard,
-  ArrowUpDown, ArrowUp, ArrowDown,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { logActivity } from '@/lib/client-activity-logger';
 import { AddLoyaltyCardDialog } from '../../customer/loyalty/add-loyalty-card-dialog';
 import EditCustomerDialog, { CustomerFormValues } from './edit-customer-dialog';
-import { getApiUrl } from '@/lib/api-config';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -56,6 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useCustomerList } from './use-customer-list';
 
 interface CustomerListProps {
   customers: Customer[];
@@ -67,12 +51,6 @@ interface CustomerListProps {
   onPageChange?: (page: number) => void;
   itemsPerPage?: number;
   onItemsPerPageChange?: (limit: number) => void;
-}
-
-function SortIcon({ isSorted }: { isSorted: false | 'asc' | 'desc' }) {
-  if (isSorted === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5" />;
-  if (isSorted === 'desc') return <ArrowDown className="ml-1 h-3.5 w-3.5" />;
-  return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50" />;
 }
 
 function CustomerSkeleton({ colCount }: { colCount: number }) {
@@ -98,206 +76,36 @@ export default function CustomerList({
   itemsPerPage = 10,
   onItemsPerPageChange,
 }: CustomerListProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [loyaltyCustomer, setLoyaltyCustomer] = useState<Customer | null>(null);
-  const [isLoyaltyDialogOpen, setIsLoyaltyDialogOpen] = useState(false);
-  const [isCheckingTransactions, setIsCheckingTransactions] = useState(false);
-  const [hasTransactions, setHasTransactions] = useState(false);
-  const [transactionTypes, setTransactionTypes] = useState<string[]>([]);
-  const { toast } = useToast();
-
-  const checkTransactions = async (customer: Customer) => {
-    try {
-      setIsCheckingTransactions(true);
-      const response = await fetch(getApiUrl(`/customers/${customer.id}/check-transactions`));
-      if (!response.ok) throw new Error(`API error ${response.status}`);
-      const result = await response.json();
-      if (result.success) {
-        setHasTransactions(result.hasTransactions);
-        setTransactionTypes(result.transactionTypes || []);
-      }
-    } catch (error) {
-      console.error('Error checking transactions:', error);
-    } finally {
-      setIsCheckingTransactions(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!deletingCustomer) return;
-    try {
-      await onDeleteCustomer(deletingCustomer.id);
-      await logActivity({
-        action: 'DELETE',
-        module: 'CUSTOMERS',
-        description: `Deleted customer: "${deletingCustomer.name}" (ID: ${deletingCustomer.id})`,
-        referenceId: deletingCustomer.id,
-      });
-      toast({
-        title: 'Customer Deleted',
-        description: `Customer "${deletingCustomer.name}" has been deleted.`,
-      });
-      setIsDeleteDialogOpen(false);
-      setDeletingCustomer(null);
-    } catch (error: any) {
-      console.error('Error deleting customer: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.message || 'Failed to delete customer. Please try again.',
-      });
-    }
-  };
-
-  const customerWithLoyalty = loyaltyCustomer
-    ? {
-        ...loyaltyCustomer,
-        loyaltyPoints: loyaltyCustomer.loyaltyPoints || 0,
-        lastTransaction: (loyaltyCustomer as any).lastTransaction || '',
-        expiryDate: (loyaltyCustomer as any).expiryDate || '',
-        pointSetting: (loyaltyCustomer as any).pointSetting || '',
-      }
-    : undefined;
-
-  const columns = useMemo<ColumnDef<Customer>[]>(() => [
-    {
-      accessorKey: 'name',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-3 h-8 font-semibold"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Name
-          <SortIcon isSorted={column.getIsSorted()} />
-        </Button>
-      ),
-      cell: ({ getValue }) => <span className="font-medium">{getValue<string>()}</span>,
-    },
-    {
-      accessorKey: 'contactNumber',
-      header: 'Contact No.',
-      cell: ({ getValue }) => getValue<string>() || '-',
-    },
-    {
-      accessorKey: 'paymentTerms',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-3 h-8 font-semibold"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Payment Terms
-          <SortIcon isSorted={column.getIsSorted()} />
-        </Button>
-      ),
-      cell: ({ getValue }) => getValue<string>() || '-',
-    },
-    {
-      accessorKey: 'address',
-      header: 'Address',
-      cell: ({ getValue }) => getValue<string>() || '-',
-    },
-    {
-      accessorKey: 'billingAddress',
-      header: 'Billing Address',
-      cell: ({ getValue }) => getValue<string>() || '-',
-    },
-    {
-      accessorKey: 'discount',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-3 h-8 font-semibold"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Discount (%)
-          <SortIcon isSorted={column.getIsSorted()} />
-        </Button>
-      ),
-      cell: ({ getValue }) => `${getValue<number>()}%`,
-    },
-    {
-      accessorKey: 'creditLimit',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-3 h-8 font-semibold"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Credit Limit
-          <SortIcon isSorted={column.getIsSorted()} />
-        </Button>
-      ),
-      cell: ({ getValue }) =>
-        `₱${Number(getValue<number>() || 0).toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`,
-    },
-    {
-      id: 'actions',
-      header: () => <span className="sr-only">Actions</span>,
-      enableSorting: false,
-      cell: ({ row }) => {
-        const customer = row.original;
-        return (
-          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => {
-                    setEditingCustomer(customer);
-                    setIsEditDialogOpen(true);
-                  }}
-                >
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit Customer
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    setLoyaltyCustomer(customer);
-                    setIsLoyaltyDialogOpen(true);
-                  }}
-                >
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Add Loyalty Card
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => {
-                    setDeletingCustomer(customer);
-                    setIsDeleteDialogOpen(true);
-                    checkTransactions(customer);
-                  }}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Customer
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        );
-      },
-    },
-  ], []);
+  const {
+    sorting,
+    setSorting,
+    editingCustomer,
+    isEditDialogOpen,
+    setIsEditDialogOpen,
+    deletingCustomer,
+    setDeletingCustomer,
+    isDeleteDialogOpen,
+    setIsDeleteDialogOpen,
+    loyaltyCustomer,
+    isLoyaltyDialogOpen,
+    setIsLoyaltyDialogOpen,
+    isCheckingTransactions,
+    hasTransactions,
+    transactionTypes,
+    columns,
+    customerWithLoyalty,
+    handleDelete,
+  } = useCustomerList({
+    customers,
+    isLoading,
+    onUpdateCustomer,
+    onDeleteCustomer,
+    totalCount,
+    currentPage,
+    onPageChange,
+    itemsPerPage,
+    onItemsPerPageChange,
+  });
 
   const pageCount = Math.ceil(totalCount / itemsPerPage);
 
@@ -314,7 +122,9 @@ export default function CustomerList({
     pageCount,
     manualPagination: true,
     manualFiltering: true,
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      setSorting(typeof updater === 'function' ? updater(sorting) : updater);
+    },
     onPaginationChange: (updater) => {
       const next =
         typeof updater === 'function'

@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import { useRef, useEffect, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -39,6 +40,79 @@ export function RecentSalesDialog({
     initialSettings,
   });
 
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const filteredSales = recentSales.filter((sale: any) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    const soNumber = sale.orderNumber?.toString().toLowerCase() || '';
+    const saleId = sale.id?.substring(0, 7).toLowerCase() || '';
+    const customerName = sale.customer?.name?.toLowerCase() || '';
+
+    return soNumber.includes(term) || saleId.includes(term) || customerName.includes(term);
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen || isLoading) return;
+
+      // When viewing receipt preview
+      if (saleToPrint) {
+        switch (e.key) {
+          case 'Enter':
+            e.preventDefault();
+            handlePrintReceiptAction(saleToPrint);
+            break;
+          case 'Escape':
+            e.preventDefault();
+            handleBackToList();
+            break;
+        }
+        return;
+      }
+
+      // When in transaction list view
+      if (step !== 'list') return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          if (selectedSale) return;
+          if (filteredSales.length === 0) return;
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? 0 : (prev + 1) % filteredSales.length));
+          break;
+        case 'ArrowUp':
+          if (selectedSale) return;
+          if (filteredSales.length === 0) return;
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev === null ? filteredSales.length - 1 : (prev - 1 + filteredSales.length) % filteredSales.length));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (selectedSale) {
+            handlePrintReceipt(selectedSale);
+          } else if (highlightedIndex !== null) {
+            setSelectedSale(filteredSales[highlightedIndex]);
+          }
+          break;
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, step, filteredSales, highlightedIndex, isLoading, selectedSale, saleToPrint, setSelectedSale, handlePrintReceipt, handlePrintReceiptAction, handleBackToList]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setHighlightedIndex(null);
+      setSearchTerm('');
+    }
+  }, [isOpen]);
+
   return (
     <>
       <Sheet open={isOpen && (step === 'list')} onOpenChange={handleOpenChange}>
@@ -68,21 +142,36 @@ export function RecentSalesDialog({
 
               <div className="mt-4 flex flex-1 gap-4 overflow-hidden">
                 <div className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-xl border">
-                  <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 shrink-0">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transactions</span>
-                    {!isLoading && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{recentSales.length}</span>}
+                  <div className="flex flex-col border-b bg-muted/40 px-3 py-2 shrink-0 gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transactions</span>
+                      {!isLoading && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{filteredSales.length}/{recentSales.length}</span>}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search by SO #, Transaction #..."
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setHighlightedIndex(null);
+                      }}
+                      className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
                   </div>
-                  <ScrollArea className="flex-1">
+                  <ScrollArea className="flex-1" ref={scrollAreaRef}>
                     {isLoading ? (
                       <div className="p-4 text-center text-sm text-muted-foreground">Loading recent sales...</div>
-                    ) : recentSales && recentSales.length > 0 ? (
-                      recentSales.map((sale: any) => {
+                    ) : filteredSales && filteredSales.length > 0 ? (
+                      filteredSales.map((sale: any, index: number) => {
                         const isActive = selectedSale?.id === sale.id;
+                        const isHighlighted = highlightedIndex !== null && index === highlightedIndex;
                         return (
                           <button
                             key={sale.id}
                             onClick={() => setSelectedSale(sale)}
-                            className={`w-full border-b border-border/50 px-3 py-2.5 text-left transition-colors ${isActive ? 'bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent hover:bg-muted/50'}`}
+                            className={`w-full border-b border-border/50 px-3 py-2.5 text-left transition-colors ${
+                              isHighlighted ? 'bg-primary/20 ring-2 ring-inset ring-primary border-l-2 border-l-primary' : isActive ? 'bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent hover:bg-muted/50'
+                            }`}
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span className="truncate font-mono text-sm font-semibold">{sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7)}</span>
@@ -101,7 +190,9 @@ export function RecentSalesDialog({
                         );
                       })
                     ) : (
-                      <div className="p-4 text-center text-sm text-muted-foreground">No recent sales found.</div>
+                      <div className="p-4 text-center text-sm text-muted-foreground">
+                        {searchTerm ? 'No transactions match your search.' : 'No recent sales found.'}
+                      </div>
                     )}
                   </ScrollArea>
                 </div>

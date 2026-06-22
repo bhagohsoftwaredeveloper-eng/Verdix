@@ -24,7 +24,10 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
   const [isVoiding, setIsVoiding] = useState(false);
   const [voidError, setVoidError] = useState('');
   const authSucceededRef = useRef(false);
-  const { print } = usePrinter(posSettings?.printMode || 'browser', posSettings?.nativePrinterName);
+  const printMode = (posSettings?.printMode && posSettings.printMode !== 'none'
+    ? posSettings.printMode
+    : 'browser') as 'browser' | 'escpos' | 'usb' | 'native' | 'epson';
+  const { print } = usePrinter(printMode, posSettings?.nativePrinterName);
 
   useEffect(() => {
     if (isOpen) {
@@ -114,7 +117,7 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
       if (!posSettings || posSettings.printMode === 'none') return;
 
       const generator = new VoidSlipGenerator();
-      const buffer = generator.generateVoidSlip(saleData, posSettings);
+      const buffer = generator.generateVoidSlip(saleData, posSettings as any);
 
       await print(buffer);
     } catch (error) {
