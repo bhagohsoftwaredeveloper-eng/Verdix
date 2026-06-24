@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { v4 as uuidv4 } from 'uuid';
 import { query } from '../../../lib/mysql';
 import { MySqlWarehouseRepository } from '../../../src/infrastructure/repositories/MySqlWarehouseRepository';
 import { GetWarehousesUseCase } from '../../../src/core/warehouses/application/GetWarehousesUseCase';

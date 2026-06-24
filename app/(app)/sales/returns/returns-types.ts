@@ -1,6 +1,6 @@
 export interface ReturnRecord {
-  soNo: string;
-  orNo: string;
+  origSiNo: string;
+  currSiNo: string;
   transDate: string;
   soldByCashier: string;
   returnedDate: string;

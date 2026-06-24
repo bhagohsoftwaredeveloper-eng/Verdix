@@ -1,6 +1,6 @@
 import type { Sale } from '@/lib/types';
 
-export type OrderDialogMode = 'order' | 'delivery-note';
+export type OrderDialogMode = 'order' | 'delivery-note' | 'invoice';
 
 export interface POSSettings {
   businessName?: string;
@@ -8,6 +8,7 @@ export interface POSSettings {
   address?: string;
   contactNumber?: string;
   tin?: string;
+  salesOrderTerms?: string;
 }
 
 export interface OrderDetailsDialogProps {

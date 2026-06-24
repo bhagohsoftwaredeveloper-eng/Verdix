@@ -1,5 +1,6 @@
 'use client';
 
+import { forwardRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, CreditCard, Users } from 'lucide-react';
@@ -10,11 +11,14 @@ import { ManageSalesPersonsDialog } from './manage-sales-persons/ManageSalesPers
 
 interface Props { onRefresh: () => void; }
 
-const ManageBtn = () => (
-  <Button variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80">
-    <span className="text-xs font-medium">Manage</span>
-  </Button>
+const ManageBtn = forwardRef<HTMLButtonElement, React.ComponentProps<typeof Button>>(
+  (props, ref) => (
+    <Button ref={ref} variant="ghost" size="sm" className="h-8 px-2 text-primary hover:text-primary/80" {...props}>
+      <span className="text-xs font-medium">Manage</span>
+    </Button>
+  )
 );
+ManageBtn.displayName = 'ManageBtn';
 
 export function DataManagementGrid({ onRefresh }: Props) {
   return (

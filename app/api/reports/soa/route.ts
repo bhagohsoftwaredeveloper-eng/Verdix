@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const prevInvoicesSql = `
         SELECT SUM(total) as total
         FROM sales_invoices
-        WHERE customer_id = ? AND invoice_date < ? AND status != 'Void'
+        WHERE customer_id = ? AND DATE(invoice_date) < DATE(?) AND status != 'Void'
     `;
     
     const [prevInvResult]: any = await query(prevInvoicesSql, [customerId, fromDate]);
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const prevPaymentsSql = `
         SELECT SUM(amount) as total
         FROM customer_payments
-        WHERE customer_id = ? AND payment_date < ? AND UPPER(payment_type) != 'CHARGE'
+        WHERE customer_id = ? AND DATE(payment_date) < DATE(?) AND UPPER(payment_type) != 'CHARGE'
     `;
     const [prevPayResult]: any = await query(prevPaymentsSql, [customerId, fromDate]);
     const prevPaymentsTotal = parseFloat(prevPayResult?.total || 0);
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
             status,
             notes as description
         FROM sales_invoices
-        WHERE customer_id = ? AND invoice_date BETWEEN ? AND ? AND status != 'Void'
+        WHERE customer_id = ? AND DATE(invoice_date) BETWEEN DATE(?) AND DATE(?) AND status != 'Void'
     `;
     const invoices: any[] = await query(invoicesSql, [customerId, fromDate, toDate]);
 
@@ -69,7 +69,8 @@ export async function GET(request: NextRequest) {
             CASE WHEN UPPER(cp.payment_type) = 'CHARGE' THEN 0 ELSE cp.amount END as credit,
             cp.note
         FROM customer_payments cp
-        WHERE cp.customer_id = ? AND cp.payment_date BETWEEN ? AND ?
+        WHERE cp.customer_id = ? AND DATE(cp.payment_date) BETWEEN DATE(?) AND DATE(?)
+          AND UPPER(cp.payment_type) != 'CHARGE'
     `;
     const payments: any[] = await query(paymentsSql, [customerId, fromDate, toDate]);
 

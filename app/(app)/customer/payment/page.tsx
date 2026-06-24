@@ -89,8 +89,9 @@ function OutstandingInvoices() {
             setIsLoadingInvoices(true);
             const params = new URLSearchParams();
             if (searchCustomer) params.append('search', searchCustomer);
-            if (dateRange.from) params.append('from', dateRange.from.toISOString());
-            if (dateRange.to) params.append('to', dateRange.to.toISOString());
+            // Plain local date (yyyy-MM-dd) — toISOString() shifts the day back in non-UTC timezones.
+            if (dateRange.from) params.append('from', format(dateRange.from, 'yyyy-MM-dd'));
+            if (dateRange.to) params.append('to', format(dateRange.to, 'yyyy-MM-dd'));
             params.append('page', pagination.currentPage.toString());
             params.append('limit', pagination.pageSize.toString());
 
@@ -283,8 +284,9 @@ function PaymentHistory() {
             setIsLoading(true);
             const params = new URLSearchParams();
             if (search) params.append('search', search);
-            if (date?.from) params.append('from', date.from.toISOString());
-            if (date?.to) params.append('to', date.to.toISOString());
+            // Plain local date (yyyy-MM-dd) — toISOString() shifts the day back in non-UTC timezones.
+            if (date?.from) params.append('from', format(date.from, 'yyyy-MM-dd'));
+            if (date?.to) params.append('to', format(date.to, 'yyyy-MM-dd'));
             if (paymentType && paymentType !== 'All') params.append('paymentType', paymentType);
             params.append('page', pagination.currentPage.toString());
             params.append('limit', pagination.pageSize.toString());
@@ -332,8 +334,9 @@ function PaymentHistory() {
         try {
             const params = new URLSearchParams();
             if (search) params.append('search', search);
-            if (date?.from) params.append('from', date.from.toISOString());
-            if (date?.to) params.append('to', date.to.toISOString());
+            // Plain local date (yyyy-MM-dd) — toISOString() shifts the day back in non-UTC timezones.
+            if (date?.from) params.append('from', format(date.from, 'yyyy-MM-dd'));
+            if (date?.to) params.append('to', format(date.to, 'yyyy-MM-dd'));
             if (paymentType && paymentType !== 'All') params.append('paymentType', paymentType);
             params.append('page', '1');
             params.append('limit', '1000000'); // Fetch all
@@ -710,8 +713,11 @@ function StatementOfAccount() {
         try {
             const params = new URLSearchParams({
                 customerId: selectedCustomer,
-                from: dateRange.from.toISOString(),
-                to: dateRange.to.toISOString(),
+                // Send plain local date (yyyy-MM-dd), not toISOString(): in non-UTC
+                // timezones toISOString() shifts local midnight back a day (e.g. UTC+8
+                // turns June 23 into June 22), which drops same-day transactions from the SOA.
+                from: format(dateRange.from, 'yyyy-MM-dd'),
+                to: format(dateRange.to, 'yyyy-MM-dd'),
             });
             const res = await fetch(getApiUrl(`/reports/soa?${params.toString()}`));
             if (!res.ok) throw new Error(`API error ${res.status}`);

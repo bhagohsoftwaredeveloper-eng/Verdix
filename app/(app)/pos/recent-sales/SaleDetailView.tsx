@@ -45,8 +45,8 @@ export function SaleDetailView({ sale, onReprint }: SaleDetailViewProps) {
               <Clock className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">SO Number</p>
-              <p className="truncate font-mono text-lg font-bold leading-tight">{sale.orderNumber || sale.id?.substring(0, 8)}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">SI Number</p>
+              <p className="truncate font-mono text-lg font-bold leading-tight">{sale.siNumber ? String(sale.siNumber).padStart(6, '0') : (sale.orderNumber || sale.id?.substring(0, 8))}</p>
             </div>
           </div>
           <div className="text-right shrink-0">

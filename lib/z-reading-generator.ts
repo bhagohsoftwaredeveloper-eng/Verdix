@@ -13,6 +13,7 @@ type BusinessSettings = {
     operatedBy?: string;
     minNumber?: string;
     serialNumber?: string;
+    vatRegistration?: 'VAT' | 'NON_VAT';
     [key: string]: any;
 };
 
@@ -53,7 +54,7 @@ export class ZReadingGenerator {
         enc.line(bizName);
         if (operatedBy) enc.line(`Operated by: ${operatedBy}`);
         enc.line(address);
-        enc.line(`VAT REG TIN: ${tin}`);
+        enc.line(`${settings?.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: ${tin}`);
         enc.line(`MIN: ${minNumber}`);
         enc.line(`S/N: ${serialNumber}`);
         if (data.terminalName) enc.line(`Terminal: ${data.terminalName}`);

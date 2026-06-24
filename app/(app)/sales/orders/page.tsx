@@ -31,7 +31,7 @@ export default function SalesOrdersPage() {
 
   const { data: salesPersons = [] } = useSalesPersonsQuery();
   const { data: customers = [] } = useCustomersQuery();
-  const { deleteMutation, makeDeliveryMutation } = useOrdersMutations();
+  const { deleteMutation, makeDeliveryMutation, makeInvoiceMutation } = useOrdersMutations();
 
   // Edit state
   const [orderToEdit, setOrderToEdit] = useState<Sale | null>(null);
@@ -55,12 +55,26 @@ export default function SalesOrdersPage() {
     setIsOrderDetailsOpen(true);
   };
 
+  const handleMakeInvoice = (sale: Sale) => {
+    makeInvoiceMutation.mutate(sale.id, {
+      onSuccess: (data) => {
+        if (data.data) {
+          setOrderToPrint(data.data);
+          setOrderDialogMode('invoice');
+          setIsOrderDetailsOpen(true);
+        }
+      },
+    });
+  };
+
   const { table, columns } = useOrdersTable({
     sales, sorting, setSorting, columnVisibility, setColumnVisibility, totalPages,
     onViewDetails: handleViewDetails,
     onEdit: (sale) => { setOrderToEdit(sale); setIsEditOpen(true); },
     onDelete: (id) => setOrderToDelete(id),
+    onMakeInvoice: handleMakeInvoice,
     makeDeliveryMutation,
+    makeInvoiceMutation,
   });
 
   return (

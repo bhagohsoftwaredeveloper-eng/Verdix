@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 
 interface SalesTransaction {
   id: string;
@@ -133,158 +133,41 @@ export default function SalesSummaryPage() {
   }, []);
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export. Please fetch the report first.",
-        variant: "destructive"
-      });
+    const subtotalSum = records.reduce((s, r) => s + r.subtotal, 0);
+    const fileName = `Sales_Summary_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
+    const ok = exportReportPdf<SalesTransaction>({
+      title: 'Sales Summary Report',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Transactions', value: String(totals.transactions) },
+        { label: 'Total Revenue', value: formatCurrency(totals.revenue) },
+        { label: 'Total Profit', value: formatCurrency(totals.profit) },
+        { label: 'Avg Transaction', value: formatCurrency(totals.avgTransaction) },
+        { label: 'Total Tax', value: formatCurrency(totals.tax) },
+        { label: 'Total Discount', value: formatCurrency(totals.discount) },
+      ],
+      columns: [
+        { header: 'OR No.', width: 22, cell: (r) => r.orderNumber || 'N/A' },
+        { header: 'Date/Time', width: 28, cell: (r) => r.date ? format(new Date(r.date), 'MM/dd/yy hh:mma') : '-' },
+        { header: 'Customer', width: 30, cell: (r) => r.customer?.name || 'Walk-in' },
+        { header: 'Cashier', width: 25, cell: (r) => r.cashier || 'N/A' },
+        { header: 'Terminal', width: 20, cell: (r) => r.terminal || 'N/A' },
+        { header: 'Payment', width: 20, cell: (r) => r.paymentMethod || 'N/A' },
+        { header: 'Subtotal', width: 20, align: 'right', cell: (r) => r.subtotal.toFixed(2) },
+        { header: 'Discount', width: 18, align: 'right', cell: (r) => r.discount.toFixed(2) },
+        { header: 'Tax', width: 16, align: 'right', cell: (r) => r.taxAmount.toFixed(2) },
+        { header: 'Total', width: 20, align: 'right', cell: (r) => r.total.toFixed(2) },
+        { header: 'Profit', width: 18, align: 'right', cell: (r) => r.profit.toFixed(2) },
+      ],
+      rows: records,
+      totals: ['TOTALS', null, null, null, null, null, subtotalSum.toFixed(2), totals.discount.toFixed(2), totals.tax.toFixed(2), totals.revenue.toFixed(2), totals.profit.toFixed(2)],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export. Please fetch the report first.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      let yPos = margin;
-
-      // Title
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Sales Summary Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      // Date range
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
-      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      // Summary section
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Transactions: ${totals.transactions}`, margin, yPos);
-      doc.text(`Total Revenue: ₱${totals.revenue.toFixed(2)}`, margin + 60, yPos);
-      doc.text(`Total Profit: ₱${totals.profit.toFixed(2)}`, margin + 120, yPos);
-      yPos += 6;
-      doc.text(`Avg Transaction: ₱${totals.avgTransaction.toFixed(2)}`, margin, yPos);
-      doc.text(`Total Tax: ₱${totals.tax.toFixed(2)}`, margin + 60, yPos);
-      doc.text(`Total Discount: ₱${totals.discount.toFixed(2)}`, margin + 120, yPos);
-      yPos += 10;
-
-      // Table headers
-      const headers = ['OR No.', 'Date/Time', 'Customer', 'Cashier', 'Terminal', 'Payment', 'Subtotal', 'Discount', 'Tax', 'Total', 'Profit'];
-      const colWidths = [22, 28, 30, 25, 20, 20, 20, 18, 16, 20, 18];
-      
-      // Draw header background
-      doc.setFillColor(34, 197, 94);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      
-      let xPos = margin;
-      headers.forEach((header, i) => {
-        doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-        xPos += colWidths[i];
-      });
-      yPos += 6;
-
-      // Reset text color for data rows
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-
-      // Table rows
-      records.forEach((record, rowIndex) => {
-        if (yPos > pageHeight - 20) {
-          doc.addPage();
-          yPos = margin;
-          
-          doc.setFillColor(34, 197, 94);
-          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-          doc.setFontSize(7);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(255, 255, 255);
-          xPos = margin;
-          headers.forEach((header, i) => {
-            doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-            xPos += colWidths[i];
-          });
-          yPos += 6;
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(6);
-        }
-
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-
-        xPos = margin;
-        const rowData = [
-          record.orderNumber || 'N/A',
-          record.date ? format(new Date(record.date), 'MM/dd/yy hh:mma') : '-',
-          record.customer?.name || 'Walk-in',
-          record.cashier || 'N/A',
-          record.terminal || 'N/A',
-          record.paymentMethod || 'N/A',
-          record.subtotal.toFixed(2),
-          record.discount.toFixed(2),
-          record.taxAmount.toFixed(2),
-          record.total.toFixed(2),
-          record.profit.toFixed(2),
-        ];
-
-        rowData.forEach((cell, i) => {
-          doc.text(String(cell), xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-      });
-
-      // Totals row
-      yPos += 4;
-      doc.setFillColor(200, 200, 200);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-
-      xPos = margin;
-      colWidths.forEach((width, i) => {
-        if (i === 0) doc.text('TOTALS', xPos + 1, yPos);
-        else if (i === 6) doc.text(totals.revenue.toFixed(2), xPos + 1, yPos);
-        else if (i === 7) doc.text(totals.discount.toFixed(2), xPos + 1, yPos);
-        else if (i === 8) doc.text(totals.tax.toFixed(2), xPos + 1, yPos);
-        else if (i === 9) doc.text(totals.revenue.toFixed(2), xPos + 1, yPos);
-        else if (i === 10) doc.text(totals.profit.toFixed(2), xPos + 1, yPos);
-        xPos += width;
-      });
-
-      const fileName = `Sales_Summary_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "PDF Exported",
-        description: `Report saved as ${fileName}`,
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to generate PDF. Please try again.",
-        variant: "destructive"
-      });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {

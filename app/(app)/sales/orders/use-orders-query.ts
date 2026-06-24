@@ -87,17 +87,16 @@ export function useOrdersMutations() {
 
   const makeDeliveryMutation = useMutation({
     mutationFn: async (sale: Sale) => {
-      const res = await fetch(getApiUrl(`/sales/orders/${sale.id}`), {
-        method: 'PUT',
+      const res = await fetch(getApiUrl(`/sales/orders/${sale.id}/deliver`), {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...sale, status: 'Fully Delivered' }),
       });
       const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Failed to update status');
+      if (!data.success) throw new Error(data.error || 'Failed to deliver order');
       return data;
     },
     onSuccess: () => {
-      toast({ title: 'Order Delivered', description: 'Status updated to Fully Delivered.' });
+      toast({ title: 'Order Delivered', description: 'Stock deducted and status set to Delivered.' });
       queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
     },
     onError: (error: Error) => {
@@ -105,5 +104,25 @@ export function useOrdersMutations() {
     },
   });
 
-  return { deleteMutation, makeDeliveryMutation };
+  const makeInvoiceMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await fetch(getApiUrl('/sales/invoices'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to create invoice');
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: 'Invoice Created', description: 'Invoice has been created successfully.' });
+      queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  return { deleteMutation, makeDeliveryMutation, makeInvoiceMutation };
 }

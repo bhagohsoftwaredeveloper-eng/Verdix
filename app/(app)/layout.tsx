@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Suspense } from 'react';
+import { Store } from 'lucide-react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { WindowControls } from '@/components/window-controls';
@@ -37,7 +38,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <SidebarProvider className="h-screen overflow-hidden">
         <AppSidebar
           user={user}
-          businessName={businessName}
           hasPermission={hasPermission}
           filteredNavItems={filteredNavItems}
           filteredOtherNavItems={filteredOtherNavItems}
@@ -51,7 +51,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <AppBreadcrumbs />
             </div>
             <div className="flex-1" />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {businessName && (
+                <>
+                  <div className="hidden sm:flex items-center gap-2.5 rounded-full border border-border/60 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent py-1.5 pl-2 pr-4 shadow-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary ring-1 ring-primary/20">
+                      <Store className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-sm font-bold tracking-tight text-foreground/90">{businessName}</span>
+                  </div>
+                  <div className="hidden sm:block h-6 w-px bg-border/60" />
+                </>
+              )}
               <NotificationsBell user={user} />
               <WindowControls />
             </div>

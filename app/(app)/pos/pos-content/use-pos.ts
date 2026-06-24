@@ -109,6 +109,7 @@ export function usePOS() {
   const [isHeldTransOpen, setIsHeldTransOpen] = useState(false);
   const [isEndShiftOpen, setIsEndShiftOpen] = useState(false);
   const [isCashTransferOpen, setIsCashTransferOpen] = useState(false);
+  const [isCashTransferPreAuthOpen, setIsCashTransferPreAuthOpen] = useState(false);
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [editingNameItemId, setEditingNameItemId] = useState<string | null>(null);
@@ -481,7 +482,7 @@ export function usePOS() {
       if (e.ctrlKey) {
         switch (e.key) {
           case '1': e.preventDefault(); handleOpenEndShift(); break;
-          case '2': e.preventDefault(); setIsCashTransferOpen(true); break;
+          case '2': e.preventDefault(); handleOpenCashTransfer(); break;
           case '3': e.preventDefault(); setIsCustomerSelectOpen(true); break;
           case '4': e.preventDefault(); handleOpenLoyalty(); break;
           case '5': e.preventDefault(); setIsRecentSalesOpen(true); break;
@@ -918,6 +919,11 @@ export function usePOS() {
     else setIsOverallReadingOpen(true);
   };
 
+  const handleOpenCashTransfer = () => {
+    if (businessSettings?.enableCashTransferAuth) setIsCashTransferPreAuthOpen(true);
+    else setIsCashTransferOpen(true);
+  };
+
   // Chain: X-Reading -> Z-Reading -> Overall Reading after shift end
   useEffect(() => {
     if (!showEndShiftReport && pendingZReading) setIsZReadingOpen(true);
@@ -984,6 +990,8 @@ export function usePOS() {
     isEndShiftOpen, setIsEndShiftOpen,
     startingCash, cashSales, cashDeposits, cashPickups,
     isCashTransferOpen, setIsCashTransferOpen,
+    isCashTransferPreAuthOpen, setIsCashTransferPreAuthOpen,
+    handleOpenCashTransfer,
     isCollisionOpen, collisionShift,
     showEndShiftReport, setShowEndShiftReport,
     lastEndedShiftId,

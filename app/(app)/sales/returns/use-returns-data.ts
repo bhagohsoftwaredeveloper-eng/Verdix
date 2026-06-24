@@ -30,21 +30,25 @@ export function useReturnsData() {
       if (result.success) {
         return result.data
           .filter((tx: any) => tx.transactionType === 'return')
-          .map((tx: any) => ({
-            soNo: tx.originalOrderNumber || 'N/A',
-            orNo: tx.orderNumber || 'N/A',
-            transDate: tx.originalTransactionTime || '',
-            soldByCashier: tx.originalCashierName || 'N/A',
-            returnedDate: tx.date || '',
-            returnedByCashier: tx.cashier || 'N/A',
-            overrideBy: tx.customer?.name || 'admin',
-            salesAmount: Math.abs(tx.total || 0),
-            cost: Math.abs(tx.cost || 0),
-            profit: tx.profit || 0,
-            vatableSales: Math.abs(tx.vatableSales || 0),
-            vatAmount: Math.abs(tx.taxAmount || 0),
-            note: tx.notes || '',
-          }));
+          .map((tx: any) => {
+            const origSiNo = tx.originalSINumber ? String(tx.originalSINumber).padStart(6, '0') : (tx.originalOrderNumber ? String(tx.originalOrderNumber).padStart(6, '0') : 'N/A');
+            const currSiNo = tx.siNumber ? String(tx.siNumber).padStart(6, '0') : (tx.orderNumber ? String(tx.orderNumber).padStart(6, '0') : 'N/A');
+            return {
+              origSiNo,
+              currSiNo,
+              transDate: tx.originalTransactionTime || '',
+              soldByCashier: tx.originalCashierName || 'N/A',
+              returnedDate: tx.date || '',
+              returnedByCashier: tx.cashier || 'N/A',
+              overrideBy: tx.customer?.name || 'admin',
+              salesAmount: Math.abs(tx.total || 0),
+              cost: Math.abs(tx.cost || 0),
+              profit: tx.profit || 0,
+              vatableSales: Math.abs(tx.vatableSales || 0),
+              vatAmount: Math.abs(tx.taxAmount || 0),
+              note: tx.notes || '',
+            };
+          });
       }
       return [];
     },
@@ -91,7 +95,7 @@ export function useReturnsData() {
       );
       yPos += 10;
 
-      const headers = ['SO No.', 'OR No.', 'Trans Date', 'Sold By', 'Return Date', 'Returned By', 'Override By', 'Sales Amt', 'Cost', 'Profit', 'Vatable', 'VAT', 'Note'];
+      const headers = ['Orig SI No.', 'Return SI No.', 'Trans Date', 'Sold By', 'Return Date', 'Returned By', 'Override By', 'Sales Amt', 'Cost', 'Profit', 'Vatable', 'VAT', 'Note'];
       const colWidths = [20, 20, 22, 18, 22, 18, 18, 18, 16, 16, 18, 14, 30];
 
       const drawHeader = () => {
@@ -127,8 +131,8 @@ export function useReturnsData() {
 
         let xPos = margin;
         const rowData = [
-          record.soNo,
-          record.orNo,
+          record.origSiNo,
+          record.currSiNo,
           record.transDate ? format(new Date(record.transDate), 'MMM dd, yyyy') : '-',
           record.soldByCashier,
           record.returnedDate ? format(new Date(record.returnedDate), 'MMM dd, yyyy hh:mma') : '-',

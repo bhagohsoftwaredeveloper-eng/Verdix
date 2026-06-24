@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTransaction, query } from '../../../../lib/mysql';
-import { deductFamilyStock, findUltimateRoot } from '../../../../lib/family-sync';
 
 // Helper function to format ISO date strings to MySQL format
 function formatDateForMySQL(dateValue: string | null | undefined): string | null {
@@ -58,7 +57,8 @@ export async function GET(request: NextRequest) {
         so.note,
         so.payment_reference,
         so.created_at,
-        so.updated_at
+        so.updated_at,
+        (SELECT COUNT(*) FROM sales_invoices si WHERE si.sales_order_id = so.id) as invoice_count
       FROM sales_orders so
       LEFT JOIN customers c ON so.customer_id = c.id
       LEFT JOIN sales_persons sp ON so.sales_person_id = sp.id
@@ -206,6 +206,7 @@ export async function GET(request: NextRequest) {
           items: formattedItems,
           date: row.order_date, // For compatibility with Sale type
           invoiceDate: row.order_date,
+          hasInvoice: Number(row.invoice_count) > 0,
         };
       })
     );
@@ -330,49 +331,9 @@ export async function POST(request: NextRequest) {
           item.quantity,
           item.price
         ]);
-
-        // --- Inventory Check Logic ---
-        // Fetch POS settings to see if negative inventory is allowed
-        const [settingsResult]: any = await connection.query('SELECT enable_negative_inventory FROM pos_settings LIMIT 1');
-        const enableNegativeInventory = settingsResult.length > 0 ? !!settingsResult[0].enable_negative_inventory : false;
-
-        if (!enableNegativeInventory) {
-            // Check stock for the item
-            const [stockResult]: any = await connection.query('SELECT stock, name FROM products WHERE id = ?', [item.product.id]);
-            if (stockResult && stockResult.length > 0) {
-                const currentStock = stockResult[0].stock;
-                if (currentStock < item.quantity) {
-                     throw new Error(`Insufficient stock for product: ${stockResult[0].name}. Current stock: ${currentStock}, Requested: ${item.quantity}`);
-                }
-            }
-        }
-
-        // --- Recursive Inventory Deduction (Full Ancestor + Descendant Hierarchy) ---
-        const [soldProdResult]: any = await connection.query(
-          'SELECT id, parent_id, unit_of_measure, name, stock FROM products WHERE id = ?',
-          [item.product.id]
-        );
-        if (soldProdResult && soldProdResult.length > 0) {
-          const soldProd = soldProdResult[0];
-
-          // Walk ALL the way up the ancestor chain (handles any depth)
-          const { rootId, factorToRoot } = await findUltimateRoot(soldProd.id, connection);
-
-          if (factorToRoot > 1 || rootId !== soldProd.id) {
-            // Sold a non-root item — convert to root units and deduct from root downward
-            const rootQty = item.quantity / factorToRoot;
-            await deductFamilyStock(
-              rootId, rootQty, orderId, 'sale',
-              `Sales Order: ${reference || orderId} (sold: ${soldProd.name})`, connection
-            );
-          } else {
-            // Sold the root — deduct and propagate to all descendants
-            await deductFamilyStock(
-              soldProd.id, item.quantity, orderId, 'sale',
-              `Sales Order: ${reference || orderId}`, connection
-            );
-          }
-        }
+        // NOTE: stock is NOT deducted at order creation. A sales order is a
+        // commitment; inventory is deducted when the order is delivered
+        // (see /sales/orders/[id]/deliver).
       }
 
       return NextResponse.json({

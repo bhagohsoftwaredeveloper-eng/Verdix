@@ -6,14 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Minus, Plus, ArrowLeftRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AdminAuthDialog } from '../admin-auth/AdminAuthDialog';
 import { useCashTransfer } from './use-cash-transfer';
 import type { CashTransferDialogProps } from './cash-transfer-types';
 
 export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, userId }: CashTransferDialogProps) {
   const {
-    form, isSubmitting, transferType, setTransferType,
-    isAuthDialogOpen, setIsAuthDialogOpen, handleAdminAuthSuccess,
+    form, isSubmitting, transferType, setTransferType, onSubmit,
   } = useCashTransfer({ isOpen, shiftId, terminalId, userId, onOpenChange });
 
   return (
@@ -33,7 +31,7 @@ export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, 
               <div className="min-w-0">
                 <SheetTitle className="text-xl font-extrabold">Cash Transfer</SheetTitle>
                 <SheetDescription className="text-sm">
-                  Record a drawer deposit or pickup. Admin authentication is required.
+                  Record a drawer deposit or pickup.
                 </SheetDescription>
               </div>
             </div>
@@ -66,7 +64,7 @@ export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, 
             <Form {...form}>
               <form
                 id="cash-transfer-form"
-                onSubmit={(e) => { e.preventDefault(); setIsAuthDialogOpen(true); }}
+                onSubmit={form.handleSubmit(onSubmit)}
                 className="space-y-5"
               >
                 <FormField
@@ -78,7 +76,7 @@ export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, 
                       <FormControl>
                         <div className="relative">
                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-black text-muted-foreground pointer-events-none">₱</span>
-                          <Input type="number" step="0.01" placeholder="0.00" className="h-16 pl-11 text-3xl font-black tracking-tight" {...field} />
+                          <Input type="number" step="0.01" placeholder="0.00" className="h-16 pl-11 text-3xl font-black tracking-tight" {...field} value={field.value || ''} />
                         </div>
                       </FormControl>
                       <FormMessage />
@@ -123,11 +121,6 @@ export function CashTransferDialog({ isOpen, onOpenChange, shiftId, terminalId, 
         </SheetContent>
       </Sheet>
 
-      <AdminAuthDialog
-        isOpen={isAuthDialogOpen}
-        onOpenChange={setIsAuthDialogOpen}
-        onSuccess={handleAdminAuthSuccess}
-      />
     </>
   );
 }

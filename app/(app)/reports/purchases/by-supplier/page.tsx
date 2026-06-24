@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 
 interface SupplierPurchase {
   supplierId: string;
@@ -118,126 +118,33 @@ export default function PurchasesBySupplierPage() {
   };
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export. Please fetch the report first.",
-        variant: "destructive"
-      });
+    const fileName = `Purchases_By_Supplier_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
+    const pct = (v: number) => (totals.totalSpent > 0 ? ((v / totals.totalSpent) * 100).toFixed(1) + '%' : '0%');
+    const ok = exportReportPdf<SupplierPurchase>({
+      title: 'Purchases by Supplier Report',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Suppliers', value: String(totals.totalSuppliers) },
+        { label: 'Total Spent', value: formatCurrency(totals.totalSpent) },
+        { label: 'Total Orders', value: String(totals.totalOrders) },
+      ],
+      columns: [
+        { header: 'Supplier Name', width: 70, cell: (r) => r.supplierName || 'N/A' },
+        { header: 'Contact Person', width: 50, cell: (r) => r.contactPerson || '-' },
+        { header: 'Total Orders', width: 30, align: 'right', cell: (r) => r.totalOrders.toString() },
+        { header: 'Total Spent', width: 40, align: 'right', cell: (r) => formatCurrency(r.totalSpent) },
+        { header: 'Last Purchase Date', width: 40, cell: (r) => r.lastPurchaseDate ? format(new Date(r.lastPurchaseDate), 'yyyy-MM-dd') : '-' },
+        { header: '% of Total', width: 30, align: 'right', cell: (r) => pct(r.totalSpent) },
+      ],
+      rows: records,
+      totals: ['TOTAL', null, String(totals.totalOrders), formatCurrency(totals.totalSpent), null, '100%'],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export. Please fetch the report first.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      let yPos = margin;
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Purchases by Supplier Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
-      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Suppliers: ${totals.totalSuppliers}`, margin, yPos);
-      doc.text(`Total Spent: ₱${totals.totalSpent.toFixed(2)}`, margin + 60, yPos);
-      doc.text(`Total Orders: ${totals.totalOrders}`, margin + 120, yPos);
-      yPos += 10;
-
-      const headers = ['Supplier Name', 'Contact Person', 'Total Orders', 'Total Spent', 'Last Purchase Date', '% of Total'];
-      const colWidths = [70, 50, 30, 40, 40, 30];
-      
-      doc.setFillColor(37, 99, 235);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      
-      let xPos = margin;
-      headers.forEach((header, i) => {
-        doc.text(header, xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-        xPos += colWidths[i];
-      });
-      yPos += 6;
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-
-      records.forEach((record, rowIndex) => {
-        if (yPos > pageHeight - 20) {
-          doc.addPage();
-          yPos = margin;
-          
-          doc.setFillColor(37, 99, 235);
-          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(255, 255, 255);
-          xPos = margin;
-          headers.forEach((header, i) => {
-            doc.text(header, xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-            xPos += colWidths[i];
-          });
-          yPos += 6;
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7);
-        }
-
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-
-        const percentage = totals.totalSpent > 0 ? ((record.totalSpent / totals.totalSpent) * 100).toFixed(1) + '%' : '0%';
-
-        xPos = margin;
-        const rowData = [
-          record.supplierName || 'N/A',
-          record.contactPerson || '-',
-          record.totalOrders.toString(),
-          `₱${record.totalSpent.toFixed(2)}`,
-          record.lastPurchaseDate ? format(new Date(record.lastPurchaseDate), 'yyyy-MM-dd') : '-',
-          percentage
-        ];
-
-        rowData.forEach((cell, i) => {
-          doc.text(String(cell), xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-      });
-
-      const fileName = `Purchases_By_Supplier_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "PDF Exported",
-        description: `Report saved as ${fileName}`,
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to generate PDF.",
-        variant: "destructive"
-      });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {

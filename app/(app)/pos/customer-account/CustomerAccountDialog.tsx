@@ -40,7 +40,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
-import { User, Loader2, Search, Plus, CreditCard, Printer, Hash, StickyNote, BadgeDollarSign, Phone, MapPin, Tag, Wallet, TrendingUp, Landmark } from 'lucide-react';
+import { User, Loader2, Search, Plus, CreditCard, Printer, Hash, StickyNote, Phone, MapPin, Tag, Wallet, TrendingUp, Landmark, Coins } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { format, differenceInDays } from 'date-fns';
@@ -61,6 +61,8 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
     paymentReference, setPaymentReference,
     paymentNote, setPaymentNote,
     isSubmittingPayment,
+    activeInvoiceBalance,
+    overpaymentMode, setOverpaymentMode,
     lastPaymentData,
     showPrintPrompt, setShowPrintPrompt,
     isAddCustomerOpen, setIsAddCustomerOpen,
@@ -161,6 +163,14 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
                         </div>
                       ))}
                     </div>
+                    {(customerDetails.credit_balance || 0) > 0 && (
+                      <Card className="border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 shrink-0">
+                        <CardContent className="p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 text-emerald-600" /><p className="text-[10px] text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">Available Credit</p></div>
+                          <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{formatCurrency(customerDetails.credit_balance || 0)}</p>
+                        </CardContent>
+                      </Card>
+                    )}
                     <div className="grid grid-cols-2 gap-2 shrink-0">
                       <Card className="border bg-muted/40">
                         <CardContent className="p-3">
@@ -279,25 +289,30 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
                       {isDetailsLoading ? (
                         <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto mr-2 inline-block" />Loading charges...</TableCell></TableRow>
                       ) : transactions.length > 0 ? (
-                        transactions.map((sale: any, idx: number) => (
+                        transactions.map((sale: any, idx: number) => {
+                          // A 'Paid' sale is settled even if amount_paid was never recorded (e.g. older POS sales).
+                          const effectivePaid = sale.status === 'Paid' ? sale.total : (sale.paidAmount || 0);
+                          const balance = Math.max(0, sale.total - effectivePaid);
+                          return (
                           <TableRow key={idx}>
                             <TableCell>{format(new Date(sale.date), 'MMM dd, yyyy')}</TableCell>
                             <TableCell className="font-medium text-primary">{sale.orderNumber || sale.receiptNo || sale.id.substring(0, 8)}</TableCell>
                             <TableCell>{formatCurrency(sale.total)}</TableCell>
-                            <TableCell>{formatCurrency(sale.paidAmount || 0)}</TableCell>
-                            <TableCell className="font-bold text-red-500">{formatCurrency(sale.total - (sale.paidAmount || 0))}</TableCell>
+                            <TableCell>{formatCurrency(effectivePaid)}</TableCell>
+                            <TableCell className={`font-bold ${balance > 0 ? 'text-red-500' : 'text-green-600'}`}>{formatCurrency(balance)}</TableCell>
                             <TableCell>
                               <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${sale.status === 'Paid' ? 'bg-green-100 text-green-700' : sale.status === 'Voided' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {sale.status}
                               </span>
                             </TableCell>
                             <TableCell className="text-right">
-                              {(sale.total - (sale.paidAmount || 0)) > 0 && sale.status !== 'Voided' && (
+                              {balance > 0 && sale.status !== 'Voided' && (
                                 <Button variant="ghost" size="sm" className="h-8 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handlePaySpecific(sale)}>Pay</Button>
                               )}
                             </TableCell>
                           </TableRow>
-                        ))
+                          );
+                        })
                       ) : (
                         <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No charge history found.</TableCell></TableRow>
                       )}
@@ -410,10 +425,56 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
             <div className="grid gap-1.5">
               <Label htmlFor="amount" className="text-sm font-medium">Amount</Label>
               <div className="relative">
-                <BadgeDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center text-sm font-semibold leading-none text-muted-foreground pointer-events-none">₱</span>
                 <Input id="amount" type="number" placeholder="0.00" className="pl-9" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} autoFocus />
               </div>
+              {activeInvoiceBalance > 0 && (
+                <p className="text-xs text-muted-foreground">Outstanding balance: {formatCurrency(activeInvoiceBalance)}</p>
+              )}
             </div>
+
+            {(() => {
+              const overpayment = Math.max(0, (parseFloat(paymentAmount) || 0) - (activeInvoiceBalance || 0));
+              if (overpayment <= 0) return null;
+              return (
+                <div className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-medium text-amber-800">
+                    Overpayment of {formatCurrency(overpayment)} detected.
+                  </p>
+                  <p className="text-xs text-amber-700">Choose how to handle the excess:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={overpaymentMode === 'change' ? 'default' : 'outline'}
+                      className={overpaymentMode === 'change' ? 'bg-amber-600 hover:bg-amber-700 h-auto py-2' : 'h-auto py-2'}
+                      onClick={() => setOverpaymentMode('change')}
+                    >
+                      <div className="flex flex-col items-center">
+                        <Coins className="h-4 w-4 mb-1" />
+                        <span className="text-xs font-medium">Give Change</span>
+                      </div>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={overpaymentMode === 'credit' ? 'default' : 'outline'}
+                      className={overpaymentMode === 'credit' ? 'bg-emerald-600 hover:bg-emerald-700 h-auto py-2' : 'h-auto py-2'}
+                      onClick={() => setOverpaymentMode('credit')}
+                    >
+                      <div className="flex flex-col items-center">
+                        <Wallet className="h-4 w-4 mb-1" />
+                        <span className="text-xs font-medium">Keep as Credit</span>
+                      </div>
+                    </Button>
+                  </div>
+                  <p className="text-xs text-amber-700">
+                    {overpaymentMode === 'change'
+                      ? `Hand back ${formatCurrency(overpayment)} as change. Only ${formatCurrency(activeInvoiceBalance)} is recorded.`
+                      : `${formatCurrency(overpayment)} will be kept as account credit usable for future charges.`}
+                  </p>
+                </div>
+              );
+            })()}
+
             <div className="grid gap-1.5">
               <Label htmlFor="type" className="text-sm font-medium">Payment Type</Label>
               <Select value={paymentType} onValueChange={setPaymentType}>

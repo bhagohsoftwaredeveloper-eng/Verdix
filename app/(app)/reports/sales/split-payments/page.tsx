@@ -41,7 +41,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface PaymentDetail {
@@ -149,96 +149,31 @@ export default function SplitPaymentsReportPage() {
   };
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export.",
-        variant: "destructive"
-      });
+    const fileName = `Split_Payments_Report_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    const ok = exportReportPdf<SplitPaymentTransaction>({
+      title: 'Split Payments Report',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Split Transactions', value: String(totals.transactions) },
+        { label: 'Total Revenue from Split Sales', value: formatCurrency(totals.revenue) },
+      ],
+      columns: [
+        { header: 'OR No.', width: 30, cell: (r) => String(r.orderNumber) },
+        { header: 'Date/Time', width: 40, cell: (r) => format(new Date(r.date), 'MM/dd/yy hh:mma') },
+        { header: 'Customer', width: 40, cell: (r) => r.customer },
+        { header: 'Cashier', width: 40, cell: (r) => r.cashier },
+        { header: 'Total', width: 30, align: 'right', cell: (r) => formatCurrency(r.total) },
+        { header: 'Payment Breakdown', width: 90, cell: (r) => r.payments.map((p) => `${p.method}: ${formatCurrency(p.amount)}`).join(' | ') },
+      ],
+      rows: records,
+      totals: ['TOTAL', null, null, null, formatCurrency(totals.revenue), null],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 10;
-      let yPos = margin;
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Split Payments Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Split Transactions: ${totals.transactions}`, margin, yPos);
-      doc.text(`Total Revenue from Split Sales: ₱${totals.revenue.toFixed(2)}`, margin + 80, yPos);
-      yPos += 10;
-
-      const headers = ['OR No.', 'Date/Time', 'Customer', 'Cashier', 'Total', 'Payment Breakdown'];
-      const colWidths = [30, 40, 40, 40, 30, 90];
-      
-      doc.setFillColor(34, 197, 94);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      doc.setFontSize(8);
-      doc.setTextColor(255, 255, 255);
-      
-      let xPos = margin;
-      headers.forEach((header, i) => {
-        doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-        xPos += colWidths[i];
-      });
-      yPos += 6;
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-
-      records.forEach((record, index) => {
-        if (yPos > 180) {
-          doc.addPage();
-          yPos = margin + 10;
-        }
-
-        if (index % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-
-        xPos = margin;
-        doc.text(String(record.orderNumber), xPos + 1, yPos);
-        xPos += colWidths[0];
-        doc.text(format(new Date(record.date), 'MM/dd/yy hh:mma'), xPos + 1, yPos);
-        xPos += colWidths[1];
-        doc.text(record.customer, xPos + 1, yPos);
-        xPos += colWidths[2];
-        doc.text(record.cashier, xPos + 1, yPos);
-        xPos += colWidths[3];
-        doc.text(`₱${record.total.toFixed(2)}`, xPos + 1, yPos);
-        xPos += colWidths[4];
-        
-        const paymentSummary = record.payments.map(p => `${p.method}: ₱${p.amount.toFixed(2)}`).join(' | ');
-        doc.text(paymentSummary, xPos + 1, yPos, { maxWidth: colWidths[5] - 2 });
-        
-        yPos += 6;
-      });
-
-      doc.save(`Split_Payments_Report_${format(new Date(), 'yyyyMMdd')}.pdf`);
-      toast({ title: "PDF Exported" });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({ title: "Export Failed", variant: "destructive" });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {

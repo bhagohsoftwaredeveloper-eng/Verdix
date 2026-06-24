@@ -18,12 +18,13 @@ type Props = {
 
 function ExpandedDetail({ sale }: { sale: any }) {
   const items: any[] = sale.items || [];
+  const siNo = sale.siNumber ? String(sale.siNumber).padStart(6, '0') : (sale.orderNumber ? String(sale.orderNumber).padStart(6, '0') : '-');
+
   return (
     <div className="p-4 bg-muted/30 border-t space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
         {[
-          ['SO No.', sale.orderNumber || '-'],
-          ['Receipt No.', sale.receiptNo || sale.orderNumber || '-'],
+          ['SI No.', siNo],
           ['Date', sale.date ? format(new Date(sale.date), 'PPpp') : '-'],
           ['Terminal', sale.terminal || '-'],
           ['Cashier', sale.cashier || '-'],

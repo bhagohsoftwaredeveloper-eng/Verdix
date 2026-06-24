@@ -34,6 +34,8 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
   const [paymentNote, setPaymentNote] = useState('');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [activeInvoiceNo, setActiveInvoiceNo] = useState<string>('');
+  const [activeInvoiceBalance, setActiveInvoiceBalance] = useState<number>(0);
+  const [overpaymentMode, setOverpaymentMode] = useState<'change' | 'credit'>('change');
   const [lastPaymentData, setLastPaymentData] = useState<any>(null);
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
@@ -189,34 +191,55 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
   };
 
   const handleSubmitPayment = async () => {
-    if (!paymentAmount || isNaN(parseFloat(paymentAmount))) {
+    const amountValue = parseFloat(paymentAmount);
+    if (!paymentAmount || isNaN(amountValue) || amountValue <= 0) {
       toast({ title: 'Invalid Amount', description: 'Please enter a valid payment amount.', variant: 'destructive' });
       return;
     }
     setIsSubmittingPayment(true);
+
+    // Determine overpayment against the invoice balance and how to handle it.
+    const balance = activeInvoiceBalance || 0;
+    const overpayment = balance > 0 ? Math.max(0, amountValue - balance) : 0;
+    // Portion applied to the invoice never exceeds the outstanding balance.
+    const appliedAmount = overpayment > 0 ? balance : amountValue;
+    // For 'change' the excess is handed back as cash, so only the applied portion is recorded.
+    // For 'credit' the full amount is recorded; the unallocated excess becomes account credit.
+    const recordedAmount = overpayment > 0 && overpaymentMode === 'change' ? balance : amountValue;
+    const changeGiven = overpayment > 0 && overpaymentMode === 'change' ? overpayment : 0;
+    const creditAdded = overpayment > 0 && overpaymentMode === 'credit' ? overpayment : 0;
+
     try {
       const response = await fetch(getApiUrl('/customers/payments'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerId: selectedCustomerId,
-          amount: parseFloat(paymentAmount),
+          amount: recordedAmount,
+          appliedAmount,
           paymentType,
           reference: paymentReference,
-          note: paymentNote,
+          note: creditAdded > 0 ? `${paymentNote} (incl. ${formatCurrency(creditAdded)} account credit)` : paymentNote,
           invoiceNo: activeInvoiceNo || undefined,
         }),
       });
       const result = await response.json();
       if (result.success) {
-        toast({ title: 'Payment Recorded', description: 'The customer payment has been recorded successfully.' });
-        setLastPaymentData({ amount: parseFloat(paymentAmount), paymentType, reference: paymentReference, note: paymentNote, invoiceNo: activeInvoiceNo, date: new Date() });
+        const desc = changeGiven > 0
+          ? `Payment recorded. Change due: ${formatCurrency(changeGiven)}.`
+          : creditAdded > 0
+            ? `Payment recorded. ${formatCurrency(creditAdded)} added as account credit.`
+            : 'The customer payment has been recorded successfully.';
+        toast({ title: 'Payment Recorded', description: desc });
+        setLastPaymentData({ amount: recordedAmount, paymentType, reference: paymentReference, note: paymentNote, invoiceNo: activeInvoiceNo, date: new Date(), changeGiven, creditAdded });
         setIsPaymentDialogOpen(false);
         setTimeout(() => setShowPrintPrompt(true), 200);
         setPaymentAmount('');
         setPaymentReference('');
         setPaymentNote('');
         setActiveInvoiceNo('');
+        setActiveInvoiceBalance(0);
+        setOverpaymentMode('change');
         refreshData();
       } else {
         throw new Error(result.error);
@@ -236,6 +259,8 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
     setPaymentReference(`${displayRef}-PAY-${Date.now().toString().slice(-4)}`);
     setPaymentNote(`Payment for ${displayRef}`);
     setActiveInvoiceNo(dbReference);
+    setActiveInvoiceBalance(balance);
+    setOverpaymentMode('change');
     onOpenChange(false);
     setTimeout(() => setIsPaymentDialogOpen(true), 150);
   };
@@ -322,6 +347,8 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
     paymentNote, setPaymentNote,
     isSubmittingPayment,
     activeInvoiceNo,
+    activeInvoiceBalance,
+    overpaymentMode, setOverpaymentMode,
     lastPaymentData,
     showPrintPrompt, setShowPrintPrompt,
     isAddCustomerOpen, setIsAddCustomerOpen,

@@ -20,6 +20,7 @@ export function useOrderPosSettings() {
             address: data.data.address || '',
             contactNumber: data.data.contactNumber || '',
             tin: data.data.tin || '',
+            salesOrderTerms: data.data.salesOrderTerms || '',
           });
         }
       } catch (e) {

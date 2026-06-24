@@ -47,11 +47,11 @@ export function RecentSalesDialog({
   const filteredSales = recentSales.filter((sale: any) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
-    const soNumber = sale.orderNumber?.toString().toLowerCase() || '';
+    const siNumber = (sale.siNumber || sale.orderNumber)?.toString().toLowerCase() || '';
     const saleId = sale.id?.substring(0, 7).toLowerCase() || '';
     const customerName = sale.customer?.name?.toLowerCase() || '';
 
-    return soNumber.includes(term) || saleId.includes(term) || customerName.includes(term);
+    return siNumber.includes(term) || saleId.includes(term) || customerName.includes(term);
   });
 
   useEffect(() => {
@@ -149,7 +149,7 @@ export function RecentSalesDialog({
                     </div>
                     <input
                       type="text"
-                      placeholder="Search by SO #, Transaction #..."
+                      placeholder="Search by SI #, Transaction #..."
                       value={searchTerm}
                       onChange={(e) => {
                         setSearchTerm(e.target.value);
@@ -174,7 +174,7 @@ export function RecentSalesDialog({
                             }`}
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="truncate font-mono text-sm font-semibold">{sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7)}</span>
+                              <span className="truncate font-mono text-sm font-semibold">{sale.siNumber ? String(sale.siNumber).padStart(6, '0') : (sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7))}</span>
                               <span className="shrink-0 font-mono text-sm font-bold">₱{formatCurrency(sale.total)}</span>
                             </div>
                             <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">

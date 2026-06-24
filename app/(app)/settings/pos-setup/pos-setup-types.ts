@@ -51,9 +51,13 @@ export interface PosSettings {
   enableOverallReadingAuth?: boolean;
   overallReadingAuthUsername?: string | null;
   overallReadingAuthPassword?: string | null;
+  enableCashTransferAuth?: boolean;
+  cashTransferAuthUsername?: string | null;
+  cashTransferAuthPassword?: string | null;
   enableCustomerDisplay?: boolean;
   customerDisplayMessage?: string | null;
   customerDisplayShowLogo?: boolean;
+  salesOrderTerms?: string | null;
 }
 
 export const DEFAULT_POS_SETTINGS: PosSettings = {
@@ -109,7 +113,11 @@ export const DEFAULT_POS_SETTINGS: PosSettings = {
   enableOverallReadingAuth: false,
   overallReadingAuthUsername: '',
   overallReadingAuthPassword: '',
+  enableCashTransferAuth: false,
+  cashTransferAuthUsername: '',
+  cashTransferAuthPassword: '',
   enableCustomerDisplay: false,
   customerDisplayMessage: 'Welcome! Thank you for shopping.',
   customerDisplayShowLogo: true,
+  salesOrderTerms: '',
 };

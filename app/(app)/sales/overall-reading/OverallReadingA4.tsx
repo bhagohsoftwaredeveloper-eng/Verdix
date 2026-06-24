@@ -92,7 +92,7 @@ export function OverallReadingA4({ data }: Props) {
       <div style={a4Styles.header}>
         <div style={a4Styles.title}>{data.businessSettings.businessName}</div>
         <div>{data.businessSettings.address}</div>
-        <div>VAT REG TIN: {data.businessSettings.tin}</div>
+        <div>{data.businessSettings.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: {data.businessSettings.tin}</div>
         <div style={a4Styles.subtitle}>OVERALL READING REPORT</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '12px' }}>
           <div>

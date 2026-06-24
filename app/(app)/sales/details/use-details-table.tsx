@@ -50,14 +50,12 @@ export function useDetailsTable({ filteredSales, totalPages, expandedRows }: Tab
       },
     },
     {
-      accessorKey: 'orderNumber',
-      header: ({ column }) => <SortBtn column={column} label="SO No." />,
-      cell: ({ row }) => <span className="font-medium text-primary whitespace-nowrap">{row.original.orderNumber || '-'}</span>,
-    },
-    {
-      accessorKey: 'receiptNo',
-      header: ({ column }) => <SortBtn column={column} label="Receipt" />,
-      cell: ({ row }) => <span className="whitespace-nowrap">{row.original.receiptNo || row.original.orderNumber || '-'}</span>,
+      accessorKey: 'siNumber',
+      header: ({ column }) => <SortBtn column={column} label="SI No." />,
+      cell: ({ row }) => {
+        const siNo = row.original.siNumber ? String(row.original.siNumber).padStart(6, '0') : (row.original.orderNumber ? String(row.original.orderNumber).padStart(6, '0') : '-');
+        return <span className="font-medium text-primary whitespace-nowrap">{siNo}</span>;
+      },
     },
     {
       accessorKey: 'date',

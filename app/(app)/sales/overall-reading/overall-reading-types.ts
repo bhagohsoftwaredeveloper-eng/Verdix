@@ -45,6 +45,7 @@ export type OverallReadingData = {
     address: string;
     tin: string;
     contactNumber: string;
+    vatRegistration?: 'VAT' | 'NON_VAT';
   };
   terminalInfo: {
     min: string;

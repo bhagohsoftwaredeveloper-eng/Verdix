@@ -26,7 +26,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
             }}
         >
             <div className="text-center mb-4">
-                <div className="font-bold text-lg mb-1">{settings?.businessName?.trim() || 'verdix'}</div>
+                <div className="font-bold text-lg mb-1">{settings?.businessName?.trim() || 'VENDIX'}</div>
                 <div>{settings?.address?.trim() || 'General Merchandise'}</div>
                 {settings?.contactNumber && <div>{settings.contactNumber}</div>}
                 {settings?.tin && <div>{settings?.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: {settings.tin}</div>}
@@ -39,7 +39,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 <div className="font-bold text-center border-y border-black py-1 mb-1 uppercase">
                     {paymentMethod?.toUpperCase() === 'CHARGE' ? 'CHARGE SLIP' : 'CASH SALE'}
                 </div>
-                <div className="font-bold">SI NO.: {(saleDetails.orderNumber || '000000').padStart(6, '0')}</div>
+                <div className="font-bold">SI NO.: {((saleDetails.siNumber || saleDetails.orderNumber || '000000').toString()).padStart(6, '0')}</div>
                 <div>Cust: {customer?.name || 'Walk-in'}</div>
                 <div>Cashier: {saleDetails.cashierName || 'Admin'}</div>
                 {saleDetails.terminalName && <div>Terminal: {saleDetails.terminalName}</div>}
@@ -218,7 +218,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 </div>
             ) : null}
             <div className="text-center mt-6">
-                <div>Shop smart, save more! Thank you for visiting verdix.</div>
+                <div>Shop smart, save more! Thank you for visiting Vendix.</div>
                 {saleDetails.isTrainingMode && (
                     <div className="mt-4 border-2 border-black p-2 bg-gray-100 text-center font-bold text-[10px] leading-tight flex flex-col gap-1">
                         <div>THIS IS NOT A CASH SALE/OFFICIAL RECEIPT.</div>

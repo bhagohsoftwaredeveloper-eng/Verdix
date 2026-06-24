@@ -40,6 +40,7 @@ export interface CompletedSale {
   paymentMethod: string;
   payments: Payment[];
   orderNumber: string;
+  siNumber?: string;
   amountTendered: number;
   transactionDate: Date;
   cashierName: string;

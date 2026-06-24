@@ -35,7 +35,7 @@ export class VoidSlipGenerator {
 
         const enc = this.encoder.initialize().codepage('cp437');
 
-        const bizName = settings?.businessName?.trim() || 'verdix';
+        const bizName = settings?.businessName?.trim() || 'VENDIX';
         const address = settings?.address?.trim() || 'General Merchandise';
         const minNumber = sale.terminalMin || settings?.minNumber || '1234567890';
         const serialNumber = sale.terminalSerialNumber || settings?.serialNumber || '0987654321-11';

@@ -25,9 +25,9 @@ export function OrderDetailsDocument({
   displayDate, subtotal, shipping, grandTotal, printContentRef,
 }: Props) {
   const labelRef = mode === 'delivery-note' ? 'Reference Number'
-    : documentTitle === 'SALES ORDER' ? 'Order Number' : 'Invoice Number';
+    : mode === 'invoice' ? 'Invoice Number' : 'Order Number';
   const labelDate = mode === 'delivery-note' ? 'Date'
-    : documentTitle === 'SALES ORDER' ? 'Order Date' : 'Invoice Date';
+    : mode === 'invoice' ? 'Invoice Date' : 'Order Date';
 
   return (
     <div className="flex-1 overflow-y-auto p-12 bg-slate-100/50 non-printable flex justify-center">
@@ -50,7 +50,7 @@ export function OrderDetailsDocument({
               )}
             </div>
             <h2 className="text-xl font-bold uppercase tracking-tight">
-              {settings.businessName || 'verdix'}
+              {settings.businessName || 'VENDIX'}
             </h2>
           </div>
 
@@ -140,7 +140,7 @@ export function OrderDetailsDocument({
         <div className="grid grid-cols-2 gap-8 mt-4">
           <div>
             <h3 className="font-bold text-sm mb-2">Terms and Conditions</h3>
-            <p className="text-xs text-muted-foreground">{(order as any).notes || (order as any).note || '-'}</p>
+            <p className="text-xs text-muted-foreground whitespace-pre-line">{(order as any).notes || (order as any).note || settings.salesOrderTerms || '-'}</p>
           </div>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between">

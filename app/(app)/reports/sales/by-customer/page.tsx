@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 
 interface CustomerSale {
   customerId: string;
@@ -153,140 +153,34 @@ export default function SalesByCustomerPage() {
   const paginatedRecords = filteredRecords.slice(startIndex, endIndex);
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export. Please fetch the report first.",
-        variant: "destructive"
-      });
+    const fileName = `Sales_By_Customer_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
+    const ok = exportReportPdf<CustomerSale>({
+      title: 'Sales by Customer Report',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Customers', value: String(totals.customers) },
+        { label: 'Total Sales', value: formatCurrency(totals.totalSales) },
+        { label: 'Outstanding', value: formatCurrency(totals.outstanding) },
+      ],
+      columns: [
+        { header: 'Customer Name', width: 45, cell: (r) => r.customerName || 'N/A' },
+        { header: 'Contact', width: 30, cell: (r) => r.contactNumber || '-' },
+        { header: 'Payment Terms', width: 25, cell: (r) => r.paymentTerms || '-' },
+        { header: '# Trans', width: 20, align: 'right', cell: (r) => r.transactionCount.toString() },
+        { header: 'Total Sales', width: 25, align: 'right', cell: (r) => r.totalSales.toFixed(2) },
+        { header: 'Total Paid', width: 25, align: 'right', cell: (r) => r.totalPaid.toFixed(2) },
+        { header: 'Outstanding', width: 25, align: 'right', cell: (r) => r.outstandingBalance.toFixed(2) },
+        { header: 'Last Purchase', width: 30, cell: (r) => r.lastPurchaseDate ? format(new Date(r.lastPurchaseDate), 'MMM dd, yyyy') : '-' },
+      ],
+      rows: records,
+      totals: ['TOTALS', null, null, null, totals.totalSales.toFixed(2), null, totals.outstanding.toFixed(2), null],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export. Please fetch the report first.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      let yPos = margin;
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Sales by Customer Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
-      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Customers: ${totals.customers}`, margin, yPos);
-      doc.text(`Total Sales: ₱${totals.totalSales.toFixed(2)}`, margin + 60, yPos);
-      doc.text(`Outstanding: ₱${totals.outstanding.toFixed(2)}`, margin + 120, yPos);
-      yPos += 10;
-
-      const headers = ['Customer Name', 'Contact', 'Payment Terms', '# Trans', 'Total Sales', 'Total Paid', 'Outstanding', 'Last Purchase'];
-      const colWidths = [45, 30, 25, 20, 25, 25, 25, 30];
-      
-      doc.setFillColor(34, 197, 94);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      
-      let xPos = margin;
-      headers.forEach((header, i) => {
-        doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-        xPos += colWidths[i];
-      });
-      yPos += 6;
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-
-      records.forEach((record, rowIndex) => {
-        if (yPos > pageHeight - 20) {
-          doc.addPage();
-          yPos = margin;
-          
-          doc.setFillColor(34, 197, 94);
-          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-          doc.setFontSize(7);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(255, 255, 255);
-          xPos = margin;
-          headers.forEach((header, i) => {
-            doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-            xPos += colWidths[i];
-          });
-          yPos += 6;
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(6);
-        }
-
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-
-        xPos = margin;
-        const rowData = [
-          record.customerName || 'N/A',
-          record.contactNumber || '-',
-          record.paymentTerms || '-',
-          record.transactionCount.toString(),
-          record.totalSales.toFixed(2),
-          record.totalPaid.toFixed(2),
-          record.outstandingBalance.toFixed(2),
-          record.lastPurchaseDate ? format(new Date(record.lastPurchaseDate), 'MMM dd, yyyy') : '-',
-        ];
-
-        rowData.forEach((cell, i) => {
-          doc.text(String(cell), xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-      });
-
-      yPos += 4;
-      doc.setFillColor(200, 200, 200);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-
-      xPos = margin;
-      colWidths.forEach((width, i) => {
-        if (i === 0) doc.text('TOTALS', xPos + 1, yPos);
-        else if (i === 4) doc.text(totals.totalSales.toFixed(2), xPos + 1, yPos);
-        else if (i === 6) doc.text(totals.outstanding.toFixed(2), xPos + 1, yPos);
-        xPos += width;
-      });
-
-      const fileName = `Sales_By_Customer_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "PDF Exported",
-        description: `Report saved as ${fileName}`,
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to generate PDF. Please try again.",
-        variant: "destructive"
-      });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {

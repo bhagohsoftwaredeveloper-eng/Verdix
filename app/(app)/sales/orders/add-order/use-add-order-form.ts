@@ -126,7 +126,7 @@ export function useAddOrderForm({ paymentMethods, salesPersons, customers, initi
         body: JSON.stringify({
           ...values,
           salesPerson: values.salesPersonId,
-          status: initialData ? initialData.status : 'To Deliver',
+          status: initialData ? initialData.status : 'Pending',
         }),
       });
       const data = await res.json();

@@ -22,14 +22,11 @@ import type { OrderDialogMode } from './order-details/order-details-dialog';
 
 function getStatusVariant(status: string) {
   switch (status) {
-    case 'Paid':
-    case 'Fully Delivered': return 'default';
-    case 'Pending':
-    case 'To Deliver': return 'secondary';
-    case 'Failed':
-    case 'Returned': return 'destructive';
-    case 'Shipped':
+    case 'Invoiced': return 'default';
     case 'Delivered': return 'outline';
+    case 'Pending': return 'secondary';
+    case 'Cancelled':
+    case 'Returned': return 'destructive';
     default: return 'secondary';
   }
 }
@@ -44,12 +41,14 @@ type Props = {
   onViewDetails: (sale: Sale, mode: OrderDialogMode) => void;
   onEdit: (sale: Sale) => void;
   onDelete: (id: string) => void;
+  onMakeInvoice: (sale: Sale) => void;
   makeDeliveryMutation: UseMutationResult<any, Error, Sale, unknown>;
+  makeInvoiceMutation: UseMutationResult<any, Error, string, unknown>;
 };
 
 export function useOrdersTable({
   sales, sorting, setSorting, columnVisibility, setColumnVisibility,
-  totalPages, onViewDetails, onEdit, onDelete, makeDeliveryMutation,
+  totalPages, onViewDetails, onEdit, onDelete, onMakeInvoice, makeDeliveryMutation, makeInvoiceMutation,
 }: Props) {
   const columns = useMemo<ColumnDef<Sale>[]>(() => [
     {
@@ -138,7 +137,9 @@ export function useOrdersTable({
       header: () => <div className="text-right non-printable" />,
       cell: ({ row }) => {
         const sale = row.original;
-        const isFullyDelivered = sale.status === 'Fully Delivered';
+        const isPending = sale.status === 'Pending';
+        const isDelivered = sale.status === 'Delivered';
+        const isInvoiced = sale.status === 'Invoiced';
         return (
           <div className="text-right non-printable">
             <DropdownMenu>
@@ -153,22 +154,30 @@ export function useOrdersTable({
                 <DropdownMenuItem onClick={() => onViewDetails(sale, 'order')}>
                   <FileText className="mr-2 h-4 w-4" /> Order Detail
                 </DropdownMenuItem>
-                {isFullyDelivered && (
-                  <>
-                    <DropdownMenuItem onClick={() => onViewDetails(sale, 'delivery-note')}>
-                      <ClipboardList className="mr-2 h-4 w-4" /> Delivery Note
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {}}>
-                      <Receipt className="mr-2 h-4 w-4" /> Make Invoice
-                    </DropdownMenuItem>
-                  </>
-                )}
-                {['Pending', 'Paid', 'Shipped', 'To Deliver'].includes(sale.status) && (
+
+                {/* Step 1: deliver a pending order (deducts stock) */}
+                {isPending && (
                   <DropdownMenuItem onClick={() => makeDeliveryMutation.mutate(sale)}>
                     <Truck className="mr-2 h-4 w-4" /> Make Delivery
                   </DropdownMenuItem>
                 )}
-                {!isFullyDelivered && (
+
+                {/* Step 2: once delivered/invoiced, a delivery note is available */}
+                {(isDelivered || isInvoiced) && (
+                  <DropdownMenuItem onClick={() => onViewDetails(sale, 'delivery-note')}>
+                    <ClipboardList className="mr-2 h-4 w-4" /> Delivery Note
+                  </DropdownMenuItem>
+                )}
+
+                {/* Step 3: invoice a delivered order, exactly once */}
+                {isDelivered && !sale.hasInvoice && (
+                  <DropdownMenuItem onClick={() => onMakeInvoice(sale)}>
+                    <Receipt className="mr-2 h-4 w-4" /> Make Invoice
+                  </DropdownMenuItem>
+                )}
+
+                {/* Edit / cancel only while still pending */}
+                {isPending && (
                   <>
                     <DropdownMenuItem onClick={() => onEdit(sale)}>
                       <Edit className="mr-2 h-4 w-4" /> Edit Order
@@ -185,7 +194,7 @@ export function useOrdersTable({
         );
       },
     },
-  ], [makeDeliveryMutation, onViewDetails, onEdit, onDelete]);
+  ], [makeDeliveryMutation, makeInvoiceMutation, onViewDetails, onEdit, onDelete, onMakeInvoice]);
 
   const table = useReactTable({
     data: sales,

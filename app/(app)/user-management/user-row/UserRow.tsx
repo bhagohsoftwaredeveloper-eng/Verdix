@@ -15,6 +15,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { User } from './user-row-types';
 import { useUserRow } from './use-user-row';
 
@@ -24,6 +27,45 @@ function getInitials(name?: string | null, username?: string | null) {
   if (name) return name.split(' ').map(n => n[0]).join('').toUpperCase();
   if (username) return username.substring(0, 2).toUpperCase();
   return '??';
+}
+
+const MAX_VISIBLE_PERMISSIONS = 3;
+
+function formatPermission(permission: string) {
+  return permission.replace(/_/g, ' ');
+}
+
+function PermissionsCell({ permissions }: { permissions?: string[] | null }) {
+  if (!permissions || permissions.length === 0) {
+    return <span className="text-sm text-muted-foreground">—</span>;
+  }
+
+  const visible = permissions.slice(0, MAX_VISIBLE_PERMISSIONS);
+  const hidden = permissions.slice(MAX_VISIBLE_PERMISSIONS);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {visible.map(permission => (
+        <Badge key={permission} variant="secondary" className="font-normal capitalize">
+          {formatPermission(permission)}
+        </Badge>
+      ))}
+      {hidden.length > 0 && (
+        <TooltipProvider delayDuration={100}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="font-normal cursor-default">
+                +{hidden.length} more
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[240px] capitalize">
+              {hidden.map(formatPermission).join(', ')}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
+  );
 }
 
 type Props = {
@@ -47,10 +89,10 @@ export function UserRow({ user, onUserUpdated, onEdit }: Props) {
               <AvatarImage src={user.photoURL || undefined} alt={user.displayName || undefined} />
               <AvatarFallback>{getInitials(user.displayName, user.username)}</AvatarFallback>
             </Avatar>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{user.displayName || 'No Name'}</span>
+            <div className="flex flex-col">
+              <span className="font-medium leading-tight">{user.displayName || 'No Name'}</span>
               {user.userType && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">{user.userType}</Badge>
+                <span className="text-xs text-muted-foreground leading-tight">{user.userType}</span>
               )}
             </div>
           </div>
@@ -59,13 +101,7 @@ export function UserRow({ user, onUserUpdated, onEdit }: Props) {
           <div className="text-sm font-medium text-muted-foreground">{user.username}</div>
         </TableCell>
         <TableCell className="hidden md:table-cell">
-          <div className="flex flex-wrap gap-1">
-            {user.permissions?.map(permission => (
-              <Badge key={permission} variant="secondary" className="font-normal">
-                {permission.replace(/_/g, ' ')}
-              </Badge>
-            ))}
-          </div>
+          <PermissionsCell permissions={user.permissions} />
         </TableCell>
         <TableCell className="hidden sm:table-cell">
           {format(new Date(user.creationTime), 'PP')}

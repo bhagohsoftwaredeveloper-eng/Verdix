@@ -66,7 +66,7 @@ export function OverallReadingReceipt({ data }: Props) {
       <div style={receiptStyles.headerDiv}>
         <div style={receiptStyles.headerTitle}>{data.businessSettings.businessName}</div>
         {data.businessSettings.address && <div style={{ fontSize: '10px' }}>{data.businessSettings.address}</div>}
-        {data.businessSettings.tin && <div style={{ fontSize: '10px' }}>VAT REG TIN: {data.businessSettings.tin}</div>}
+        {data.businessSettings.tin && <div style={{ fontSize: '10px' }}>{data.businessSettings.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: {data.businessSettings.tin}</div>}
         {data.terminalInfo?.min && <div style={{ fontSize: '10px' }}>MIN: {data.terminalInfo.min}</div>}
         {data.terminalInfo?.sn  && <div style={{ fontSize: '10px' }}>S/N: {data.terminalInfo.sn}</div>}
         <div style={{ fontSize: '10px' }}>

@@ -16,13 +16,12 @@ type Options = {
 };
 
 export function useCashTransfer({ isOpen, shiftId, terminalId, userId, onOpenChange }: Options) {
-  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [transferType, setTransferType] = useState<'pickup' | 'deposit'>('pickup');
   const { toast } = useToast();
 
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
-    defaultValues: { amount: 0, reason: '' },
+    defaultValues: { amount: '' as unknown as number, reason: '' },
   });
 
   useEffect(() => {
@@ -31,11 +30,6 @@ export function useCashTransfer({ isOpen, shiftId, terminalId, userId, onOpenCha
       setTransferType('pickup');
     }
   }, [isOpen, form]);
-
-  const handleAdminAuthSuccess = () => {
-    setIsAuthDialogOpen(false);
-    form.handleSubmit(onSubmit)();
-  };
 
   async function onSubmit(values: TransferFormValues) {
     try {
@@ -61,7 +55,6 @@ export function useCashTransfer({ isOpen, shiftId, terminalId, userId, onOpenCha
   return {
     form, isSubmitting,
     transferType, setTransferType,
-    isAuthDialogOpen, setIsAuthDialogOpen,
-    handleAdminAuthSuccess, onSubmit,
+    onSubmit,
   };
 }

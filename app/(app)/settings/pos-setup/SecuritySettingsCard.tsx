@@ -28,6 +28,7 @@ const AUTH_CONFIGS: AuthConfig[] = [
   { enableKey: 'enablePriceEditAuth',     usernameKey: 'priceEditAuthUsername',      passwordKey: 'priceEditAuthPassword',      label: 'Edit Price Authentication',         desc: 'Require credentials to edit item price',                      userPlaceholder: 'e.g. manager',    passPlaceholder: 'e.g. 1234' },
   { enableKey: 'enableTaxRatesAuth',      usernameKey: 'taxRatesAuthUsername',       passwordKey: 'taxRatesAuthPassword',       label: 'Tax Rates Authentication',          desc: 'Require credentials to manage tax rates',                     userPlaceholder: 'e.g. admin',      passPlaceholder: 'e.g. 1234' },
   { enableKey: 'enableOverallReadingAuth',usernameKey: 'overallReadingAuthUsername', passwordKey: 'overallReadingAuthPassword', label: 'Overall Reading Authentication',     desc: 'Require credentials to view overall terminal reading',         userPlaceholder: 'e.g. manager',    passPlaceholder: 'e.g. 1234' },
+  { enableKey: 'enableCashTransferAuth',  usernameKey: 'cashTransferAuthUsername',   passwordKey: 'cashTransferAuthPassword',   label: 'Cash Transfer Authentication',       desc: 'Require credentials to process cash deposit or pickup',        userPlaceholder: 'e.g. manager',    passPlaceholder: 'e.g. 1234' },
 ];
 
 interface Props { settings: PosSettings; set: SetFn; }

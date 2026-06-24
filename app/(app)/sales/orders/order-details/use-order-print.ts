@@ -15,7 +15,7 @@ type Props = {
 export function useOrderPrint({ order, settings, mode }: Props) {
   const printContentRef = useRef<HTMLDivElement>(null);
 
-  const documentTitle = mode === 'delivery-note' ? 'DELIVERY NOTE' : 'SALES ORDER';
+  const documentTitle = mode === 'delivery-note' ? 'DELIVERY NOTE' : mode === 'invoice' ? 'INVOICE' : 'SALES ORDER';
   const displayDate = order ? (order.orderDate || order.date) : null;
   const subtotal = order ? order.items.reduce((sum, item) => sum + item.price * item.quantity, 0) : 0;
   const shipping = order ? Number((order as any).shipping || 0) : 0;
@@ -55,7 +55,7 @@ export function useOrderPrint({ order, settings, mode }: Props) {
         .items-table td.amount { font-weight: bold; }
         .footer { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 30px; }
         .terms h3 { font-size: 13px; font-weight: bold; margin-bottom: 8px; }
-        .terms p { font-size: 11px; color: #666; }
+        .terms p { font-size: 11px; color: #666; white-space: pre-line; }
         .totals { font-size: 12px; }
         .totals-row { display: flex; justify-content: space-between; padding: 4px 0; font-weight: bold; }
         .totals-row.grand { font-size: 16px; font-weight: 900; border-top: 2px solid #000; padding-top: 8px; margin-top: 8px; }
@@ -138,7 +138,7 @@ export function useOrderPrint({ order, settings, mode }: Props) {
           <div class="footer">
             <div class="terms">
               <h3>Terms and Conditions</h3>
-              <p>${(order as any).notes || (order as any).note || '-'}</p>
+              <p>${(order as any).notes || (order as any).note || settings.salesOrderTerms || '-'}</p>
             </div>
             <div class="totals">
               <div class="totals-row"><span>SUBTOTAL</span><span>${subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>

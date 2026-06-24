@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 
 interface ProductSale {
   product: {
@@ -136,151 +136,40 @@ export default function TopItemsSalesPage() {
   const paginatedRecords = filteredRecords.slice(startIndex, endIndex);
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export. Please fetch the report first.",
-        variant: "destructive"
-      });
+    const fileName = `Top_Items_Sales_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
+    const ok = exportReportPdf<ProductSale>({
+      title: 'Top Items by Sales Report',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Products', value: String(totals.products) },
+        { label: 'Total Units Sold', value: String(totals.unitsSold) },
+        { label: 'Total Revenue', value: formatCurrency(totals.revenue) },
+        { label: 'Total Profit', value: formatCurrency(totals.profit) },
+        { label: 'Avg Price/Unit', value: formatCurrency(totals.avgPrice) },
+      ],
+      columns: [
+        { header: 'Rank', width: 12, cell: (_r, i) => (i + 1).toString() },
+        { header: 'Product', width: 30, cell: (r) => r.product.name || 'N/A' },
+        { header: 'Barcode', width: 25, cell: (r) => r.product.barcode || '-' },
+        { header: 'Category', width: 23, cell: (r) => r.product.category || '-' },
+        { header: 'Brand', width: 23, cell: (r) => r.product.brand || '-' },
+        { header: 'Units Sold', width: 18, align: 'right', cell: (r) => r.unitsSold.toString() },
+        { header: 'UOM', width: 15, cell: (r) => r.product.unitOfMeasure || '-' },
+        { header: 'Revenue', width: 22, align: 'right', cell: (r) => r.totalRevenue.toFixed(2) },
+        { header: 'Cost', width: 20, align: 'right', cell: (r) => r.totalCost.toFixed(2) },
+        { header: 'Profit', width: 20, align: 'right', cell: (r) => r.totalProfit.toFixed(2) },
+        { header: 'Margin %', width: 15, align: 'right', cell: (r) => (r.totalRevenue > 0 ? ((r.totalProfit / r.totalRevenue) * 100) : 0).toFixed(1) + '%' },
+        { header: '# Sales', width: 15, align: 'right', cell: (r) => r.numberOfSales.toString() },
+      ],
+      rows: records,
+      totals: ['TOTALS', null, null, null, null, totals.unitsSold.toString(), null, totals.revenue.toFixed(2), totals.cost.toFixed(2), totals.profit.toFixed(2), null, null],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export. Please fetch the report first.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      let yPos = margin;
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Top Items by Sales Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
-      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Products: ${totals.products}`, margin, yPos);
-      doc.text(`Total Units Sold: ${totals.unitsSold}`, margin + 60, yPos);
-      doc.text(`Total Revenue: ₱${totals.revenue.toFixed(2)}`, margin + 120, yPos);
-      yPos += 6;
-      doc.text(`Total Profit: ₱${totals.profit.toFixed(2)}`, margin, yPos);
-      doc.text(`Avg Price/Unit: ₱${totals.avgPrice.toFixed(2)}`, margin + 60, yPos);
-      yPos += 10;
-
-      const headers = ['Rank', 'Product', 'Barcode', 'Category', 'Brand', 'Units Sold', 'UOM', 'Revenue', 'Cost', 'Profit', 'Margin %', '# Sales'];
-      const colWidths = [12, 30, 25, 23, 23, 18, 15, 22, 20, 20, 15, 15];
-      
-      doc.setFillColor(34, 197, 94);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      
-      let xPos = margin;
-      headers.forEach((header, i) => {
-        doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-        xPos += colWidths[i];
-      });
-      yPos += 6;
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-
-      records.forEach((record, rowIndex) => {
-        if (yPos > pageHeight - 20) {
-          doc.addPage();
-          yPos = margin;
-          
-          doc.setFillColor(34, 197, 94);
-          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-          doc.setFontSize(7);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(255, 255, 255);
-          xPos = margin;
-          headers.forEach((header, i) => {
-            doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-            xPos += colWidths[i];
-          });
-          yPos += 6;
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(6);
-        }
-
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-
-        const profitMargin = record.totalRevenue > 0 ? ((record.totalProfit / record.totalRevenue) * 100) : 0;
-
-        xPos = margin;
-        const rowData = [
-          (rowIndex + 1).toString(),
-          record.product.name || 'N/A',
-          record.product.barcode || '-',
-          record.product.category || '-',
-          record.product.brand || '-',
-          record.unitsSold.toString(),
-          record.product.unitOfMeasure || '-',
-          record.totalRevenue.toFixed(2),
-          record.totalCost.toFixed(2),
-          record.totalProfit.toFixed(2),
-          profitMargin.toFixed(1) + '%',
-          record.numberOfSales.toString(),
-        ];
-
-        rowData.forEach((cell, i) => {
-          doc.text(String(cell), xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-      });
-
-      yPos += 4;
-      doc.setFillColor(200, 200, 200);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-
-      xPos = margin;
-      colWidths.forEach((width, i) => {
-        if (i === 0) doc.text('TOTALS', xPos + 1, yPos);
-        else if (i === 4) doc.text(totals.unitsSold.toString(), xPos + 1, yPos);
-        else if (i === 6) doc.text(totals.revenue.toFixed(2), xPos + 1, yPos);
-        else if (i === 7) doc.text(totals.cost.toFixed(2), xPos + 1, yPos);
-        else if (i === 8) doc.text(totals.profit.toFixed(2), xPos + 1, yPos);
-        xPos += width;
-      });
-
-      const fileName = `Top_Items_Sales_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "PDF Exported",
-        description: `Report saved as ${fileName}`,
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to generate PDF. Please try again.",
-        variant: "destructive"
-      });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {

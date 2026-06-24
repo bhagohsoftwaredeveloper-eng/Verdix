@@ -290,6 +290,50 @@ export async function getNextZReadingNumber(terminalId: string): Promise<string>
 }
 
 /**
+ * Atomically gets and increments the next SI Number (Sales Invoice Number)
+ * @returns The next SI number string (e.g., "001234")
+ */
+export async function getNextSINumber(): Promise<string> {
+  return await withTransaction(async (connection) => {
+    // 1. Increment global SI number
+    await connection.query(
+      `UPDATE transaction_references SET si_number = LPAD(IF(si_number IS NULL OR si_number = '', 0, CAST(si_number AS UNSIGNED)) + 1, 6, '0') WHERE id = 1`
+    );
+
+    // 2. Fetch the new value
+    const [rows]: any = await connection.query(
+      `SELECT si_number as next_val FROM transaction_references WHERE id = 1`
+    );
+
+    if (!rows || rows.length === 0) {
+      throw new Error('Failed to fetch next SI number');
+    }
+
+    return rows[0].next_val;
+  });
+}
+
+/**
+ * Format SI number with padding
+ * @param siNumber - SI number (string or number)
+ * @returns Formatted SI number (e.g., "001234")
+ */
+export function formatSINumber(siNumber: string | number | null | undefined): string {
+  if (!siNumber) return '000000';
+  return String(siNumber).padStart(6, '0');
+}
+
+/**
+ * Validate SI number format
+ * @param siNumber - SI number to validate
+ * @returns Whether SI number is valid
+ */
+export function validateSINumber(siNumber: string | null | undefined): boolean {
+  if (!siNumber) return false;
+  return /^\d{1,6}$/.test(siNumber) && siNumber.length <= 6;
+}
+
+/**
  * Close the connection pool
  */
 export async function closePool() {

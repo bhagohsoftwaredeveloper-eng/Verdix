@@ -41,6 +41,15 @@ function POSContent() {
           description="Please enter credentials to access Cash Count."
         />
 
+        <AdminAuthDialog
+          isOpen={pos.isCashTransferPreAuthOpen}
+          onOpenChange={pos.setIsCashTransferPreAuthOpen}
+          onSuccess={() => { pos.setIsCashTransferPreAuthOpen(false); pos.setIsCashTransferOpen(true); }}
+          requiredCredentials={{ username: pos.businessSettings?.cashTransferAuthUsername, password: pos.businessSettings?.cashTransferAuthPassword }}
+          title="Cash Transfer Authentication"
+          description="Please enter credentials to process a cash transfer."
+        />
+
         {/* Left: Transaction Area */}
         <div className="flex-1 flex flex-col relative min-w-0">
           {pos.showOverlay && (
@@ -99,7 +108,7 @@ function POSContent() {
             />
             <PosFooterActions
               handleOpenEndShift={pos.handleOpenEndShift}
-              setIsCashTransferOpen={pos.setIsCashTransferOpen}
+              handleOpenCashTransfer={pos.handleOpenCashTransfer}
               setIsCustomerSelectOpen={pos.setIsCustomerSelectOpen}
               handleOpenLoyalty={pos.handleOpenLoyalty}
               setIsRecentSalesOpen={pos.setIsRecentSalesOpen}

@@ -96,7 +96,15 @@ export function EditUserDialog({ user, onUserUpdated, open, onOpenChange }: Prop
                     <p className="text-sm text-muted-foreground">Select individual access rights for this user.</p>
                   </div>
                   <UserPermissionsGrid form={form} />
-                  <FormMessage />
+                  <FormField
+                    control={form.control}
+                    name="permissions"
+                    render={() => (
+                      <FormItem>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
             </ScrollArea>

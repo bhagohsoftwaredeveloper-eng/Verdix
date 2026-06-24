@@ -109,8 +109,8 @@ export function ReturnsDataSection({ table, columns, isLoading, viewMode, setVie
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-base text-primary">{record.soNo}</CardTitle>
-                          <CardDescription className="text-xs">{record.orNo}</CardDescription>
+                          <CardTitle className="text-base text-primary">{record.origSiNo}</CardTitle>
+                          <CardDescription className="text-xs">{record.currSiNo}</CardDescription>
                         </div>
                         <Badge variant="outline" className="border-green-600 text-green-600">Returned</Badge>
                       </div>

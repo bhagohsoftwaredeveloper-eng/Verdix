@@ -34,7 +34,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 
 interface DiscountRecord {
   transactionDate: string;
@@ -128,115 +128,35 @@ export default function DiscountReportPage() {
     `₱${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const exportToPDF = () => {
-    if (records.length === 0) {
+    const fileName = `Discount_Report_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
+    const grandTotal = filteredRecords.reduce((sum, r) => sum + r.discountAmount, 0);
+    const ok = exportReportPdf<DiscountRecord>({
+      title: 'Discount Report (SC / PWD / NAAC / Solo Parent)',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'}  To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Records', value: String(totals.count) },
+        { label: 'Total Discount', value: formatCurrency(totals.discount) },
+      ],
+      columns: [
+        { header: 'Date', width: 30, cell: (r) => r.transactionDate ? format(new Date(r.transactionDate), 'yyyy-MM-dd HH:mm') : '-' },
+        { header: 'OR/SI No.', width: 24, cell: (r) => String(r.orderNumber || '-').padStart(6, '0') },
+        { header: 'Type', width: 26, cell: (r) => TYPE_LABELS[r.discountType] || r.discountType },
+        { header: 'Cardholder Name', width: 45, cell: (r) => r.holderName || '-' },
+        { header: 'ID Number', width: 35, cell: (r) => r.idNumber || '-' },
+        { header: 'Item', width: 40, cell: (r) => r.productName || '-' },
+        { header: 'Disc %', width: 16, align: 'right', cell: (r) => `${r.discountPercentage.toFixed(0)}%` },
+        { header: 'Disc Amount', width: 25, align: 'right', cell: (r) => r.discountAmount.toFixed(2) },
+        { header: 'Cashier', width: 25, cell: (r) => r.cashierName || '-' },
+      ],
+      rows: filteredRecords,
+      totals: ['GRAND TOTAL', null, null, null, null, null, `${filteredRecords.length} rec`, grandTotal.toFixed(2), null],
+      fileName,
+    });
+    if (!ok) {
       toast({ title: 'No Data', description: 'No records to export.', variant: 'destructive' });
       return;
     }
-    try {
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      let yPos = margin;
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Discount Report (SC / PWD / NAAC / Solo Parent)', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(
-        `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'}  To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
-        pageWidth / 2,
-        yPos,
-        { align: 'center' }
-      );
-      yPos += 8;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Records: ${totals.count}`, margin, yPos);
-      doc.text(`Total Discount: ${formatCurrency(totals.discount)}`, margin + 80, yPos);
-      yPos += 8;
-
-      const headers = ['Date', 'OR/SI No.', 'Type', 'Cardholder Name', 'ID Number', 'Item', 'Disc %', 'Disc Amount', 'Cashier'];
-      const colWidths = [30, 24, 26, 45, 35, 40, 16, 25, 25];
-
-      const drawHeader = () => {
-        doc.setFillColor(59, 130, 246);
-        doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(255, 255, 255);
-        let xPos = margin;
-        headers.forEach((header, i) => {
-          doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(6);
-      };
-
-      drawHeader();
-
-      filteredRecords.forEach((record, rowIndex) => {
-        if (yPos > pageHeight - 20) {
-          doc.addPage();
-          yPos = margin;
-          drawHeader();
-        }
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-        let xPos = margin;
-        const rowData = [
-          record.transactionDate ? format(new Date(record.transactionDate), 'yyyy-MM-dd HH:mm') : '-',
-          String(record.orderNumber || '-').padStart(6, '0'),
-          TYPE_LABELS[record.discountType] || record.discountType,
-          record.holderName || '-',
-          record.idNumber || '-',
-          record.productName || '-',
-          `${record.discountPercentage.toFixed(0)}%`,
-          record.discountAmount.toFixed(2),
-          record.cashierName || '-',
-        ];
-        rowData.forEach((cell, i) => {
-          doc.text(String(cell), xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-      });
-
-      // Grand total row
-      if (yPos > pageHeight - 20) {
-        doc.addPage();
-        yPos = margin;
-      }
-      yPos += 2;
-      doc.setFillColor(200, 200, 200);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      const grandTotal = filteredRecords.reduce((sum, r) => sum + r.discountAmount, 0);
-      let totXPos = margin;
-      colWidths.forEach((width, i) => {
-        if (i === 0) doc.text('GRAND TOTAL', totXPos + 1, yPos);
-        else if (i === 6) doc.text(`${filteredRecords.length} rec`, totXPos + 1, yPos);
-        else if (i === 7) doc.text(grandTotal.toFixed(2), totXPos + 1, yPos);
-        totXPos += width;
-      });
-
-      const fileName = `Discount_Report_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
-      doc.save(fileName);
-      toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({ title: 'Export Failed', description: 'Failed to generate PDF.', variant: 'destructive' });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   return (

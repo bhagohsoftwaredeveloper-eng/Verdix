@@ -80,7 +80,10 @@ import './079_create_payment_allocations_table';
 import './080_backfill_payment_allocations';
 import './081_normalize_payment_invoice_notes';
 import './082_alter_pos_settings_add_vat_registration';
-
+import './083_add_si_number_to_tables';
+import './084_add_si_number_to_transaction_references';
+import './085_backfill_si_numbers';
+import './086_redesign_sales_order_flow';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

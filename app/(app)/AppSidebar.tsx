@@ -27,7 +27,6 @@ type AppUser = { email: string; permissions?: string[]; userType?: string };
 
 type Props = {
   user: AppUser;
-  businessName: string;
   hasPermission: (permission?: string) => boolean;
   filteredNavItems: { href: string; icon: any; label: string; permission?: string }[];
   filteredOtherNavItems: { href: string; icon: any; label: string; permission?: string }[];
@@ -36,7 +35,7 @@ type Props = {
 };
 
 export function AppSidebar({
-  user, businessName, hasPermission,
+  user, hasPermission,
   filteredNavItems, filteredOtherNavItems,
   pathname, getInitials,
 }: Props) {
@@ -55,7 +54,7 @@ export function AppSidebar({
         <div className="flex items-center gap-3 transition-all duration-300 group-data-[collapsible=icon]:justify-center">
           <Logo variant="icon" size={36} />
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <h1 className="text-xl font-extrabold font-headline tracking-tight text-sidebar-foreground">{businessName}</h1>
+            <h1 className="text-xl font-extrabold font-headline tracking-tight text-sidebar-foreground">VENDIX</h1>
             <span className="text-[10px] uppercase font-bold text-primary tracking-[0.2em] mt-0.5 opacity-90">Enterprise</span>
           </div>
         </div>
@@ -144,10 +143,6 @@ export function AppSidebar({
                 <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <UserIcon className="mr-2 h-4 w-4" /><span>Profile</span>
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => handleSignOut()}>
               <LogOut className="mr-2 h-4 w-4" /><span>Log out</span>

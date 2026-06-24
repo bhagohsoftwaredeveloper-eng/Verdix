@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Building2, Upload } from 'lucide-react';
 import Image from 'next/image';
@@ -52,6 +53,18 @@ export function BusinessSetupCard({ settings, set, logoPreview, isUploading, onL
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" value={settings.email || ''} onChange={e => set('email', e.target.value)} placeholder="Enter email address" />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="salesOrderTerms">Sales Order Terms &amp; Conditions</Label>
+          <Textarea
+            id="salesOrderTerms"
+            value={settings.salesOrderTerms || ''}
+            onChange={e => set('salesOrderTerms', e.target.value)}
+            placeholder="Enter the default terms and conditions printed on sales orders, delivery notes and invoices"
+            rows={4}
+          />
+          <p className="text-xs text-muted-foreground">Shown in the Terms and Conditions section of the sales order / invoice printout.</p>
         </div>
 
         <div className="space-y-2">

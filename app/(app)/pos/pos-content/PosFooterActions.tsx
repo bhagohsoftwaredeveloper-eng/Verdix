@@ -14,7 +14,7 @@ function CashTransferIcon({ className }: { className?: string }) {
 
 type Props = {
   handleOpenEndShift: () => void;
-  setIsCashTransferOpen: (v: boolean) => void;
+  handleOpenCashTransfer: () => void;
   setIsCustomerSelectOpen: (v: boolean) => void;
   handleOpenLoyalty: () => void;
   setIsRecentSalesOpen: (v: boolean) => void;
@@ -26,13 +26,13 @@ type Props = {
 };
 
 export function PosFooterActions({
-  handleOpenEndShift, setIsCashTransferOpen, setIsCustomerSelectOpen, handleOpenLoyalty,
+  handleOpenEndShift, handleOpenCashTransfer, setIsCustomerSelectOpen, handleOpenLoyalty,
   setIsRecentSalesOpen, setIsVoidSalesOpen, setIsReturnSalesOpen, handleOpenOverallReading,
   setIsZReadingOpen, setIsPriceInquiryOpen,
 }: Props) {
   const footerActions = [
     { icon: Printer, label: 'Cash count', shortcut: 'Ctrl+1', action: handleOpenEndShift, tint: 'text-emerald-600' },
-    { icon: CashTransferIcon, label: 'Cash transfer', shortcut: 'Ctrl+2', action: () => setIsCashTransferOpen(true), tint: 'text-emerald-600' },
+    { icon: CashTransferIcon, label: 'Cash transfer', shortcut: 'Ctrl+2', action: handleOpenCashTransfer, tint: 'text-emerald-600' },
     { icon: User, label: 'Customer', shortcut: 'Ctrl+3', action: () => setIsCustomerSelectOpen(true), tint: 'text-sky-600' },
     { icon: User, label: 'Loyalty', shortcut: 'Ctrl+4', action: handleOpenLoyalty, tint: 'text-sky-600' },
     { icon: Clock, label: 'Recent Sales', shortcut: 'Ctrl+5', action: () => setIsRecentSalesOpen(true), tint: 'text-amber-600' },

@@ -104,8 +104,7 @@ export function ByDateTable({
                         <Table className="text-xs">
                           <TableHeader>
                             <TableRow className="bg-muted hover:bg-muted">
-                              <TableHead className="h-8 py-1">Order No</TableHead>
-                              <TableHead className="h-8 py-1">Receipt No</TableHead>
+                              <TableHead className="h-8 py-1">SI No.</TableHead>
                               <TableHead className="h-8 py-1">Cashier</TableHead>
                               <TableHead className="h-8 py-1">Method</TableHead>
                               <TableHead className="h-8 py-1 text-right">Total</TableHead>
@@ -114,8 +113,7 @@ export function ByDateTable({
                           <TableBody>
                             {transactionsByDate[row.original.date].map((tx: any) => (
                               <TableRow key={tx.id} className="hover:bg-muted/50">
-                                <TableCell className="py-1">{tx.orderNumber}</TableCell>
-                                <TableCell className="py-1">{tx.receiptNo}</TableCell>
+                                <TableCell className="py-1">{tx.siNumber ? String(tx.siNumber).padStart(6, '0') : (tx.orderNumber ? String(tx.orderNumber).padStart(6, '0') : '-')}</TableCell>
                                 <TableCell className="py-1">{tx.cashier}</TableCell>
                                 <TableCell className="py-1">{tx.paymentMethod}</TableCell>
                                 <TableCell className="py-1 text-right">

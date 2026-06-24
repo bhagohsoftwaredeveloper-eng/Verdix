@@ -13,7 +13,7 @@ export function useAppLayout() {
 
   const [user, setUser] = useState<AppUser | null>(null);
   const [isUserLoading, setIsUserLoading] = useState(true);
-  const [businessName, setBusinessName] = useState('verdix');
+  const [businessName, setBusinessName] = useState('VENDIX');
 
   const isPOSPage = pathname === '/pos' || pathname === '/pos/customer-display';
 
