@@ -90,6 +90,7 @@ export function usePOS() {
   const [isQueuePanelOpen, setIsQueuePanelOpen] = useState(false);
   const [isSendToQueueOpen, setIsSendToQueueOpen] = useState(false);
   const [isFrontlinerPromptOpen, setIsFrontlinerPromptOpen] = useState(false);
+  const [isFrontlinerBlocked, setIsFrontlinerBlocked] = useState(false);
   const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
 
   const [enableNegativeInventory, setEnableNegativeInventory] = useState(false);
@@ -869,15 +870,29 @@ export function usePOS() {
   };
 
   const handlePosLoginSuccess = async (user: any) => {
+    const userIsFrontliner = !!(user?.permissions as string[] | undefined)?.includes('pos_frontliner');
+
+    // Block frontliner when POS is not in pharmacy mode
+    if (userIsFrontliner && businessSettings?.posMode !== 'pharmacy') {
+      setCurrentUser(user);
+      setIsFrontlinerBlocked(true);
+      setIsFrontlinerPromptOpen(true);
+      return;
+    }
+
     setIsCheckingShift(true);
     setIsPosLoggedIn(true);
     setCurrentUser(user);
 
-    // Show pharmacy frontliner info prompt
-    const userIsFrontliner = !!(user?.permissions as string[] | undefined)?.includes('pos_frontliner');
-    if (businessSettings?.posMode === 'pharmacy' && userIsFrontliner) {
+    // Frontliner skips shift — mark active immediately
+    if (userIsFrontliner) {
+      setShiftActive(true);
+      setIsFrontlinerBlocked(false);
       setIsFrontlinerPromptOpen(true);
+      setIsCheckingShift(false);
+      return;
     }
+
     localStorage.setItem('pos_current_user', JSON.stringify(user));
 
     const savedCart = localStorage.getItem('pos_current_cart');
@@ -1081,6 +1096,7 @@ export function usePOS() {
     isFrontliner, queuedOrders, isQueuePanelOpen, setIsQueuePanelOpen,
     isSendToQueueOpen, setIsSendToQueueOpen,
     isFrontlinerPromptOpen, setIsFrontlinerPromptOpen,
+    isFrontlinerBlocked,
     handleSendToQueue, handleConfirmSendToQueue, handleClaimQueuedOrder,
     // shift dialogs
     isCashCountAuthOpen, setIsCashCountAuthOpen,

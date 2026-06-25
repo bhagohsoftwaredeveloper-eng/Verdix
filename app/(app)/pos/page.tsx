@@ -159,7 +159,7 @@ function POSContent() {
         </div>
       )}
 
-      {pos.isPosLoggedIn && !pos.shiftActive && !pos.isCheckingShift && !pos.isCollisionOpen && (
+      {pos.isPosLoggedIn && !pos.shiftActive && !pos.isCheckingShift && !pos.isCollisionOpen && !pos.isFrontliner && (
         <StartShiftDialog
           isOpen={true}
           onShiftStart={pos.handleStartShift}
@@ -198,8 +198,9 @@ function POSContent() {
 
       <FrontlinerModePrompt
         open={pos.isFrontlinerPromptOpen}
-        onOpenChange={pos.setIsFrontlinerPromptOpen}
+        blocked={pos.isFrontlinerBlocked}
         userName={pos.currentUser?.name || pos.currentUser?.username}
+        onOpenChange={pos.setIsFrontlinerPromptOpen}
       />
     </>
   );
