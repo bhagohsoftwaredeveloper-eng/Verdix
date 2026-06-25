@@ -1,5 +1,22 @@
 import type { Product } from '@/lib/types';
 
+export type QueuedOrder = {
+  id: string;
+  queueNumber: number;
+  dailyQueueNumber: number;
+  items: SaleItem[];
+  customerId?: string;
+  customerName: string;
+  queueNotes?: string;
+  fronlinerId: string;
+  frontlinerName: string;
+  terminalId?: string;
+  terminalName?: string;
+  shiftId?: string;
+  status: 'pending' | 'claimed';
+  createdAt: string;
+};
+
 export type SuspendedTransaction = {
   id: string;
   items: SaleItem[];

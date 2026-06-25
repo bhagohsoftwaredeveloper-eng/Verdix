@@ -58,6 +58,7 @@ export interface PosSettings {
   customerDisplayMessage?: string | null;
   customerDisplayShowLogo?: boolean;
   salesOrderTerms?: string | null;
+  posMode?: 'default' | 'pharmacy';
 }
 
 export const DEFAULT_POS_SETTINGS: PosSettings = {
@@ -120,4 +121,5 @@ export const DEFAULT_POS_SETTINGS: PosSettings = {
   customerDisplayMessage: 'Welcome! Thank you for shopping.',
   customerDisplayShowLogo: true,
   salesOrderTerms: '',
+  posMode: 'default',
 };

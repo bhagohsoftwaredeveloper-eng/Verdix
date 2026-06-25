@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import {
   Pencil, X, Percent, Tag, ListOrdered, Plus, FilePenLine, Power,
-  RefreshCw, Monitor,
+  RefreshCw, Monitor, Inbox,
 } from 'lucide-react';
 import type { SuspendedTransaction } from './pos-types';
 
@@ -24,6 +24,11 @@ type Props = {
   focusInlineQuantity: (id: string | null) => void;
   handleRequestPriceEdit: () => void;
   handleShutdown: () => void;
+  // frontliner / queue
+  isFrontliner?: boolean;
+  posMode?: 'default' | 'pharmacy';
+  queuedOrdersCount?: number;
+  setIsQueuePanelOpen?: (v: boolean) => void;
 };
 
 export function PosHeader({
@@ -31,7 +36,9 @@ export function PosHeader({
   enableCustomerDisplay, openOnSecondScreen,
   handleOpenEditDialog, handleVoidLine, handleOpenDiscountDialog, handleHold,
   setIsHeldTransOpen, focusInlineQuantity, handleRequestPriceEdit, handleShutdown,
+  isFrontliner, posMode, queuedOrdersCount = 0, setIsQueuePanelOpen,
 }: Props) {
+
   const headerActions = [
     { icon: Pencil, label: 'Edit Item', fKey: 'F1', action: handleOpenEditDialog, tint: 'text-blue-600' },
     { icon: X, label: 'Line Void', fKey: 'F2', action: () => handleVoidLine(selectedItemId), tint: 'text-rose-600' },
@@ -45,25 +52,51 @@ export function PosHeader({
 
   return (
     <header className="h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center px-4 gap-4 justify-between shrink-0 z-10">
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mask-gradient-x flex-1">
-        {headerActions.map(({ icon: Icon, label, fKey, action, tint }) => (
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 px-1">
+        {headerActions.map(({ icon: Icon, label, fKey, action, tint, ...rest }) => {
+          const highlight = (rest as any).highlight as boolean | undefined;
+          return (
+            <Button
+              key={label}
+              variant="ghost"
+              size="sm"
+              className={`group relative flex h-[3.25rem] min-w-[4.25rem] flex-col items-center justify-center gap-1 rounded-xl border px-2 font-normal shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                highlight
+                  ? 'border-violet-400/60 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-900/40'
+                  : 'border-border/60 bg-background hover:border-primary/30 hover:bg-muted/50'
+              }`}
+              onClick={action}
+            >
+              <Icon className={`h-4 w-4 transition-transform group-hover:scale-110 ${tint}`} />
+              <span className="text-[10px] leading-none font-medium text-center text-foreground">{label}</span>
+              <kbd className="rounded bg-muted px-1 py-px text-[8px] font-mono font-semibold leading-none text-muted-foreground">{fKey}</kbd>
+              {label === 'Suspended' && heldTransactions.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-sm ring-2 ring-background">
+                  {heldTransactions.length}
+                </span>
+              )}
+            </Button>
+          );
+        })}
+
+        {/* Cashier: queue button — only visible in pharmacy mode */}
+        {!isFrontliner && posMode === 'pharmacy' && setIsQueuePanelOpen && (
           <Button
-            key={label}
             variant="ghost"
             size="sm"
-            className="group relative flex h-[3.25rem] min-w-[4.75rem] flex-col items-center justify-center gap-1 rounded-xl border border-border/60 bg-background px-2 font-normal shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/50 hover:shadow-md"
-            onClick={action}
+            className="group relative flex h-[3.25rem] min-w-[4.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-violet-400/60 bg-violet-50 px-2 font-normal shadow-sm transition-all hover:-translate-y-0.5 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-900/40"
+            onClick={() => setIsQueuePanelOpen(true)}
           >
-            <Icon className={`h-4 w-4 transition-transform group-hover:scale-110 ${tint}`} />
-            <span className="text-[10px] leading-none font-medium text-center text-foreground">{label}</span>
-            <kbd className="rounded bg-muted px-1 py-px text-[8px] font-mono font-semibold leading-none text-muted-foreground">{fKey}</kbd>
-            {label === 'Suspended' && heldTransactions.length > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-sm ring-2 ring-background">
-                {heldTransactions.length}
+            <Inbox className="h-4 w-4 transition-transform group-hover:scale-110 text-violet-600" />
+            <span className="text-[10px] leading-none font-medium text-foreground">Queue</span>
+            <kbd className="rounded bg-muted px-1 py-px text-[8px] font-mono font-semibold leading-none text-muted-foreground">Ctrl+Q</kbd>
+            {queuedOrdersCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-2 ring-background">
+                {queuedOrdersCount > 9 ? '9+' : queuedOrdersCount}
               </span>
             )}
           </Button>
-        ))}
+        )}
       </div>
 
       <div className="flex items-center gap-2 border-l pl-4 ml-2 shrink-0">

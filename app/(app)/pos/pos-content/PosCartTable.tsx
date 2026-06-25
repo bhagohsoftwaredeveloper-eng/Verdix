@@ -33,6 +33,8 @@ type Props = {
   commitInlinePrice: (id: string, value: string) => void;
   focusInlineQuantity: (id: string | null) => void;
   commitQty: (id: string) => void;
+  isFrontliner?: boolean;
+  handleSendToQueue?: () => void;
 };
 
 export function PosCartTable({
@@ -42,7 +44,7 @@ export function PosCartTable({
   editingQtyItemId, setEditingQtyItemId,
   editingPriceItemId, setEditingPriceItemId,
   qtyDraft, setQtyDraft,
-  handleCancelAll, startEditName, commitInlineName,
+  handleCancelAll, startEditName, commitInlineName, isFrontliner, handleSendToQueue,
   requestInlinePriceEdit, commitInlinePrice, focusInlineQuantity, commitQty,
 }: Props) {
   return (
@@ -65,6 +67,7 @@ export function PosCartTable({
                 e.preventDefault();
                 e.stopPropagation();
                 if (inputValue.trim()) handleAddItemBySKU(inputValue);
+                else if (isFrontliner) handleSendToQueue?.();
                 else handleDefaultTender();
               }
             }}

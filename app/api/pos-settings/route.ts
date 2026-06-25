@@ -40,7 +40,8 @@ export async function GET(request: NextRequest) {
       { name: 'sales_order_terms', type: 'TEXT NULL' },
       { name: 'enable_cash_transfer_auth', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'cash_transfer_auth_username', type: 'VARCHAR(255) NULL' },
-      { name: 'cash_transfer_auth_password', type: 'VARCHAR(255) NULL' }
+      { name: 'cash_transfer_auth_password', type: 'VARCHAR(255) NULL' },
+      { name: 'pos_mode', type: "ENUM('default','pharmacy') DEFAULT 'default'" }
     ];
 
     const currentColumnsResult = await query(
@@ -133,7 +134,8 @@ export async function GET(request: NextRequest) {
         sales_order_terms AS salesOrderTerms,
         enable_cash_transfer_auth AS enableCashTransferAuth,
         cash_transfer_auth_username AS cashTransferAuthUsername,
-        cash_transfer_auth_password AS cashTransferAuthPassword
+        cash_transfer_auth_password AS cashTransferAuthPassword,
+        pos_mode AS posMode
       FROM pos_settings
       LIMIT 1
     `;
@@ -354,7 +356,8 @@ export async function POST(request: NextRequest) {
         salesOrderTerms: 'sales_order_terms',
         enableCashTransferAuth: 'enable_cash_transfer_auth',
         cashTransferAuthUsername: 'cash_transfer_auth_username',
-        cashTransferAuthPassword: 'cash_transfer_auth_password'
+        cashTransferAuthPassword: 'cash_transfer_auth_password',
+        posMode: 'pos_mode'
       };
 
       const updates: string[] = [];

@@ -10,6 +10,9 @@ import { PosCartTable } from './pos-content/PosCartTable';
 import { PosFooterActions } from './pos-content/PosFooterActions';
 import { PosTotalsPanel } from './pos-content/PosTotalsPanel';
 import { PosDialogs } from './pos-content/PosDialogs';
+import { PosQueuePanel } from './pos-content/PosQueuePanel';
+import { SendToQueueDialog } from './pos-content/SendToQueueDialog';
+import { FrontlinerModePrompt } from './pos-content/FrontlinerModePrompt';
 import { usePOS } from './pos-content/use-pos';
 
 // Re-export types used by sibling dialog files
@@ -77,6 +80,10 @@ function POSContent() {
             focusInlineQuantity={pos.focusInlineQuantity}
             handleRequestPriceEdit={pos.handleRequestPriceEdit}
             handleShutdown={pos.handleShutdown}
+            isFrontliner={pos.isFrontliner}
+            posMode={pos.businessSettings?.posMode}
+            queuedOrdersCount={pos.queuedOrders.length}
+            setIsQueuePanelOpen={pos.setIsQueuePanelOpen}
           />
 
           <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
@@ -105,6 +112,8 @@ function POSContent() {
               commitInlinePrice={pos.commitInlinePrice}
               focusInlineQuantity={pos.focusInlineQuantity}
               commitQty={pos.commitQty}
+              isFrontliner={pos.isFrontliner}
+              handleSendToQueue={pos.handleSendToQueue}
             />
             <PosFooterActions
               handleOpenEndShift={pos.handleOpenEndShift}
@@ -117,6 +126,7 @@ function POSContent() {
               handleOpenOverallReading={pos.handleOpenOverallReading}
               setIsZReadingOpen={pos.setIsZReadingOpen}
               setIsPriceInquiryOpen={pos.setIsPriceInquiryOpen}
+              isFrontliner={pos.isFrontliner}
             />
           </div>
         </div>
@@ -137,6 +147,9 @@ function POSContent() {
           taxDetails={pos.taxDetails}
           items={pos.items}
           handleDefaultTender={pos.handleDefaultTender}
+          isFrontliner={pos.isFrontliner}
+          handleSendToQueue={pos.handleSendToQueue}
+          posMode={pos.businessSettings?.posMode}
         />
       </div>
 
@@ -164,6 +177,30 @@ function POSContent() {
       )}
 
       <PosDialogs {...pos} />
+
+      <SendToQueueDialog
+        open={pos.isSendToQueueOpen}
+        onOpenChange={pos.setIsSendToQueueOpen}
+        items={pos.items}
+        defaultCustomerName={pos.selectedCustomer?.name || 'Walk-in'}
+        totalDue={pos.totalDue}
+        currencySymbol={pos.businessSettings?.currencySymbol}
+        onConfirm={pos.handleConfirmSendToQueue}
+      />
+
+      <PosQueuePanel
+        open={pos.isQueuePanelOpen}
+        onOpenChange={pos.setIsQueuePanelOpen}
+        queuedOrders={pos.queuedOrders}
+        onClaimOrder={pos.handleClaimQueuedOrder}
+        currencySymbol={pos.businessSettings?.currencySymbol}
+      />
+
+      <FrontlinerModePrompt
+        open={pos.isFrontlinerPromptOpen}
+        onOpenChange={pos.setIsFrontlinerPromptOpen}
+        userName={pos.currentUser?.name || pos.currentUser?.username}
+      />
     </>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Product } from '@/lib/types';
 import { useProducts } from '@/hooks/use-api';
 import { useLiveRefresh } from '@/hooks/use-live-refresh';
@@ -12,6 +12,7 @@ type Options = {
   onSelectProduct: (product: Product) => void;
   activeLevelId?: string;
   warehouseId?: string;
+  allProducts?: Product[];
 };
 
 export function useProductSearch({
@@ -20,8 +21,12 @@ export function useProductSearch({
   onSelectProduct,
   activeLevelId,
   warehouseId,
+  allProducts = [],
 }: Options) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const { products, loading, error, refetch: refetchProducts } = useProducts(
     debouncedSearchTerm,
@@ -29,22 +34,26 @@ export function useProductSearch({
     undefined,
     warehouseId
   );
+
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
 
-  // Update displayed products only when not loading or when loading starts to keep previous results
   useEffect(() => {
     if (!loading && !error) {
-      setDisplayedProducts(products);
+      let filtered = products;
+      if (selectedBrand) filtered = filtered.filter(p => p.brand === selectedBrand);
+      if (selectedCategory) filtered = filtered.filter(p => p.category === selectedCategory);
+      setDisplayedProducts(filtered);
     }
-  }, [products, loading, error]);
+  }, [products, loading, error, selectedBrand, selectedCategory]);
 
-  // Handle auto-refresh when stock is updated (e.g., after a sale)
   const stableRefresh = useCallback(() => { refetchProducts(); }, [refetchProducts]);
   useLiveRefresh(stableRefresh);
 
   useEffect(() => {
     if (isOpen) {
       setSearchTerm('');
+      setSelectedBrand('');
+      setSelectedCategory('');
     }
   }, [isOpen, activeLevelId]);
 
@@ -57,7 +66,6 @@ export function useProductSearch({
           onOpenChange(false);
         }
       };
-
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
@@ -77,13 +85,24 @@ export function useProductSearch({
     return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
   }, []);
 
+  // Derive unique brands and categories from the full product list
+  const brands = useMemo(() => {
+    const source = allProducts.length > 0 ? allProducts : products;
+    return [...new Set(source.map(p => p.brand).filter(Boolean))].sort() as string[];
+  }, [allProducts, products]);
+
+  const categories = useMemo(() => {
+    const source = allProducts.length > 0 ? allProducts : products;
+    return [...new Set(source.map(p => p.category).filter(Boolean))].sort() as string[];
+  }, [allProducts, products]);
+
   return {
-    searchTerm,
-    setSearchTerm,
+    searchTerm, setSearchTerm,
+    selectedBrand, setSelectedBrand,
+    selectedCategory, setSelectedCategory,
     displayedProducts,
-    loading,
-    error,
-    handleSelect,
-    stockTone,
+    loading, error,
+    handleSelect, stockTone,
+    brands, categories,
   };
 }

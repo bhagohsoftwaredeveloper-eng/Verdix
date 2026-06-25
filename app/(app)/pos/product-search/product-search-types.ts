@@ -10,4 +10,5 @@ export interface ProductSearchDialogProps {
   defaultLevelId?: string;
   activeLevelName?: string;
   warehouseId?: string;
+  allProducts?: Product[];
 }

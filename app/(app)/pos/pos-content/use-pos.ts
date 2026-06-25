@@ -10,7 +10,7 @@ import { calculateEffectivePrice } from '@/lib/pricing';
 import { getApiUrl } from '@/lib/api-config';
 import { formatStockQuantity } from '@/lib/utils';
 import { WALK_IN_CUSTOMER } from '../customer-account/customer-account-types';
-import { type SaleItem, type SuspendedTransaction, mapVatStatusToTaxType } from './pos-types';
+import { type SaleItem, type SuspendedTransaction, type QueuedOrder, mapVatStatusToTaxType } from './pos-types';
 import type { Customer, ZReadingData, SystemSettings } from '@/lib/types';
 
 export function usePOS() {
@@ -80,6 +80,16 @@ export function usePOS() {
   const [businessSettings, setBusinessSettings] = useState<SystemSettings | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [priceLevels, setPriceLevels] = useState<any[]>([]);
+
+  const isFrontliner = useMemo(
+    () => !!(currentUser?.permissions as string[] | undefined)?.includes('pos_frontliner'),
+    [currentUser]
+  );
+
+  const [queuedOrders, setQueuedOrders] = useState<QueuedOrder[]>([]);
+  const [isQueuePanelOpen, setIsQueuePanelOpen] = useState(false);
+  const [isSendToQueueOpen, setIsSendToQueueOpen] = useState(false);
+  const [isFrontlinerPromptOpen, setIsFrontlinerPromptOpen] = useState(false);
   const [selectedPriceLevelId, setSelectedPriceLevelId] = useState<string>('');
 
   const [enableNegativeInventory, setEnableNegativeInventory] = useState(false);
@@ -285,6 +295,20 @@ export function usePOS() {
     };
   }, [fetchSettings]);
 
+  // Queue polling — only for non-frontliner cashiers when logged in & shift active
+  useEffect(() => {
+    if (!isPosLoggedIn || !shiftActive || isFrontliner) return;
+    const fetchQueue = () => {
+      fetch(getApiUrl('/pos/queue'))
+        .then(r => r.json())
+        .then(result => { if (result.success) setQueuedOrders(result.data); })
+        .catch(() => {});
+    };
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 8000);
+    return () => clearInterval(interval);
+  }, [isPosLoggedIn, shiftActive, isFrontliner]);
+
   useEffect(() => {
     if (enableCustomerDisplay && isPosLoggedIn) openOnSecondScreen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -474,6 +498,9 @@ export function usePOS() {
           break;
         }
         case 'F9': e.preventDefault(); setIsProductSearchOpen(prev => !prev); break;
+        case 'q': case 'Q': {
+          if (e.ctrlKey && !isFrontliner) { e.preventDefault(); setIsQueuePanelOpen(true); } break;
+        }
         case 'F10': handleOpenTender('CREDIT_CARD'); break;
         case 'F11': handleOpenTender('E_WALLET'); break;
         case 'F12': handleOpenTender('POINTS'); break;
@@ -601,6 +628,65 @@ export function usePOS() {
     setItems(items.filter(item => item.id !== productId));
   };
 
+  const handleSendToQueue = () => {
+    if (items.length === 0) {
+      toast({ title: 'Empty Cart', description: 'Add items before sending to queue.', variant: 'destructive' });
+      return;
+    }
+    setIsSendToQueueOpen(true);
+  };
+
+  const handleConfirmSendToQueue = async (customerName: string, queueNotes: string) => {
+    const userId = currentUser?.uid || currentUser?.id;
+    const userName = currentUser?.displayName || currentUser?.username || 'Frontliner';
+    try {
+      const response = await fetch(getApiUrl('/pos/queue'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items,
+          customerId: selectedCustomer?.id === 'walk-in' ? undefined : selectedCustomer?.id,
+          customerName: customerName || selectedCustomer?.name || 'Walk-in',
+          queueNotes,
+          fronlinerId: userId,
+          frontlinerName: userName,
+          terminalId: selectedTerminalId,
+          terminalName: currentTerminalName,
+          shiftId: currentShiftId,
+        }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setItems([]);
+        setSelectedItemId(null);
+        setSelectedCustomer(WALK_IN_CUSTOMER);
+        return result.data as { queueNumber: number; dailyQueueNumber: number };
+      } else throw new Error(result.error);
+    } catch (error: any) {
+      toast({ title: 'Queue Error', description: error.message || 'Failed to send order.', variant: 'destructive' });
+      return null;
+    }
+  };
+
+  const handleClaimQueuedOrder = async (orderId: string) => {
+    if (items.length > 0) {
+      toast({ title: 'Cart Not Empty', description: 'Clear the current cart before loading a queued order.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const response = await fetch(getApiUrl(`/pos/queue?id=${orderId}`), { method: 'DELETE' });
+      const result = await response.json();
+      if (result.success) {
+        setItems(result.data.items);
+        setQueuedOrders(prev => prev.filter(o => o.id !== orderId));
+        setIsQueuePanelOpen(false);
+        toast({ title: `Order #${result.data.queueNumber} Loaded`, description: `From ${result.data.frontlinerName || 'frontliner'}.` });
+      } else throw new Error(result.error);
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to claim order.', variant: 'destructive' });
+    }
+  };
+
   const handleSuccessfulSale = (paymentMethod: string, amount: number) => {
     if (paymentMethod.toUpperCase() === 'CASH') setCashSales(prev => prev + amount);
     setItems([]);
@@ -609,6 +695,7 @@ export function usePOS() {
   };
 
   const handleOpenTender = (method: string) => {
+    if (isFrontliner) return;
     if (items.length > 0) {
       if (!enableNegativeInventory) {
         const lowStock = items.filter(item => item.quantity > item.stock);
@@ -785,6 +872,12 @@ export function usePOS() {
     setIsCheckingShift(true);
     setIsPosLoggedIn(true);
     setCurrentUser(user);
+
+    // Show pharmacy frontliner info prompt
+    const userIsFrontliner = !!(user?.permissions as string[] | undefined)?.includes('pos_frontliner');
+    if (businessSettings?.posMode === 'pharmacy' && userIsFrontliner) {
+      setIsFrontlinerPromptOpen(true);
+    }
     localStorage.setItem('pos_current_user', JSON.stringify(user));
 
     const savedCart = localStorage.getItem('pos_current_cart');
@@ -984,6 +1077,11 @@ export function usePOS() {
     currentTime, shiftActive, isPosLoggedIn, isCheckingShift, isEndingShift,
     currentUser, businessSettings, isTrainingMode, enableCustomerDisplay,
     openOnSecondScreen, showQuantityInSearch, showOverlay,
+    // frontliner / queue
+    isFrontliner, queuedOrders, isQueuePanelOpen, setIsQueuePanelOpen,
+    isSendToQueueOpen, setIsSendToQueueOpen,
+    isFrontlinerPromptOpen, setIsFrontlinerPromptOpen,
+    handleSendToQueue, handleConfirmSendToQueue, handleClaimQueuedOrder,
     // shift dialogs
     isCashCountAuthOpen, setIsCashCountAuthOpen,
     cashCountAuthCredentials,
@@ -1032,6 +1130,8 @@ export function usePOS() {
     // price levels
     priceLevels, selectedPriceLevelId, setSelectedPriceLevelId,
     activeLevelId, defaultLevelId, activeLevelName,
+    // products (for search filters)
+    products,
     // totals
     totalDue, subTotal, vatSales, vatAmount, taxDetails, numberOfItems,
     // handlers

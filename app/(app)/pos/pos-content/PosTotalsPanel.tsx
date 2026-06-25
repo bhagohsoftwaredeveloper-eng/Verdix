@@ -1,7 +1,7 @@
-﻿'use client';
+'use client';
 
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, User, X, ChevronRight } from 'lucide-react';
+import { ShoppingCart, User, X, ChevronRight, SendToBack } from 'lucide-react';
 import { WALK_IN_CUSTOMER } from '../customer-account/CustomerAccountDialog';
 import type { SaleItem } from './pos-types';
 import type { Customer, SystemSettings } from '@/lib/types';
@@ -30,18 +30,21 @@ type Props = {
   taxDetails: TaxDetails;
   items: SaleItem[];
   handleDefaultTender: () => void;
+  isFrontliner?: boolean;
+  handleSendToQueue?: () => void;
+  posMode?: 'default' | 'pharmacy';
 };
 
 export function PosTotalsPanel({
   businessSettings, currentTerminalName, currentUser,
   selectedCustomer, handleSelectCustomer, setIsCustomerSelectOpen,
   totalDue, numberOfItems, subTotal, vatSales, vatAmount, taxDetails,
-  items, handleDefaultTender,
+  items, handleDefaultTender, isFrontliner, handleSendToQueue, posMode,
 }: Props) {
   return (
     <div className="w-96 bg-background border-l shadow-2xl z-20 flex flex-col h-full">
       {/* Branded Header */}
-      <div className="bg-gradient-to-br from-primary to-primary/85 text-white px-5 py-4 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)]">
+      <div className={`text-white px-5 py-4 shadow-[0_10px_25px_-5px_hsl(var(--primary)/0.4)] ${isFrontliner ? 'bg-gradient-to-br from-violet-700 to-violet-600' : 'bg-gradient-to-br from-primary to-primary/85'}`}>
         <div className="flex items-center gap-3">
           {businessSettings?.logoPath ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -60,9 +63,23 @@ export function PosTotalsPanel({
           <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
             <User className="w-4 h-4" />
           </div>
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-white/60 leading-none">Cashier</p>
-            <p className="font-bold text-sm leading-none mt-1 truncate">{currentUser?.displayName || 'Cashier Terminal'}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wider text-white/60 leading-none">
+              {isFrontliner ? 'Frontliner' : 'Cashier'}
+            </p>
+            <p className="font-bold text-sm leading-none mt-1 truncate">{currentUser?.displayName || (isFrontliner ? 'Frontliner' : 'Cashier Terminal')}</p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {posMode === 'pharmacy' && (
+              <span className="rounded-md bg-cyan-500/80 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                Pharmacy
+              </span>
+            )}
+            {isFrontliner && (
+              <span className="rounded-md bg-white/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
+                Frontliner
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -100,7 +117,7 @@ export function PosTotalsPanel({
       {/* Total Amount Due */}
       <div className="px-6 py-6 text-center border-b bg-muted/20 relative overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
-        <span className="relative text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Amount Due</span>
+        <span className="relative text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Amount</span>
         <div className="relative flex items-start justify-center mt-1.5">
           <span className="text-3xl font-bold text-primary mt-2 mr-1">₱</span>
           <span className="text-6xl font-black tracking-tighter text-primary tabular-nums leading-none">
@@ -153,22 +170,34 @@ export function PosTotalsPanel({
         </div>
       </div>
 
-      {/* Tender Button */}
+      {/* Action Button */}
       <div className="p-5 bg-muted/10 border-t">
-        <Button
-          size="lg"
-          className="w-full h-20 text-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-1 transition-all rounded-xl"
-          onClick={handleDefaultTender}
-          disabled={items.length === 0}
-        >
-          <span className="flex-1 text-left pl-4">TENDER</span>
-          <div className="bg-white/20 rounded-lg p-2 mr-2">
-            <ChevronRight className="w-8 h-8" />
-          </div>
-        </Button>
+        {isFrontliner ? (
+          <Button
+            size="lg"
+            className="w-full h-20 text-2xl font-bold shadow-lg bg-violet-600 hover:bg-violet-700 shadow-violet-400/20 hover:shadow-violet-400/40 hover:-translate-y-1 transition-all rounded-xl"
+            onClick={handleSendToQueue}
+            disabled={items.length === 0}
+          >
+            <span className="flex-1 text-left pl-4">SEND TO QUEUE</span>
+            <div className="bg-white/20 rounded-lg p-2 mr-2">
+              <SendToBack className="w-8 h-8" />
+            </div>
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            className="w-full h-20 text-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-1 transition-all rounded-xl"
+            onClick={handleDefaultTender}
+            disabled={items.length === 0}
+          >
+            <span className="flex-1 text-left pl-4">TENDER</span>
+            <div className="bg-white/20 rounded-lg p-2 mr-2">
+              <ChevronRight className="w-8 h-8" />
+            </div>
+          </Button>
+        )}
       </div>
     </div>
   );
 }
-
-

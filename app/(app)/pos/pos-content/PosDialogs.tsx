@@ -57,6 +57,7 @@ export function PosDialogs(pos: Props) {
         defaultLevelId={pos.defaultLevelId}
         activeLevelName={pos.activeLevelName}
         warehouseId={pos.inventoryLocation}
+        allProducts={pos.products}
       />
 
       <DiscountDialog

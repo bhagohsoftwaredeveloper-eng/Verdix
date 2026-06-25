@@ -1,5 +1,6 @@
 "use client"
 
+import { useRef, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
 import {
   Toast,
@@ -9,23 +10,83 @@ import {
   ToastTitle,
   ToastViewport,
 } from "@/components/ui/toast"
+import { CheckCircle2, XCircle, Info } from "lucide-react"
+
+const TOAST_DURATION = 4000
 
 export function Toaster() {
-  const { toasts } = useToast()
+  const { toasts, dismiss } = useToast()
+
+  const wasLoadingRef   = useRef(new Set<string>())
+  const dismissTimerRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+
+  useEffect(() => {
+    toasts.forEach((t) => {
+      if (t.loading) {
+        wasLoadingRef.current.add(t.id)
+        const existing = dismissTimerRef.current.get(t.id)
+        if (existing) { clearTimeout(existing); dismissTimerRef.current.delete(t.id) }
+      } else if (wasLoadingRef.current.has(t.id) && !dismissTimerRef.current.has(t.id)) {
+        wasLoadingRef.current.delete(t.id)
+        const timer = setTimeout(() => {
+          dismiss(t.id)
+          dismissTimerRef.current.delete(t.id)
+        }, 1600)
+        dismissTimerRef.current.set(t.id, timer)
+      }
+    })
+  }, [toasts, dismiss])
 
   return (
-    <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+    <ToastProvider duration={TOAST_DURATION}>
+      {toasts.map(({ id, title, description, action, loading, icon, variant, ...props }) => {
+        const isLoading = !!loading
+
+        const autoIcon = icon ?? (
+          variant === 'destructive'
+            ? <XCircle      className="h-4 w-4 text-red-400 shrink-0"      />
+            : variant === 'success'
+            ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0"  />
+            : <Info         className="h-4 w-4 text-foreground/40 shrink-0" />
+        )
+
+        /* bar color matches variant */
+        const barTrack = isLoading
+          ? 'bg-blue-200 dark:bg-blue-900'
+          : variant === 'destructive'  ? 'bg-red-400/30'
+          : variant === 'success'      ? 'bg-emerald-300/50 dark:bg-emerald-800/50'
+          : 'bg-primary/20'
+
+        const barFill = isLoading
+          ? 'bg-blue-500 dark:bg-blue-400 animate-toast-bar'
+          : variant === 'destructive'  ? 'bg-red-400 animate-toast-progress origin-left'
+          : variant === 'success'      ? 'bg-emerald-500 animate-toast-progress origin-left'
+          : 'bg-primary animate-toast-progress origin-left'
+
         return (
-          <Toast key={id} {...props}>
-            <div className="grid gap-1">
-              {title && <ToastTitle>{title}</ToastTitle>}
-              {description && (
-                <ToastDescription>{description}</ToastDescription>
-              )}
+          <Toast
+            key={id}
+            variant={isLoading ? 'loading' : variant}
+            duration={isLoading ? 999999999 : TOAST_DURATION}
+            {...props}
+          >
+            {/* Content */}
+            <div className="flex items-start gap-3 px-4 pt-3.5 pb-3 pr-9">
+              {!isLoading && <div className="mt-px shrink-0">{autoIcon}</div>}
+              <div className="flex-1 min-w-0">
+                {title       && <ToastTitle>{title}</ToastTitle>}
+                {description && <ToastDescription>{description}</ToastDescription>}
+                {action      && <div className="mt-2">{action}</div>}
+              </div>
             </div>
-            {action}
-            <ToastClose />
+
+            {/* Close */}
+            {!isLoading && <ToastClose />}
+
+            {/* Progress / loading bar — always visible */}
+            <div className={`h-[3px] w-full overflow-hidden ${barTrack}`}>
+              <div className={`h-full ${isLoading ? 'w-1/2' : 'w-full'} ${barFill}`} />
+            </div>
           </Toast>
         )
       })}

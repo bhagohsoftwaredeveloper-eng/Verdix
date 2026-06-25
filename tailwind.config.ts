@@ -77,6 +77,15 @@ export default {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		keyframes: {
+  			'toast-bar': {
+  				'0%':   { transform: 'translateX(-100%)' },
+  				'60%':  { transform: 'translateX(60%)' },
+  				'100%': { transform: 'translateX(100%)' },
+  			},
+  			'toast-progress': {
+  				'0%':   { transform: 'scaleX(1)' },
+  				'100%': { transform: 'scaleX(0)' },
+  			},
   			'accordion-down': {
   				from: {
   					height: '0'
@@ -147,6 +156,8 @@ export default {
   			}
   		},
   		animation: {
+  			'toast-bar':      'toast-bar 1.4s cubic-bezier(0.4,0,0.2,1) infinite',
+  			'toast-progress': 'toast-progress 4s linear forwards',
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
   			'fade-in': 'fade-in 0.3s ease-in-out',

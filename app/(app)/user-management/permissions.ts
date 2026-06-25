@@ -1,5 +1,6 @@
 export const ALL_PERMISSIONS = [
     { id: 'access_pos', label: 'Access Point of Sale' },
+    { id: 'pos_frontliner', label: 'POS Frontliner (Tag Orders Only)' },
     { id: 'view_dashboard', label: 'View Dashboard' },
     { id: 'manage_products', label: 'Manage Products' },
     { id: 'manage_inventory', label: 'Manage Inventory' },
