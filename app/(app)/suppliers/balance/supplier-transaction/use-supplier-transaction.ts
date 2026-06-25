@@ -3,10 +3,17 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { getSupplierTransactions, SupplierTransaction } from '../../actions';
+import { printSupplierSOA, SOASupplierInfo } from '@/lib/print-supplier-soa';
+import { getApiUrl } from '@/lib/api-config';
 
 export const PAGE_SIZE = 5;
 
-export function useSupplierTransaction(supplierId: string, supplierName: string, isOpen: boolean) {
+export function useSupplierTransaction(
+  supplierId: string,
+  supplierName: string,
+  isOpen: boolean,
+  supplierInfo?: SOASupplierInfo,
+) {
   const [transactions, setTransactions] = useState<SupplierTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -102,9 +109,10 @@ export function useSupplierTransaction(supplierId: string, supplierName: string,
   };
 
   const handlePrint = () => {
+    if (!transactions.length) return;
+    const fmtN = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2 });
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-    const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2 });
     printWindow.document.write(`
       <!DOCTYPE html><html><head>
         <title>Transaction History - ${supplierName}</title>
@@ -128,9 +136,9 @@ export function useSupplierTransaction(supplierId: string, supplierName: string,
               <td>${format(new Date(txn.date), 'MMM dd, yyyy')}</td>
               <td>${txn.type === 'PURCHASE' ? txn.reference : (txn.reference || '-')}</td>
               <td>${txn.description}</td>
-              <td class="text-right">₱${fmt(txn.amount)}</td>
-              <td class="text-right">₱${fmt(txn.paidAmount || 0)}</td>
-              <td class="text-right">₱${fmt(txn.balance || 0)}</td>
+              <td class="text-right">₱${fmtN(txn.amount)}</td>
+              <td class="text-right">₱${fmtN(txn.paidAmount || 0)}</td>
+              <td class="text-right">₱${fmtN(txn.balance || 0)}</td>
             </tr>
             ${txn.payments?.map(pay => `
               <tr class="payment-row">
@@ -138,7 +146,7 @@ export function useSupplierTransaction(supplierId: string, supplierName: string,
                 <td>${pay.reference || '-'}</td>
                 <td>Allocation: ${pay.paymentMethod}</td>
                 <td class="text-right">-</td>
-                <td class="text-right">₱${fmt(pay.amount)}</td>
+                <td class="text-right">₱${fmtN(pay.amount)}</td>
                 <td class="text-right">-</td>
               </tr>`).join('') || ''}
           `).join('')}
@@ -149,6 +157,36 @@ export function useSupplierTransaction(supplierId: string, supplierName: string,
     printWindow.document.close();
   };
 
+  const handlePrintSOA = async () => {
+    if (!filteredTransactions.length) return;
+    try {
+      const res = await fetch(getApiUrl('/pos-settings'));
+      const json = res.ok ? await res.json() : null;
+      const biz = json?.data ?? {};
+
+      printSupplierSOA({
+        supplier: supplierInfo ?? { id: supplierId, name: supplierName },
+        transactions: filteredTransactions,
+        period: { from: startDate || undefined, to: endDate || undefined },
+        business: {
+          businessName: biz.businessName || supplierName,
+          address: biz.address,
+          contactNumber: biz.contactNumber,
+          tin: biz.tin,
+        },
+      });
+    } catch (err) {
+      console.error('Failed to load POS settings for SOA:', err);
+      // Fallback: print without business info
+      printSupplierSOA({
+        supplier: supplierInfo ?? { id: supplierId, name: supplierName },
+        transactions: filteredTransactions,
+        period: { from: startDate || undefined, to: endDate || undefined },
+        business: { businessName: supplierName },
+      });
+    }
+  };
+
   return {
     transactions, loading,
     searchTerm, setSearchTerm,
@@ -157,6 +195,6 @@ export function useSupplierTransaction(supplierId: string, supplierName: string,
     currentPage, setCurrentPage,
     filteredTransactions, totalPages, paginatedTransactions,
     summary, currentBalance,
-    handleExportCSV, handlePrint,
+    handleExportCSV, handlePrint, handlePrintSOA,
   };
 }

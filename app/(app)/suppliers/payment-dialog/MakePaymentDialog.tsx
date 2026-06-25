@@ -14,7 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Info } from 'lucide-react';
 import { usePaymentMethods } from '@/hooks/use-api';
 import { SupplierWithBalance } from '../actions';
 import { PoAllocationPanel } from './PoAllocationPanel';
@@ -35,7 +35,7 @@ export function MakePaymentDialog({ supplier, onPaymentComplete, trigger, open: 
     loadingPOs, filteredPOs, selectedPOs,
     poSearchTerm, setPoSearchTerm,
     handleAutoAllocate, handlePOToggle, handlePOAmountChange,
-    totalAllocated,
+    totalAllocated, advanceCredit,
     showPrintResult, setShowPrintResult, handlePrintVoucher,
   } = useMakePayment({ supplier, onPaymentComplete, open: controlledOpen, onOpenChange });
 
@@ -51,6 +51,16 @@ export function MakePaymentDialog({ supplier, onPaymentComplete, trigger, open: 
             Record a payment to {supplier.name}. Current Balance: ₱{supplier.balance.toFixed(2)}
           </DialogDescription>
         </DialogHeader>
+
+        {advanceCredit > 0 && (
+          <div className="flex items-start gap-2 rounded-md bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-800 dark:text-blue-300 -mt-1">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>
+              <strong>Advance credit available: ₱{advanceCredit.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
+              {' '}— this supplier has unallocated payments already on file. The net balance due is ₱{Math.max(0, supplier.balance - advanceCredit).toLocaleString('en-US', { minimumFractionDigits: 2 })}.
+            </span>
+          </div>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField

@@ -64,7 +64,7 @@ export function PoAllocationPanel({
         ) : (
           <div className="space-y-2">
             {filteredPOs.map(po => (
-              <div key={po.id} className="flex flex-col gap-1 border-b pb-2 last:border-0">
+              <div key={po.id} className={`flex flex-col gap-1 border-b pb-2 last:border-0 ${po.isOverdue ? 'bg-red-50/50 dark:bg-red-950/10 -mx-1 px-1 rounded' : ''}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 overflow-hidden">
                     <Checkbox
@@ -72,12 +72,17 @@ export function PoAllocationPanel({
                       checked={!!selectedPOs[po.id]}
                       onCheckedChange={() => handlePOToggle(po.id, po.balance)}
                     />
-                    <label htmlFor={`po-${po.id}`} className="text-xs font-medium cursor-pointer truncate">
+                    <label htmlFor={`po-${po.id}`} className={`text-xs font-medium cursor-pointer truncate ${po.isOverdue ? 'text-red-700 dark:text-red-400' : ''}`}>
                       {po.referenceNumber || po.id}
                     </label>
+                    {po.isOverdue && (
+                      <span className="text-[9px] text-red-600 font-semibold shrink-0">OVERDUE</span>
+                    )}
                   </div>
                   <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                    {format(new Date(po.date), 'MM/dd/yy')}
+                    {po.dueDate
+                      ? `Due ${format(new Date(po.dueDate + 'T00:00:00'), 'MM/dd/yy')}`
+                      : format(new Date(po.date), 'MM/dd/yy')}
                   </span>
                 </div>
                 <div className="flex items-center justify-between pl-6">

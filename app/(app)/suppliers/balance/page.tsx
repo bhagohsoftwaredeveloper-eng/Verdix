@@ -2,6 +2,8 @@
 
 import { MakePaymentDialog } from '../payment-dialog/MakePaymentDialog';
 import { SupplierTransactionDialog } from './supplier-transaction/SupplierTransactionDialog';
+import { CreditMemoDialog } from '../credit-memo/CreditMemoDialog';
+import { BulkPaymentDialog } from '../bulk-payment/BulkPaymentDialog';
 import { SupplierSummaryCards } from './SupplierSummaryCards';
 import { SupplierBalanceTable } from './SupplierBalanceTable';
 import { useSupplierBalance } from './use-supplier-balance';
@@ -13,12 +15,17 @@ export default function SupplierBalancePage() {
     filters, setFilters,
     currentPage, setCurrentPage,
     pageSize, setPageSize,
-    totalPayable, overdueTotal, awaitingCount,
+    totalPayable, overdueTotal, awaitingCount, agingBuckets,
     selectedSupplier,
     isTransactionDialogOpen, setIsTransactionDialogOpen,
     isPaymentDialogOpen, setIsPaymentDialogOpen,
-    handleViewTransactions, handleMakePayment,
+    isCreditMemoDialogOpen, setIsCreditMemoDialogOpen,
+    handleViewTransactions, handleMakePayment, handleRecordReturn,
     loadSuppliers,
+    selectedIds, selectedSuppliers,
+    allPageSelected, somePageSelected,
+    handleToggleSelect, handleSelectAll, clearSelection,
+    isBulkPaymentOpen, setIsBulkPaymentOpen, handleBulkPayment,
   } = useSupplierBalance();
 
   return (
@@ -31,6 +38,7 @@ export default function SupplierBalancePage() {
         totalPayable={totalPayable}
         overdueTotal={overdueTotal}
         awaitingCount={awaitingCount}
+        agingBuckets={agingBuckets}
       />
 
       <SupplierBalanceTable
@@ -48,6 +56,14 @@ export default function SupplierBalancePage() {
         setPageSize={setPageSize}
         onViewTransactions={handleViewTransactions}
         onMakePayment={handleMakePayment}
+        onRecordReturn={handleRecordReturn}
+        selectedIds={selectedIds}
+        allPageSelected={allPageSelected}
+        somePageSelected={somePageSelected}
+        onToggleSelect={handleToggleSelect}
+        onSelectAll={handleSelectAll}
+        onClearSelection={clearSelection}
+        onBulkPayment={handleBulkPayment}
       />
 
       {selectedSupplier && (
@@ -55,6 +71,16 @@ export default function SupplierBalancePage() {
           <SupplierTransactionDialog
             supplierId={selectedSupplier.id}
             supplierName={selectedSupplier.name}
+            supplier={{
+              id: selectedSupplier.id,
+              name: selectedSupplier.name,
+              company: selectedSupplier.company,
+              address: selectedSupplier.address,
+              contactNumber: selectedSupplier.contactNumber,
+              email: selectedSupplier.email,
+              tin: selectedSupplier.tin,
+              paymentTerms: selectedSupplier.paymentTerms,
+            }}
             open={isTransactionDialogOpen}
             onOpenChange={setIsTransactionDialogOpen}
           />
@@ -64,8 +90,25 @@ export default function SupplierBalancePage() {
             onOpenChange={setIsPaymentDialogOpen}
             onPaymentComplete={loadSuppliers}
           />
+          <CreditMemoDialog
+            supplierId={selectedSupplier.id}
+            supplierName={selectedSupplier.name}
+            open={isCreditMemoDialogOpen}
+            onOpenChange={setIsCreditMemoDialogOpen}
+            onComplete={loadSuppliers}
+          />
         </>
       )}
+
+      <BulkPaymentDialog
+        suppliers={selectedSuppliers}
+        open={isBulkPaymentOpen}
+        onOpenChange={setIsBulkPaymentOpen}
+        onComplete={() => {
+          clearSelection();
+          loadSuppliers();
+        }}
+      />
     </div>
   );
 }

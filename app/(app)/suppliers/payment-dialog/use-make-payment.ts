@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from '@/hooks/use-toast';
-import { addSupplierPayment, SupplierWithBalance, getUnpaidPurchaseOrders } from '../actions';
+import { addSupplierPayment, SupplierWithBalance, getUnpaidPurchaseOrders, getSupplierAdvanceCredit } from '../actions';
 import { printSupplierVoucher } from '@/lib/print-supplier-voucher';
 import { dispatchStockUpdate } from '@/hooks/use-live-refresh';
 import { paymentSchema, PaymentFormValues } from './payment-dialog-types';
@@ -27,6 +27,7 @@ export function useMakePayment({ supplier, onPaymentComplete, open: controlledOp
   const [unpaidPOs, setUnpaidPOs] = useState<any[]>([]);
   const [selectedPOs, setSelectedPOs] = useState<Record<string, number>>({});
   const [loadingPOs, setLoadingPOs] = useState(false);
+  const [advanceCredit, setAdvanceCredit] = useState(0);
   const [showPrintResult, setShowPrintResult] = useState(false);
   const [lastPayment, setLastPayment] = useState<any>(null);
   const [poSearchTerm, setPoSearchTerm] = useState('');
@@ -43,7 +44,10 @@ export function useMakePayment({ supplier, onPaymentComplete, open: controlledOp
   });
 
   useEffect(() => {
-    if (open) fetchPOs();
+    if (open) {
+      fetchPOs();
+      getSupplierAdvanceCredit(supplier.id).then(setAdvanceCredit).catch(() => setAdvanceCredit(0));
+    }
   }, [open, supplier.id]);
 
   const fetchPOs = async () => {
@@ -151,7 +155,7 @@ export function useMakePayment({ supplier, onPaymentComplete, open: controlledOp
     loadingPOs, filteredPOs, selectedPOs,
     poSearchTerm, setPoSearchTerm,
     handleAutoAllocate, handlePOToggle, handlePOAmountChange,
-    totalAllocated,
+    totalAllocated, advanceCredit,
     showPrintResult, setShowPrintResult, handlePrintVoucher,
   };
 }

@@ -8,21 +8,27 @@ import { Button } from '@/components/ui/button';
 import {
   Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Loader2, Printer, Download } from 'lucide-react';
+import { Loader2, Printer, Download, FileText } from 'lucide-react';
 import { useSupplierTransaction, PAGE_SIZE } from './use-supplier-transaction';
 import { TransactionSummaryCards } from './TransactionSummaryCards';
 import { TransactionFilters } from './TransactionFilters';
 import { TransactionItem } from './TransactionItem';
+import { SOASupplierInfo } from '@/lib/print-supplier-soa';
 
 interface Props {
   supplierId: string;
   supplierName: string;
+  /** Full supplier object — used to populate the SOA header */
+  supplier?: SOASupplierInfo;
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
-export function SupplierTransactionDialog({ supplierId, supplierName, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: Props) {
+export function SupplierTransactionDialog({
+  supplierId, supplierName, supplier,
+  trigger, open: controlledOpen, onOpenChange: setControlledOpen,
+}: Props) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
@@ -36,8 +42,8 @@ export function SupplierTransactionDialog({ supplierId, supplierName, trigger, o
     currentPage, setCurrentPage,
     filteredTransactions, totalPages, paginatedTransactions,
     summary, currentBalance,
-    handleExportCSV, handlePrint,
-  } = useSupplierTransaction(supplierId, supplierName, open);
+    handleExportCSV, handlePrint, handlePrintSOA,
+  } = useSupplierTransaction(supplierId, supplierName, open, supplier);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -53,10 +59,30 @@ export function SupplierTransactionDialog({ supplierId, supplierName, trigger, o
               </DialogDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handlePrint} disabled={loading || !transactions.length}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrintSOA}
+                disabled={loading || !filteredTransactions.length}
+                title="Print Statement of Account"
+              >
+                <FileText className="h-4 w-4 mr-2" />Print SOA
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handlePrint}
+                disabled={loading || !transactions.length}
+                title="Quick print — transaction list"
+              >
                 <Printer className="h-4 w-4 mr-2" />Print
               </Button>
-              <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={loading || !transactions.length}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCSV}
+                disabled={loading || !transactions.length}
+              >
                 <Download className="h-4 w-4 mr-2" />Export CSV
               </Button>
             </div>
