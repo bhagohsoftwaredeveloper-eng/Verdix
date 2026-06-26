@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
@@ -31,9 +31,25 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [licenseChecked, setLicenseChecked] = useState(false);
 
   // const auth = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    fetch('/api/license/status')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res?.data?.status !== 'active') {
+          router.replace('/activate');
+        } else {
+          setLicenseChecked(true);
+        }
+      })
+      .catch(() => {
+        setLicenseChecked(true);
+      });
+  }, [router]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -89,6 +105,14 @@ export default function LoginPage() {
     }
   };
 
+
+  if (!licenseChecked) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full lg:grid lg:grid-cols-2">
