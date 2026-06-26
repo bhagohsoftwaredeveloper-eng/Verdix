@@ -392,6 +392,39 @@ async function handle(req: Req, res: Res) {
         }
       }
 
+      // System configuration (admin only)
+      if (p.startsWith('/api/config')) {
+        if (session.role !== 'admin')
+          return sendJson(res, 403, { success: false, error: 'Only administrators can access system configuration.' });
+
+        if (method === 'GET' && p === '/api/config/backup') {
+          const backup = await svc.exportBackup();
+          const json = JSON.stringify(backup, null, 2);
+          const filename = `verdix-license-backup-${new Date().toISOString().slice(0, 10)}.json`;
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+          });
+          return res.end(json);
+        }
+
+        if (method === 'POST' && p === '/api/config/reset') {
+          if (IS_PROD)
+            return sendJson(res, 403, { success: false, error: 'Reset is disabled in production. Contact your database administrator.' });
+          await svc.resetAllData();
+          await svc.log(null, null, 'system.reset', `All data reset by ${session.username}`);
+          return sendJson(res, 200, { success: true });
+        }
+
+        if (method === 'POST' && p === '/api/config/restore') {
+          const body = await readBody(req);
+          const result = await svc.importBackup(body);
+          await svc.log(null, null, 'system.restore',
+            `Backup restored by ${session.username}: ${result.customers} customers, ${result.licenses} licenses, ${result.activations} activations`);
+          return sendJson(res, 200, { success: true, data: result });
+        }
+      }
+
       return sendJson(res, 404, { success: false, error: 'Unknown endpoint.' });
     } catch (e: any) {
       console.error('API error:', e);

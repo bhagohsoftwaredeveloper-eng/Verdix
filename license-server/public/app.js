@@ -62,24 +62,27 @@ function closeModal(id) { document.getElementById(id).classList.remove('show'); 
 
 // ── tabs ─────────────────────────────────────────────────────────────────────
 const TAB_META = {
-  overview: ['Overview', 'License management at a glance'],
-  customers: ['Customers', 'Businesses you sell licenses to'],
-  licenses: ['Licenses', 'Issue and manage product keys'],
-  activations: ['Activations', 'Machines currently using your licenses'],
-  users: ['Team', 'Administrators who can access this dashboard'],
+  overview:    ['Overview',              'License management at a glance'],
+  customers:   ['Customers',             'Businesses you sell licenses to'],
+  licenses:    ['Licenses',              'Issue and manage product keys'],
+  activations: ['Activations',           'Machines currently using your licenses'],
+  users:       ['Team',                  'Administrators who can access this dashboard'],
+  config:      ['System Configuration',  'Backup, restore, and reset license data'],
 };
+const ALL_TABS = ['overview', 'customers', 'licenses', 'activations', 'users', 'config'];
 function showTab(tab) {
-  ['overview', 'customers', 'licenses', 'activations', 'users'].forEach((t) => {
+  ALL_TABS.forEach((t) => {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
-    document.querySelector('[data-tab="' + t + '"]').classList.toggle('active', t === tab);
+    const btn = document.querySelector('[data-tab="' + t + '"]');
+    if (btn) btn.classList.toggle('active', t === tab);
   });
   const m = TAB_META[tab];
   if (m) { $('page-title').textContent = m[0]; $('page-sub').textContent = m[1]; }
-  if (tab === 'overview') loadStats();
-  if (tab === 'customers') loadCustomers();
-  if (tab === 'licenses') loadLicenses();
+  if (tab === 'overview')    loadStats();
+  if (tab === 'customers')   loadCustomers();
+  if (tab === 'licenses')    loadLicenses();
   if (tab === 'activations') loadActivations();
-  if (tab === 'users') loadUsers();
+  if (tab === 'users')       loadUsers();
 }
 
 // ── overview ─────────────────────────────────────────────────────────────────
@@ -374,6 +377,77 @@ async function deleteUser(id, username) {
   loadUsers();
 }
 
+// ── system configuration ─────────────────────────────────────────────────────
+async function downloadBackup(btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Preparing…';
+  try {
+    const res = await fetch('/api/config/backup');
+    if (res.status === 401) { location.href = '/login'; return; }
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `verdix-license-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch (ex) {
+    alert('Backup failed: ' + ex.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+async function doRestore(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  const msg = $('restore-msg');
+  msg.style.display = 'none';
+
+  if (!confirm(`Restore from "${file.name}"?\n\nAll current customers, licenses, and activations will be replaced. Admin accounts are kept.\n\nThis cannot be undone.`)) return;
+
+  msg.textContent = 'Uploading and restoring…';
+  msg.style.display = 'block';
+  msg.style.cssText = 'display:block;margin-top:14px;padding:11px 13px;border-radius:10px;font-size:13px;color:var(--muted2);background:var(--panel2);border:1px solid var(--border2)';
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const res = await api('/api/config/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.success) throw new Error(res.error);
+    const d = res.data;
+    msg.textContent = `✓ Restored: ${d.customers} customers, ${d.licenses} licenses, ${d.activations} activations.`;
+    msg.style.cssText = 'display:block;margin-top:14px;padding:11px 13px;border-radius:10px;font-size:13px;color:#86efac;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.35)';
+  } catch (ex) {
+    msg.textContent = 'Restore failed: ' + ex.message;
+    msg.style.cssText = 'display:block;margin-top:14px;padding:11px 13px;border-radius:10px;font-size:13px;color:#fca5a5;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35)';
+  }
+}
+
+async function resetData() {
+  if (!confirm('Reset all data?\n\nThis will permanently delete ALL customers, licenses, activations, and audit logs. Admin accounts are kept.\n\nThis CANNOT be undone.')) return;
+  const typed = prompt('Type DELETE to confirm:');
+  if (typed !== 'DELETE') { if (typed !== null) alert('Cancelled — you must type DELETE exactly.'); return; }
+  try {
+    const res = await api('/api/config/reset', { method: 'POST' });
+    if (!res.success) throw new Error(res.error);
+    alert('All data has been reset.');
+    loadStats();
+  } catch (ex) {
+    alert(ex.message);
+  }
+}
+
 // ── boot ─────────────────────────────────────────────────────────────────────
 async function logout() { await api('/api/logout', { method: 'POST' }); location.href = '/login'; }
 (async function init() {
@@ -384,7 +458,10 @@ async function logout() { await api('/api/logout', { method: 'POST' }); location
       const av = $('user-av');
       if (av) av.textContent = (me.data.username || 'A').charAt(0).toUpperCase();
       // Only administrators can manage the team.
-      if (me.data.role !== 'admin') { const nav = $('nav-users'); if (nav) nav.style.display = 'none'; }
+      if (me.data.role !== 'admin') {
+        const navUsers = $('nav-users'); if (navUsers) navUsers.style.display = 'none';
+        const navConfig = $('nav-config'); if (navConfig) navConfig.style.display = 'none';
+      }
     }
   } catch {}
   loadStats();

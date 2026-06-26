@@ -394,6 +394,95 @@ export async function log(
   }
 }
 
+// ── System configuration (backup / restore / reset) ──────────────────────────
+export async function exportBackup(): Promise<object> {
+  const customers = await query<any[]>(`SELECT * FROM customers ORDER BY created_at ASC`);
+  const licenses = await query<any[]>(`SELECT * FROM licenses ORDER BY created_at ASC`);
+  const activations = await query<any[]>(`SELECT * FROM activations ORDER BY activated_at ASC`);
+  const logs = await query<any[]>(`SELECT * FROM activation_logs ORDER BY created_at ASC`);
+  return {
+    version: 1,
+    exported_at: new Date().toISOString(),
+    tables: { customers, licenses, activations, activation_logs: logs },
+  };
+}
+
+export async function resetAllData(): Promise<void> {
+  await query(`SET FOREIGN_KEY_CHECKS = 0`);
+  try {
+    await query(`TRUNCATE TABLE activation_logs`);
+    await query(`TRUNCATE TABLE activations`);
+    await query(`TRUNCATE TABLE licenses`);
+    await query(`TRUNCATE TABLE customers`);
+  } finally {
+    await query(`SET FOREIGN_KEY_CHECKS = 1`);
+  }
+}
+
+export async function importBackup(
+  data: any
+): Promise<{ customers: number; licenses: number; activations: number }> {
+  if (!data?.tables) throw new Error('Invalid backup format — missing "tables" key.');
+  const {
+    customers = [],
+    licenses = [],
+    activations = [],
+    activation_logs: logs = [],
+  } = data.tables;
+
+  await query(`SET FOREIGN_KEY_CHECKS = 0`);
+  try {
+    await query(`TRUNCATE TABLE activation_logs`);
+    await query(`TRUNCATE TABLE activations`);
+    await query(`TRUNCATE TABLE licenses`);
+    await query(`TRUNCATE TABLE customers`);
+
+    for (const c of customers) {
+      await query(
+        `INSERT INTO customers (id, business_name, contact_name, email, phone, address, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [c.id, c.business_name, c.contact_name ?? null, c.email ?? null, c.phone ?? null,
+         c.address ?? null, c.notes ?? null, c.created_at]
+      );
+    }
+    for (const l of licenses) {
+      await query(
+        `INSERT INTO licenses
+           (id, customer_id, product_key, edition, type, expires_at, max_activations,
+            features, status, notes, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [l.id, l.customer_id, l.product_key, l.edition, l.type, l.expires_at ?? null,
+         l.max_activations,
+         typeof l.features === 'string' ? l.features : JSON.stringify(l.features ?? []),
+         l.status, l.notes ?? null, l.created_by ?? null, l.created_at]
+      );
+    }
+    for (const a of activations) {
+      await query(
+        `INSERT INTO activations
+           (id, license_id, machine_id, machine_label, signed_license, app_version,
+            ip_address, status, activated_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [a.id, a.license_id, a.machine_id, a.machine_label ?? null, a.signed_license,
+         a.app_version ?? null, a.ip_address ?? null, a.status, a.activated_at,
+         a.last_seen_at ?? null]
+      );
+    }
+    for (const lg of logs) {
+      await query(
+        `INSERT INTO activation_logs (license_id, machine_id, action, detail, ip_address, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [lg.license_id ?? null, lg.machine_id ?? null, lg.action, lg.detail ?? null,
+         lg.ip_address ?? null, lg.created_at]
+      );
+    }
+  } finally {
+    await query(`SET FOREIGN_KEY_CHECKS = 1`);
+  }
+
+  return { customers: customers.length, licenses: licenses.length, activations: activations.length };
+}
+
 export async function dashboardStats(): Promise<any> {
   const [c] = await query<any[]>(`SELECT COUNT(*) AS n FROM customers`);
   const [l] = await query<any[]>(`SELECT COUNT(*) AS n FROM licenses`);
