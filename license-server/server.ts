@@ -409,8 +409,6 @@ async function handle(req: Req, res: Res) {
         }
 
         if (method === 'POST' && p === '/api/config/reset') {
-          if (IS_PROD)
-            return sendJson(res, 403, { success: false, error: 'Reset is disabled in production. Contact your database administrator.' });
           await svc.resetAllData();
           await svc.log(null, null, 'system.reset', `All data reset by ${session.username}`);
           return sendJson(res, 200, { success: true });

@@ -1,5 +1,5 @@
-; verdix Inno Setup Script
-#define AppName "verdix"
+; Vendix Inno Setup Script
+#define AppName "Vendix"
 #define AppVersion "1.14"
 #define AppPublisher "BHAGOH SYSTEMS"
 #define AppExeName "verdix.exe"
@@ -11,8 +11,9 @@ AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
-OutputBaseFilename=verdixSetup_{#AppVersion}
-Compression=lzma
+SetupIconFile=public\verdix_logo.ico
+OutputBaseFilename=VendixSetup_{#AppVersion}
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
@@ -48,10 +49,10 @@ Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs
 
 
 [Icons]
-Name: "{autoprograms}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
-Name: "{autodesktop}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
-Name: "{userstartup}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
-Name: "{commonstartup}\verdix Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
+Name: "{autoprograms}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+Name: "{autodesktop}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+Name: "{userstartup}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+Name: "{commonstartup}\Vendix Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
 
 
 [Run]

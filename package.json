@@ -113,7 +113,7 @@
   },
   "build": {
     "appId": "com.verdix.pos",
-    "productName": "VENDIX",
+    "productName": "verdix",
     "directories": {
       "output": "dist"
     },
@@ -127,7 +127,7 @@
       "public/**/*"
     ],
     "win": {
-      "target": "portable",
+      "target": "dir",
       "icon": "public/verdix.png"
     }
   }
