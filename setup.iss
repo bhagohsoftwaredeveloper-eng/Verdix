@@ -43,7 +43,7 @@ Source: "run_migration.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Next.js Standalone Files
-Source: ".next\standalone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "backups\*"
+Source: ".next\standalone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "backups\*,Output\*,vendor\*,dist\*,temp_docs\*,scratch\*,*.sql,*.log,*.txt,server.log,dev_server.log"
 Source: ".next\static\*"; DestDir: "{app}\.next\static"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs createallsubdirs
 
