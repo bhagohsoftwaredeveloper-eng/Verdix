@@ -67,3 +67,6 @@ DB_BACK_UP5112026.sql
 /license-generator/keys/
 license.dat
 *.license
+
+# Bundled MySQL — large binary files, not for git (kept locally for installer build)
+/mysql-bundle/

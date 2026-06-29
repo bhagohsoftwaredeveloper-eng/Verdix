@@ -79,7 +79,7 @@ function createSplashScreen() {
       </style>
     </head>
     <body>
-      <div class="title">verdix</div>
+      <div class="title">Vendix</div>
       <div class="subtitle">Starting background services...</div>
       <div class="spinner"></div>
     </body>
@@ -122,7 +122,7 @@ function createWindow() {
   });
 
   if (process.platform === 'win32') {
-    app.setAppUserModelId('com.verdix.pos');
+    app.setAppUserModelId('com.vendix.pos');
   }
 
   const isAdmin = roleName === 'Admin Dashboard' || startRoute.includes('dashboard');
@@ -142,7 +142,7 @@ function createWindow() {
       backgroundThrottling: false,
       spellcheck: false,
     },
-    title: `verdix - ${roleName}`,
+    title: `Vendix - ${roleName}`,
     autoHideMenuBar: true,
     icon: path.join(__dirname, 'public', 'verdix_logo.png'),
     fullscreen: !isAdmin,

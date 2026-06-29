@@ -15,6 +15,18 @@ import {
 } from '../lib/licensing/core';
 import { getPrivateKeyPem } from './keys';
 import { query, withTransaction } from './db';
+import {
+  getCachedLicense,
+  getCachedLicenseByKey,
+  getCachedActivation,
+  countCachedActiveActivations,
+  isMachineActivatedInCache,
+  cachePutLicense,
+  cacheUpdateLicenseStatus,
+  cachePutActivation,
+  cacheReleaseActivation,
+  CachedLicense,
+} from './cache';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface Customer {
@@ -151,7 +163,9 @@ export async function createLicense(input: {
   );
 
   await log(id, null, 'license.created', `Product key ${productKey} issued`);
-  return getLicense(id) as Promise<License>;
+  const created = await getLicense(id) as License;
+  if (created) cachePutLicense(created as unknown as CachedLicense);
+  return created;
 }
 
 function normalizeLicenseRow(row: any): License {
@@ -176,15 +190,25 @@ function safeJson(s: string): string[] {
 }
 
 export async function getLicense(id: string): Promise<License | null> {
-  const rows = await query<any[]>(`SELECT * FROM licenses WHERE id = ?`, [id]);
-  return rows[0] ? normalizeLicenseRow(rows[0]) : null;
+  try {
+    const rows = await query<any[]>(`SELECT * FROM licenses WHERE id = ?`, [id]);
+    return rows[0] ? normalizeLicenseRow(rows[0]) : null;
+  } catch {
+    const cached = getCachedLicense(id);
+    return cached ? normalizeLicenseRow(cached) : null;
+  }
 }
 
 export async function getLicenseByProductKey(productKey: string): Promise<License | null> {
-  const rows = await query<any[]>(`SELECT * FROM licenses WHERE product_key = ?`, [
-    productKey.trim().toUpperCase(),
-  ]);
-  return rows[0] ? normalizeLicenseRow(rows[0]) : null;
+  try {
+    const rows = await query<any[]>(`SELECT * FROM licenses WHERE product_key = ?`, [
+      productKey.trim().toUpperCase(),
+    ]);
+    return rows[0] ? normalizeLicenseRow(rows[0]) : null;
+  } catch {
+    const cached = getCachedLicenseByKey(productKey);
+    return cached ? normalizeLicenseRow(cached) : null;
+  }
 }
 
 export async function listLicenses(): Promise<any[]> {
@@ -200,6 +224,7 @@ export async function listLicenses(): Promise<any[]> {
 
 export async function setLicenseStatus(id: string, status: LicenseStatus): Promise<void> {
   await query(`UPDATE licenses SET status = ? WHERE id = ?`, [status, id]);
+  cacheUpdateLicenseStatus(id, status);
   await log(id, null, 'license.' + status, `Status set to ${status}`);
 }
 
@@ -234,6 +259,7 @@ export async function issueSignedLicense(
   const signedLicense = signLicense(payload, getPrivateKeyPem());
 
   if (opts.record !== false) {
+    const activationId = crypto.randomUUID();
     await query(
       `INSERT INTO activations
          (id, license_id, machine_id, machine_label, signed_license, app_version, ip_address, last_seen_at)
@@ -246,7 +272,7 @@ export async function issueSignedLicense(
          status         = 'active',
          last_seen_at   = NOW()`,
       [
-        crypto.randomUUID(),
+        activationId,
         license.id,
         machineId,
         opts.machineLabel || null,
@@ -255,6 +281,18 @@ export async function issueSignedLicense(
         opts.ip || null,
       ]
     );
+    cachePutActivation({
+      id: activationId,
+      license_id: license.id,
+      machine_id: machineId,
+      machine_label: opts.machineLabel || null,
+      signed_license: signedLicense,
+      app_version: opts.appVersion || null,
+      ip_address: opts.ip || null,
+      status: 'active',
+      activated_at: new Date().toISOString(),
+      last_seen_at: new Date().toISOString(),
+    });
     await log(license.id, machineId, 'license.signed', 'Machine-bound license issued');
   }
 
@@ -262,19 +300,27 @@ export async function issueSignedLicense(
 }
 
 export async function countActiveActivations(licenseId: string): Promise<number> {
-  const rows = await query<any[]>(
-    `SELECT COUNT(*) AS n FROM activations WHERE license_id = ? AND status = 'active'`,
-    [licenseId]
-  );
-  return Number(rows[0]?.n || 0);
+  try {
+    const rows = await query<any[]>(
+      `SELECT COUNT(*) AS n FROM activations WHERE license_id = ? AND status = 'active'`,
+      [licenseId]
+    );
+    return Number(rows[0]?.n || 0);
+  } catch {
+    return countCachedActiveActivations(licenseId);
+  }
 }
 
 export async function machineAlreadyActivated(licenseId: string, machineId: string): Promise<boolean> {
-  const rows = await query<any[]>(
-    `SELECT id FROM activations WHERE license_id = ? AND machine_id = ? AND status = 'active'`,
-    [licenseId, normalizeMachineId(machineId)]
-  );
-  return rows.length > 0;
+  try {
+    const rows = await query<any[]>(
+      `SELECT id FROM activations WHERE license_id = ? AND machine_id = ? AND status = 'active'`,
+      [licenseId, normalizeMachineId(machineId)]
+    );
+    return rows.length > 0;
+  } catch {
+    return isMachineActivatedInCache(licenseId, normalizeMachineId(machineId));
+  }
 }
 
 export async function listActivations(licenseId?: string): Promise<any[]> {
@@ -300,11 +346,15 @@ export async function listActivations(licenseId?: string): Promise<any[]> {
 }
 
 export async function getActivation(licenseId: string, machineId: string): Promise<any | null> {
-  const rows = await query<any[]>(
-    `SELECT * FROM activations WHERE license_id = ? AND machine_id = ?`,
-    [licenseId, normalizeMachineId(machineId)]
-  );
-  return rows[0] || null;
+  try {
+    const rows = await query<any[]>(
+      `SELECT * FROM activations WHERE license_id = ? AND machine_id = ?`,
+      [licenseId, normalizeMachineId(machineId)]
+    );
+    return rows[0] || null;
+  } catch {
+    return getCachedActivation(licenseId, normalizeMachineId(machineId));
+  }
 }
 
 export async function touchActivation(
@@ -372,6 +422,7 @@ export async function releaseActivation(activationId: string): Promise<void> {
     activationId,
   ]);
   await query(`UPDATE activations SET status = 'released' WHERE id = ?`, [activationId]);
+  cacheReleaseActivation(activationId);
   if (rows[0]) await log(rows[0].license_id, rows[0].machine_id, 'activation.released', 'Seat released');
 }
 

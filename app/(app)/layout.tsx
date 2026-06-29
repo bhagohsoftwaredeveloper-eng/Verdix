@@ -11,6 +11,7 @@ import { queryClient } from './layout-nav-config';
 import { useAppLayout } from './use-app-layout';
 import { AppSidebar } from './AppSidebar';
 import { NotificationsBell } from './NotificationsBell';
+import { useLicenseHeartbeat } from './use-license-heartbeat';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const {
@@ -19,6 +20,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     filteredNavItems, filteredOtherNavItems,
     pathname,
   } = useAppLayout();
+
+  useLicenseHeartbeat();
 
   if (isPOSPage) return <>{children}</>;
 

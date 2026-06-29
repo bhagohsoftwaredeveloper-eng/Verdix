@@ -29,18 +29,24 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "{commonappdata}\Verdix"; Permissions: users-modify
 
 [Files]
-; App Files
+; Electron app binary
 Source: "dist\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Runtime config
 Source: ".env"; DestDir: "{app}"; Flags: ignoreversion
-Source: "establish_mysql_connection.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "start_mysql.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "migrate.js"; DestDir: "{app}"; Flags: ignoreversion
-Source: "init_database.js"; DestDir: "{app}"; Flags: ignoreversion
-Source: "schema.sql"; DestDir: "{app}"; Flags: ignoreversion
-Source: "run_migration.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; Database setup scripts
+Source: "schema.sql"; DestDir: "{app}"; Flags: ignoreversion
+Source: "init_database.js"; DestDir: "{app}"; Flags: ignoreversion
+Source: "migrate.js"; DestDir: "{app}"; Flags: ignoreversion
+Source: "run_migration.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "setup_mysql_service.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "uninstall_mysql_service.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
+
+; Bundled MySQL 8.0 (portable — no separate MySQL install needed on client PC)
+Source: "mysql-bundle\*"; DestDir: "{app}\mysql"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Next.js Standalone Files
 Source: ".next\standalone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "backups\*,Output\*,vendor\*,dist\*,temp_docs\*,scratch\*,*.sql,*.log,*.txt,server.log,dev_server.log"
@@ -56,8 +62,13 @@ Name: "{commonstartup}\Vendix Server"; Filename: "{app}\start_server.bat"; Flags
 
 
 [Run]
-Filename: "{app}\run_migration.bat"; Flags: runhidden waituntilterminated
+; Sets up bundled MySQL as a Windows service, creates the DB, and runs migrations
+Filename: "{app}\setup_mysql_service.bat"; Flags: runhidden waituntilterminated; StatusMsg: "Setting up database..."
 Filename: "{app}\{#AppExeName}"; Flags: nowait skipifsilent
+
+[UninstallRun]
+Filename: "{app}\uninstall_mysql_service.bat"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveMySQLService"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
+Type: filesandordirs; Name: "{commonappdata}\Verdix\mysql-data"
