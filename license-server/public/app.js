@@ -1,4 +1,4 @@
-/* Verdix LMS dashboard logic (vanilla JS). */
+/* Vendix LMS dashboard logic (vanilla JS). */
 
 let customersCache = [];
 let licensesCache = [];

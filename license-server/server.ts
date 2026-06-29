@@ -36,7 +36,8 @@ import { hasPrivateKey } from './keys';
 
 dotenv.config();
 
-const PORT = parseInt(process.env.LICENSE_UI_PORT || '4100', 10);
+// Railway injects PORT; LICENSE_UI_PORT is the local dev override.
+const PORT = parseInt(process.env.PORT || process.env.LICENSE_UI_PORT || '4100', 10);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -463,7 +464,7 @@ async function boot() {
       }
     });
   }).listen(PORT, () => {
-    console.log('\n🔑 Verdix License Management System');
+    console.log('\n🔑 Vendix License Management System');
     console.log('   ▶ http://localhost:' + PORT + '\n');
   });
 }

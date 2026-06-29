@@ -1,5 +1,5 @@
 /**
- * keygen — one-time setup for the Verdix license system.
+ * keygen — one-time setup for the Vendix license system.
  * ----------------------------------------------------------------------------
  * Generates a fresh Ed25519 key pair and:
  *   1. writes the PRIVATE key to license-server/keys/private-key.pem
