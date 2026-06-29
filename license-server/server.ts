@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import { migrate } from './schema';
+import { initCache } from './cache';
 import {
   getAdminByUsername,
   verifyPassword,
@@ -445,6 +446,8 @@ async function boot() {
     console.error('   Check your LICENSE_DB_* / CLOUD_DB_* settings in .env\n');
     process.exit(1);
   }
+
+  await initCache();
 
   if (!hasPrivateKey()) {
     console.warn('⚠️  No signing key found. Run `npm run license:keygen` (signing will fail).');
