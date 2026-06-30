@@ -235,6 +235,7 @@ export function InlineEditableSelect<T>({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                resetRename();
                 setAdding(true);
               }}
             >
