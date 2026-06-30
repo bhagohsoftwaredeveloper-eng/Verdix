@@ -147,10 +147,10 @@ export function ProductSelector({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleScanOrPunch()}
-          className="pr-10 bg-white"
+          className="pr-10 bg-background"
         />
         <Search
-          className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500 cursor-pointer"
+          className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
           onClick={() => setSearchDialogOpen(true)}
         />
       </div>
@@ -162,8 +162,8 @@ export function ProductSelector({
         >
           <div data-drag-handle className="cursor-move">
             <DialogHeader>
-              <DialogTitle className="text-zinc-900">Search Products</DialogTitle>
-              <DialogDescription className="text-zinc-600">
+              <DialogTitle className="text-foreground">Search Products</DialogTitle>
+              <DialogDescription className="text-muted-foreground">
                 Search and select a product to add to the purchase order.
               </DialogDescription>
             </DialogHeader>
@@ -197,8 +197,8 @@ export function ProductSelector({
                       onSelect={() => onSelectProduct(product)}
                     >
                       <div className="flex flex-col">
-                        <span className="font-bold text-zinc-900">{product.name}</span>
-                        <span className="text-sm text-zinc-700 font-medium">
+                        <span className="font-bold text-foreground">{product.name}</span>
+                        <span className="text-sm text-muted-foreground font-medium">
                           SKU: {product.sku || 'N/A'} | Barcode: {product.barcode || 'N/A'} | Stock:{' '}
                           {formatQuantity(product.stock)}
                         </span>

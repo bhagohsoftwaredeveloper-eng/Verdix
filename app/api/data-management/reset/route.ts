@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '../../../../lib/mysql';
+import { DEFAULT_UNITS_OF_MEASURE } from '../../../../lib/default-units';
 
 export async function POST(request: NextRequest) {
   try {
@@ -149,6 +150,14 @@ export async function POST(request: NextRequest) {
             "INSERT IGNORE INTO warehouses (id, name, location, is_active, is_main) VALUES (?, ?, ?, ?, ?)",
             ['wh_main', 'STORE', 'Main Store', 1, 1]
           );
+
+          // Re-insert default units of measure so they survive the reset
+          for (const u of DEFAULT_UNITS_OF_MEASURE) {
+            await connection.query(
+              'INSERT IGNORE INTO units_of_measure (id, name, abbreviation) VALUES (?, ?, ?)',
+              [u.id, u.name, u.abbreviation]
+            );
+          }
         } finally {
           await connection.query('SET FOREIGN_KEY_CHECKS = 1');
         }
@@ -227,6 +236,14 @@ export async function POST(request: NextRequest) {
             "INSERT IGNORE INTO warehouses (id, name, location, is_active, is_main) VALUES (?, ?, ?, ?, ?)",
             ['wh_main', 'STORE', 'Main Store', 1, 1]
           );
+
+          // 5. Re-insert default units of measure so they survive a factory reset
+          for (const u of DEFAULT_UNITS_OF_MEASURE) {
+            await connection.query(
+              'INSERT IGNORE INTO units_of_measure (id, name, abbreviation) VALUES (?, ?, ?)',
+              [u.id, u.name, u.abbreviation]
+            );
+          }
 
           // User Management Reset (Keep Admin users)
           // 1. Get Admin/Super Admin role IDs

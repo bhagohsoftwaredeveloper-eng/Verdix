@@ -21,7 +21,7 @@ export function AddOrderItemsTable({ form, fields, remove, total }: Props) {
     <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col relative">
       <div className="overflow-y-auto flex-1 h-full relative">
         <table className="w-full caption-bottom text-sm text-left border-collapse">
-          <TableHeader className="sticky top-0 bg-white z-50 shadow-sm">
+          <TableHeader className="sticky top-0 bg-background z-50 shadow-sm">
             <TableRow className="hover:bg-transparent border-b">
               <TableHead className="w-[40%] pl-4 h-10">Product</TableHead>
               <TableHead className="w-[15%] text-center h-10">Qty</TableHead>
@@ -61,7 +61,7 @@ export function AddOrderItemsTable({ form, fields, remove, total }: Props) {
                         render={({ field }) => (
                           <Input
                             type="number"
-                            className="h-8 w-20 text-center bg-white"
+                            className="h-8 w-20 text-center bg-background"
                             {...field}
                             onFocus={e => e.target.select()}
                           />
@@ -77,7 +77,7 @@ export function AddOrderItemsTable({ form, fields, remove, total }: Props) {
                         <Input
                           type="number"
                           step="0.01"
-                          className="h-8 w-24 text-right ml-auto border-transparent hover:border-input focus:border-input bg-white"
+                          className="h-8 w-24 text-right ml-auto border-transparent hover:border-input focus:border-input bg-background"
                           {...field}
                         />
                       )}

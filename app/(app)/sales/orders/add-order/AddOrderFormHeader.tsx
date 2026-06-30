@@ -47,7 +47,7 @@ export function AddOrderFormHeader({
         <CustomerSelectionField
           control={form.control}
           customerList={customers}
-          className="bg-white h-8 text-xs"
+          className="bg-background h-8 text-xs"
           onCustomerAdded={refetchCustomers}
           labelClassName="text-xs font-semibold text-muted-foreground"
         />
@@ -60,7 +60,7 @@ export function AddOrderFormHeader({
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
               </div>
               <FormControl>
-                <Input className="h-8 bg-white text-xs" {...field} />
+                <Input className="h-8 bg-background text-xs" {...field} />
               </FormControl>
             </FormItem>
           )}
@@ -77,7 +77,7 @@ export function AddOrderFormHeader({
               <FormItem className="space-y-1">
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Order Date</FormLabel>
                 <FormControl>
-                  <Input type="date" className="h-8 bg-white text-xs" {...field} />
+                  <Input type="date" className="h-8 bg-background text-xs" {...field} />
                 </FormControl>
               </FormItem>
             )}
@@ -89,7 +89,7 @@ export function AddOrderFormHeader({
               <FormItem className="space-y-1">
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Delivery Date</FormLabel>
                 <FormControl>
-                  <Input type="date" className="h-8 bg-white text-xs" {...field} />
+                  <Input type="date" className="h-8 bg-background text-xs" {...field} />
                 </FormControl>
               </FormItem>
             )}
@@ -109,7 +109,7 @@ export function AddOrderFormHeader({
               </div>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
-                  <SelectTrigger className="h-8 bg-white text-xs">
+                  <SelectTrigger className="h-8 bg-background text-xs">
                     <SelectValue placeholder="Select warehouse" />
                   </SelectTrigger>
                 </FormControl>
@@ -142,7 +142,7 @@ export function AddOrderFormHeader({
               </div>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
-                  <SelectTrigger className="h-8 bg-white text-xs">
+                  <SelectTrigger className="h-8 bg-background text-xs">
                     <SelectValue placeholder="Select sales person" />
                   </SelectTrigger>
                 </FormControl>
@@ -166,7 +166,7 @@ export function AddOrderFormHeader({
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
               </div>
               <FormControl>
-                <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
+                <Input className="h-8 bg-background text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
               </FormControl>
             </FormItem>
           )}
@@ -189,7 +189,7 @@ export function AddOrderFormHeader({
               </div>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
-                  <SelectTrigger className="h-8 bg-white text-xs">
+                  <SelectTrigger className="h-8 bg-background text-xs">
                     <SelectValue placeholder="Select method" />
                   </SelectTrigger>
                 </FormControl>
@@ -217,7 +217,7 @@ export function AddOrderFormHeader({
                 </div>
                 <FormControl>
                   <Input
-                    className="h-8 bg-white text-xs"
+                    className="h-8 bg-background text-xs"
                     placeholder={isReferenceRequired ? 'Req...' : 'Opt...'}
                     {...field}
                     value={field.value || ''}
@@ -236,7 +236,7 @@ export function AddOrderFormHeader({
                   <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
                 </div>
                 <FormControl>
-                  <Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} />
+                  <Input type="number" step="0.01" className="h-8 bg-background text-xs" {...field} />
                 </FormControl>
               </FormItem>
             )}
