@@ -64,14 +64,8 @@ export function useAddProductForm({
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
 
   const [dialogs, setDialogs] = useState({
-    categories: false,
-    brands: false,
-    subcategories: false,
-    suppliers: false,
     warehouses: false,
     shelfLocations: false,
-    units: false,
-    departments: false,
   });
 
   const [selects, setSelects] = useState({

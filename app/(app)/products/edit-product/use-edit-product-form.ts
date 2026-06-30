@@ -73,14 +73,8 @@ export function useEditProductForm({
   });
 
   const [dialogs, setDialogs] = useState({
-    categories: false,
-    brands: false,
-    subcategories: false,
-    suppliers: false,
     warehouses: false,
     shelfLocations: false,
-    units: false,
-    departments: false,
   });
 
   // Guard to prevent auto-calculation on initial form reset
