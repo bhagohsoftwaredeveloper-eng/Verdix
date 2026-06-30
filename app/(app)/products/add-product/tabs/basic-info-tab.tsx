@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Category, Brand } from '@/lib/types';
 
 import { useAddProductFormContext } from '../add-product-form-context';
+import { InlineEditableSelect } from '../../components/inline-editable-select';
+import { addBrand, updateBrand } from '../../actions';
 
 export function BasicInfoTab() {
   const {
@@ -19,6 +21,7 @@ export function BasicInfoTab() {
     subcategories, isLoadingSubcategories,
     selects, setSelects,
     setDialogs,
+    refreshBrands,
     generateSku,
     generateBarcode,
   } = useAddProductFormContext();
@@ -45,47 +48,32 @@ export function BasicInfoTab() {
         render={({ field }) => (
           <FormItem>
             <FormLabel>Brand</FormLabel>
-            <Select
-              open={selects.brands}
-              onOpenChange={(open) => setSelects(prev => ({ ...prev, brands: open }))}
-              onValueChange={field.onChange}
+            <InlineEditableSelect
+              items={brands}
+              isLoading={isLoadingBrands}
               value={field.value}
-            >
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a brand" />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {isLoadingBrands ? (
-                  <SelectItem value="loading" disabled>Loading...</SelectItem>
-                ) : brands?.length > 0 ? (
-                  brands.map((brand: Brand) => (
-                    <SelectItem key={brand.id} value={brand.name}>
-                      {brand.name}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="none" disabled>No brands found</SelectItem>
-                )}
-                <div className="border-t mt-1 pt-1 px-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setDialogs(prev => ({ ...prev, brands: true }));
-                      setSelects(prev => ({ ...prev, brands: false }));
-                    }}
-                  >
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Brand
-                  </Button>
-                </div>
-              </SelectContent>
-            </Select>
+              onChange={field.onChange}
+              open={selects.brands}
+              onOpenChange={(o) => setSelects((p) => ({ ...p, brands: o }))}
+              placeholder="Select a brand"
+              addLabel="Add Brand"
+              emptyLabel="No brands found"
+              getId={(b: Brand) => b.id}
+              getValue={(b: Brand) => b.name}
+              getOptionLabel={(b: Brand) => b.name}
+              getName={(b: Brand) => b.name}
+              onAdd={async (name) => {
+                const r = await addBrand(name, 0);
+                if (r.success) { await refreshBrands(); return name; }
+                return undefined;
+              }}
+              onRename={async (id, name) => {
+                const existing = brands.find((b: Brand) => b.id === id);
+                const r = await updateBrand(id, name, existing?.markupPercentage);
+                if (r.success) { await refreshBrands(); return name; }
+                return undefined;
+              }}
+            />
             <FormMessage />
           </FormItem>
         )}
