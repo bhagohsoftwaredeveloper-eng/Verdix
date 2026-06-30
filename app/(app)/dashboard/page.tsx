@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Card,
@@ -23,7 +23,8 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { CartesianGrid, XAxis, Area, AreaChart } from 'recharts';
-import { Package, ShoppingCart, AlertCircle, Boxes, TrendingUp, Loader2 } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle, Boxes, TrendingUp, Loader2, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { getApiUrl } from '@/lib/api-config';
 import type { ChartConfig } from '@/components/ui/chart';
 import { SupplierScheduleCard } from './supplier-schedule-card';
@@ -51,30 +52,62 @@ function CurrencyIcon({ className }: { className?: string }) {
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(getApiUrl('/reports/stats'));
+      if (!res.ok) {
+        // Prefer the server-provided message (e.g. "Database unavailable")
+        // over a generic status string.
+        let message = `Request failed (${res.status})`;
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch {
+          // response had no JSON body; keep the status-based message
+        }
+        throw new Error(message);
+      }
+      const result = await res.json();
+
+      // Data processing for charts is now handled within the components
+
+      setData(result);
+    } catch (err: any) {
+      console.error("Failed to fetch dashboard data:", err);
+      setError(err?.message || 'Failed to load dashboard data.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch(getApiUrl('/reports/stats'));
-        if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
-        const result = await res.json();
-        
-        // Data processing for charts is now handled within the components
-        
-        setData(result);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   if (loading) {
       return (
           <div className="flex items-center justify-center h-screen">
               <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+      );
+  }
+
+  if (error) {
+      return (
+          <div className="flex flex-col items-center justify-center h-screen gap-4 text-center px-4">
+              <AlertCircle className="h-10 w-10 text-destructive" />
+              <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">Failed to load dashboard</h2>
+                  <p className="text-sm text-muted-foreground max-w-md">{error}</p>
+              </div>
+              <Button onClick={fetchData} variant="outline">
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry
+              </Button>
           </div>
       );
   }

@@ -125,10 +125,35 @@ export async function GET(request: NextRequest) {
             }
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error fetching reports stats:', error);
+
+        const isDev = process.env.NODE_ENV !== 'production';
+        // mysql2 surfaces connection failures via error.code — treat these as
+        // "database unavailable" (503) so the client can tell a down DB apart
+        // from an actual server bug (500).
+        const connectionErrorCodes = [
+            'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EHOSTUNREACH',
+            'PROTOCOL_CONNECTION_LOST', 'ER_CON_COUNT_ERROR', 'ER_ACCESS_DENIED_ERROR',
+        ];
+        const isDbUnavailable = typeof error?.code === 'string' && connectionErrorCodes.includes(error.code);
+
+        if (isDbUnavailable) {
+            return NextResponse.json(
+                {
+                    error: 'Database unavailable. Please ensure the database service is running.',
+                    code: 'DB_UNAVAILABLE',
+                    ...(isDev && { detail: error.message }),
+                },
+                { status: 503 }
+            );
+        }
+
         return NextResponse.json(
-            { error: 'Failed to fetch reports statistics' },
+            {
+                error: 'Failed to fetch reports statistics',
+                ...(isDev && { detail: error?.message }),
+            },
             { status: 500 }
         );
     }
