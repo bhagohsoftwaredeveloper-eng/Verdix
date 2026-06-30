@@ -80,6 +80,10 @@ export async function DELETE(
       await connection.execute('DELETE FROM user_types WHERE id = ?', [id]);
     });
 
+    // Propagate the delete across machines via cloud sync (permissions cascade).
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('user_types', id);
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting user type:', error);

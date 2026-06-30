@@ -254,6 +254,10 @@ export async function DELETE(request: NextRequest) {
     const sql = 'DELETE FROM payment_terms WHERE id = ?';
     await query(sql, [id]);
 
+    // Propagate the delete across machines via cloud sync.
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('payment_terms', id);
+
     return NextResponse.json({
       success: true,
       message: 'Payment term deleted successfully',

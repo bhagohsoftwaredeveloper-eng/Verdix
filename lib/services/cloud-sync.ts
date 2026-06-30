@@ -31,6 +31,7 @@ type SyncTable = { tableName: string; idCol: string; timeCol: string | null };
 // ---------------------------------------------------------------------------
 const EXCLUDE_TABLES = new Set<string>([
   'cloud_sync_tracker',     // our own sync state
+  'sync_tombstones',        // delete log — handled explicitly (push + apply), not generically
   'migrations',             // schema version history (per machine)
   'external_api_logs',      // local sync queue (large, machine-specific)
   'external_api_settings',  // holds cloud-sync credentials
@@ -96,6 +97,11 @@ const PULL_CONFIG: Record<string, { idCol: string; timeCol: string | null }> = {
   price_levels:     { idCol: 'id',  timeCol: null },
   users:            { idCol: 'uid', timeCol: 'creation_time' },
   user_permissions: { idCol: 'id',  timeCol: null },
+  // Centrally-managed approval process: edits flow down to every terminal.
+  // Saving a workflow delete+inserts rows with fresh ids, so created_at always
+  // advances — incremental pull picks up new steps; removed steps arrive as
+  // tombstones (see app/api/approvals/workflows POST).
+  approval_workflows: { idCol: 'id', timeCol: 'created_at' },
 };
 
 // ---------------------------------------------------------------------------
@@ -119,6 +125,19 @@ async function ensureTrackerTables(): Promise<void> {
   if (!cols.some(r => r.c === 'last_pull_at')) {
     await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_pull_at TIMESTAMP NULL DEFAULT NULL`, []);
   }
+
+  // Delete log — self-heals even if migration 090 hasn't run on this machine.
+  await query(`
+    CREATE TABLE IF NOT EXISTS sync_tombstones (
+      id          BIGINT       NOT NULL AUTO_INCREMENT,
+      table_name  VARCHAR(100) NOT NULL,
+      record_id   VARCHAR(100) NOT NULL,
+      deleted_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_table_record (table_name, record_id),
+      INDEX idx_deleted_at (deleted_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  `, []);
 }
 
 function toMysqlTs(d: Date | string): string {
@@ -152,6 +171,23 @@ async function getTableColumns(
   const cols = new Set<string>(rows.map(r => r.c));
   _columnCache.set(key, { cols, at: Date.now() });
   return cols;
+}
+
+// Primary-key column resolver — most tables use `id`, but some (e.g. users → uid)
+// don't. Cached so tombstone deletes hit the right column. Defaults to 'id'.
+const _pkCache = new Map<string, string>();
+
+async function getPkColumn(tableName: string): Promise<string> {
+  const cached = _pkCache.get(tableName);
+  if (cached) return cached;
+  const rows = await query(
+    `SELECT COLUMN_NAME AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_KEY = 'PRI' LIMIT 1`,
+    [tableName],
+  ) as any[];
+  const pk = rows[0]?.c || 'id';
+  _pkCache.set(tableName, pk);
+  return pk;
 }
 
 async function getLastPush(tableName: string): Promise<string> {
@@ -243,6 +279,110 @@ function buildBulkUpsert(
 }
 
 // ---------------------------------------------------------------------------
+// Tombstones — propagate hard-deletes across machines.
+// Watermarks reuse cloud_sync_tracker under synthetic keys so we never re-scan
+// the whole delete log every tick.
+// ---------------------------------------------------------------------------
+const TOMBSTONE_PUSH_KEY = '__tombstones';   // last_push_at = newest deleted_at sent up
+const TOMBSTONE_PULL_KEY = '__tombstones';   // last_pull_at = newest deleted_at applied down
+
+/** Push new local tombstones to Railway's sync_tombstones table. */
+async function pushTombstones(): Promise<number> {
+  const lastPush = await getLastPush(TOMBSTONE_PUSH_KEY);
+
+  const rows = await query(`
+    SELECT table_name, record_id, deleted_at
+    FROM sync_tombstones
+    WHERE deleted_at > ?
+    ORDER BY deleted_at ASC
+    LIMIT ${BATCH}
+  `, [lastPush]) as any[];
+
+  if (!rows.length) return 0;
+
+  const cols = ['table_name', 'record_id', 'deleted_at'];
+  const { sql, params } = buildBulkUpsert('sync_tombstones', rows, cols, 'table_name');
+  // Upsert keyed on the UNIQUE(table_name, record_id); id is auto-increment so
+  // we deliberately omit it and let the unique key drive the conflict.
+  await cloudQuery(sql, params);
+
+  // Apply the delete on Railway too, so the cloud hub doesn't keep orphaned rows
+  // that a fresh machine would otherwise pull back down before its tombstone.
+  for (const r of rows) {
+    if (EXCLUDE_TABLES.has(r.table_name)) continue;
+    try {
+      const pk = await getPkColumn(r.table_name);
+      await cloudQuery(`DELETE FROM \`${r.table_name}\` WHERE \`${pk}\` = ?`, [r.record_id]);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (!msg.includes("doesn't exist") && !msg.includes('foreign key')) {
+        console.error(`[CloudSync] Tombstone cloud-delete failed ${r.table_name}/${r.record_id}:`, msg);
+      }
+    }
+  }
+
+  let latest = lastPush;
+  for (const r of rows) {
+    if (r.deleted_at) {
+      const ts = toMysqlTs(r.deleted_at);
+      if (ts > latest) latest = ts;
+    }
+  }
+  if (latest > lastPush) await setLastPush(TOMBSTONE_PUSH_KEY, latest);
+  return rows.length;
+}
+
+/** Pull remote tombstones and apply them as local DELETEs (idempotent). */
+async function pullTombstones(): Promise<number> {
+  // Cloud may not have the table yet (fresh Railway DB) — skip quietly.
+  const cloudCols = await getTableColumns(cloudQuery, 'cloud', 'sync_tombstones');
+  if (!cloudCols.size) return 0;
+
+  const lastPull = await getLastPull(TOMBSTONE_PULL_KEY);
+  const rows = await cloudQuery(`
+    SELECT table_name, record_id, deleted_at
+    FROM sync_tombstones
+    WHERE deleted_at > ?
+    ORDER BY deleted_at ASC
+    LIMIT 500
+  `, [lastPull]) as any[];
+
+  if (!rows.length) return 0;
+
+  let applied = 0;
+  let latest = lastPull;
+  for (const r of rows) {
+    if (!EXCLUDE_TABLES.has(r.table_name)) {
+      try {
+        // Best-effort delete; ignore FK blocks / already-gone rows so one bad
+        // row never stalls the whole batch.
+        const pk = await getPkColumn(r.table_name);
+        await query(`DELETE FROM \`${r.table_name}\` WHERE \`${pk}\` = ?`, [r.record_id]);
+        applied++;
+      } catch (err) {
+        const msg = (err as Error).message;
+        if (!msg.includes("doesn't exist") && !msg.includes('foreign key')) {
+          console.error(`[CloudSync] Tombstone apply failed ${r.table_name}/${r.record_id}:`, msg);
+        }
+      }
+    }
+    // Mirror the tombstone locally so a sibling machine syncing FROM us also learns
+    // of the delete, and so we don't re-pull it forever.
+    await query(`
+      INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE deleted_at = VALUES(deleted_at)
+    `, [r.table_name, r.record_id, toMysqlTs(r.deleted_at)]);
+
+    if (r.deleted_at) {
+      const ts = toMysqlTs(r.deleted_at);
+      if (ts > latest) latest = ts;
+    }
+  }
+  if (latest > lastPull) await setLastPull(TOMBSTONE_PULL_KEY, latest);
+  return applied;
+}
+
+// ---------------------------------------------------------------------------
 // Push — scan local tables, bulk-upsert new/updated rows to Railway
 // ---------------------------------------------------------------------------
 export async function processPushToCloud(): Promise<{ pushed: number; failed: number }> {
@@ -255,6 +395,13 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 
   let totalPushed = 0;
   let totalFailed = 0;
+
+  // Propagate deletes first so a row re-pushed below can't shadow its own tombstone.
+  try {
+    totalPushed += await pushTombstones();
+  } catch (err) {
+    console.error('[CloudSync] Tombstone push error:', (err as Error).message);
+  }
 
   for (const cfg of await discoverPushTables()) {
     const { tableName } = cfg;
@@ -340,6 +487,14 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
   await ensureTrackerTables();
 
   let totalPulled = 0;
+
+  // Apply remote deletes first so we don't immediately re-pull a row that was
+  // deleted centrally, only to delete it again next cycle.
+  try {
+    totalPulled += await pullTombstones();
+  } catch (err) {
+    console.error('[CloudSync] Tombstone pull error:', (err as Error).message);
+  }
 
   for (const [tableName, cfg] of Object.entries(PULL_CONFIG)) {
     try {

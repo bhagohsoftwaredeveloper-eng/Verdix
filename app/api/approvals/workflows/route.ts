@@ -52,7 +52,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
+    const removedStepIds: string[] = [];
+
     await withTransaction(async (connection) => {
+      // Capture the old step ids so cloud sync can delete them on other machines —
+      // this is a full delete+reinsert with fresh ids, so every old row is gone.
+      const [existing]: any = await connection.query(
+        'SELECT id FROM approval_workflows WHERE transaction_type = ?',
+        [transactionType]
+      );
+      for (const r of existing) removedStepIds.push(r.id);
+
       // 1. Delete existing steps for this transaction type
       await connection.query(
         'DELETE FROM approval_workflows WHERE transaction_type = ?',
@@ -69,9 +79,16 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      message: `Workflow for ${transactionType} updated successfully` 
+    // Propagate the replaced steps as deletes so sibling terminals drop the stale
+    // rows; the freshly-inserted ids sync down normally via PULL_CONFIG.
+    if (removedStepIds.length) {
+      const { recordTombstones } = await import('@/lib/services/sync-tombstones');
+      await recordTombstones('approval_workflows', removedStepIds);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Workflow for ${transactionType} updated successfully`
     });
   } catch (error: any) {
     console.error('Error updating workflow:', error);

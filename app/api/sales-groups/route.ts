@@ -146,6 +146,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Propagate the delete across machines via cloud sync.
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('sales_groups', id);
+
     return NextResponse.json({
       success: true,
       message: 'Sales group deleted successfully',

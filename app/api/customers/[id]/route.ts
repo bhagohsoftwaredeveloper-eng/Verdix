@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../../lib/mysql';
 import { ensureCustomerCreditColumn } from '@/lib/ensure-customer-credit';
+import { recordTombstone } from '@/lib/services/sync-tombstones';
 
 // GET endpoint to fetch a single customer
 export async function GET(
@@ -239,6 +240,10 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    // Record a tombstone so cloud sync removes this customer on Railway and on
+    // sibling terminals (otherwise the deleted row would resurrect on next pull).
+    await recordTombstone('customers', customerId);
 
     return NextResponse.json({
       success: true,

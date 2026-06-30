@@ -53,6 +53,10 @@ export async function DELETE(
             await connection.query('DELETE FROM sales_order_items WHERE sales_order_id = ?', [orderId]);
             await connection.query('DELETE FROM sales_orders WHERE id = ?', [orderId]);
 
+            // Propagate the delete across machines via cloud sync (items cascade).
+            const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+            await recordTombstone('sales_orders', orderId);
+
             return NextResponse.json({
                 success: true,
                 message: wasStockDeducted

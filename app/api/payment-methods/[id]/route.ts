@@ -141,6 +141,10 @@ export async function DELETE(
       );
     }
 
+    // Propagate the delete across machines via cloud sync.
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('payment_methods', paymentMethodId);
+
     return NextResponse.json({
       success: true,
       message: 'Payment method deleted successfully',

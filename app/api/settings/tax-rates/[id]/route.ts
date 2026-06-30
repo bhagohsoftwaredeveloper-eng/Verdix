@@ -38,6 +38,11 @@ export async function DELETE(
   try {
     const { id } = await params;
     await query('DELETE FROM tax_rates WHERE id = ?', [id]);
+
+    // Propagate the delete across machines via cloud sync.
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('tax_rates', id);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting tax rate:', error);

@@ -76,6 +76,10 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     // Since we have ON DELETE CASCADE on stock_count_items, deleting the parent is enough
     await query(`DELETE FROM stock_counts WHERE id = ?`, [id]);
 
+    // Propagate the delete across machines via cloud sync (items cascade).
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('stock_counts', id);
+
     return NextResponse.json({ message: 'Stock count deleted successfully' });
   } catch (error) {
     console.error('Error deleting stock count:', error);
