@@ -11,8 +11,15 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { UnitOfMeasure } from '@/lib/types';
+import type { Supplier } from '@/lib/types';
 
 import { useAddProductFormContext } from '../add-product-form-context';
+import { InlineEditableSelect } from '../../components/inline-editable-select';
+import {
+  addDepartment, updateDepartment,
+  addSupplier, updateSupplier, getSuppliers,
+  addUnitOfMeasure, updateUnitOfMeasure,
+} from '../../actions';
 
 export function InventoryTab() {
   const {
@@ -26,6 +33,9 @@ export function InventoryTab() {
     unitsOfMeasure, isLoadingUnits,
     selects, setSelects,
     setDialogs,
+    refreshDepartments,
+    refreshSuppliers,
+    refreshUnits,
   } = useAddProductFormContext();
 
   return (
@@ -37,47 +47,32 @@ export function InventoryTab() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Department</FormLabel>
-              <Select
-                open={selects.departments}
-                onOpenChange={(open) => setSelects(prev => ({ ...prev, departments: open }))}
-                onValueChange={field.onChange}
+              <InlineEditableSelect
+                items={departments}
+                isLoading={isLoadingDepartments}
                 value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a department" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {isLoadingDepartments ? (
-                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                  ) : departments?.length > 0 ? (
-                    departments.map((dept: any) => (
-                      <SelectItem key={dept.id} value={dept.name}>
-                        {dept.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="none" disabled>No departments found</SelectItem>
-                  )}
-                  <div className="border-t mt-1 pt-1 px-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDialogs(prev => ({ ...prev, departments: true }));
-                        setSelects(prev => ({ ...prev, departments: false }));
-                      }}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Department
-                    </Button>
-                  </div>
-                </SelectContent>
-              </Select>
+                onChange={field.onChange}
+                open={selects.departments}
+                onOpenChange={(o) => setSelects((p) => ({ ...p, departments: o }))}
+                placeholder="Select a department"
+                addLabel="Add Department"
+                emptyLabel="No departments found"
+                getId={(d: any) => d.id}
+                getValue={(d: any) => d.name}
+                getOptionLabel={(d: any) => d.name}
+                getName={(d: any) => d.name}
+                onAdd={async (name) => {
+                  const r = await addDepartment(name, 0);
+                  if (r.success) { await refreshDepartments(); return name; }
+                  return undefined;
+                }}
+                onRename={async (id, name) => {
+                  const existing = departments.find((d: any) => d.id === id);
+                  const r = await updateDepartment(id, name, existing?.markupPercentage);
+                  if (r.success) { await refreshDepartments(); return name; }
+                  return undefined;
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}
@@ -136,43 +131,38 @@ export function InventoryTab() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Supplier (Optional)</FormLabel>
-              <Select
-                open={selects.suppliers}
-                onOpenChange={(open) => setSelects(prev => ({ ...prev, suppliers: open }))}
-                onValueChange={field.onChange}
+              <InlineEditableSelect
+                items={suppliers}
+                isLoading={isLoadingSuppliers}
                 value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a supplier" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {isLoadingSuppliers ? (
-                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                  ) : suppliers?.length > 0 ? (
-                    suppliers.map(supplier => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)
-                  ) : (
-                    <SelectItem value="none" disabled>No suppliers found</SelectItem>
-                  )}
-                  <div className="border-t mt-1 pt-1 px-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDialogs(prev => ({ ...prev, suppliers: true }));
-                        setSelects(prev => ({ ...prev, suppliers: false }));
-                      }}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Supplier
-                    </Button>
-                  </div>
-                </SelectContent>
-              </Select>
+                onChange={field.onChange}
+                open={selects.suppliers}
+                onOpenChange={(o) => setSelects((p) => ({ ...p, suppliers: o }))}
+                placeholder="Select a supplier"
+                addLabel="Add Supplier"
+                emptyLabel="No suppliers found"
+                getId={(s: Supplier) => s.id}
+                getValue={(s: Supplier) => s.id}
+                getOptionLabel={(s: Supplier) => s.name}
+                getName={(s: Supplier) => s.name}
+                onAdd={async (name) => {
+                  const r = await addSupplier({ name });
+                  if (r.success) {
+                    await refreshSuppliers();
+                    const fresh = await getSuppliers();
+                    const created = fresh.find((s) => s.name === name);
+                    return created?.id;
+                  }
+                  return undefined;
+                }}
+                onRename={async (id, name) => {
+                  const existing = suppliers.find((s: Supplier) => s.id === id);
+                  if (!existing) return undefined;
+                  const r = await updateSupplier(id, { ...existing, name });
+                  if (r.success) { await refreshSuppliers(); return id; }
+                  return undefined;
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}
@@ -331,47 +321,32 @@ export function InventoryTab() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>{productType === 'parent' ? 'Base Unit of Measure' : 'Unit of Measure'}</FormLabel>
-              <Select
-                open={selects.units}
-                onOpenChange={(open) => setSelects(prev => ({ ...prev, units: open }))}
-                onValueChange={field.onChange}
+              <InlineEditableSelect
+                items={unitsOfMeasure}
+                isLoading={isLoadingUnits}
                 value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a unit" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {isLoadingUnits ? (
-                    <SelectItem value="loading" disabled>Loading...</SelectItem>
-                  ) : unitsOfMeasure?.length > 0 ? (
-                    unitsOfMeasure.map((uom: UnitOfMeasure) => (
-                      <SelectItem key={uom.id} value={uom.name}>
-                        {uom.name} ({uom.abbreviation})
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="none" disabled>No units found</SelectItem>
-                  )}
-                  <div className="border-t mt-1 pt-1 px-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDialogs(prev => ({ ...prev, units: true }));
-                        setSelects(prev => ({ ...prev, units: false }));
-                      }}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Unit
-                    </Button>
-                  </div>
-                </SelectContent>
-              </Select>
+                onChange={field.onChange}
+                open={selects.units}
+                onOpenChange={(o) => setSelects((p) => ({ ...p, units: o }))}
+                placeholder="Select a unit"
+                addLabel="Add Unit"
+                emptyLabel="No units found"
+                getId={(u: UnitOfMeasure) => u.id}
+                getValue={(u: UnitOfMeasure) => u.name}
+                getOptionLabel={(u: UnitOfMeasure) => `${u.name} (${u.abbreviation})`}
+                getName={(u: UnitOfMeasure) => u.name}
+                onAdd={async (name) => {
+                  const r = await addUnitOfMeasure(name, name);
+                  if (r.success) { await refreshUnits(); return name; }
+                  return undefined;
+                }}
+                onRename={async (id, name) => {
+                  const existing = unitsOfMeasure.find((u: UnitOfMeasure) => u.id === id);
+                  const r = await updateUnitOfMeasure(id, name, existing?.abbreviation ?? name);
+                  if (r.success) { await refreshUnits(); return name; }
+                  return undefined;
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}
