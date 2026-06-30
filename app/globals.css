@@ -156,14 +156,20 @@
     }
   }
 
+  /* Animate the dark tint (background-color), NOT the element's opacity.
+     The overlay has backdrop-filter: blur(); animating opacity on a
+     backdrop-filtered element makes Chromium re-rasterize the blur each
+     frame, which flickers (most visible behind large dialogs). Keeping
+     opacity at 1 and the blur constant while only the tint fades removes
+     the flicker. Tailwind's bg-black/50 = rgba(0,0,0,0.5) end state. */
   @keyframes dialog-overlay-show-css {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from { background-color: rgba(0, 0, 0, 0); }
+    to { background-color: rgba(0, 0, 0, 0.5); }
   }
 
   @keyframes dialog-overlay-hide-css {
-    from { opacity: 1; }
-    to { opacity: 0; }
+    from { background-color: rgba(0, 0, 0, 0.5); }
+    to { background-color: rgba(0, 0, 0, 0); }
   }
 
   .animate-dialog-in {

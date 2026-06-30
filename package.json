@@ -128,7 +128,7 @@
     ],
     "win": {
       "target": "dir",
-      "icon": "public/verdix.png"
+      "icon": "public/verdix_logo.ico"
     }
   }
 }

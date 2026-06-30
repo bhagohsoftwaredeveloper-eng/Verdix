@@ -5,7 +5,9 @@ set "MYSQL_DIR=%~dp0mysql"
 set "MYSQL_BIN=%MYSQL_DIR%\bin"
 set "DATA_DIR=C:\ProgramData\Verdix\mysql-data"
 set "LOG_FILE=C:\ProgramData\Verdix\mysql-setup.log"
-set "INI_FILE=%MYSQL_DIR%\my.ini"
+:: my.ini lives in ProgramData (always writable) — NOT under Program Files, whose
+:: path may contain "(x86)" parentheses that break parenthesized echo blocks.
+set "INI_FILE=C:\ProgramData\Verdix\my.ini"
 
 echo [%date% %time%] Starting MySQL setup... >> "%LOG_FILE%"
 
@@ -26,26 +28,27 @@ if not exist "%DATA_DIR%" (
     echo [%date% %time%] Created data directory: %DATA_DIR% >> "%LOG_FILE%"
 )
 
-:: Write my.ini using forward slashes (MySQL requirement on Windows)
+:: Write my.ini using forward slashes (MySQL requirement on Windows).
+:: Each line is redirected individually — NOT wrapped in a ( ) block — so the
+:: "(x86)" in the basedir path can never be mistaken for a block terminator.
 set "INI_DATADIR=%DATA_DIR:\=/%"
 set "INI_BASEDIR=%MYSQL_DIR:\=/%"
 
-(
-    echo [mysqld]
-    echo basedir=%INI_BASEDIR%
-    echo datadir=%INI_DATADIR%
-    echo port=3306
-    echo character-set-server=utf8mb4
-    echo collation-server=utf8mb4_0900_ai_ci
-    echo default-authentication-plugin=mysql_native_password
-    echo [client]
-    echo port=3306
-    echo default-character-set=utf8mb4
-) > "%INI_FILE%"
-echo [%date% %time%] Wrote my.ini >> "%LOG_FILE%"
+>"%INI_FILE%"  echo [mysqld]
+>>"%INI_FILE%" echo basedir=%INI_BASEDIR%
+>>"%INI_FILE%" echo datadir=%INI_DATADIR%
+>>"%INI_FILE%" echo port=3306
+>>"%INI_FILE%" echo character-set-server=utf8mb4
+>>"%INI_FILE%" echo collation-server=utf8mb4_0900_ai_ci
+>>"%INI_FILE%" echo default-authentication-plugin=mysql_native_password
+>>"%INI_FILE%" echo [client]
+>>"%INI_FILE%" echo port=3306
+>>"%INI_FILE%" echo default-character-set=utf8mb4
+echo [%date% %time%] Wrote my.ini to %INI_FILE% >> "%LOG_FILE%"
 
 :: Initialize the data directory (creates root@localhost with no password)
 echo Initializing MySQL data directory...
+echo [%date% %time%] Running mysqld --initialize-insecure (basedir=%MYSQL_DIR%) >> "%LOG_FILE%"
 "%MYSQL_BIN%\mysqld.exe" --defaults-file="%INI_FILE%" --initialize-insecure --console >> "%LOG_FILE%" 2>&1
 if %errorlevel% neq 0 (
     echo [FAIL] mysqld --initialize-insecure failed. Check %LOG_FILE%
@@ -87,15 +90,28 @@ if %errorlevel% neq 0 (
 echo [%date% %time%] Root password set. >> "%LOG_FILE%"
 
 :run_migrations
-:: ── Run database init + migrations ───────────────────────────────────────────
-echo Running database initialization and migrations...
-call "%~dp0run_migration.bat"
+:: ── Create database + apply schema/seed via bundled mysql client ──────────────
+:: Uses the bundled mysql.exe (no Node/mysql2 needed). verdix_install.sql holds
+:: the full 75-table structure (CREATE TABLE IF NOT EXISTS), reference data, and
+:: the default admin account — so a fresh PC gets a ready-to-use database.
+set "MYSQL_CLIENT=%MYSQL_BIN%\mysql.exe"
+
+echo Creating database...
+"%MYSQL_CLIENT%" -u root -prootpassword -e "CREATE DATABASE IF NOT EXISTS verdix CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;" >> "%LOG_FILE%" 2>&1
 if %errorlevel% neq 0 (
-    echo [FAIL] Database migration failed. Check %LOG_FILE%
-    echo [%date% %time%] FAIL: run_migration.bat returned %errorlevel% >> "%LOG_FILE%"
+    echo [FAIL] Could not create database. Check %LOG_FILE%
+    echo [%date% %time%] FAIL: create database returned %errorlevel% >> "%LOG_FILE%"
     exit /b 1
 )
 
-echo [%date% %time%] Setup complete. >> "%LOG_FILE%"
-echo [ok] MySQL setup and database initialization complete.
+echo Applying schema, reference data, and default admin...
+"%MYSQL_CLIENT%" -u root -prootpassword verdix < "%~dp0verdix_install.sql" >> "%LOG_FILE%" 2>&1
+if %errorlevel% neq 0 (
+    echo [FAIL] Could not apply verdix_install.sql. Check %LOG_FILE%
+    echo [%date% %time%] FAIL: apply verdix_install.sql returned %errorlevel% >> "%LOG_FILE%"
+    exit /b 1
+)
+
+echo [%date% %time%] Setup complete. Default login: admin / admin123 >> "%LOG_FILE%"
+echo [ok] Database ready. Default login -- username: admin  password: admin123
 exit /b 0

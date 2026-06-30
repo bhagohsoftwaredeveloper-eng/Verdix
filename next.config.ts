@@ -6,6 +6,26 @@ const nextConfig: NextConfig = {
   // gihapon '.next' kung walay env — walay kausaban sa normal nga dev/build.
   distDir: process.env.NEXT_DIST_DIR || '.next',
   output: 'standalone',
+  // Keep heavy, non-runtime folders out of the standalone trace. Without this
+  // Next copies these multi-GB folders into .next/standalone, bloating it to
+  // 30GB+ and causing the installer to silently fail copying node_modules/next.
+  outputFileTracingExcludes: {
+    '*': [
+      'backups/**',
+      'vendor/**',
+      'mysql-bundle/**',
+      'dist/**',
+      'Output/**',
+      'temp_docs/**',
+      'scratch/**',
+      'playwright-report/**',
+      'tests/**',
+      'license-server/**',
+      '**/*.sql',
+      '**/*.log',
+      '**/*.pdf',
+    ],
+  },
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
