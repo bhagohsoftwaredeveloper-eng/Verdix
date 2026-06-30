@@ -19,6 +19,7 @@ import {
   getUnitsOfMeasure,
   getSuppliers,
   getWarehouses,
+  getShelfLocations,
   getDepartments,
 } from '../actions';
 import { productSchema, type ProductFormValues } from './product-schema';
@@ -70,11 +71,6 @@ export function useEditProductForm({
     shelfLocations: false,
     units: false,
     departments: false,
-  });
-
-  const [dialogs, setDialogs] = useState({
-    warehouses: false,
-    shelfLocations: false,
   });
 
   // Guard to prevent auto-calculation on initial form reset
@@ -421,17 +417,8 @@ export function useEditProductForm({
   const refreshSubcategories = () => getSubcategories().then(setSubcategories);
   const refreshSuppliers = () => getSuppliers().then(setSuppliers);
   const refreshWarehouses = () => getWarehouses().then(setWarehouses);
+  const refreshShelfLocations = () => getShelfLocations().then(setShelfLocations);
   const refreshUnits = () => getUnitsOfMeasure().then(setUnits);
-
-  const handleShelfLocationAdded = (newLocationId?: string) => {
-    if (onOptionsRefresh) onOptionsRefresh();
-    if (newLocationId) {
-      const currentIds = form.getValues('shelfLocationIds') || [];
-      if (!currentIds.includes(newLocationId)) {
-        form.setValue('shelfLocationIds', [...currentIds, newLocationId], { shouldValidate: true, shouldDirty: true });
-      }
-    }
-  };
 
   return {
     // the product being edited (read-only stock display, etc.)
@@ -455,9 +442,8 @@ export function useEditProductForm({
     taxRates,
     systemSettings,
 
-    // nested popover/select/dialog open state
+    // nested popover/select open state
     selects, setSelects,
-    dialogs, setDialogs,
 
     // field arrays
     conversionFactorFields, appendConversionFactor, removeConversionFactor,
@@ -479,8 +465,8 @@ export function useEditProductForm({
     refreshSubcategories,
     refreshSuppliers,
     refreshWarehouses,
+    refreshShelfLocations,
     refreshUnits,
-    handleShelfLocationAdded,
   };
 }
 

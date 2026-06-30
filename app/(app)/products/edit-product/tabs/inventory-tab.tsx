@@ -1,24 +1,21 @@
 'use client';
 
-import { PlusCircle, Check, ChevronsUpDown } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Badge } from '@/components/ui/badge';
-import { cn, formatQuantity } from '@/lib/utils';
+import { formatQuantity } from '@/lib/utils';
 import { UnitOfMeasure } from '@/lib/types';
 import type { Supplier } from '@/lib/types';
 
 import { useEditProductFormContext } from '../edit-product-form-context';
 import { InlineEditableSelect } from '../../components/inline-editable-select';
+import { InlineEditableMultiSelect } from '../../components/inline-editable-multi-select';
 import {
   addDepartment, updateDepartment,
   addSupplier, updateSupplier, getSuppliers,
+  addWarehouse, updateWarehouse, getWarehouses,
+  addShelfLocation, updateShelfLocation, getShelfLocations,
   addUnitOfMeasure, updateUnitOfMeasure,
 } from '../../actions';
 
@@ -33,9 +30,10 @@ export function InventoryTab() {
     shelfLocations,
     units,
     selects, setSelects,
-    setDialogs,
     refreshDepartments,
     refreshSuppliers,
+    refreshWarehouses,
+    refreshShelfLocations,
     refreshUnits,
   } = useEditProductFormContext();
 
@@ -176,45 +174,37 @@ export function InventoryTab() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Warehouse (Optional)</FormLabel>
-              <Select
-                open={selects.warehouses}
-                onOpenChange={(open) => setSelects(prev => ({ ...prev, warehouses: open }))}
-                onValueChange={field.onChange}
+              <InlineEditableSelect
+                items={warehouses}
+                isLoading={false}
                 value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a warehouse" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {warehouses?.length > 0 ? (
-                    warehouses.map((w: any) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="none" disabled>No warehouses found</SelectItem>
-                  )}
-                  <div className="border-t mt-1 pt-1 px-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDialogs(prev => ({ ...prev, warehouses: true }));
-                        setSelects(prev => ({ ...prev, warehouses: false }));
-                      }}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Warehouse
-                    </Button>
-                  </div>
-                </SelectContent>
-              </Select>
+                onChange={field.onChange}
+                open={selects.warehouses}
+                onOpenChange={(o) => setSelects((p) => ({ ...p, warehouses: o }))}
+                placeholder="Select a warehouse"
+                addLabel="Add Warehouse"
+                emptyLabel="No warehouses found"
+                getId={(w: any) => w.id}
+                getValue={(w: any) => w.id}
+                getOptionLabel={(w: any) => w.name}
+                getName={(w: any) => w.name}
+                onAdd={async (name) => {
+                  const r = await addWarehouse(name);
+                  if (r.success) {
+                    await refreshWarehouses();
+                    const fresh = await getWarehouses();
+                    const created = fresh.find((w: any) => w.name === name);
+                    return created?.id;
+                  }
+                  return undefined;
+                }}
+                onRename={async (id, name) => {
+                  const existing = warehouses.find((w: any) => w.id === id);
+                  const r = await updateWarehouse(id, name, existing?.location);
+                  if (r.success) { await refreshWarehouses(); return id; }
+                  return undefined;
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}
@@ -226,92 +216,33 @@ export function InventoryTab() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Shelf Locations (Optional)</FormLabel>
-              <Popover>
-                <FormControl>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      className={cn(
-                        "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 h-auto min-h-10 text-left font-normal",
-                        !field.value?.length && "text-muted-foreground"
-                      )}
-                    >
-                      <div className="flex flex-wrap gap-1 pointer-events-none">
-                        {field.value && field.value.length > 0 ? (
-                          field.value.map((id: string) => {
-                            const location = (shelfLocations || []).find((l: any) => l.id === id);
-                            return (
-                              <Badge
-                                variant="secondary"
-                                key={id}
-                                className="mr-1 mb-1"
-                              >
-                                {location?.name || id}
-                              </Badge>
-                            );
-                          })
-                        ) : (
-                          "Select locations..."
-                        )}
-                      </div>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                </FormControl>
-                <PopoverContent
-                  className="w-full min-w-[300px] p-0"
-                  align="start"
-                >
-                  <Command className="w-full">
-                    <CommandInput placeholder="Search location..." />
-                    <CommandList className="max-h-[300px] overflow-y-auto">
-                      <CommandEmpty>No location found.</CommandEmpty>
-                      <CommandGroup>
-                        {(shelfLocations || []).map((loc: any) => (
-                          <CommandItem
-                            key={loc.id}
-                            value={loc.name}
-                            onSelect={() => {
-                              const current = field.value || [];
-                              const next = current.includes(loc.id)
-                                ? current.filter((id: string) => id !== loc.id)
-                                : [...current, loc.id];
-                              field.onChange(next);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                field.value?.includes(loc.id)
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              )}
-                            />
-                            {loc.name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                    <div className="border-t mt-1 pt-1 px-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setDialogs(prev => ({ ...prev, shelfLocations: true }));
-                        }}
-                      >
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Add Shelf Location
-                      </Button>
-                    </div>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <InlineEditableMultiSelect
+                items={shelfLocations || []}
+                value={field.value || []}
+                onChange={field.onChange}
+                placeholder="Select locations..."
+                searchPlaceholder="Search location..."
+                addLabel="Add Shelf Location"
+                emptyLabel="No location found."
+                getId={(loc: any) => loc.id}
+                getName={(loc: any) => loc.name}
+                onAdd={async (name) => {
+                  const r = await addShelfLocation(name);
+                  if (r.success) {
+                    await refreshShelfLocations();
+                    const fresh = await getShelfLocations();
+                    const created = fresh.find((l: any) => l.name === name);
+                    return created?.id;
+                  }
+                  return undefined;
+                }}
+                onRename={async (id, name) => {
+                  const existing = (shelfLocations || []).find((l: any) => l.id === id);
+                  const r = await updateShelfLocation(id, name, existing?.description);
+                  if (r.success) { await refreshShelfLocations(); return id; }
+                  return undefined;
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}

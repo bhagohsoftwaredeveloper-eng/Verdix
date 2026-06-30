@@ -19,6 +19,7 @@ import {
   addProduct,
   getSuppliers,
   getWarehouses,
+  getShelfLocations,
   getDepartments,
 } from '../actions';
 import { productSchema, type ProductFormValues } from './product-schema';
@@ -62,11 +63,6 @@ export function useAddProductForm({
 
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
-
-  const [dialogs, setDialogs] = useState({
-    warehouses: false,
-    shelfLocations: false,
-  });
 
   const [selects, setSelects] = useState({
     categories: false,
@@ -454,17 +450,8 @@ export function useAddProductForm({
   const refreshSubcategories = () => getSubcategories().then(setSubcategories);
   const refreshSuppliers = () => getSuppliers().then(setSuppliers);
   const refreshWarehouses = () => getWarehouses().then(setWarehouses);
+  const refreshShelfLocations = () => getShelfLocations().then(setShelfLocations);
   const refreshUnits = () => getUnitsOfMeasure().then(setUnitsOfMeasure);
-
-  const handleShelfLocationAdded = (newLocationId?: string) => {
-    if (onOptionsRefresh) onOptionsRefresh();
-    if (newLocationId) {
-      const currentIds = form.getValues('shelfLocationIds') || [];
-      if (!currentIds.includes(newLocationId)) {
-        form.setValue('shelfLocationIds', [...currentIds, newLocationId], { shouldValidate: true, shouldDirty: true });
-      }
-    }
-  };
 
   return {
     // dialog + submit state
@@ -487,8 +474,7 @@ export function useAddProductForm({
     taxRates,
     systemSettings,
 
-    // nested popover/select/dialog open state
-    dialogs, setDialogs,
+    // nested popover/select open state
     selects, setSelects,
 
     // field arrays
@@ -511,8 +497,8 @@ export function useAddProductForm({
     refreshSubcategories,
     refreshSuppliers,
     refreshWarehouses,
+    refreshShelfLocations,
     refreshUnits,
-    handleShelfLocationAdded,
   };
 }
 

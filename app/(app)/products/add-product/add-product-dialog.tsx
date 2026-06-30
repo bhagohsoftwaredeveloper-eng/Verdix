@@ -15,9 +15,6 @@ import {
 import { Form } from '@/components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-import { ManageWarehousesDialog } from '../../sales/manage-warehouses/ManageWarehousesDialog';
-import { ManageShelfLocationsDialog } from '../shelf-locations/ManageShelfLocationsDialog';
-
 import { useAddProductForm, type UseAddProductFormProps } from './use-add-product-form';
 import { AddProductFormProvider } from './add-product-form-context';
 import { BasicInfoTab } from './tabs/basic-info-tab';
@@ -32,12 +29,9 @@ export function AddProductDialog(props: UseAddProductFormProps) {
     isOpen, setIsOpen,
     isSubmitting,
     form,
-    dialogs, setDialogs,
     tabErrors,
     markupSource,
     onSubmit,
-    refreshWarehouses,
-    handleShelfLocationAdded,
   } = controller;
 
   return (
@@ -139,18 +133,6 @@ export function AddProductDialog(props: UseAddProductFormProps) {
             )}
           </Button>
         </DialogFooter>
-
-        {/* Lifted Manage Dialogs */}
-        <ManageWarehousesDialog
-          open={dialogs.warehouses}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, warehouses: open }))}
-          onChange={refreshWarehouses}
-        />
-        <ManageShelfLocationsDialog
-          open={dialogs.shelfLocations}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, shelfLocations: open }))}
-          onLocationAdded={handleShelfLocationAdded}
-        />
       </DialogContent>
     </Dialog>
   );

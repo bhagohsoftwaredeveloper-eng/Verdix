@@ -17,9 +17,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Product } from '@/lib/types';
 
-import { ManageWarehousesDialog } from '../../sales/manage-warehouses/ManageWarehousesDialog';
-import { ManageShelfLocationsDialog } from '../shelf-locations/ManageShelfLocationsDialog';
-
 import { useEditProductForm } from './use-edit-product-form';
 import { EditProductFormProvider } from './edit-product-form-context';
 import { BasicInfoTab } from './tabs/basic-info-tab';
@@ -57,12 +54,9 @@ export function EditProductDialog({
     isOpen, setIsOpen,
     isSubmitting,
     form,
-    dialogs, setDialogs,
     tabErrors,
     markupSource,
     saveChanges,
-    refreshWarehouses,
-    handleShelfLocationAdded,
   } = controller;
 
   return (
@@ -179,18 +173,6 @@ export function EditProductDialog({
             </Button>
           </DialogFooter>
         </DialogContent>
-
-        {/* Lifted Manage Dialogs */}
-        <ManageWarehousesDialog
-          open={dialogs.warehouses}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, warehouses: open }))}
-          onChange={refreshWarehouses}
-        />
-        <ManageShelfLocationsDialog
-          open={dialogs.shelfLocations}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, shelfLocations: open }))}
-          onLocationAdded={handleShelfLocationAdded}
-        />
       </Dialog>
     </TooltipProvider>
   );
