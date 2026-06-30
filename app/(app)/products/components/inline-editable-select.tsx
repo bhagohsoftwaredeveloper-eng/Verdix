@@ -25,6 +25,7 @@ export interface InlineEditableSelectProps<T> {
   addLabel: string;
   emptyLabel: string;
   loadingLabel?: string;
+  orphanLabel?: (value: string) => string;
   getId: (item: T) => string;
   getValue: (item: T) => string;
   getOptionLabel: (item: T) => string;
@@ -44,6 +45,7 @@ export function InlineEditableSelect<T>({
   addLabel,
   emptyLabel,
   loadingLabel = 'Loading...',
+  orphanLabel,
   getId,
   getValue,
   getOptionLabel,
@@ -185,6 +187,10 @@ export function InlineEditableSelect<T>({
           })
         ) : (
           <SelectItem value="none" disabled>{emptyLabel}</SelectItem>
+        )}
+
+        {!isLoading && orphanLabel && value && !items.some((item) => getValue(item) === value) && (
+          <SelectItem value={value}>{orphanLabel(value)}</SelectItem>
         )}
 
         <div className="border-t mt-1 pt-1 px-1">

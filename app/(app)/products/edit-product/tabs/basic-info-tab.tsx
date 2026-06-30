@@ -59,6 +59,7 @@ export function BasicInfoTab() {
                 placeholder="Select a brand"
                 addLabel="Add Brand"
                 emptyLabel="No brands found"
+                orphanLabel={(v) => `${v} (Missing in Settings)`}
                 getId={(b: Brand) => b.id}
                 getValue={(b: Brand) => b.name}
                 getOptionLabel={(b: Brand) => b.name}
@@ -190,6 +191,7 @@ export function BasicInfoTab() {
                 placeholder="Select a category"
                 addLabel="Add Category"
                 emptyLabel="No categories found"
+                orphanLabel={(v) => `${v} (Missing in Settings)`}
                 getId={(c: Category) => c.id}
                 getValue={(c: Category) => c.name}
                 getOptionLabel={(c: Category) => c.name}
@@ -226,6 +228,7 @@ export function BasicInfoTab() {
                 placeholder="Select a subcategory"
                 addLabel="Add Subcategory"
                 emptyLabel="No subcategories found"
+                orphanLabel={(v) => `${v} (Missing in Settings)`}
                 getId={(s: Category) => s.id}
                 getValue={(s: Category) => s.name}
                 getOptionLabel={(s: Category) => s.name}

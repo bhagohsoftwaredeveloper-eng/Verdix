@@ -466,9 +466,6 @@ export function useEditProductForm({
     // watched / derived values
     selectedSupplierId,
     selectedUnitOfMeasure,
-    watchedCategoryName,
-    watchedSubcategoryName,
-    watchedBrandName,
     tabErrors,
     selectedPriceLevelId, setSelectedPriceLevelId,
     markupSource,
