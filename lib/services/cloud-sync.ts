@@ -21,6 +21,7 @@
 
 import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '../mysql';
 import { filterPullColumns } from './cloud-sync-columns';
+import { buildKeysetSelect, buildTombstoneSelect } from './cloud-sync-cursor';
 
 const BATCH = 100;
 
@@ -113,7 +114,9 @@ async function ensureTrackerTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS cloud_sync_tracker (
       table_name   VARCHAR(100) PRIMARY KEY,
       last_push_at TIMESTAMP    NOT NULL DEFAULT '2000-01-01 00:00:00',
-      last_pull_at TIMESTAMP    NULL DEFAULT NULL
+      last_push_id VARCHAR(100) NOT NULL DEFAULT '',
+      last_pull_at TIMESTAMP    NULL DEFAULT NULL,
+      last_pull_id VARCHAR(100) NOT NULL DEFAULT ''
     )
   `, []);
 
@@ -125,6 +128,12 @@ async function ensureTrackerTables(): Promise<void> {
   ) as any[];
   if (!cols.some(r => r.c === 'last_pull_at')) {
     await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_pull_at TIMESTAMP NULL DEFAULT NULL`, []);
+  }
+  if (!cols.some(r => r.c === 'last_push_id')) {
+    await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_push_id VARCHAR(100) NOT NULL DEFAULT ''`, []);
+  }
+  if (!cols.some(r => r.c === 'last_pull_id')) {
+    await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_pull_id VARCHAR(100) NOT NULL DEFAULT ''`, []);
   }
 
   // Delete log — self-heals even if migration 090 hasn't run on this machine.
@@ -241,6 +250,49 @@ async function setLastPull(tableName: string, ts: string): Promise<void> {
     INSERT INTO cloud_sync_tracker (table_name, last_pull_at) VALUES (?, ?)
     ON DUPLICATE KEY UPDATE last_pull_at = VALUES(last_pull_at)
   `, [tableName, ts]);
+}
+
+type Cursor = { at: string; id: string };
+const DEFAULT_CURSOR: Cursor = { at: '2000-01-01 00:00:00', id: '' };
+
+async function getPushCursor(tableName: string): Promise<Cursor> {
+  const rows = await query(
+    `SELECT last_push_at, last_push_id FROM cloud_sync_tracker WHERE table_name = ?`,
+    [tableName],
+  ) as any[];
+  const r = rows[0];
+  if (!r) return { ...DEFAULT_CURSOR };
+  return {
+    at: r.last_push_at ? toMysqlTs(r.last_push_at) : DEFAULT_CURSOR.at,
+    id: r.last_push_id ?? DEFAULT_CURSOR.id,
+  };
+}
+
+async function setPushCursor(tableName: string, at: string, id: string): Promise<void> {
+  await query(`
+    INSERT INTO cloud_sync_tracker (table_name, last_push_at, last_push_id) VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE last_push_at = VALUES(last_push_at), last_push_id = VALUES(last_push_id)
+  `, [tableName, at, id]);
+}
+
+async function getPullCursor(tableName: string): Promise<Cursor> {
+  const rows = await query(
+    `SELECT last_pull_at, last_pull_id FROM cloud_sync_tracker WHERE table_name = ?`,
+    [tableName],
+  ) as any[];
+  const r = rows[0];
+  if (!r) return { ...DEFAULT_CURSOR };
+  return {
+    at: r.last_pull_at ? toMysqlTs(r.last_pull_at) : DEFAULT_CURSOR.at,
+    id: r.last_pull_id ?? DEFAULT_CURSOR.id,
+  };
+}
+
+async function setPullCursor(tableName: string, at: string, id: string): Promise<void> {
+  await query(`
+    INSERT INTO cloud_sync_tracker (table_name, last_pull_at, last_pull_id) VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE last_pull_at = VALUES(last_pull_at), last_pull_id = VALUES(last_pull_id)
+  `, [tableName, at, id]);
 }
 
 // ---------------------------------------------------------------------------
@@ -438,16 +490,14 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
       const cols = [...localCols].filter(c => cloudCols.has(c));
       if (!cols.includes(cfg.idCol)) continue;
 
-      const colList  = cols.map(c => `\`${c}\``).join(', ');
-      const lastPush = cfg.timeCol ? await getLastPush(tableName) : '2000-01-01 00:00:00';
+      const colList = cols.map(c => `\`${c}\``).join(', ');
+      const cursor = cfg.timeCol ? await getPushCursor(tableName) : DEFAULT_CURSOR;
 
       const rows = cfg.timeCol
-        ? await query(`
-            SELECT ${colList} FROM \`${tableName}\`
-            WHERE \`${cfg.timeCol}\` > ?
-            ORDER BY \`${cfg.timeCol}\` ASC
-            LIMIT ${BATCH}
-          `, [lastPush]) as any[]
+        ? await query(
+            buildKeysetSelect({ table: tableName, colList, timeCol: cfg.timeCol, idCol: cfg.idCol, limit: BATCH }),
+            [cursor.at, cursor.at, cursor.id],
+          ) as any[]
         : await query(`SELECT ${colList} FROM \`${tableName}\` LIMIT ${BATCH}`, []) as any[];
 
       if (!rows.length) continue;
@@ -458,17 +508,13 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 
         totalPushed += rows.length;
 
-        // Advance tracker to the latest timestamp in this batch (incremental only)
+        // Advance the cursor to the LAST row of the batch. Rows are ordered by
+        // (timeCol, id), so the last row is the max keyset position — rows sharing
+        // a second are drained across ticks instead of being skipped.
         if (cfg.timeCol) {
-          let latestTs = lastPush;
-          for (const row of rows) {
-            if (row[cfg.timeCol]) {
-              const rowTs = toMysqlTs(row[cfg.timeCol]);
-              if (rowTs > latestTs) latestTs = rowTs;
-            }
-          }
-          if (latestTs > lastPush) {
-            await setLastPush(tableName, latestTs);
+          const last = rows[rows.length - 1];
+          if (last[cfg.timeCol]) {
+            await setPushCursor(tableName, toMysqlTs(last[cfg.timeCol]), String(last[cfg.idCol]));
           }
         }
       } catch (cloudErr) {
@@ -534,25 +580,14 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
       const colList = cols.map(c => `\`${c}\``).join(', ');
 
       let rows: any[] = [];
-      let latestTs: string | null = null;
 
+      let cursor: Cursor = DEFAULT_CURSOR;
       if (useTimeCol) {
-        const lastPull = await getLastPull(tableName);
-        rows = await cloudQuery(`
-          SELECT ${colList}
-          FROM \`${tableName}\`
-          WHERE \`${cfg.timeCol}\` > ?
-          ORDER BY \`${cfg.timeCol}\` ASC
-          LIMIT 500
-        `, [lastPull]) as any[];
-
-        latestTs = lastPull;
-        for (const row of rows) {
-          if (row[cfg.timeCol!]) {
-            const rowTs = toMysqlTs(row[cfg.timeCol!]);
-            if (rowTs > (latestTs ?? '')) latestTs = rowTs;
-          }
-        }
+        cursor = await getPullCursor(tableName);
+        rows = await cloudQuery(
+          buildKeysetSelect({ table: tableName, colList, timeCol: cfg.timeCol!, idCol: cfg.idCol, limit: 500 }),
+          [cursor.at, cursor.at, cursor.id],
+        ) as any[];
       } else {
         // Reference table — pull everything (small tables only)
         rows = await cloudQuery(`SELECT ${colList} FROM \`${tableName}\``) as any[];
@@ -564,8 +599,12 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
       await query(sql, params);
       totalPulled += rows.length;
 
-      if (useTimeCol && latestTs) {
-        await setLastPull(tableName, latestTs);
+      // Advance to the last row of the batch (ordered by timeCol, id).
+      if (useTimeCol) {
+        const last = rows[rows.length - 1];
+        if (last[cfg.timeCol!]) {
+          await setPullCursor(tableName, toMysqlTs(last[cfg.timeCol!]), String(last[cfg.idCol]));
+        }
       }
     } catch (err) {
       const msg = (err as Error).message;
