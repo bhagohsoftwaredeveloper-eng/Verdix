@@ -24,6 +24,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useLicenseHeartbeat();
 
+  // Seed the sidebar's initial open state from the persisted cookie so a
+  // collapsed sidebar stays collapsed across reloads. Read once on mount.
+  const [defaultSidebarOpen] = React.useState(() => {
+    if (typeof document === 'undefined') return true;
+    const match = document.cookie.match(/(?:^|;\s*)sidebar_state=(true|false)/);
+    return match ? match[1] === 'true' : true;
+  });
+
   if (isPOSPage) return <>{children}</>;
 
   if (isUserLoading || !user) {
@@ -39,7 +47,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <NavigationProgress />
       </Suspense>
-      <SidebarProvider className="h-screen overflow-hidden">
+      <SidebarProvider defaultOpen={defaultSidebarOpen} className="h-screen overflow-hidden">
         <AppSidebar
           user={user}
           hasPermission={hasPermission}
