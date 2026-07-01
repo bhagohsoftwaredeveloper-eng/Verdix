@@ -20,6 +20,7 @@
  */
 
 import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '../mysql';
+import { filterPullColumns } from './cloud-sync-columns';
 
 const BATCH = 100;
 
@@ -521,8 +522,10 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
       const localCols = await getTableColumns(query, 'local', tableName);
       if (!localCols.size || !localCols.has(cfg.idCol)) continue;
 
-      // Sync ALL columns common to both sides (schema is identical via dump)
-      const cols = [...cloudCols].filter(c => localCols.has(c));
+      // Sync ALL columns common to both sides (schema is identical via dump),
+      // minus any branch-authoritative columns that a pull must never clobber
+      // (e.g. products.stock). idCol/timeCol are never in the exclusion set.
+      const cols = filterPullColumns(tableName, [...cloudCols].filter(c => localCols.has(c)));
       if (!cols.includes(cfg.idCol)) continue;
 
       const useTimeCol = cfg.timeCol && cloudCols.has(cfg.timeCol);
