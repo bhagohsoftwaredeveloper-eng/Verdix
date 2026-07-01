@@ -3,3 +3,4 @@
 import './cloud-sync-columns.test';
 import './cloud-sync-cursor.test';
 import './sidebar-search.test';
+import './sku.test';
