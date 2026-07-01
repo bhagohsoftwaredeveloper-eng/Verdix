@@ -37,11 +37,11 @@ components/import-wizard/
 
 Each entity config contributes:
 - **field schema**: `{ key, label, required, type: 'text'|'number'|'boolean', aliases: string[], default? }`
-- **match key**: products → `sku`; suppliers → `name`; customers → `name` + `contact_number`
+- **match key**: products → barcode (if present) else `name`; suppliers → `name`; customers → `name` + `contact_number`
 
 ### Entity field schemas (source of truth from existing routes)
 
-- **Products** (required: `name`, `sku`): barcode, description, category, brand, subcategory, unit, cost_price, selling_price, stock_quantity, reorder_point, parent_id, image_url, conversion_factor.
+- **Products** (required: `name`; **`id` and `sku` are auto-generated on import — excluded from the template**): barcode, description, category, brand, subcategory, unit, cost_price, selling_price, stock_quantity, reorder_point, parent_id, image_url, conversion_factor. **Match on barcode (if present), else name.**
 - **Customers** (required: `name`; **`id` no longer required — auto-generated**): contact_number, active, sales_person, sales_area, sales_group, loyalty_points, payment_terms, address, billing_address, discount, credit_limit, price_level_id. Match on name+contact_number.
 - **Suppliers** (required: `name`): contact_number, address, payment_terms, markup_percentage. Match on name.
 
@@ -66,6 +66,7 @@ Import routes move from "parse raw CSV + guess columns" to "accept clean pre-map
 
 - New JSON request shape: `{ rows: MappedRow[] }` (already validated/coerced client-side; server re-validates required fields defensively).
 - Structured response: `{ added, updated, skipped, errors: [{ row, reason }] }` instead of a message string.
+- **Products**: auto-generate `id` (UUID) and `sku` on insert; match on barcode-then-name. SKU uses the existing format `{BRAND3}-{NAME3}-{RANDOM6}` — extract the generator from `use-add-product-form.ts` into a shared `lib/` helper so add-product and import stay consistent.
 - **Customers**: auto-generate UUID when `id` absent; match on name+contact_number.
 - New lightweight `GET .../import/<entity>/keys` returning existing match-keys for client-side new/update classification.
 - Legacy CSV endpoints remain for back-compat; the UI uses the new JSON path.
