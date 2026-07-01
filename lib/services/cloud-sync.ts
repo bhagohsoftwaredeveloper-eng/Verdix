@@ -140,9 +140,25 @@ async function ensureTrackerTables(): Promise<void> {
   `, []);
 }
 
+// Format a Date/string as a MySQL DATETIME literal in LOCAL wall-clock time.
+//
+// Both pools use mysql2's default `timezone: 'local'`, which decodes a DB value
+// like '2026-07-01 14:00:00' into `new Date(2026, 6, 1, 14, 0, 0)` — i.e. the
+// wall-clock digits are read as LOCAL time. To round-trip that value back into
+// the exact same literal (so `WHERE updated_at > ?` watermarks compare against
+// the stored wall clock, not a UTC-shifted copy), we must read the Date back
+// with the LOCAL getters — the inverse of mysql2's decoder.
+//
+// The previous implementation used `.toISOString()` (UTC), so every watermark
+// was shifted by the machine's tz offset, and reading a stored watermark back
+// through this function shifted it a SECOND time — starving/re-pushing rows.
 function toMysqlTs(d: Date | string): string {
   const date = typeof d === 'string' ? new Date(d) : d;
-  return date.toISOString().slice(0, 19).replace('T', ' ');
+  const p = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ` +
+    `${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`
+  );
 }
 
 // ---------------------------------------------------------------------------
