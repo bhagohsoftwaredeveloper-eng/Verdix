@@ -7,3 +7,4 @@ import './sku.test';
 import './import-schemas.test';
 import './import-coerce.test';
 import './import-automap.test';
+import './import-parse.test';
