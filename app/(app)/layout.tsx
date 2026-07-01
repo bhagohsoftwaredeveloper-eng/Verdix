@@ -3,7 +3,8 @@
 import React, { Suspense } from 'react';
 import { Store } from 'lucide-react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { AnimatedSidebarTrigger } from '@/components/AnimatedSidebarTrigger';
 import { WindowControls } from '@/components/window-controls';
 import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
 import { NavigationProgress } from '@/components/navigation-progress';
@@ -50,7 +51,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarInset className="min-w-0">
           <header className="sticky top-0 z-30 flex items-center h-16 gap-4 px-4 border-b bg-background/80 backdrop-blur-sm sm:px-6 non-printable window-drag">
             <div className="flex items-center gap-4 window-no-drag">
-              <SidebarTrigger />
+              <AnimatedSidebarTrigger />
               <AppBreadcrumbs />
             </div>
             <div className="flex-1" />
