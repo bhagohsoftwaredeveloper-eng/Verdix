@@ -12,9 +12,11 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useSidebar } from '@/components/ui/sidebar';
+import { Input } from '@/components/ui/input';
 import {
   Warehouse, ChartNoAxesCombined, User as UserIcon,
-  ShoppingCart, Users, ChevronDown, LogOut,
+  ShoppingCart, Users, ChevronDown, LogOut, Search,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { handleSignOut } from '../auth-actions';
@@ -22,6 +24,8 @@ import {
   inventoryNavItems, salesNavItems, customerNavItems,
   suppliersNavItems, purchasesNavItems,
 } from './layout-nav-config';
+import { buildNavIndex, filterNavIndex, matchSegments } from '@/lib/sidebar-search';
+import { useMemo, useRef, useState, useEffect } from 'react';
 
 type AppUser = { email: string; permissions?: string[]; userType?: string };
 
@@ -48,6 +52,37 @@ export function AppSidebar({
   const hasOperations = hasPermission('manage_inventory') || hasPermission('view_sales') ||
     hasPermission('manage_customers') || hasPermission('manage_purchases') || hasPermission('manage_suppliers');
 
+  const { state: sidebarState, setOpen } = useSidebar();
+  const isCollapsed = sidebarState === 'collapsed';
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const navIndex = useMemo(() => buildNavIndex([
+    { section: null, items: filteredNavItems },
+    { section: 'Inventory', items: inventoryNavItems },
+    { section: 'Sales', items: salesNavItems },
+    { section: 'Customers', items: customerNavItems },
+    { section: 'Purchases', items: purchasesNavItems },
+    { section: 'Suppliers', items: suppliersNavItems },
+    { section: null, items: filteredOtherNavItems },
+  ]), [filteredNavItems, filteredOtherNavItems]);
+
+  const matches = filterNavIndex(navIndex, query);
+  const isSearching = query.trim().length > 0;
+
+  // Ctrl/Cmd+K focuses the search box.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setOpen(true);
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [setOpen]);
+
   return (
     <Sidebar className="non-printable border-r" collapsible="icon">
       <SidebarHeader className="h-20 border-b border-sidebar-border sticky top-0 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl z-10 px-6 group-data-[collapsible=icon]:px-0 justify-center shadow-sm">
@@ -61,63 +96,123 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-6 gap-2 overflow-y-auto flex-1 group-data-[collapsible=icon]:px-0">
-        {filteredNavItems.length > 0 && (
+        {isCollapsed ? (
+          <button
+            type="button"
+            aria-label="Search navigation"
+            title="Search (Ctrl+K)"
+            onClick={() => { setOpen(true); setTimeout(() => searchRef.current?.focus(), 0); }}
+            className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+          >
+            <Search className="size-4" />
+          </button>
+        ) : (
+          <div className="relative px-1 mb-2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') { setQuery(''); searchRef.current?.blur(); }
+                if (e.key === 'Enter' && matches.length > 0) {
+                  window.location.assign(matches[0].href);
+                }
+              }}
+              placeholder="Search... (Ctrl+K)"
+              className="h-9 pl-9 text-sm bg-sidebar-accent/40 border-sidebar-border focus-visible:ring-1"
+            />
+          </div>
+        )}
+
+        {isSearching ? (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Platform</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">
+              Results ({matches.length})
+            </SidebarGroupLabel>
             <SidebarMenu>
-              {filteredNavItems.map(item => (
-                <SidebarMenuItem key={item.href}>
-                  <Link href={item.href}>
-                    <SidebarMenuButton isActive={pathname === item.href} tooltip={{ children: item.label }} className="relative gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-1/2 data-[active=true]:before:h-5 data-[active=true]:before:w-1 data-[active=true]:before:-translate-y-1/2 data-[active=true]:before:rounded-r-full data-[active=true]:before:bg-primary data-[active=true]:text-primary">
-                      <item.icon />
-                      <span className="text-[14px]">{item.label}</span>
+              {matches.length === 0 && (
+                <div className="px-4 py-2 text-[13px] text-muted-foreground">No pages found.</div>
+              )}
+              {matches.map(m => (
+                <SidebarMenuItem key={m.href}>
+                  <Link href={m.href}>
+                    <SidebarMenuButton isActive={pathname === m.href} className="gap-3 px-4 py-2 font-medium rounded-lg">
+                      <span className="text-[14px]">
+                        {matchSegments(m.label, query).map((seg, i) =>
+                          seg.match
+                            ? <mark key={i} className="bg-primary/20 text-primary rounded-sm px-0.5">{seg.text}</mark>
+                            : <span key={i}>{seg.text}</span>,
+                        )}
+                        {m.section && <span className="ml-1 text-[11px] text-muted-foreground">· {m.section}</span>}
+                      </span>
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
           </SidebarGroup>
-        )}
+        ) : (
+          <>
+            {filteredNavItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Platform</SidebarGroupLabel>
+                <SidebarMenu>
+                  {filteredNavItems.map(item => (
+                    <SidebarMenuItem key={item.href}>
+                      <Link href={item.href}>
+                        <SidebarMenuButton isActive={pathname === item.href} tooltip={{ children: item.label }} className="relative gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-1/2 data-[active=true]:before:h-5 data-[active=true]:before:w-1 data-[active=true]:before:-translate-y-1/2 data-[active=true]:before:rounded-r-full data-[active=true]:before:bg-primary data-[active=true]:text-primary">
+                          <item.icon />
+                          <span className="text-[14px]">{item.label}</span>
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
 
-        {hasOperations && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Operations</SidebarGroupLabel>
-            <SidebarMenu>
-              {hasPermission('manage_inventory') && (
-                <CollapsibleNavSection label="Inventory" icon={Warehouse} isActive={isInventoryPage} items={inventoryNavItems} pathname={pathname} />
-              )}
-              {hasPermission('view_sales') && (
-                <CollapsibleNavSection label="Sales" icon={ChartNoAxesCombined} isActive={isSalesPage} items={salesNavItems} pathname={pathname} />
-              )}
-              {hasPermission('manage_customers') && (
-                <CollapsibleNavSection label="Customers" icon={UserIcon} isActive={isCustomerPage} items={customerNavItems} pathname={pathname} />
-              )}
-              {hasPermission('manage_purchases') && (
-                <CollapsibleNavSection label="Purchases" icon={ShoppingCart} isActive={isPurchasesPage} items={purchasesNavItems} pathname={pathname} />
-              )}
-              {hasPermission('manage_suppliers') && (
-                <CollapsibleNavSection label="Suppliers" icon={Users} isActive={isSuppliersPage} items={suppliersNavItems} pathname={pathname} />
-              )}
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
+            {hasOperations && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Operations</SidebarGroupLabel>
+                <SidebarMenu>
+                  {hasPermission('manage_inventory') && (
+                    <CollapsibleNavSection label="Inventory" icon={Warehouse} isActive={isInventoryPage} items={inventoryNavItems} pathname={pathname} />
+                  )}
+                  {hasPermission('view_sales') && (
+                    <CollapsibleNavSection label="Sales" icon={ChartNoAxesCombined} isActive={isSalesPage} items={salesNavItems} pathname={pathname} />
+                  )}
+                  {hasPermission('manage_customers') && (
+                    <CollapsibleNavSection label="Customers" icon={UserIcon} isActive={isCustomerPage} items={customerNavItems} pathname={pathname} />
+                  )}
+                  {hasPermission('manage_purchases') && (
+                    <CollapsibleNavSection label="Purchases" icon={ShoppingCart} isActive={isPurchasesPage} items={purchasesNavItems} pathname={pathname} />
+                  )}
+                  {hasPermission('manage_suppliers') && (
+                    <CollapsibleNavSection label="Suppliers" icon={Users} isActive={isSuppliersPage} items={suppliersNavItems} pathname={pathname} />
+                  )}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
 
-        {filteredOtherNavItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Management</SidebarGroupLabel>
-            <SidebarMenu>
-              {filteredOtherNavItems.map(item => (
-                <SidebarMenuItem key={item.href}>
-                  <Link href={item.href}>
-                    <SidebarMenuButton isActive={pathname === item.href} tooltip={{ children: item.label }} className="relative gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-1/2 data-[active=true]:before:h-5 data-[active=true]:before:w-1 data-[active=true]:before:-translate-y-1/2 data-[active=true]:before:rounded-r-full data-[active=true]:before:bg-primary data-[active=true]:text-primary">
-                      <item.icon />
-                      <span className="text-[14px]">{item.label}</span>
-                    </SidebarMenuButton>
-                  </Link>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+            {filteredOtherNavItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.1em] font-bold text-muted-foreground/80 px-4 mb-3">Management</SidebarGroupLabel>
+                <SidebarMenu>
+                  {filteredOtherNavItems.map(item => (
+                    <SidebarMenuItem key={item.href}>
+                      <Link href={item.href}>
+                        <SidebarMenuButton isActive={pathname === item.href} tooltip={{ children: item.label }} className="relative gap-3 px-4 py-2.5 font-medium rounded-lg transition-all duration-200 hover:shadow-sm data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-1/2 data-[active=true]:before:h-5 data-[active=true]:before:w-1 data-[active=true]:before:-translate-y-1/2 data-[active=true]:before:rounded-r-full data-[active=true]:before:bg-primary data-[active=true]:text-primary">
+                          <item.icon />
+                          <span className="text-[14px]">{item.label}</span>
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
+          </>
         )}
       </SidebarContent>
 
