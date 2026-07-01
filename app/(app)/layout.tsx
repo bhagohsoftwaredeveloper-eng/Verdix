@@ -3,7 +3,8 @@
 import React, { Suspense } from 'react';
 import { Store } from 'lucide-react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { AnimatedSidebarTrigger } from '@/components/AnimatedSidebarTrigger';
 import { WindowControls } from '@/components/window-controls';
 import { AppBreadcrumbs } from '@/components/app-breadcrumbs';
 import { NavigationProgress } from '@/components/navigation-progress';
@@ -23,6 +24,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useLicenseHeartbeat();
 
+  // Seed the sidebar's initial open state from the persisted cookie so a
+  // collapsed sidebar stays collapsed across reloads. Read once on mount.
+  const [defaultSidebarOpen] = React.useState(() => {
+    if (typeof document === 'undefined') return true;
+    const match = document.cookie.match(/(?:^|;\s*)sidebar_state=(true|false)/);
+    return match ? match[1] === 'true' : true;
+  });
+
   if (isPOSPage) return <>{children}</>;
 
   if (isUserLoading || !user) {
@@ -38,7 +47,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <NavigationProgress />
       </Suspense>
-      <SidebarProvider className="h-screen overflow-hidden">
+      <SidebarProvider defaultOpen={defaultSidebarOpen} className="h-screen overflow-hidden">
         <AppSidebar
           user={user}
           hasPermission={hasPermission}
@@ -50,7 +59,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarInset className="min-w-0">
           <header className="sticky top-0 z-30 flex items-center h-16 gap-4 px-4 border-b bg-background/80 backdrop-blur-sm sm:px-6 non-printable window-drag">
             <div className="flex items-center gap-4 window-no-drag">
-              <SidebarTrigger />
+              <AnimatedSidebarTrigger />
               <AppBreadcrumbs />
             </div>
             <div className="flex-1" />

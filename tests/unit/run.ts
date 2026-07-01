@@ -2,3 +2,4 @@
 // and throws (non-zero exit) on failure.
 import './cloud-sync-columns.test';
 import './cloud-sync-cursor.test';
+import './sidebar-search.test';
