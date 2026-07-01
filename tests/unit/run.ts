@@ -5,3 +5,5 @@ import './cloud-sync-cursor.test';
 import './sidebar-search.test';
 import './sku.test';
 import './import-schemas.test';
+import './import-coerce.test';
+import './import-automap.test';
