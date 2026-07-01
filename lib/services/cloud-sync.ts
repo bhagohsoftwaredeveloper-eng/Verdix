@@ -153,8 +153,10 @@ async function ensureTrackerTables(): Promise<void> {
 // The previous implementation used `.toISOString()` (UTC), so every watermark
 // was shifted by the machine's tz offset, and reading a stored watermark back
 // through this function shifted it a SECOND time — starving/re-pushing rows.
-function toMysqlTs(d: Date | string): string {
-  const date = typeof d === 'string' ? new Date(d) : d;
+//
+// Takes a Date only: every caller passes a mysql2-decoded TIMESTAMP column. An
+// ISO-'Z' string would mis-shift here, so we refuse strings at the type level.
+function toMysqlTs(date: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return (
     `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ` +
