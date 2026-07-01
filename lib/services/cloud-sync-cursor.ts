@@ -10,7 +10,18 @@
  * tests; must never pull in the DB pool / scheduler.
  */
 
-/** Data-loop select: keyset on (timeCol, id). Placeholders bind [at, at, id]. */
+/**
+ * Data-loop select: keyset on (timeCol, id). Placeholders bind [at, at, id].
+ *
+ * The seek requires `idCol` to impose a TOTAL order within a single timestamp,
+ * otherwise a row could be skipped. This holds for our data because every
+ * client-generated id is lowercase alphanumeric (uuidv4 hex, or
+ * `prefix_<Date.now()>_<base36>`) with no case/accent variants — so even the
+ * default case/accent-insensitive collation (utf8mb4_0900_ai_ci) orders them
+ * totally. We deliberately do NOT force `COLLATE utf8mb4_bin`: this builder is
+ * generic and the push loop auto-discovers every table, some of which have
+ * numeric (BIGINT) PKs — a string collation on those would throw and break sync.
+ */
 export function buildKeysetSelect(opts: {
   table: string;
   colList: string;
