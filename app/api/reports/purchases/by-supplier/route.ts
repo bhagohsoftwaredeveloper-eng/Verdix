@@ -9,10 +9,9 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
 
     let sql = `
-      SELECT 
+      SELECT
         s.id as supplierId,
         s.name as supplierName,
-        s.contact_person as contactPerson,
         COUNT(po.id) as totalOrders,
         SUM(po.total) as totalSpent,
         MAX(po.date) as lastPurchaseDate
@@ -33,11 +32,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      sql += ' AND (s.name LIKE ? OR s.contact_person LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      sql += ' AND s.name LIKE ?';
+      params.push(`%${search}%`);
     }
 
-    sql += ' GROUP BY s.id, s.name, s.contact_person';
+    sql += ' GROUP BY s.id, s.name';
     sql += ' ORDER BY totalSpent DESC';
 
     const results = await query(sql, params);
@@ -46,6 +45,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: results.map((row: any) => ({
         ...row,
+        contactPerson: null,
         totalSpent: parseFloat(row.totalSpent || '0'),
         totalOrders: parseInt(row.totalOrders || '0'),
       }))
