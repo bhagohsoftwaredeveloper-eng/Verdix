@@ -67,6 +67,9 @@ Import routes move from "parse raw CSV + guess columns" to "accept clean pre-map
 - New JSON request shape: `{ rows: MappedRow[] }` (already validated/coerced client-side; server re-validates required fields defensively).
 - Structured response: `{ added, updated, skipped, errors: [{ row, reason }] }` instead of a message string.
 - **Products**: auto-generate `id` (UUID) and `sku` on insert; match on barcode-then-name. SKU uses the existing format `{BRAND3}-{NAME3}-{RANDOM6}` — extract the generator from `use-add-product-form.ts` into a shared `lib/` helper so add-product and import stay consistent.
+- **Products — stock_quantity handling:**
+  - **New product** with `stock_quantity > 0` → set `stock`, create an opening `inventory_batches` row at `cost_price` (`source_type='adjustment'`, notes `'Imported Stock'`, mirroring the Add Product "Initial Stock" pattern at `app/(app)/products/actions.ts:475`) and a `stock_movement` (reason `'import'`). Keeps FIFO costing and audit intact.
+  - **Existing product matched on update** → `stock_quantity` from the file is **ignored** (never overwrites on-hand stock / FIFO batches). Bulk catalog re-import must not clobber live inventory; stock changes go through the normal stock-in / adjustment flow. Preview must label this clearly (e.g. "stock unchanged — existing product").
 - **Customers**: auto-generate UUID when `id` absent; match on name+contact_number.
 - New lightweight `GET .../import/<entity>/keys` returning existing match-keys for client-side new/update classification.
 - Legacy CSV endpoints remain for back-compat; the UI uses the new JSON path.
