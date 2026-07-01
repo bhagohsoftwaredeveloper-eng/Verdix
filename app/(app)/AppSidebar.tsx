@@ -76,7 +76,7 @@ export function AppSidebar({
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setOpen(true);
-        searchRef.current?.focus();
+        setTimeout(() => searchRef.current?.focus(), 0);
       }
     };
     window.addEventListener('keydown', handler);
