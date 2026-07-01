@@ -120,7 +120,7 @@ export function AppSidebar({
                 }
               }}
               placeholder="Search... (Ctrl+K)"
-              className="h-9 pl-9 text-sm bg-sidebar-accent/40 border-sidebar-border focus-visible:ring-1"
+              className="h-9 pl-9 text-sm bg-sidebar-accent/40 border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/50 focus-visible:ring-1"
             />
           </div>
         )}
