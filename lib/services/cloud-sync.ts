@@ -218,40 +218,6 @@ async function getPkColumn(tableName: string): Promise<string> {
   return pk;
 }
 
-async function getLastPush(tableName: string): Promise<string> {
-  const rows = await query(
-    `SELECT last_push_at FROM cloud_sync_tracker WHERE table_name = ?`,
-    [tableName]
-  ) as any[];
-  return rows[0]?.last_push_at
-    ? toMysqlTs(rows[0].last_push_at)
-    : '2000-01-01 00:00:00';
-}
-
-async function setLastPush(tableName: string, ts: string): Promise<void> {
-  await query(`
-    INSERT INTO cloud_sync_tracker (table_name, last_push_at) VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE last_push_at = VALUES(last_push_at)
-  `, [tableName, ts]);
-}
-
-async function getLastPull(tableName: string): Promise<string> {
-  const rows = await query(
-    `SELECT last_pull_at FROM cloud_sync_tracker WHERE table_name = ?`,
-    [tableName]
-  ) as any[];
-  return rows[0]?.last_pull_at
-    ? toMysqlTs(rows[0].last_pull_at)
-    : '2000-01-01 00:00:00';
-}
-
-async function setLastPull(tableName: string, ts: string): Promise<void> {
-  await query(`
-    INSERT INTO cloud_sync_tracker (table_name, last_pull_at) VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE last_pull_at = VALUES(last_pull_at)
-  `, [tableName, ts]);
-}
-
 type Cursor = { at: string; id: string };
 const DEFAULT_CURSOR: Cursor = { at: '2000-01-01 00:00:00', id: '' };
 
@@ -359,15 +325,12 @@ const TOMBSTONE_PULL_KEY = '__tombstones';   // last_pull_at = newest deleted_at
 
 /** Push new local tombstones to Railway's sync_tombstones table. */
 async function pushTombstones(): Promise<number> {
-  const lastPush = await getLastPush(TOMBSTONE_PUSH_KEY);
+  const cursor = await getPushCursor(TOMBSTONE_PUSH_KEY);
 
-  const rows = await query(`
-    SELECT table_name, record_id, deleted_at
-    FROM sync_tombstones
-    WHERE deleted_at > ?
-    ORDER BY deleted_at ASC
-    LIMIT ${BATCH}
-  `, [lastPush]) as any[];
+  const rows = await query(
+    buildTombstoneSelect({ table: 'sync_tombstones', colList: 'id, table_name, record_id, deleted_at', limit: BATCH }),
+    [cursor.id || '0'],
+  ) as any[];
 
   if (!rows.length) return 0;
 
@@ -392,14 +355,12 @@ async function pushTombstones(): Promise<number> {
     }
   }
 
-  let latest = lastPush;
-  for (const r of rows) {
-    if (r.deleted_at) {
-      const ts = toMysqlTs(r.deleted_at);
-      if (ts > latest) latest = ts;
-    }
-  }
-  if (latest > lastPush) await setLastPush(TOMBSTONE_PUSH_KEY, latest);
+  const last = rows[rows.length - 1];
+  await setPushCursor(
+    TOMBSTONE_PUSH_KEY,
+    last.deleted_at ? toMysqlTs(last.deleted_at) : cursor.at,
+    String(last.id),
+  );
   return rows.length;
 }
 
@@ -409,19 +370,15 @@ async function pullTombstones(): Promise<number> {
   const cloudCols = await getTableColumns(cloudQuery, 'cloud', 'sync_tombstones');
   if (!cloudCols.size) return 0;
 
-  const lastPull = await getLastPull(TOMBSTONE_PULL_KEY);
-  const rows = await cloudQuery(`
-    SELECT table_name, record_id, deleted_at
-    FROM sync_tombstones
-    WHERE deleted_at > ?
-    ORDER BY deleted_at ASC
-    LIMIT 500
-  `, [lastPull]) as any[];
+  const cursor = await getPullCursor(TOMBSTONE_PULL_KEY);
+  const rows = await cloudQuery(
+    buildTombstoneSelect({ table: 'sync_tombstones', colList: 'id, table_name, record_id, deleted_at', limit: 500 }),
+    [cursor.id || '0'],
+  ) as any[];
 
   if (!rows.length) return 0;
 
   let applied = 0;
-  let latest = lastPull;
   for (const r of rows) {
     if (!EXCLUDE_TABLES.has(r.table_name)) {
       try {
@@ -443,13 +400,13 @@ async function pullTombstones(): Promise<number> {
       INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)
       ON DUPLICATE KEY UPDATE deleted_at = VALUES(deleted_at)
     `, [r.table_name, r.record_id, toMysqlTs(r.deleted_at)]);
-
-    if (r.deleted_at) {
-      const ts = toMysqlTs(r.deleted_at);
-      if (ts > latest) latest = ts;
-    }
   }
-  if (latest > lastPull) await setLastPull(TOMBSTONE_PULL_KEY, latest);
+  const last = rows[rows.length - 1];
+  await setPullCursor(
+    TOMBSTONE_PULL_KEY,
+    last.deleted_at ? toMysqlTs(last.deleted_at) : cursor.at,
+    String(last.id),
+  );
   return applied;
 }
 
