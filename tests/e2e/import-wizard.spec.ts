@@ -27,6 +27,28 @@ test('products import wizard — happy path adds products', async ({ page }) => 
   await expect(page.getByText(/Added: 2/)).toBeVisible();
 });
 
+test('products export round-trips through the import wizard as updates', async ({ page }) => {
+  await seedSession(page, DEFAULT_ADMIN);
+  await page.goto('/settings/data-management');
+  await page.getByRole('tab', { name: 'Import & Export' }).click();
+
+  // Export the current product catalog (first "Export CSV" button).
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).first().click();
+  const download = await downloadPromise;
+  const exportPath = await download.path();
+
+  // Feed the exported file straight back into the products import wizard.
+  await page.getByRole('button', { name: 'Import from file' }).first().click();
+  await page.setInputFiles('input[type="file"]', exportPath!);
+  await page.getByRole('button', { name: /Next: Preview/i }).click();
+
+  // Every exported row already exists -> all classify as updates, none new, none skipped.
+  await expect(page.getByText('0 new')).toBeVisible();
+  await expect(page.getByText('0 skipped')).toBeVisible();
+  await expect(page.getByText(/[1-9]\d* update/)).toBeVisible();
+});
+
 test('products import wizard — mixed rows skips invalid', async ({ page }) => {
   await seedSession(page, DEFAULT_ADMIN);
   await page.goto('/settings/data-management');
