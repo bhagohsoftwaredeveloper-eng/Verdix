@@ -1,36 +1,34 @@
-
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
-import Papa from 'papaparse';
+import { ENTITY_SCHEMAS } from '@/lib/import/entity-schemas';
+import { buildEntityExportCsv } from '@/lib/import/csv-out';
 
-export async function GET(request: NextRequest) {
+// Columns are aliased to the import field keys so the export matches the import
+// template exactly (plus a trailing `sku` for reference). See lib/import/entity-schemas.ts.
+export async function GET() {
   try {
     const products = await query(`
-      SELECT 
-        id, 
-        name, 
-        sku, 
-        barcode, 
-        description, 
-        category, 
+      SELECT
+        name,
+        barcode,
+        description,
+        category,
         brand,
         subcategory,
-        stock as stock_quantity, 
+        unit_of_measure AS unit,
+        cost AS cost_price,
+        price AS selling_price,
+        stock AS stock_quantity,
         reorder_point,
-        cost as cost_price,
-        price as selling_price,
-        unit_of_measure as unit,
-        parent_id,
         image_url,
-        conversion_factor
+        conversion_factor,
+        sku
       FROM products
     `);
 
-    const plainProducts = JSON.parse(JSON.stringify(products));
-    const csv = Papa.unparse(plainProducts);
-    
-    // Add Byte Order Mark (BOM) for Excel compatibility
-    const csvWithBOM = '\uFEFF' + csv;
+    const plain = JSON.parse(JSON.stringify(products));
+    const csv = buildEntityExportCsv(ENTITY_SCHEMAS.products, plain, ['sku']);
+    const csvWithBOM = '﻿' + csv;
 
     return new NextResponse(csvWithBOM, {
       headers: {
@@ -38,7 +36,6 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': 'attachment; filename="products.csv"',
       },
     });
-
   } catch (error: any) {
     console.error('Error exporting products:', error);
     return NextResponse.json({ success: false, error: 'Failed to export products' }, { status: 500 });
