@@ -8,3 +8,5 @@ import './import-schemas.test';
 import './import-coerce.test';
 import './import-automap.test';
 import './import-parse.test';
+import './import-classify.test';
+import './import-csvout.test';
