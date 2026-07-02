@@ -57,12 +57,9 @@ export default function DataManagementPage() {
 
         <TabsContent value="import-export" className="space-y-4 pt-4">
           <ImportExportTab
-            exporting={m.exporting} importFile={m.importFile} importing={m.importing}
-            onExport={m.handleExport} onFileChange={m.handleFileUpload} onImport={m.uploadProducts}
-            customerExporting={m.customerExporting} customerImportFile={m.customerImportFile} customerImporting={m.customerImporting}
-            onCustomerExport={m.handleCustomerExport} onCustomerFileChange={m.handleCustomerFileUpload} onCustomerImport={m.uploadCustomers}
-            supplierExporting={m.supplierExporting} supplierImportFile={m.supplierImportFile} supplierImporting={m.supplierImporting}
-            onSupplierExport={m.handleSupplierExport} onSupplierFileChange={m.handleSupplierFileUpload} onSupplierImport={m.uploadSuppliers}
+            exporting={m.exporting} onExport={m.handleExport}
+            customerExporting={m.customerExporting} onCustomerExport={m.handleCustomerExport}
+            supplierExporting={m.supplierExporting} onSupplierExport={m.handleSupplierExport}
           />
         </TabsContent>
 
