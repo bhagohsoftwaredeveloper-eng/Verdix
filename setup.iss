@@ -1,6 +1,6 @@
 ; Vendix Inno Setup Script
 #define AppName "Vendix"
-#define AppVersion "1.15"
+#define AppVersion "1.16"
 #define AppPublisher "BHAGOH SYSTEMS"
 #define AppExeName "verdix.exe"
 
