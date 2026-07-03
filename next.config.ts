@@ -1,13 +1,13 @@
 import type {NextConfig} from 'next';
-import { createRequire } from 'module';
 
 // Kuhaa ang app version gikan sa package.json aron i-inline sa client bundle.
-// Usa ra ka tinubdan sa version — mag-sync awtomatik kada `npm version` bump.
-const { version: appVersion } = createRequire(import.meta.url)('./package.json');
-
+// Gamiton ang `npm_package_version` (gi-set sa npm kada `npm run build/dev`)
+// imbes i-import ang root package.json — kay ang pag-import sa root-level nga
+// file maghimo sa NFT nga i-trace ang tibuok project (mag-bloat sa standalone).
+// Mag-sync gihapon awtomatik sa package.json version.
 const nextConfig: NextConfig = {
   env: {
-    NEXT_PUBLIC_APP_VERSION: appVersion,
+    NEXT_PUBLIC_APP_VERSION: process.env.npm_package_version,
   },
   // Tugoti ang separate dist dir (env-driven) aron ang e2e test server makasabay
   // sa usa ka running nga dev server (lahi ang Next dev singleton lock). Default
