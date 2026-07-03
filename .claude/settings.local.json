@@ -26,7 +26,22 @@
       "Bash(\"C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe\" -h viaduct.proxy.rlwy.net -P 14274 -u root -N -e \"SELECT \\(SELECT COUNT\\(*\\) FROM information_schema.tables WHERE table_schema='verdix'\\) AS tables, \\(SELECT COUNT\\(*\\) FROM verdix.products\\) AS products, \\(SELECT COUNT\\(*\\) FROM verdix.sales_invoices\\) AS sales_inv, \\(SELECT COUNT\\(*\\) FROM verdix.point_history\\) AS point_hist;\")",
       "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/__TRACKED_VAR__)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/)",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Bash(printf '@echo off\\\\r\\\\ncd /d \"%%~dp0\"\\\\r\\\\necho ran > marker.txt\\\\r\\\\n')",
+      "Bash(cp \"/d/VERDIX_POS/Verdix_POS/start_server_hidden.vbs\" ./test_hidden.vbs)",
+      "Bash(rm -f marker.txt)",
+      "PowerShell($dir = \"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--VERDIX-POS-Verdix-POS\\\\fd01af71-3cca-49e3-8748-bd081a3f9daf\\\\scratchpad\"; Remove-Item \"$dir\\\\marker.txt\" -ErrorAction SilentlyContinue; & wscript.exe \"$dir\\\\test_hidden.vbs\"; Start-Sleep -Milliseconds 800; if \\(Test-Path \"$dir\\\\marker.txt\"\\) { \"PASS: batch ran hidden, marker created: \" + \\(Get-Content \"$dir\\\\marker.txt\"\\) } else { \"FAIL: marker not created\" })",
+      "PowerShell(npm run typecheck)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000\" -TimeoutSec 4 -UseBasicParsing; \"UP: $\\($r.StatusCode\\)\" } catch { \"DOWN: $\\($_.Exception.Message\\)\" })",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "PowerShell($c = Get-Command iscc -ErrorAction SilentlyContinue; if \\($c\\) { \"iscc on PATH: $\\($c.Source\\)\" } else { $p = \"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\ISCC.exe\"; if \\(Test-Path $p\\) { \"Found at: $p \\(NOT on PATH\\)\" } else { \"ISCC.exe not found - Inno Setup may not be installed\" } })",
+      "PowerShell(npm run build 2>&1)",
+      "PowerShell(& \"C:\\\\Program Files \\(x86\\)\\\\Inno Setup 6\\\\ISCC.exe\" setup.iss 2>&1)",
+      "PowerShell(Get-Item \"D:\\\\VERDIX_POS\\\\Verdix_POS\\\\Output\\\\VendixSetup_1.16.exe\" | Select-Object Name, @{N='SizeMB';E={[math]::Round\\($_.Length/1MB,1\\)}}, LastWriteTime)"
     ]
   }
 }

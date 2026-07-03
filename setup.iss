@@ -51,6 +51,9 @@ Source: "verdix_install.sql"; DestDir: "{app}"; Flags: ignoreversion
 Source: "setup_mysql_service.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "uninstall_mysql_service.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
+; Hidden launcher for start_server.bat — runs it with no visible console window
+; at boot (see [Icons] {commonstartup} entry).
+Source: "start_server_hidden.vbs"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Bundled MySQL 8.0 (portable — no separate MySQL install needed on client PC)
 ; Excludes drop ~600MB of files the server never needs at runtime: debug symbols
@@ -82,7 +85,10 @@ Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs
 Name: "{autoprograms}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
 Name: "{autodesktop}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
 Name: "{userstartup}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
-Name: "{commonstartup}\Vendix Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
+; Launch the server at boot through wscript + the hidden VBS wrapper so no
+; console window appears (start_server.bat directly would flash a cmd window
+; even with runminimized). wscript is the default, no-console host for .vbs.
+Name: "{commonstartup}\Vendix Server"; Filename: "wscript.exe"; Parameters: """{app}\start_server_hidden.vbs"""
 
 
 [Run]
