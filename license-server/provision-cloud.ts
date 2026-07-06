@@ -11,7 +11,7 @@
 import crypto from 'crypto';
 import { spawnSync } from 'child_process';
 import mysql from 'mysql2/promise';
-import { getLicenseByProductKey, upsertCloudConfig, addLicenseFeature } from './service';
+import { getLicenseByProductKey, getCloudConfig, upsertCloudConfig, addLicenseFeature } from './service';
 
 export function deriveTenantNames(licenseId: string): { dbName: string; dbUser: string } {
   const short = crypto.createHash('sha256').update(licenseId).digest('hex').slice(0, 10);
@@ -44,13 +44,19 @@ async function main() {
   if (!license) throw new Error(`No license found for product key ${productKey}`);
 
   const { dbName, dbUser } = deriveTenantNames(license.id);
-  const password = crypto.randomBytes(18).toString('base64').replace(/[^A-Za-z0-9]/g, '').slice(0, 24);
+  const existing = await getCloudConfig(license.id);
+  const rotate = flag('rotate-password');
+  const isNewPassword = !existing || rotate;
+  const password = isNewPassword
+    ? crypto.randomBytes(18).toString('base64').replace(/[^A-Za-z0-9]/g, '').slice(0, 24)
+    : existing!.password;
 
+  // Railway's proxy requires relaxed TLS verification here, matching lib/mysql.ts's cloud pool.
   const conn = await mysql.createConnection({ ...admin, ssl: { rejectUnauthorized: false } });
   try {
     await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`);
     await conn.query(`CREATE USER IF NOT EXISTS ?@'%' IDENTIFIED BY ?`, [dbUser, password]);
-    if (flag('rotate-password')) {
+    if (isNewPassword) {
       await conn.query(`ALTER USER ?@'%' IDENTIFIED BY ?`, [dbUser, password]);
     }
     await conn.query(`GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO ?@'%'`, [dbUser]);
@@ -63,15 +69,15 @@ async function main() {
   console.log(`Loading schema from '${refDb}' into '${dbName}' ...`);
   const dump = spawnSync('mysqldump', [
     '-h', admin.host, '-P', String(admin.port), '-u', admin.user,
-    `-p${admin.password}`, '--no-data', '--skip-add-locks', '--set-gtid-purged=OFF', refDb,
-  ], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
-  if (dump.status !== 0) throw new Error('mysqldump failed: ' + dump.stderr?.toString());
+    '--no-data', '--skip-add-locks', '--set-gtid-purged=OFF', refDb,
+  ], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024, env: { ...process.env, MYSQL_PWD: admin.password } });
+  if (dump.status !== 0) throw new Error('mysqldump failed: ' + (dump.error?.message || dump.stderr?.toString() || 'unknown'));
 
   const load = spawnSync('mysql', [
     '-h', admin.host, '-P', String(admin.port), '-u', admin.user,
-    `-p${admin.password}`, dbName,
-  ], { input: dump.stdout, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
-  if (load.status !== 0) throw new Error('schema load failed: ' + load.stderr?.toString());
+    dbName,
+  ], { input: dump.stdout, encoding: 'buffer', maxBuffer: 256 * 1024 * 1024, env: { ...process.env, MYSQL_PWD: admin.password } });
+  if (load.status !== 0) throw new Error('schema load failed: ' + (load.error?.message || load.stderr?.toString() || 'unknown'));
 
   await upsertCloudConfig(license.id, {
     host: admin.host, port: admin.port, name: dbName, user: dbUser, password,
