@@ -74,7 +74,15 @@
       "Bash(export CLOUD_PROVISION_HOST=reseau.proxy.rlwy.net CLOUD_PROVISION_PORT=25746 CLOUD_PROVISION_USER=root CLOUD_PROVISION_PASSWORD=bEahHvHYWkZWBkfdKqfnpQJwZKNzBpqY CLOUD_PROVISION_REF_DB=verdix CLOUD_CONFIG_SECRET=verify-secret-2026)",
       "Bash(export CLOUD_CONFIG_SECRET=verify-secret-2026)",
       "Bash(rm -f scripts/_verify-create-license.ts scripts/_verify-check.ts scripts/_verify-cleanup.ts)",
-      "Bash(git merge --no-ff feat/multi-tenant-cloud-sync -m 'Merge feat/multi-tenant-cloud-sync: per-customer isolated cloud sync *)"
+      "Bash(git merge --no-ff feat/multi-tenant-cloud-sync -m 'Merge feat/multi-tenant-cloud-sync: per-customer isolated cloud sync *)",
+      "Bash(bash __TRACKED_VAR__/scripts/review-package 88ddfd8 HEAD)",
+      "Bash(bash __TRACKED_VAR__/scripts/task-brief docs/superpowers/plans/2026-07-06-web-hosted-license.md 2)",
+      "Bash(bash __TRACKED_VAR__/scripts/review-package a842f55 HEAD)",
+      "Bash(bash __TRACKED_VAR__/scripts/task-brief docs/superpowers/plans/2026-07-06-web-hosted-license.md 3)",
+      "Bash(bash __TRACKED_VAR__/scripts/review-package 513f155 HEAD)",
+      "Bash(git merge --no-ff feat/web-hosted-license -m 'Merge feat/web-hosted-license: web/hosted license mode *)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")",
+      "Bash(railway logs *)"
     ]
   }
 }
