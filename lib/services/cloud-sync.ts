@@ -22,6 +22,7 @@
 import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '../mysql';
 import { filterPullColumns } from './cloud-sync-columns';
 import { buildKeysetSelect, buildTombstoneSelect } from './cloud-sync-cursor';
+import { hasCloudSyncFeature } from '../licensing/cloud-config';
 
 const BATCH = 100;
 
@@ -414,7 +415,7 @@ async function pullTombstones(): Promise<number> {
 // Push — scan local tables, bulk-upsert new/updated rows to Railway
 // ---------------------------------------------------------------------------
 export async function processPushToCloud(): Promise<{ pushed: number; failed: number }> {
-  if (!isCloudDbConfigured()) return { pushed: 0, failed: 0 };
+  if (!isCloudDbConfigured() || !hasCloudSyncFeature()) return { pushed: 0, failed: 0 };
 
   const online = await checkCloudConnection();
   if (!online) return { pushed: 0, failed: 0 };
@@ -501,7 +502,7 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 // Pull — query Railway directly for master data and upsert locally
 // ---------------------------------------------------------------------------
 export async function processPullFromCloud(): Promise<{ pulled: number }> {
-  if (!isCloudDbConfigured()) return { pulled: 0 };
+  if (!isCloudDbConfigured() || !hasCloudSyncFeature()) return { pulled: 0 };
 
   const online = await checkCloudConnection();
   if (!online) return { pulled: 0 };
