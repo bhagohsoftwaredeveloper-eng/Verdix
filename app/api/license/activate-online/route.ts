@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import os from 'os';
 import { evaluateLicenseKey, saveLicenseKey } from '@/lib/licensing/verify';
 import { getMachineId } from '@/lib/licensing/machine';
+import { saveCloudConfig } from '@/lib/licensing/cloud-config';
+import { resetCloudPool } from '@/lib/mysql';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +61,10 @@ export async function POST(request: NextRequest) {
     const info = evaluateLicenseKey(json.signedLicense);
     if (info.status === 'active' || info.status === 'expired') {
       saveLicenseKey(json.signedLicense);
+      if (json.cloudConfig) {
+        saveCloudConfig(json.cloudConfig);
+        resetCloudPool();
+      }
       return NextResponse.json({ success: true, data: info });
     }
 
