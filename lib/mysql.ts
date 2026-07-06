@@ -1,6 +1,8 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { readCloudConfig } from './licensing/cloud-config';
+import { composeSINumber, isValidSeriesPrefix } from './si-number';
+export { formatSINumber, validateSINumber } from './si-number';
 
 // Load environment variables
 dotenv.config();
@@ -333,26 +335,6 @@ export async function getNextSINumber(): Promise<string> {
 
     return rows[0].next_val;
   });
-}
-
-/**
- * Format SI number with padding
- * @param siNumber - SI number (string or number)
- * @returns Formatted SI number (e.g., "001234")
- */
-export function formatSINumber(siNumber: string | number | null | undefined): string {
-  if (!siNumber) return '000000';
-  return String(siNumber).padStart(6, '0');
-}
-
-/**
- * Validate SI number format
- * @param siNumber - SI number to validate
- * @returns Whether SI number is valid
- */
-export function validateSINumber(siNumber: string | null | undefined): boolean {
-  if (!siNumber) return false;
-  return /^\d{1,6}$/.test(siNumber) && siNumber.length <= 6;
 }
 
 /**
