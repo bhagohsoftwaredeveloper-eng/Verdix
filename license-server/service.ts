@@ -228,6 +228,15 @@ export async function setLicenseStatus(id: string, status: LicenseStatus): Promi
   await log(id, null, 'license.' + status, `Status set to ${status}`);
 }
 
+export async function addLicenseFeature(licenseId: string, feature: string): Promise<void> {
+  const license = await getLicense(licenseId);
+  if (!license) throw new Error('License not found: ' + licenseId);
+  const features = Array.from(new Set([...(license.features || []), feature]));
+  await query(`UPDATE licenses SET features = ? WHERE id = ?`, [JSON.stringify(features), licenseId]);
+  cacheUpdateLicenseStatus(licenseId, license.status); // keep cache warm; status unchanged
+  await log(licenseId, null, 'license.feature.added', feature);
+}
+
 // ── Cloud Config (per-license multi-tenant DB storage) ────────────────────────
 export interface CloudConfig {
   host: string;

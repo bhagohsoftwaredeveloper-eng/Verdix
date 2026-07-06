@@ -12,3 +12,4 @@ import './import-classify.test';
 import './import-csvout.test';
 import './aes-gcm.test';
 import './cloud-config-crypto.test';
+import './tenant-names.test';
