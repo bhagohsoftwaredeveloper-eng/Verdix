@@ -15,3 +15,4 @@ import './cloud-config-crypto.test';
 import './tenant-names.test';
 import './cloud-config-store.test';
 import './license-machine-match.test';
+import './si-number.test';
