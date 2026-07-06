@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { readCloudConfig } from './licensing/cloud-config';
 
 // Load environment variables
 dotenv.config();
@@ -48,17 +49,31 @@ if (process.env.NODE_ENV === 'production') {
 // Cloud (Railway) MySQL pool — used by cloud-sync for direct DB push/pull
 // Lazy-initialized so an offline machine never blocks on cloud connection
 // ---------------------------------------------------------------------------
+
+// Resolve cloud connection: delivered per-customer config file first, then env (dev).
+function resolveCloudConn(): { host: string; port: number; user: string; password: string; database: string } | null {
+  const cfg = readCloudConfig();
+  if (cfg) return { host: cfg.host, port: cfg.port, user: cfg.user, password: cfg.password, database: cfg.name };
+  if (process.env.CLOUD_DB_HOST) {
+    return {
+      host: process.env.CLOUD_DB_HOST,
+      port: parseInt(process.env.CLOUD_DB_PORT || '3306'),
+      user: process.env.CLOUD_DB_USER || 'root',
+      password: process.env.CLOUD_DB_PASSWORD || '',
+      database: process.env.CLOUD_DB_NAME || 'railway',
+    };
+  }
+  return null;
+}
+
 function getCloudPool(): mysql.Pool | null {
-  if (!process.env.CLOUD_DB_HOST) return null;
+  const conn = resolveCloudConn();
+  if (!conn) return null;
 
   if (global.__cloudMysqlPool === undefined) {
     try {
       global.__cloudMysqlPool = mysql.createPool({
-        host: process.env.CLOUD_DB_HOST,
-        port: parseInt(process.env.CLOUD_DB_PORT || '3306'),
-        user: process.env.CLOUD_DB_USER || 'root',
-        password: process.env.CLOUD_DB_PASSWORD || '',
-        database: process.env.CLOUD_DB_NAME || 'railway',
+        ...conn,
         ssl: { rejectUnauthorized: false },
         waitForConnections: true,
         connectionLimit: 5,
@@ -73,12 +88,19 @@ function getCloudPool(): mysql.Pool | null {
       global.__cloudMysqlPool = null;
     }
   }
-
   return global.__cloudMysqlPool ?? null;
 }
 
+/** Drop the cached cloud pool so a newly-saved config is picked up without restart. */
+export function resetCloudPool(): void {
+  if (global.__cloudMysqlPool) {
+    try { global.__cloudMysqlPool.end(); } catch { /* ignore */ }
+  }
+  global.__cloudMysqlPool = undefined;
+}
+
 export function isCloudDbConfigured(): boolean {
-  return !!process.env.CLOUD_DB_HOST;
+  return resolveCloudConn() !== null;
 }
 
 export async function cloudQuery(sql: string, params?: any[]): Promise<any> {
