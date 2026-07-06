@@ -6,7 +6,7 @@ import {
   removeLicenseKey,
 } from '@/lib/licensing/verify';
 import { getMachineId } from '@/lib/licensing/machine';
-import { saveCloudConfig, removeCloudConfig } from '@/lib/licensing/cloud-config';
+import { saveCloudConfig, removeCloudConfig, cloudConfigMatches } from '@/lib/licensing/cloud-config';
 import { resetCloudPool } from '@/lib/mysql';
 
 export const dynamic = 'force-dynamic';
@@ -57,7 +57,7 @@ export async function POST() {
         const info = evaluateLicenseKey(json.signedLicense);
         if (info.status === 'active' || info.status === 'expired') saveLicenseKey(json.signedLicense);
       }
-      if (json.cloudConfig) {
+      if (json.cloudConfig && !cloudConfigMatches(json.cloudConfig)) {
         saveCloudConfig(json.cloudConfig);
         resetCloudPool();
       }

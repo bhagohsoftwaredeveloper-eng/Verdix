@@ -119,8 +119,13 @@ function clientIp(req: Req): string {
 
 async function cloudConfigFor(license: { id: string; features: string[] | null }) {
   if (!license.features || !license.features.includes('cloud-sync')) return undefined;
-  const cfg = await svc.getCloudConfig(license.id);
-  return cfg || undefined;
+  try {
+    const cfg = await svc.getCloudConfig(license.id);
+    return cfg || undefined;
+  } catch (e) {
+    console.error('[license] cloudConfig lookup failed (check CLOUD_CONFIG_SECRET):', (e as Error).message);
+    return undefined;
+  }
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────

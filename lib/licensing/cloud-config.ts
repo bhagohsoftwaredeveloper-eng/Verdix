@@ -61,6 +61,14 @@ export function removeCloudConfig(): void {
   }
 }
 
+/** True when the given config exactly matches what's already stored on disk. */
+export function cloudConfigMatches(cfg: CloudConfig, machineId?: string): boolean {
+  const cur = readCloudConfig(machineId);
+  if (!cur) return false;
+  return cur.host === cfg.host && cur.port === cfg.port && cur.name === cfg.name
+      && cur.user === cfg.user && cur.password === cfg.password;
+}
+
 /** True when the locally-installed, signature-verified license grants cloud sync. */
 export function hasCloudSyncFeature(): boolean {
   const payload = readLicensePayload();

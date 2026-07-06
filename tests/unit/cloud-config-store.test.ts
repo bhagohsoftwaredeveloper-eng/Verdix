@@ -6,13 +6,17 @@ import fs from 'node:fs';
 const tmp = path.join(os.tmpdir(), `verdix-cloud-${Date.now()}.dat`);
 process.env.CLOUD_CONFIG_FILE = tmp;
 
-import { saveCloudConfig, readCloudConfig, removeCloudConfig } from '../../lib/licensing/cloud-config';
+import { saveCloudConfig, readCloudConfig, removeCloudConfig, cloudConfigMatches } from '../../lib/licensing/cloud-config';
 
 const cfg = { host: 'reseau.proxy.rlwy.net', port: 25746, name: 'verdix_c_abc', user: 'u_abc', password: 'pw-123' };
 
 // round-trip with an explicit machine id
 saveCloudConfig(cfg, 'machine-A');
 assert.deepEqual(readCloudConfig('machine-A'), cfg, 'round-trips config for same machine');
+
+// cloudConfigMatches: identical config matches, differing field does not
+assert.equal(cloudConfigMatches(cfg, 'machine-A'), true, 'matches identical stored config');
+assert.equal(cloudConfigMatches({ ...cfg, password: 'different' }, 'machine-A'), false, 'differs when a field changes');
 
 // file is encrypted (password not in plaintext on disk)
 const onDisk = fs.readFileSync(tmp, 'utf8');
