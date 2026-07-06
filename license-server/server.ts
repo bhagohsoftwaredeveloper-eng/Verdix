@@ -117,6 +117,12 @@ function clientIp(req: Req): string {
   );
 }
 
+async function cloudConfigFor(license: { id: string; features: string[] | null }) {
+  if (!license.features || !license.features.includes('cloud-sync')) return undefined;
+  const cfg = await svc.getCloudConfig(license.id);
+  return cfg || undefined;
+}
+
 // ── Router ───────────────────────────────────────────────────────────────────
 async function handle(req: Req, res: Res) {
   const url = new URL(req.url || '/', `http://localhost:${PORT}`);
@@ -199,10 +205,12 @@ async function handle(req: Req, res: Res) {
       });
       await svc.log(license.id, payload.machineId, 'activate.online', 'Online activation', ip);
 
+      const cloudConfig = await cloudConfigFor(license);
       return sendJson(res, 200, {
         success: true,
         signedLicense,
         info: { customer: payload.customer, edition: payload.edition, expires: payload.expires },
+        ...(cloudConfig ? { cloudConfig } : {}),
       });
     } catch (e: any) {
       console.error('Activation error:', e);
@@ -226,7 +234,10 @@ async function handle(req: Req, res: Res) {
         appVersion: body.appVersion,
         ip: clientIp(req),
       });
-      return sendJson(res, 200, { success: true, ...result });
+      const license = await svc.getLicense(licenseId);
+      const cloudConfig =
+        result.status === 'active' && license ? await cloudConfigFor(license) : undefined;
+      return sendJson(res, 200, { success: true, ...result, ...(cloudConfig ? { cloudConfig } : {}) });
     } catch (e: any) {
       console.error('Validate error:', e);
       return sendJson(res, 500, { success: false, error: 'Validation failed on the server.' });
