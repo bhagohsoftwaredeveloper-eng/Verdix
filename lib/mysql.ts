@@ -315,25 +315,47 @@ export async function getNextZReadingNumber(terminalId: string): Promise<string>
 
 /**
  * Atomically gets and increments the next SI Number (Sales Invoice Number)
- * @returns The next SI number string (e.g., "001234")
+ * @returns The next SI number string (e.g., "PREFIX-001234")
  */
 export async function getNextSINumber(): Promise<string> {
   return await withTransaction(async (connection) => {
-    // 1. Increment global SI number
+    // 1. Resolve this deployment's series prefix (stored column first, else env).
+    //    Fail loud if unresolved — never emit an unprefixed/ambiguous number that
+    //    could collide with another writer.
+    const [prefixRows]: any = await connection.query(
+      `SELECT si_prefix FROM transaction_references WHERE id = 1`
+    );
+    let prefix: string = (prefixRows?.[0]?.si_prefix || '').trim();
+    if (!prefix) {
+      const envPrefix = (process.env.SI_SERIES_PREFIX || '').trim().toUpperCase();
+      if (envPrefix && isValidSeriesPrefix(envPrefix)) {
+        await connection.query(
+          `UPDATE transaction_references SET si_prefix = ? WHERE id = 1`,
+          [envPrefix]
+        );
+        prefix = envPrefix;
+      }
+    }
+    if (!prefix || !isValidSeriesPrefix(prefix)) {
+      throw new Error(
+        'SI series prefix is not configured. Set SI_SERIES_PREFIX (e.g. WEB, MAIN, BR2) ' +
+        'so invoice numbers do not collide across writers.'
+      );
+    }
+
+    // 2. Atomically increment the numeric counter (unchanged behavior).
     await connection.query(
       `UPDATE transaction_references SET si_number = LPAD(IF(si_number IS NULL OR si_number = '', 0, CAST(si_number AS UNSIGNED)) + 1, 6, '0') WHERE id = 1`
     );
 
-    // 2. Fetch the new value
+    // 3. Read it back and compose PREFIX-NNNNNN.
     const [rows]: any = await connection.query(
       `SELECT si_number as next_val FROM transaction_references WHERE id = 1`
     );
-
     if (!rows || rows.length === 0) {
       throw new Error('Failed to fetch next SI number');
     }
-
-    return rows[0].next_val;
+    return composeSINumber(prefix, rows[0].next_val);
   });
 }
 
