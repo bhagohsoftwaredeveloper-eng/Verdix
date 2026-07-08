@@ -4,11 +4,15 @@ import { PULL_EXCLUDE_TABLES, isPullExcluded } from '../../lib/services/cloud-sy
 // stock-authoritative tables are pull-excluded
 for (const t of ['stock_movements','stock_adjustments','stock_counts','stock_count_items',
                  'inventory_transfers','inventory_transfer_items','inventory_batches',
-                 'product_shelves','bad_orders']) {
+                 'product_shelves','bad_orders','bad_order_items','repackaging_logs']) {
   assert.equal(isPullExcluded(t), true, `${t} must be pull-excluded`);
 }
 // per-terminal fiscal tables are pull-excluded
 for (const t of ['shifts','cash_transfers']) {
+  assert.equal(isPullExcluded(t), true, `${t} must be pull-excluded`);
+}
+// branch-authoritative running-balance tables are pull-excluded
+for (const t of ['customer_loyalty']) {
   assert.equal(isPullExcluded(t), true, `${t} must be pull-excluded`);
 }
 // ordinary business tables are pullable

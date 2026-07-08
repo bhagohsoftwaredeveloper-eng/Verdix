@@ -39,6 +39,10 @@ export const PULL_EXCLUDE_TABLES: Set<string> = new Set([
   'inventory_batches',
   'product_shelves',
   'bad_orders',
+  'bad_order_items', // child of bad_orders (excluded above) — pulling it would FK-fail forever
+  'repackaging_logs', // stock-moving operation log, same class as stock_movements/stock_adjustments
+  // branch-authoritative running balances (same class as products.stock)
+  'customer_loyalty',
   // per-terminal fiscal
   'shifts',
   'cash_transfers',
