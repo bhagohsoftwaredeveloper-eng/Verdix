@@ -47,6 +47,8 @@ export const PULL_EXCLUDE_TABLES: Set<string> = new Set([
   // per-terminal fiscal
   'shifts',
   'cash_transfers',
+  'x_readings',   // per-terminal X-reading records — reporting push only, never pull
+  'z_readings',   // per-terminal Z-reading records — reporting push only, never pull
 ]);
 
 /** True when `table` is pushed up but must not be pulled down. */
