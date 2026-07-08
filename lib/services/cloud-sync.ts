@@ -23,6 +23,7 @@ import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '..
 import { filterPullColumns, isPullExcluded } from './cloud-sync-columns';
 import { buildKeysetSelect, buildTombstoneSelect } from './cloud-sync-cursor';
 import { buildBulkUpsert } from './cloud-sync-upsert';
+import { detectConflicts } from './cloud-sync-conflicts';
 import { hasCloudSyncFeature } from '../licensing/cloud-config';
 import { reconcileStockDeltas } from './stock-reconcile';
 
@@ -506,9 +507,42 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
 
       if (!rows.length) continue;
 
+      // Conflict surfacing: only for tables keyed on updated_at. A row edited on
+      // BOTH sides since the last pull is a conflict; true-LWW resolves it, we log it.
+      let conflicts: ReturnType<typeof detectConflicts> = [];
+      if (useTimeCol && cfg.timeCol === 'updated_at') {
+        try {
+          const ids = rows.map(r => String(r[cfg.idCol]));
+          const localRows = await query(
+            `SELECT \`${cfg.idCol}\` AS id, updated_at FROM \`${tableName}\` WHERE \`${cfg.idCol}\` IN (${ids.map(() => '?').join(',')})`,
+            ids,
+          ) as any[];
+          const localMap = new Map<string, string>();
+          for (const lr of localRows) {
+            if (lr.updated_at) localMap.set(String(lr.id), toMysqlTs(lr.updated_at));
+          }
+          const incoming = rows.map(r => ({ id: String(r[cfg.idCol]), updatedAt: r['updated_at'] ? toMysqlTs(r['updated_at']) : '' }));
+          conflicts = detectConflicts(incoming, localMap, cursor.at);
+        } catch (cErr) {
+          console.error(`[CloudSync] Conflict detect error on ${tableName}:`, (cErr as Error).message);
+        }
+      }
+
       const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol, cols.includes('updated_at') ? 'updated_at' : undefined);
       await query(sql, params);
       totalPulled += rows.length;
+
+      // Best-effort conflict log — never abort the pull.
+      for (const cf of conflicts) {
+        try {
+          await query(
+            `INSERT INTO sync_conflicts (table_name, record_id, local_updated_at, cloud_updated_at, resolution) VALUES (?, ?, ?, ?, ?)`,
+            [tableName, cf.recordId, cf.localUpdatedAt, cf.cloudUpdatedAt, cf.resolution],
+          );
+        } catch (logErr) {
+          console.error(`[CloudSync] Conflict log failed ${tableName}/${cf.recordId}:`, (logErr as Error).message);
+        }
+      }
 
       // Advance to the last row of the batch (ordered by timeCol, id).
       if (useTimeCol) {

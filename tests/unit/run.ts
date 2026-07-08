@@ -1,6 +1,7 @@
 // Runs every unit test file. Each test self-executes its assertions on import
 // and throws (non-zero exit) on failure.
 import './cloud-sync-columns.test';
+import './cloud-sync-conflicts.test';
 import './cloud-sync-cursor.test';
 import './cloud-sync-upsert.test';
 import './sidebar-search.test';
