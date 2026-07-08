@@ -149,6 +149,20 @@ hardware fingerprint.
 
 ---
 
+## 5b. Terminal-id uniqueness (multi-writer fiscal isolation)
+
+Per-terminal fiscal records — `shifts`, `cash_transfers`, `x_readings`,
+`z_readings`, and the OR/X/Z counters on `pos_terminals` — are pushed to the shared
+cloud tagged by `terminal_id`, and are **never pulled back down** (they stay local
+to their terminal). Their global uniqueness depends on **each writer having a
+distinct `terminal_id`** — the web deployment and every desktop terminal must be
+provisioned with a unique terminal id (analogous to the per-deployment
+`SI_SERIES_PREFIX`). Colliding terminal ids would collide on push (e.g. the
+`z_readings.reading_number` primary key). **Assign each terminal a unique id at
+setup.**
+
+---
+
 ## 6. Runtime flow (reference)
 
 ```

@@ -8,7 +8,7 @@ for (const t of ['stock_adjustments','stock_counts','stock_count_items',
   assert.equal(isPullExcluded(t), true, `${t} must be pull-excluded`);
 }
 // per-terminal fiscal tables are pull-excluded
-for (const t of ['shifts','cash_transfers']) {
+for (const t of ['shifts','cash_transfers','x_readings','z_readings']) {
   assert.equal(isPullExcluded(t), true, `${t} must be pull-excluded`);
 }
 // branch-authoritative running-balance tables are pull-excluded
