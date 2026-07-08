@@ -81,8 +81,13 @@ export async function POST(request: NextRequest) {
 
         // Process allocations
         if (allocations && Array.isArray(allocations)) {
+            // Track how much of THIS payment is still available to allocate, so the
+            // sum across invoices can never exceed the recorded payment amount.
+            let remainingPayment = Number(amount);
+
             for (const alloc of allocations) {
                 if (alloc.amountAllocated <= 0) continue;
+                if (remainingPayment <= 0) break;
 
                 // 1. Get current invoice details (using FOR UPDATE to lock row during transaction)
                 const [invoiceResult]: any = await connection.query(
@@ -97,9 +102,12 @@ export async function POST(request: NextRequest) {
                 const invoiceTotal = Number(invoice.total);
                 const remainingBalance = invoiceTotal - currentAmountPaid;
 
-                // Never allocate more than what the invoice still owes
-                const appliedAmount = Math.min(Number(alloc.amountAllocated), remainingBalance);
+                // Never allocate more than what the invoice still owes, nor more than
+                // what is left of the payment itself.
+                const appliedAmount = Math.min(Number(alloc.amountAllocated), remainingBalance, remainingPayment);
                 if (appliedAmount <= 0) continue;
+
+                remainingPayment -= appliedAmount;
 
                 const newAmountPaid = currentAmountPaid + appliedAmount;
                 const newStatus = newAmountPaid >= invoiceTotal ? 'Paid' : 'Pending';

@@ -16,10 +16,11 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     let baseSql = `
-      SELECT 
+      SELECT
         pt.id as pos_transaction_id,
         pt.sale_id,
         pt.order_number,
+        pt.si_number,
         pt.transaction_type,
         pt.subtotal,
         pt.discount_amount,
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
         st.customer_id,
         st.reference,
         st.receipt_number,
+        st.si_number as sales_trans_si_number,
         st.transaction_source,
         c.name as customer_name,
         c.contact_number as customer_contact,
@@ -191,12 +193,16 @@ export async function GET(request: NextRequest) {
       const balance = 0;
       const amountPaid = totalAmount; // Assuming full payment for now as logic for partial isn't fully clear
 
+      // SI No. with fallback to legacy fields
+      const siNumber = row.si_number || row.sales_trans_si_number || row.receipt_number || row.order_number;
+
       return {
         id: row.sale_id,
         reference: row.reference,
         transactionSource: row.transaction_source || 'POS',
-        orderNumber: row.order_number,
-        receiptNo: row.receipt_number || row.order_number, // Fallback to order_number if receipt_number is null
+        siNumber: siNumber, // Primary field: SI Number (consolidated)
+        orderNumber: row.order_number, // Legacy field (kept for 90 days)
+        receiptNo: row.receipt_number, // Legacy field (kept for 90 days)
         posTransactionId: row.pos_transaction_id,
         date: row.transaction_time,
         total: totalAmount,

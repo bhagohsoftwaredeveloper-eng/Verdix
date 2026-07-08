@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
@@ -31,9 +31,25 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [licenseChecked, setLicenseChecked] = useState(false);
 
   // const auth = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    fetch('/api/license/status')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res?.data?.status !== 'active') {
+          router.replace('/activate');
+        } else {
+          setLicenseChecked(true);
+        }
+      })
+      .catch(() => {
+        setLicenseChecked(true);
+      });
+  }, [router]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -89,6 +105,14 @@ export default function LoginPage() {
     }
   };
 
+
+  if (!licenseChecked) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full lg:grid lg:grid-cols-2">
@@ -170,10 +194,18 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-          
+
+          {process.env.NEXT_PUBLIC_APP_VERSION && (
+            <div className="flex justify-center">
+              <Badge variant="secondary" className="text-xs font-medium text-muted-foreground">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </Badge>
+            </div>
+          )}
+
         </div>
       </div>
-      
+
       {/* Right Side - Abstract/Branded Background */}
       <div className="hidden bg-muted lg:block relative overflow-hidden">
          <div className="absolute inset-0 bg-slate-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black z-0" />

@@ -70,7 +70,7 @@ export const printBadOrder = (data: BadOrder) => {
   printWindow.document.write(`
     <div class="header">
       <div class="company-info">
-        <h1>verdix</h1>
+        <h1>VENDIX</h1>
         <p>Bad Order & Inventory Control</p>
       </div>
       <div class="report-title">

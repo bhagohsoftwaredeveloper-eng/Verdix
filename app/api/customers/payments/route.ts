@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/mysql';
+import { ensureCustomerCreditColumn } from '@/lib/ensure-customer-credit';
 import { v4 as uuidv4 } from 'uuid';
 
 // Ensure the allocation junction table exists so JOINs below never fail on a fresh DB.
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
         FROM payment_allocations
         GROUP BY payment_id
       ) pa ON pa.payment_id = cp.id
-      WHERE 1=1
+      WHERE UPPER(cp.payment_type) != 'CHARGE'
     `;
 
     const params: any[] = [];
@@ -63,12 +64,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (fromDate) {
-        sql += ' AND cp.payment_date >= ?';
+        sql += ' AND DATE(cp.payment_date) >= DATE(?)';
         params.push(fromDate);
     }
 
     if (toDate) {
-        sql += ' AND cp.payment_date <= ?';
+        sql += ' AND DATE(cp.payment_date) <= DATE(?)';
         params.push(toDate);
     }
 
@@ -133,7 +134,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
-    const { customerId, amount, paymentType, paymentDate, reference, note, invoiceNo } = data;
+    const { customerId, amount, appliedAmount, paymentType, paymentDate, reference, note, invoiceNo } = data;
+
+    // Amount applied to the invoice may be less than the recorded payment when the
+    // customer overpays and keeps the excess as account credit. Falls back to the
+    // full amount for backward compatibility.
+    const invoiceApplied = (appliedAmount !== undefined && appliedAmount !== null) ? appliedAmount : amount;
 
     if (!customerId || !amount || !paymentType) {
       return NextResponse.json(
@@ -145,6 +151,14 @@ export async function POST(request: NextRequest) {
     const id = uuidv4();
     const finalReference = reference || `PAY-${Date.now()}`;
     const formattedDate = paymentDate ? new Date(paymentDate).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    // The portion of the recorded payment NOT applied to the invoice becomes
+    // available account credit (e.g. an overpayment the customer keeps on file).
+    const creditDelta = Math.max(0, Number(amount) - Number(invoiceApplied));
+    if (creditDelta > 0) await ensureCustomerCreditColumn();
+
+    // Junction table must exist before we link this payment to its invoice.
+    if (invoiceNo) await ensurePaymentAllocationsTable();
 
     return await withTransaction(async (connection) => {
       // 1. Record the payment
@@ -161,11 +175,11 @@ export async function POST(request: NextRequest) {
         
         // Step A: Update amount_paid
         await connection.query(`
-          UPDATE sales_invoices 
+          UPDATE sales_invoices
           SET amount_paid = COALESCE(amount_paid, 0) + ?,
               updated_at = NOW()
           WHERE reference = ?
-        `, [amount, invoiceNo]);
+        `, [invoiceApplied, invoiceNo]);
 
         // Step B: Update status based on total
         await connection.query(`
@@ -183,6 +197,32 @@ export async function POST(request: NextRequest) {
               st.updated_at = NOW()
           WHERE st.reference = ?
         `, [invoiceNo]);
+
+        // Step D: Record the allocation link (source of truth for allocation status /
+        // SOA). Without this the payment shows as "Unallocated" even though it was
+        // applied to a specific invoice. invoiceNo is the human-readable reference;
+        // payment_allocations stores the internal invoice id.
+        const [invRows]: any = await connection.query(
+          'SELECT id FROM sales_invoices WHERE reference = ? AND customer_id = ? LIMIT 1',
+          [invoiceNo, customerId]
+        );
+        const invoiceId = invRows && invRows.length > 0 ? invRows[0].id : null;
+        if (invoiceId) {
+          const allocationId = `pa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await connection.query(
+            `INSERT INTO payment_allocations (id, payment_id, invoice_id, amount_allocated)
+             VALUES (?, ?, ?, ?)`,
+            [allocationId, id, invoiceId, invoiceApplied]
+          );
+        }
+      }
+
+      // Credit the customer's account with any unapplied overpayment.
+      if (creditDelta > 0) {
+        await connection.query(
+          'UPDATE customers SET credit_balance = COALESCE(credit_balance, 0) + ?, updated_at = NOW() WHERE id = ?',
+          [creditDelta, customerId]
+        );
       }
 
       return NextResponse.json({

@@ -150,7 +150,21 @@ export async function DELETE(request: NextRequest) {
       params.push(name);
     }
 
+    // Tombstones are keyed by primary key (id); a name-only delete can't be
+    // propagated without it, so resolve the id BEFORE deleting the row.
+    let tombstoneId = id;
+    if (!tombstoneId && name) {
+      const rows: any = await query('SELECT id FROM payment_term_types WHERE name = ?', [name]);
+      tombstoneId = rows?.[0]?.id ?? null;
+    }
+
     await query(sql, params);
+
+    // Propagate the delete across machines via cloud sync.
+    if (tombstoneId) {
+      const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+      await recordTombstone('payment_term_types', tombstoneId);
+    }
 
     return NextResponse.json({
       success: true,

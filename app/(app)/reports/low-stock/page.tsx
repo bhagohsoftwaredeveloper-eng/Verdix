@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -14,10 +14,18 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Printer, AlertTriangle, Search, X } from 'lucide-react';
 import { format } from 'date-fns';
-import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import { getApiUrl } from '@/lib/api-config';
 import { formatQuantity, formatStockQuantity } from '@/lib/utils';
+
+// Escape user-provided text before injecting into the print document.
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -59,12 +67,77 @@ export default function LowStockReportPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [limit, setLimit] = useState(10);
   
-  const componentRef = useRef<HTMLDivElement>(null);
+  const handlePrint = async () => {
+    // Print the full low-stock list (all pages), not just the visible page.
+    let rows: Product[] = products;
+    try {
+      const params = new URLSearchParams({
+        lowStock: 'true',
+        page: '1',
+        limit: '10000',
+        ...(searchQuery ? { search: searchQuery } : {}),
+      });
+      const res = await fetch(getApiUrl(`/reports/inventory?${params.toString()}`));
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) rows = data.data;
+    } catch {
+      // fall back to whatever is currently loaded
+    }
 
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: 'Low Stock Report',
-  });
+    const body = rows.length > 0
+      ? rows.map((p) => `
+          <tr>
+            <td>${escapeHtml(p.name)}</td>
+            <td>${escapeHtml(p.barcode || '-')}</td>
+            <td>${escapeHtml(p.category || '-')}</td>
+            <td class="num stock">${escapeHtml(formatStockQuantity(p.stock))} ${escapeHtml(p.unit_of_measure || '')}</td>
+            <td class="num">${escapeHtml(formatStockQuantity(p.reorder_point))}</td>
+            <td class="status">Restock Needed</td>
+          </tr>`).join('')
+      : `<tr><td colspan="6" style="text-align:center;padding:24px;color:#16a34a;">No products are currently low on stock.</td></tr>`;
+
+    const html = `<!DOCTYPE html><html><head><title>Low Stock Report</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111; padding: 24px; }
+        h1 { font-size: 20px; margin: 0 0 2px; }
+        .sub { color: #666; font-size: 12px; margin: 0 0 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border-bottom: 1px solid #ddd; padding: 8px 10px; text-align: left; }
+        th { background: #f5f5f5; font-weight: bold; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; }
+        th.num, td.num { text-align: right; }
+        td.stock { color: #dc2626; font-weight: 700; }
+        td.status { text-align: right; color: #dc2626; font-weight: 600; }
+        .meta { color: #888; font-size: 10px; margin-top: 16px; }
+        @page { margin: 1cm; }
+      </style></head>
+      <body>
+        <h1>Low Stock Report</h1>
+        <p class="sub">Products that have fallen below their reorder point.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Product Name</th>
+              <th>Barcode</th>
+              <th>Category</th>
+              <th class="num">Current Stock</th>
+              <th class="num">Reorder Point</th>
+              <th class="num">Status</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+        <p class="meta">Generated: ${escapeHtml(format(new Date(), 'PPpp'))} &middot; ${rows.length} item(s)</p>
+      </body></html>`;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=650');
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onload = () => printWindow.print();
+    setTimeout(() => { try { printWindow.print(); } catch { /* noop */ } }, 300);
+  };
 
   useEffect(() => {
     fetchData(currentPage, searchQuery);
@@ -162,7 +235,7 @@ export default function LowStockReportPage() {
         </div>
       </div>
 
-      <div ref={componentRef} className="bg-background p-4 rounded-md border print:border-0 print:p-8 print:shadow-none printable-area">
+      <div className="bg-background p-4 rounded-md border">
           <ReportHeader title="Low Stock Report" subtitle="Products that have fallen below their reorder point." />
 
           <Table>

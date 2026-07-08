@@ -70,16 +70,19 @@ export function useDetailsUtils({ sales, searchTerm, paymentTypeFilter, salesSta
       if (items.length === 0) return [{ ...sale, itemName: 'No Items', itemCost: 0, itemPrice: 0, itemQty: 0, itemTotal: 0 }];
       return items.map((item: any) => ({ ...sale, ...item, itemName: item.productName, itemCost: item.cost, itemPrice: item.price, itemQty: item.quantity, itemTotal: item.total }));
     });
-    const headers = ['SO No.', 'Receipt No.', 'Date', 'Terminal', 'Cashier', 'Customer', 'Description', 'Cost', 'Price', 'Quantity', 'Discount', 'Amount Due', 'Profit', 'Payment Type', 'Note'];
-    const csvRows = rows.map((row: any) => [
-      row.orderNumber || '', row.receiptNo || row.orderNumber || '',
-      row.date ? format(new Date(row.date), 'yyyy-MM-dd HH:mm') : '',
-      row.terminal || '', row.cashier || '', row.customer?.name || 'Walk-in',
-      row.itemName || 'General Item', row.itemCost || 0, row.itemPrice || 0, row.itemQty || 1,
-      row.discount || 0, row.itemTotal || row.total || 0,
-      (row.itemTotal || 0) - ((row.itemCost || 0) * (row.itemQty || 1)),
-      row.paymentMethod || '', row.notes || '',
-    ]);
+    const headers = ['SI No.', 'Date', 'Terminal', 'Cashier', 'Customer', 'Description', 'Cost', 'Price', 'Quantity', 'Discount', 'Amount Due', 'Profit', 'Payment Type', 'Note'];
+    const csvRows = rows.map((row: any) => {
+      const siNo = row.siNumber ? String(row.siNumber).padStart(6, '0') : (row.orderNumber ? String(row.orderNumber).padStart(6, '0') : '');
+      return [
+        siNo,
+        row.date ? format(new Date(row.date), 'yyyy-MM-dd HH:mm') : '',
+        row.terminal || '', row.cashier || '', row.customer?.name || 'Walk-in',
+        row.itemName || 'General Item', row.itemCost || 0, row.itemPrice || 0, row.itemQty || 1,
+        row.discount || 0, row.itemTotal || row.total || 0,
+        (row.itemTotal || 0) - ((row.itemCost || 0) * (row.itemQty || 1)),
+        row.paymentMethod || '', row.notes || '',
+      ];
+    });
     const csv = [headers.join(','), ...csvRows.map((r: any[]) => r.map(c => `"${c}"`).join(','))].join('\n');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
@@ -91,7 +94,10 @@ export function useDetailsUtils({ sales, searchTerm, paymentTypeFilter, salesSta
     const data = await fetchAllSalesForExport();
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-    const printContent = `<html><head><title>Sales Details Report</title><style>body{font-family:sans-serif;font-size:10px;}table{width:100%;border-collapse:collapse;margin-bottom:20px;}th,td{border:1px solid #ddd;padding:4px;text-align:left;}th{background-color:#f2f2f2;font-weight:bold;}.text-right{text-align:right;}.sub-table{margin:10px;width:95%;background-color:#fafafa;}.sub-table th{background-color:#eee;}.summary-row{font-weight:bold;background-color:#f9f9f9;}</style></head><body><h2>Sales Details Report</h2><p>Generated: ${format(new Date(), 'PPpp')}</p><table><thead><tr><th>SO No.</th><th>Date</th><th>Customer</th><th>Payment Type</th><th>Total Amount</th></tr></thead><tbody>${data.map((sale: any) => `<tr class="summary-row"><td>${sale.orderNumber || ''}</td><td>${sale.date ? format(new Date(sale.date), 'MM/dd/yyyy HH:mm') : ''}</td><td>${sale.customer?.name || 'Walk-in'}</td><td>${sale.paymentMethod || '-'}</td><td class="text-right">${formatAmount(sale.total)}</td></tr><tr><td colspan="5"><table class="sub-table"><thead><tr><th>Description</th><th class="text-right">Cost</th><th class="text-right">Price</th><th class="text-right">Qty</th><th class="text-right">Total</th></tr></thead><tbody>${(sale.items || []).map((item: any) => `<tr><td>${item.productName}</td><td class="text-right">${formatAmount(item.cost)}</td><td class="text-right">${formatAmount(item.price)}</td><td class="text-right">${item.quantity}</td><td class="text-right">${formatAmount(item.total)}</td></tr>`).join('')}</tbody></table></td></tr>`).join('')}</tbody></table></body></html>`;
+    const printContent = `<html><head><title>Sales Details Report</title><style>body{font-family:sans-serif;font-size:10px;}table{width:100%;border-collapse:collapse;margin-bottom:20px;}th,td{border:1px solid #ddd;padding:4px;text-align:left;}th{background-color:#f2f2f2;font-weight:bold;}.text-right{text-align:right;}.sub-table{margin:10px;width:95%;background-color:#fafafa;}.sub-table th{background-color:#eee;}.summary-row{font-weight:bold;background-color:#f9f9f9;}</style></head><body><h2>Sales Details Report</h2><p>Generated: ${format(new Date(), 'PPpp')}</p><table><thead><tr><th>SI No.</th><th>Date</th><th>Customer</th><th>Payment Type</th><th>Total Amount</th></tr></thead><tbody>${data.map((sale: any) => {
+      const siNo = sale.siNumber ? String(sale.siNumber).padStart(6, '0') : (sale.orderNumber ? String(sale.orderNumber).padStart(6, '0') : '');
+      return `<tr class="summary-row"><td>${siNo}</td><td>${sale.date ? format(new Date(sale.date), 'MM/dd/yyyy HH:mm') : ''}</td><td>${sale.customer?.name || 'Walk-in'}</td><td>${sale.paymentMethod || '-'}</td><td class="text-right">${formatAmount(sale.total)}</td></tr><tr><td colspan="5"><table class="sub-table"><thead><tr><th>Description</th><th class="text-right">Cost</th><th class="text-right">Price</th><th class="text-right">Qty</th><th class="text-right">Total</th></tr></thead><tbody>${(sale.items || []).map((item: any) => `<tr><td>${item.productName}</td><td class="text-right">${formatAmount(item.cost)}</td><td class="text-right">${formatAmount(item.price)}</td><td class="text-right">${item.quantity}</td><td class="text-right">${formatAmount(item.total)}</td></tr>`).join('')}</tbody></table></td></tr>`;
+    }).join('')}</tbody></table></body></html>`;
     printWindow.document.write(printContent);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);

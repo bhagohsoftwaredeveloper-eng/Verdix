@@ -15,6 +15,7 @@ import {
   verifyLicenseSignature,
   normalizeMachineId,
   PRODUCT_ID,
+  HOSTED_MACHINE_ID,
   LicensePayload,
 } from './core';
 import { PUBLIC_KEY_PEM } from './public-key';
@@ -52,6 +53,8 @@ export function getLicenseFilePath(): string {
 }
 
 export function readLicenseKey(): string | null {
+  const envKey = process.env.LICENSE_KEY?.trim();
+  if (envKey) return envKey;
   try {
     const p = getLicenseFilePath();
     if (!fs.existsSync(p)) return null;
@@ -75,6 +78,17 @@ export function removeLicenseKey(): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * True when the license's machineId matches this machine, OR when it is the
+ * HOSTED sentinel (web/hosted licenses carry no hardware binding). The sentinel
+ * only ever appears in a vendor-signed payload, so this cannot be forged.
+ */
+export function isMachineMatch(payloadMachineId: string, actualMachineId: string): boolean {
+  const pid = normalizeMachineId(payloadMachineId);
+  if (pid === normalizeMachineId(HOSTED_MACHINE_ID)) return true;
+  return pid === normalizeMachineId(actualMachineId);
 }
 
 /**
@@ -112,7 +126,7 @@ export function evaluateLicenseKey(key: string | null): LicenseInfo {
     return { status: 'invalid', licensed: false, machineId, reason: 'wrong-product' };
   }
 
-  if (normalizeMachineId(p.machineId) !== normalizeMachineId(machineId)) {
+  if (!isMachineMatch(p.machineId, machineId)) {
     return {
       status: 'wrong-machine',
       licensed: false,

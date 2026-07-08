@@ -18,12 +18,13 @@ type Props = {
 
 function ExpandedDetail({ sale }: { sale: any }) {
   const items: any[] = sale.items || [];
+  const siNo = sale.siNumber ? String(sale.siNumber).padStart(6, '0') : (sale.orderNumber ? String(sale.orderNumber).padStart(6, '0') : '-');
+
   return (
     <div className="p-4 bg-muted/30 border-t space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
         {[
-          ['SO No.', sale.orderNumber || '-'],
-          ['Receipt No.', sale.receiptNo || sale.orderNumber || '-'],
+          ['SI No.', siNo],
           ['Date', sale.date ? format(new Date(sale.date), 'PPpp') : '-'],
           ['Terminal', sale.terminal || '-'],
           ['Cashier', sale.cashier || '-'],
@@ -78,9 +79,9 @@ export function DetailsTable({ table, isLoading, expandedRows, onToggleRow }: Pr
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map(hg => (
-            <TableRow key={hg.id} className="bg-primary hover:bg-primary">
+            <TableRow key={hg.id} className="[&>th]:bg-primary [&>th]:text-primary-foreground [&>th]:font-semibold hover:bg-primary">
               {hg.headers.map(header => (
-                <TableHead key={header.id} className="text-primary-foreground">
+                <TableHead key={header.id}>
                   {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </TableHead>
               ))}

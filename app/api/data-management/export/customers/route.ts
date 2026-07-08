@@ -1,35 +1,32 @@
-
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
-import Papa from 'papaparse';
+import { ENTITY_SCHEMAS } from '@/lib/import/entity-schemas';
+import { buildEntityExportCsv } from '@/lib/import/csv-out';
 
-export async function GET(request: NextRequest) {
+// Columns match the import template exactly so export -> edit -> re-import round-trips.
+// Auto-generated id and the internal price_level_id (a UUID, not in the template) are omitted.
+export async function GET() {
   try {
     const customers = await query(`
-      SELECT 
-        id, 
-        name, 
-        contact_number, 
-        active, 
-        sales_person, 
-        sales_area, 
-        sales_group, 
-        loyalty_points, 
-        payment_terms, 
-        address, 
-        billing_address, 
-        discount, 
-        credit_limit, 
-        price_level_id
+      SELECT
+        name,
+        contact_number,
+        address,
+        billing_address,
+        sales_person,
+        sales_area,
+        sales_group,
+        payment_terms,
+        loyalty_points,
+        discount,
+        credit_limit,
+        active
       FROM customers
     `);
 
-    // Convert to plain objects to ensure PapaParse handles them correctly
-    const plainCustomers = JSON.parse(JSON.stringify(customers));
-    const csv = Papa.unparse(plainCustomers);
-    
-    // Add Byte Order Mark (BOM) for Excel compatibility
-    const csvWithBOM = '\uFEFF' + csv;
+    const plain = JSON.parse(JSON.stringify(customers));
+    const csv = buildEntityExportCsv(ENTITY_SCHEMAS.customers, plain);
+    const csvWithBOM = '﻿' + csv;
 
     return new NextResponse(csvWithBOM, {
       headers: {
@@ -37,7 +34,6 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': 'attachment; filename="customers.csv"',
       },
     });
-
   } catch (error: any) {
     console.error('Error exporting customers:', error);
     return NextResponse.json({ success: false, error: 'Failed to export customers' }, { status: 500 });

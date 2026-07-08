@@ -135,8 +135,9 @@ export interface Sale {
   amountPaid?: number;
   balance?: number;
   paymentMethod: string;
-  status: 'Paid' | 'Pending' | 'Failed' | 'Shipped' | 'Delivered' | 'Returned' | 'Voided' | 'To Deliver' | 'Fully Delivered';
+  status: 'Paid' | 'Pending' | 'Failed' | 'Shipped' | 'Delivered' | 'Returned' | 'Voided' | 'To Deliver' | 'Fully Delivered' | 'Invoiced' | 'Cancelled';
   orderNumber?: number;
+  siNumber?: number | string;
   notes?: string;
   shipping?: number;
   payments?: { method: string; amount: number; reference?: string }[];
@@ -150,6 +151,7 @@ export interface Sale {
   pointsUsedCount?: number;
   pointsBalance?: number;
   paymentReference?: string;
+  hasInvoice?: boolean;
 }
 
 export interface PurchaseOrder {
@@ -388,6 +390,10 @@ export interface SystemSettings {
   enableOverallReadingAuth?: boolean;
   overallReadingAuthUsername?: string | null;
   overallReadingAuthPassword?: string | null;
+  enableCashTransferAuth?: boolean;
+  cashTransferAuthUsername?: string | null;
+  cashTransferAuthPassword?: string | null;
+  posMode?: 'default' | 'pharmacy';
 }
 
 export interface User {

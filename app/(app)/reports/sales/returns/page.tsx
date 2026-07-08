@@ -33,11 +33,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 
 interface ReturnRecord {
-  soNo: string;
-  orNo: string;
+  origSiNo: string;
+  currSiNo: string;
   transDate: string;
   soldByCashier: string;
   returnedDate: string;
@@ -68,8 +68,8 @@ export default function ReturnedSalesPage() {
     if (!searchTerm.trim()) return true;
     const search = searchTerm.toLowerCase();
     return (
-      String(record.soNo || '').toLowerCase().includes(search) ||
-      String(record.orNo || '').toLowerCase().includes(search) ||
+      String(record.origSiNo || '').toLowerCase().includes(search) ||
+      String(record.currSiNo || '').toLowerCase().includes(search) ||
       String(record.soldByCashier || '').toLowerCase().includes(search) ||
       String(record.returnedByCashier || '').toLowerCase().includes(search) ||
       String(record.overrideBy || '').toLowerCase().includes(search) ||
@@ -115,21 +115,25 @@ export default function ReturnedSalesPage() {
       if (result.success) {
         const mappedRecords = result.data
           .filter((tx: any) => tx.transactionType === 'return')
-          .map((tx: any) => ({
-            soNo: tx.originalOrderNumber || 'N/A',
-            orNo: tx.orderNumber || 'N/A',
-            transDate: tx.originalTransactionTime || '',
-            soldByCashier: tx.originalCashierName || 'N/A',
-            returnedDate: tx.date || '',
-            returnedByCashier: tx.cashier || 'N/A',
-            overrideBy: tx.customer?.name || 'admin',
-            salesAmount: Math.abs(tx.total || 0),
-            cost: Math.abs(tx.cost || 0),
-            profit: tx.profit || 0,
-            vatableSales: Math.abs(tx.vatableSales || 0),
-            vatAmount: Math.abs(tx.taxAmount || 0),
-            note: tx.notes || ''
-          }));
+          .map((tx: any) => {
+            const origSiNo = tx.originalSINumber ? String(tx.originalSINumber).padStart(6, '0') : (tx.originalOrderNumber ? String(tx.originalOrderNumber).padStart(6, '0') : 'N/A');
+            const currSiNo = tx.siNumber ? String(tx.siNumber).padStart(6, '0') : (tx.orderNumber ? String(tx.orderNumber).padStart(6, '0') : 'N/A');
+            return {
+              origSiNo,
+              currSiNo,
+              transDate: tx.originalTransactionTime || '',
+              soldByCashier: tx.originalCashierName || 'N/A',
+              returnedDate: tx.date || '',
+              returnedByCashier: tx.cashier || 'N/A',
+              overrideBy: tx.customer?.name || 'admin',
+              salesAmount: Math.abs(tx.total || 0),
+              cost: Math.abs(tx.cost || 0),
+              profit: tx.profit || 0,
+              vatableSales: Math.abs(tx.vatableSales || 0),
+              vatAmount: Math.abs(tx.taxAmount || 0),
+              note: tx.notes || ''
+            };
+          });
         setRecords(mappedRecords);
       }
     } catch (error) {
@@ -144,148 +148,41 @@ export default function ReturnedSalesPage() {
   }, []);
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export. Please fetch the report first.",
-        variant: "destructive"
-      });
+    const fileName = `Merchandise_Credit_Report_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
+    const ok = exportReportPdf<ReturnRecord>({
+      title: 'Merchandise Credit Report',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Revenue', value: formatCurrency(totals.revenue) },
+        { label: 'Cost', value: formatCurrency(totals.cost) },
+        { label: 'Profit', value: formatCurrency(totals.profit) },
+        { label: 'Vatable Sales', value: formatCurrency(totals.vatableSales) },
+        { label: 'VAT Amount', value: formatCurrency(totals.vatAmount) },
+      ],
+      columns: [
+        { header: 'Orig SI No.', width: 20, cell: (r) => r.origSiNo },
+        { header: 'Return SI No.', width: 20, cell: (r) => r.currSiNo },
+        { header: 'Trans Date', width: 22, cell: (r) => r.transDate ? format(new Date(r.transDate), 'MM/dd/yy hh:mma') : '-' },
+        { header: 'Sold By', width: 18, cell: (r) => r.soldByCashier || '-' },
+        { header: 'Return Date', width: 22, cell: (r) => r.returnedDate ? format(new Date(r.returnedDate), 'MM/dd/yy hh:mma') : '-' },
+        { header: 'Returned By', width: 18, cell: (r) => r.returnedByCashier || '-' },
+        { header: 'Override By', width: 18, cell: (r) => r.overrideBy || '-' },
+        { header: 'Amount', width: 18, align: 'right', cell: (r) => r.salesAmount.toFixed(2) },
+        { header: 'Cost', width: 16, align: 'right', cell: (r) => r.cost.toFixed(2) },
+        { header: 'Profit', width: 16, align: 'right', cell: (r) => r.profit.toFixed(2) },
+        { header: 'Vatable', width: 18, align: 'right', cell: (r) => r.vatableSales.toFixed(2) },
+        { header: 'VAT', width: 14, align: 'right', cell: (r) => r.vatAmount.toFixed(2) },
+        { header: 'Note', width: 30, cell: (r) => r.note || '-' },
+      ],
+      rows: records,
+      totals: ['TOTALS', null, null, null, null, null, null, totals.revenue.toFixed(2), totals.cost.toFixed(2), totals.profit.toFixed(2), totals.vatableSales.toFixed(2), totals.vatAmount.toFixed(2), null],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export. Please fetch the report first.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      let yPos = margin;
-
-      // Title
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Merchandise Credit Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      // Date range
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
-      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      // Table headers
-      const headers = ['SO No.', 'OR No.', 'Trans Date', 'Sold By', 'Return Date', 'Returned By', 'Override By', 'Sales Amt', 'Cost', 'Profit', 'Vatable', 'VAT', 'Note'];
-      const colWidths = [20, 20, 22, 18, 22, 18, 18, 18, 16, 16, 18, 14, 30];
-      
-      // Draw header background
-      doc.setFillColor(34, 197, 94);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      
-      let xPos = margin;
-      headers.forEach((header, i) => {
-        doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-        xPos += colWidths[i];
-      });
-      yPos += 6;
-
-      // Reset text color for data rows
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-
-      // Table rows
-      records.forEach((record, rowIndex) => {
-        if (yPos > pageHeight - 20) {
-          doc.addPage();
-          yPos = margin;
-          
-          doc.setFillColor(34, 197, 94);
-          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-          doc.setFontSize(7);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(255, 255, 255);
-          xPos = margin;
-          headers.forEach((header, i) => {
-            doc.text(header, xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-            xPos += colWidths[i];
-          });
-          yPos += 6;
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(6);
-        }
-
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-
-        xPos = margin;
-        const rowData = [
-          record.soNo,
-          record.orNo,
-          record.transDate ? format(new Date(record.transDate), 'MMM dd, yyyy') : '-',
-          record.soldByCashier,
-          record.returnedDate ? format(new Date(record.returnedDate), 'MMM dd, yyyy hh:mma') : '-',
-          record.returnedByCashier,
-          record.overrideBy,
-          record.salesAmount.toFixed(2),
-          record.cost.toFixed(2),
-          record.profit.toFixed(2),
-          record.vatableSales.toFixed(2),
-          record.vatAmount.toFixed(2),
-          record.note || ''
-        ];
-
-        rowData.forEach((cell, i) => {
-          doc.text(String(cell), xPos + 1, yPos, { maxWidth: colWidths[i] - 2 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-      });
-
-      // Totals row
-      yPos += 4;
-      doc.setFillColor(200, 200, 200);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-
-      xPos = margin;
-      colWidths.forEach((width, i) => {
-        if (i === 0) doc.text('TOTALS', xPos + 1, yPos);
-        else if (i === 7) doc.text(totals.revenue.toFixed(2), xPos + 1, yPos);
-        else if (i === 8) doc.text(totals.cost.toFixed(2), xPos + 1, yPos);
-        else if (i === 9) doc.text(totals.profit.toFixed(2), xPos + 1, yPos);
-        else if (i === 10) doc.text(totals.vatableSales.toFixed(2), xPos + 1, yPos);
-        else if (i === 11) doc.text(totals.vatAmount.toFixed(2), xPos + 1, yPos);
-        xPos += width;
-      });
-
-      const fileName = `Merchandise_Credit_Report_${format(fromDate || new Date(), 'yyyyMMdd')}_${format(toDate || new Date(), 'yyyyMMdd')}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "PDF Exported",
-        description: `Report saved as ${fileName}`,
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to generate PDF. Please try again.",
-        variant: "destructive"
-      });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {
@@ -506,8 +403,8 @@ export default function ReturnedSalesPage() {
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-base text-primary">{record.soNo}</CardTitle>
-                          <CardDescription className="text-xs">{record.orNo}</CardDescription>
+                          <CardTitle className="text-base text-primary">{record.origSiNo}</CardTitle>
+                          <CardDescription className="text-xs">{record.currSiNo}</CardDescription>
                         </div>
                         <Badge variant="outline" className="border-green-600 text-green-600">Returned</Badge>
                       </div>
@@ -592,8 +489,8 @@ export default function ReturnedSalesPage() {
           >
             <TableHeader className="bg-muted">
               <TableRow className="bg-muted hover:bg-muted">
-                <TableHead className="py-2 px-3">SO No.</TableHead>
-                <TableHead className="py-2 px-2">OR No.</TableHead>
+                <TableHead className="py-2 px-3">Orig SI No.</TableHead>
+                <TableHead className="py-2 px-2">Return SI No.</TableHead>
                 <TableHead className="py-2 px-2">Trans Date</TableHead>
                 <TableHead className="py-2 px-2">Sold By</TableHead>
                 <TableHead className="py-2 px-2">Return Date</TableHead>
@@ -618,8 +515,8 @@ export default function ReturnedSalesPage() {
                     )}
                     onClick={() => setSelectedRow(index)}
                   >
-                    <TableCell className="py-2 px-3 font-medium text-primary">{record.soNo}</TableCell>
-                    <TableCell className="py-2 px-2">{record.orNo}</TableCell>
+                    <TableCell className="py-2 px-3 font-medium text-primary">{record.origSiNo}</TableCell>
+                    <TableCell className="py-2 px-2">{record.currSiNo}</TableCell>
                     <TableCell className="py-2 px-2">
                       {record.transDate ? format(new Date(record.transDate), 'MM/dd/yy hh:mma') : '-'}
                     </TableCell>

@@ -1,0 +1,125 @@
+export interface PosSettings {
+  businessName: string;
+  operatedBy?: string | null;
+  logoPath: string | null;
+  transactionPrefix: string;
+  address: string | null;
+  contactNumber: string | null;
+  tin: string | null;
+  email: string | null;
+  vatRegistration?: 'VAT' | 'NON_VAT';
+  currentTerminalId?: string | null;
+  currentTerminalName?: string | null;
+  enableLineVoidAuth?: boolean;
+  lineVoidAuthUsername?: string | null;
+  lineVoidAuthPassword?: string | null;
+  enableVoidReturnAuth?: boolean;
+  voidAuthUsername?: string | null;
+  voidAuthPassword?: string | null;
+  enableReturnAuth?: boolean;
+  returnAuthUsername?: string | null;
+  returnAuthPassword?: string | null;
+  enableRecentSalesAuth?: boolean;
+  recentSalesAuthUsername?: string | null;
+  recentSalesAuthPassword?: string | null;
+  paperSize?: '58mm' | '80mm';
+  printMode?: 'browser' | 'escpos' | 'usb' | 'native';
+  enableNegativeInventory?: boolean;
+  enableCashCountAuth?: boolean;
+  cashCountAuthUsername?: string | null;
+  cashCountAuthPassword?: string | null;
+  showQuantityInSearch?: boolean;
+  enablePriceEditAuth?: boolean;
+  priceEditAuthUsername?: string | null;
+  priceEditAuthPassword?: string | null;
+  enableTaxRatesAuth?: boolean;
+  taxRatesAuthUsername?: string | null;
+  taxRatesAuthPassword?: string | null;
+  isTrainingMode?: boolean;
+  printTwoReceipts?: boolean;
+  nativePrinterName?: string | null;
+  requireAdjustmentConfirmation?: boolean;
+  requireTransferConfirmation?: boolean;
+  requirePurchaseOrderConfirmation?: boolean;
+  requireReceiveConfirmation?: boolean;
+  requireBadOrderConfirmation?: boolean;
+  requireStockCountApproval?: boolean;
+  requireRepackagingConfirmation?: boolean;
+  requireShelfTransferApproval?: boolean;
+  batchCostingRepackInherit?: boolean;
+  batchCostingOversellBlock?: boolean;
+  enableOverallReadingAuth?: boolean;
+  overallReadingAuthUsername?: string | null;
+  overallReadingAuthPassword?: string | null;
+  enableCashTransferAuth?: boolean;
+  cashTransferAuthUsername?: string | null;
+  cashTransferAuthPassword?: string | null;
+  enableCustomerDisplay?: boolean;
+  customerDisplayMessage?: string | null;
+  customerDisplayShowLogo?: boolean;
+  salesOrderTerms?: string | null;
+  posMode?: 'default' | 'pharmacy';
+}
+
+export const DEFAULT_POS_SETTINGS: PosSettings = {
+  businessName: '',
+  operatedBy: '',
+  logoPath: null,
+  transactionPrefix: 'TXN',
+  address: '',
+  contactNumber: '',
+  tin: '',
+  email: '',
+  vatRegistration: 'VAT',
+  currentTerminalId: null,
+  currentTerminalName: null,
+  enableLineVoidAuth: false,
+  lineVoidAuthUsername: '',
+  lineVoidAuthPassword: '',
+  enableVoidReturnAuth: false,
+  voidAuthUsername: '',
+  voidAuthPassword: '',
+  enableReturnAuth: false,
+  returnAuthUsername: '',
+  returnAuthPassword: '',
+  enableRecentSalesAuth: false,
+  recentSalesAuthUsername: '',
+  recentSalesAuthPassword: '',
+  paperSize: '58mm',
+  printMode: 'browser',
+  enableNegativeInventory: false,
+  enableCashCountAuth: false,
+  cashCountAuthUsername: '',
+  cashCountAuthPassword: '',
+  showQuantityInSearch: true,
+  enablePriceEditAuth: false,
+  priceEditAuthUsername: '',
+  priceEditAuthPassword: '',
+  enableTaxRatesAuth: false,
+  taxRatesAuthUsername: '',
+  taxRatesAuthPassword: '',
+  isTrainingMode: false,
+  printTwoReceipts: false,
+  nativePrinterName: 'XP-58-P',
+  requireAdjustmentConfirmation: false,
+  requireTransferConfirmation: false,
+  requirePurchaseOrderConfirmation: false,
+  requireReceiveConfirmation: false,
+  requireBadOrderConfirmation: false,
+  requireStockCountApproval: false,
+  requireRepackagingConfirmation: false,
+  requireShelfTransferApproval: false,
+  batchCostingRepackInherit: true,
+  batchCostingOversellBlock: false,
+  enableOverallReadingAuth: false,
+  overallReadingAuthUsername: '',
+  overallReadingAuthPassword: '',
+  enableCashTransferAuth: false,
+  cashTransferAuthUsername: '',
+  cashTransferAuthPassword: '',
+  enableCustomerDisplay: false,
+  customerDisplayMessage: 'Welcome! Thank you for shopping.',
+  customerDisplayShowLogo: true,
+  salesOrderTerms: '',
+  posMode: 'default',
+};

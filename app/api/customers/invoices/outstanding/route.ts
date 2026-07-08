@@ -52,12 +52,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (fromDate) {
-        sql += ' AND si.invoice_date >= ?';
+        sql += ' AND DATE(si.invoice_date) >= DATE(?)';
         params.push(fromDate);
     }
 
     if (toDate) {
-        sql += ' AND si.invoice_date <= ?';
+        sql += ' AND DATE(si.invoice_date) <= DATE(?)';
         params.push(toDate);
     }
 

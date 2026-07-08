@@ -20,6 +20,10 @@
  */
 
 import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '../mysql';
+import { filterPullColumns, isPullExcluded } from './cloud-sync-columns';
+import { buildKeysetSelect, buildTombstoneSelect } from './cloud-sync-cursor';
+import { hasCloudSyncFeature } from '../licensing/cloud-config';
+import { reconcileStockDeltas } from './stock-reconcile';
 
 const BATCH = 100;
 
@@ -31,6 +35,7 @@ type SyncTable = { tableName: string; idCol: string; timeCol: string | null };
 // ---------------------------------------------------------------------------
 const EXCLUDE_TABLES = new Set<string>([
   'cloud_sync_tracker',     // our own sync state
+  'sync_tombstones',        // delete log — handled explicitly (push + apply), not generically
   'migrations',             // schema version history (per machine)
   'external_api_logs',      // local sync queue (large, machine-specific)
   'external_api_settings',  // holds cloud-sync credentials
@@ -38,6 +43,7 @@ const EXCLUDE_TABLES = new Set<string>([
   'transaction_references', // global receipt/reference counters
   'pos_terminals',          // per-terminal OR/X/Z counters
   'pos_settings',           // local terminal settings
+  'stock_movement_applied', // local-only: which movements have hit this node's stock
 ]);
 
 // ---------------------------------------------------------------------------
@@ -83,20 +89,15 @@ async function discoverPushTables(): Promise<SyncTable[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Pull tables — Railway → local master data (curated; these are the records
-// that may be edited centrally and need to flow back down to each machine).
-// timeCol null = full reference pull (small lookup tables).
+// Pull tables — symmetric with push: auto-discover every table, then drop the
+// ones that are push-only (branch/terminal-authoritative). New tables sync both
+// ways automatically. products.stock is still dropped at column level by
+// filterPullColumns; per-DB counters/config are already in EXCLUDE_TABLES.
 // ---------------------------------------------------------------------------
-const PULL_CONFIG: Record<string, { idCol: string; timeCol: string | null }> = {
-  products:         { idCol: 'id',  timeCol: 'updated_at' },
-  categories:       { idCol: 'id',  timeCol: 'updated_at' },
-  brands:           { idCol: 'id',  timeCol: 'updated_at' },
-  warehouses:       { idCol: 'id',  timeCol: 'updated_at' },
-  payment_methods:  { idCol: 'id',  timeCol: 'updated_at' },
-  price_levels:     { idCol: 'id',  timeCol: null },
-  users:            { idCol: 'uid', timeCol: 'creation_time' },
-  user_permissions: { idCol: 'id',  timeCol: null },
-};
+async function discoverPullTables(): Promise<SyncTable[]> {
+  const tables = await discoverPushTables();
+  return tables.filter(t => !isPullExcluded(t.tableName));
+}
 
 // ---------------------------------------------------------------------------
 // Tracker tables (local) — record sync progress per table
@@ -106,7 +107,9 @@ async function ensureTrackerTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS cloud_sync_tracker (
       table_name   VARCHAR(100) PRIMARY KEY,
       last_push_at TIMESTAMP    NOT NULL DEFAULT '2000-01-01 00:00:00',
-      last_pull_at TIMESTAMP    NULL DEFAULT NULL
+      last_push_id VARCHAR(100) NOT NULL DEFAULT '',
+      last_pull_at TIMESTAMP    NULL DEFAULT NULL,
+      last_pull_id VARCHAR(100) NOT NULL DEFAULT ''
     )
   `, []);
 
@@ -119,11 +122,48 @@ async function ensureTrackerTables(): Promise<void> {
   if (!cols.some(r => r.c === 'last_pull_at')) {
     await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_pull_at TIMESTAMP NULL DEFAULT NULL`, []);
   }
+  if (!cols.some(r => r.c === 'last_push_id')) {
+    await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_push_id VARCHAR(100) NOT NULL DEFAULT ''`, []);
+  }
+  if (!cols.some(r => r.c === 'last_pull_id')) {
+    await query(`ALTER TABLE cloud_sync_tracker ADD COLUMN last_pull_id VARCHAR(100) NOT NULL DEFAULT ''`, []);
+  }
+
+  // Delete log — self-heals even if migration 090 hasn't run on this machine.
+  await query(`
+    CREATE TABLE IF NOT EXISTS sync_tombstones (
+      id          BIGINT       NOT NULL AUTO_INCREMENT,
+      table_name  VARCHAR(100) NOT NULL,
+      record_id   VARCHAR(100) NOT NULL,
+      deleted_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_table_record (table_name, record_id),
+      INDEX idx_deleted_at (deleted_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  `, []);
 }
 
-function toMysqlTs(d: Date | string): string {
-  const date = typeof d === 'string' ? new Date(d) : d;
-  return date.toISOString().slice(0, 19).replace('T', ' ');
+// Format a Date/string as a MySQL DATETIME literal in LOCAL wall-clock time.
+//
+// Both pools use mysql2's default `timezone: 'local'`, which decodes a DB value
+// like '2026-07-01 14:00:00' into `new Date(2026, 6, 1, 14, 0, 0)` — i.e. the
+// wall-clock digits are read as LOCAL time. To round-trip that value back into
+// the exact same literal (so `WHERE updated_at > ?` watermarks compare against
+// the stored wall clock, not a UTC-shifted copy), we must read the Date back
+// with the LOCAL getters — the inverse of mysql2's decoder.
+//
+// The previous implementation used `.toISOString()` (UTC), so every watermark
+// was shifted by the machine's tz offset, and reading a stored watermark back
+// through this function shifted it a SECOND time — starving/re-pushing rows.
+//
+// Takes a Date only: every caller passes a mysql2-decoded TIMESTAMP column. An
+// ISO-'Z' string would mis-shift here, so we refuse strings at the type level.
+function toMysqlTs(date: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ` +
+    `${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -154,38 +194,64 @@ async function getTableColumns(
   return cols;
 }
 
-async function getLastPush(tableName: string): Promise<string> {
+// Primary-key column resolver — most tables use `id`, but some (e.g. users → uid)
+// don't. Cached so tombstone deletes hit the right column. Defaults to 'id'.
+const _pkCache = new Map<string, string>();
+
+async function getPkColumn(tableName: string): Promise<string> {
+  const cached = _pkCache.get(tableName);
+  if (cached) return cached;
   const rows = await query(
-    `SELECT last_push_at FROM cloud_sync_tracker WHERE table_name = ?`,
-    [tableName]
+    `SELECT COLUMN_NAME AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_KEY = 'PRI' LIMIT 1`,
+    [tableName],
   ) as any[];
-  return rows[0]?.last_push_at
-    ? toMysqlTs(rows[0].last_push_at)
-    : '2000-01-01 00:00:00';
+  const pk = rows[0]?.c || 'id';
+  _pkCache.set(tableName, pk);
+  return pk;
 }
 
-async function setLastPush(tableName: string, ts: string): Promise<void> {
-  await query(`
-    INSERT INTO cloud_sync_tracker (table_name, last_push_at) VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE last_push_at = VALUES(last_push_at)
-  `, [tableName, ts]);
-}
+type Cursor = { at: string; id: string };
+const DEFAULT_CURSOR: Cursor = { at: '2000-01-01 00:00:00', id: '' };
 
-async function getLastPull(tableName: string): Promise<string> {
+async function getPushCursor(tableName: string): Promise<Cursor> {
   const rows = await query(
-    `SELECT last_pull_at FROM cloud_sync_tracker WHERE table_name = ?`,
-    [tableName]
+    `SELECT last_push_at, last_push_id FROM cloud_sync_tracker WHERE table_name = ?`,
+    [tableName],
   ) as any[];
-  return rows[0]?.last_pull_at
-    ? toMysqlTs(rows[0].last_pull_at)
-    : '2000-01-01 00:00:00';
+  const r = rows[0];
+  if (!r) return { ...DEFAULT_CURSOR };
+  return {
+    at: r.last_push_at ? toMysqlTs(r.last_push_at) : DEFAULT_CURSOR.at,
+    id: r.last_push_id ?? DEFAULT_CURSOR.id,
+  };
 }
 
-async function setLastPull(tableName: string, ts: string): Promise<void> {
+async function setPushCursor(tableName: string, at: string, id: string): Promise<void> {
   await query(`
-    INSERT INTO cloud_sync_tracker (table_name, last_pull_at) VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE last_pull_at = VALUES(last_pull_at)
-  `, [tableName, ts]);
+    INSERT INTO cloud_sync_tracker (table_name, last_push_at, last_push_id) VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE last_push_at = VALUES(last_push_at), last_push_id = VALUES(last_push_id)
+  `, [tableName, at, id]);
+}
+
+async function getPullCursor(tableName: string): Promise<Cursor> {
+  const rows = await query(
+    `SELECT last_pull_at, last_pull_id FROM cloud_sync_tracker WHERE table_name = ?`,
+    [tableName],
+  ) as any[];
+  const r = rows[0];
+  if (!r) return { ...DEFAULT_CURSOR };
+  return {
+    at: r.last_pull_at ? toMysqlTs(r.last_pull_at) : DEFAULT_CURSOR.at,
+    id: r.last_pull_id ?? DEFAULT_CURSOR.id,
+  };
+}
+
+async function setPullCursor(tableName: string, at: string, id: string): Promise<void> {
+  await query(`
+    INSERT INTO cloud_sync_tracker (table_name, last_pull_at, last_pull_id) VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE last_pull_at = VALUES(last_pull_at), last_pull_id = VALUES(last_pull_id)
+  `, [tableName, at, id]);
 }
 
 // ---------------------------------------------------------------------------
@@ -243,10 +309,105 @@ function buildBulkUpsert(
 }
 
 // ---------------------------------------------------------------------------
+// Tombstones — propagate hard-deletes across machines.
+// Watermarks reuse cloud_sync_tracker under synthetic keys so we never re-scan
+// the whole delete log every tick.
+// ---------------------------------------------------------------------------
+const TOMBSTONE_PUSH_KEY = '__tombstones';   // last_push_at = newest deleted_at sent up
+const TOMBSTONE_PULL_KEY = '__tombstones';   // last_pull_at = newest deleted_at applied down
+
+/** Push new local tombstones to Railway's sync_tombstones table. */
+async function pushTombstones(): Promise<number> {
+  const cursor = await getPushCursor(TOMBSTONE_PUSH_KEY);
+
+  const rows = await query(
+    buildTombstoneSelect({ table: 'sync_tombstones', colList: 'id, table_name, record_id, deleted_at', limit: BATCH }),
+    [cursor.id || '0'],
+  ) as any[];
+
+  if (!rows.length) return 0;
+
+  const cols = ['table_name', 'record_id', 'deleted_at'];
+  const { sql, params } = buildBulkUpsert('sync_tombstones', rows, cols, 'table_name');
+  // Upsert keyed on the UNIQUE(table_name, record_id); id is auto-increment so
+  // we deliberately omit it and let the unique key drive the conflict.
+  await cloudQuery(sql, params);
+
+  // Apply the delete on Railway too, so the cloud hub doesn't keep orphaned rows
+  // that a fresh machine would otherwise pull back down before its tombstone.
+  for (const r of rows) {
+    if (EXCLUDE_TABLES.has(r.table_name)) continue;
+    try {
+      const pk = await getPkColumn(r.table_name);
+      await cloudQuery(`DELETE FROM \`${r.table_name}\` WHERE \`${pk}\` = ?`, [r.record_id]);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (!msg.includes("doesn't exist") && !msg.includes('foreign key')) {
+        console.error(`[CloudSync] Tombstone cloud-delete failed ${r.table_name}/${r.record_id}:`, msg);
+      }
+    }
+  }
+
+  const last = rows[rows.length - 1];
+  await setPushCursor(
+    TOMBSTONE_PUSH_KEY,
+    last.deleted_at ? toMysqlTs(last.deleted_at) : cursor.at,
+    String(last.id),
+  );
+  return rows.length;
+}
+
+/** Pull remote tombstones and apply them as local DELETEs (idempotent). */
+async function pullTombstones(): Promise<number> {
+  // Cloud may not have the table yet (fresh Railway DB) — skip quietly.
+  const cloudCols = await getTableColumns(cloudQuery, 'cloud', 'sync_tombstones');
+  if (!cloudCols.size) return 0;
+
+  const cursor = await getPullCursor(TOMBSTONE_PULL_KEY);
+  const rows = await cloudQuery(
+    buildTombstoneSelect({ table: 'sync_tombstones', colList: 'id, table_name, record_id, deleted_at', limit: 500 }),
+    [cursor.id || '0'],
+  ) as any[];
+
+  if (!rows.length) return 0;
+
+  let applied = 0;
+  for (const r of rows) {
+    if (!EXCLUDE_TABLES.has(r.table_name)) {
+      try {
+        // Best-effort delete; ignore FK blocks / already-gone rows so one bad
+        // row never stalls the whole batch.
+        const pk = await getPkColumn(r.table_name);
+        await query(`DELETE FROM \`${r.table_name}\` WHERE \`${pk}\` = ?`, [r.record_id]);
+        applied++;
+      } catch (err) {
+        const msg = (err as Error).message;
+        if (!msg.includes("doesn't exist") && !msg.includes('foreign key')) {
+          console.error(`[CloudSync] Tombstone apply failed ${r.table_name}/${r.record_id}:`, msg);
+        }
+      }
+    }
+    // Mirror the tombstone locally so a sibling machine syncing FROM us also learns
+    // of the delete, and so we don't re-pull it forever.
+    await query(`
+      INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE deleted_at = VALUES(deleted_at)
+    `, [r.table_name, r.record_id, toMysqlTs(r.deleted_at)]);
+  }
+  const last = rows[rows.length - 1];
+  await setPullCursor(
+    TOMBSTONE_PULL_KEY,
+    last.deleted_at ? toMysqlTs(last.deleted_at) : cursor.at,
+    String(last.id),
+  );
+  return applied;
+}
+
+// ---------------------------------------------------------------------------
 // Push — scan local tables, bulk-upsert new/updated rows to Railway
 // ---------------------------------------------------------------------------
 export async function processPushToCloud(): Promise<{ pushed: number; failed: number }> {
-  if (!isCloudDbConfigured()) return { pushed: 0, failed: 0 };
+  if (!isCloudDbConfigured() || !hasCloudSyncFeature()) return { pushed: 0, failed: 0 };
 
   const online = await checkCloudConnection();
   if (!online) return { pushed: 0, failed: 0 };
@@ -255,6 +416,13 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 
   let totalPushed = 0;
   let totalFailed = 0;
+
+  // Propagate deletes first so a row re-pushed below can't shadow its own tombstone.
+  try {
+    totalPushed += await pushTombstones();
+  } catch (err) {
+    console.error('[CloudSync] Tombstone push error:', (err as Error).message);
+  }
 
   for (const cfg of await discoverPushTables()) {
     const { tableName } = cfg;
@@ -272,16 +440,14 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
       const cols = [...localCols].filter(c => cloudCols.has(c));
       if (!cols.includes(cfg.idCol)) continue;
 
-      const colList  = cols.map(c => `\`${c}\``).join(', ');
-      const lastPush = cfg.timeCol ? await getLastPush(tableName) : '2000-01-01 00:00:00';
+      const colList = cols.map(c => `\`${c}\``).join(', ');
+      const cursor = cfg.timeCol ? await getPushCursor(tableName) : DEFAULT_CURSOR;
 
       const rows = cfg.timeCol
-        ? await query(`
-            SELECT ${colList} FROM \`${tableName}\`
-            WHERE \`${cfg.timeCol}\` > ?
-            ORDER BY \`${cfg.timeCol}\` ASC
-            LIMIT ${BATCH}
-          `, [lastPush]) as any[]
+        ? await query(
+            buildKeysetSelect({ table: tableName, colList, timeCol: cfg.timeCol, idCol: cfg.idCol, limit: BATCH }),
+            [cursor.at, cursor.at, cursor.id],
+          ) as any[]
         : await query(`SELECT ${colList} FROM \`${tableName}\` LIMIT ${BATCH}`, []) as any[];
 
       if (!rows.length) continue;
@@ -292,17 +458,13 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 
         totalPushed += rows.length;
 
-        // Advance tracker to the latest timestamp in this batch (incremental only)
+        // Advance the cursor to the LAST row of the batch. Rows are ordered by
+        // (timeCol, id), so the last row is the max keyset position — rows sharing
+        // a second are drained across ticks instead of being skipped.
         if (cfg.timeCol) {
-          let latestTs = lastPush;
-          for (const row of rows) {
-            if (row[cfg.timeCol]) {
-              const rowTs = toMysqlTs(row[cfg.timeCol]);
-              if (rowTs > latestTs) latestTs = rowTs;
-            }
-          }
-          if (latestTs > lastPush) {
-            await setLastPush(tableName, latestTs);
+          const last = rows[rows.length - 1];
+          if (last[cfg.timeCol]) {
+            await setPushCursor(tableName, toMysqlTs(last[cfg.timeCol]), String(last[cfg.idCol]));
           }
         }
       } catch (cloudErr) {
@@ -332,7 +494,7 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 // Pull — query Railway directly for master data and upsert locally
 // ---------------------------------------------------------------------------
 export async function processPullFromCloud(): Promise<{ pulled: number }> {
-  if (!isCloudDbConfigured()) return { pulled: 0 };
+  if (!isCloudDbConfigured() || !hasCloudSyncFeature()) return { pulled: 0 };
 
   const online = await checkCloudConnection();
   if (!online) return { pulled: 0 };
@@ -341,7 +503,16 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
 
   let totalPulled = 0;
 
-  for (const [tableName, cfg] of Object.entries(PULL_CONFIG)) {
+  // Apply remote deletes first so we don't immediately re-pull a row that was
+  // deleted centrally, only to delete it again next cycle.
+  try {
+    totalPulled += await pullTombstones();
+  } catch (err) {
+    console.error('[CloudSync] Tombstone pull error:', (err as Error).message);
+  }
+
+  for (const cfg of await discoverPullTables()) {
+    const { tableName } = cfg;
     try {
       // Only sync columns present in BOTH cloud and local (handles schema drift)
       const cloudCols = await getTableColumns(cloudQuery, 'cloud', tableName);
@@ -350,33 +521,24 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
       const localCols = await getTableColumns(query, 'local', tableName);
       if (!localCols.size || !localCols.has(cfg.idCol)) continue;
 
-      // Sync ALL columns common to both sides (schema is identical via dump)
-      const cols = [...cloudCols].filter(c => localCols.has(c));
+      // Sync ALL columns common to both sides (schema is identical via dump),
+      // minus any branch-authoritative columns that a pull must never clobber
+      // (e.g. products.stock). idCol/timeCol are never in the exclusion set.
+      const cols = filterPullColumns(tableName, [...cloudCols].filter(c => localCols.has(c)));
       if (!cols.includes(cfg.idCol)) continue;
 
       const useTimeCol = cfg.timeCol && cloudCols.has(cfg.timeCol);
       const colList = cols.map(c => `\`${c}\``).join(', ');
 
       let rows: any[] = [];
-      let latestTs: string | null = null;
 
+      let cursor: Cursor = DEFAULT_CURSOR;
       if (useTimeCol) {
-        const lastPull = await getLastPull(tableName);
-        rows = await cloudQuery(`
-          SELECT ${colList}
-          FROM \`${tableName}\`
-          WHERE \`${cfg.timeCol}\` > ?
-          ORDER BY \`${cfg.timeCol}\` ASC
-          LIMIT 500
-        `, [lastPull]) as any[];
-
-        latestTs = lastPull;
-        for (const row of rows) {
-          if (row[cfg.timeCol!]) {
-            const rowTs = toMysqlTs(row[cfg.timeCol!]);
-            if (rowTs > (latestTs ?? '')) latestTs = rowTs;
-          }
-        }
+        cursor = await getPullCursor(tableName);
+        rows = await cloudQuery(
+          buildKeysetSelect({ table: tableName, colList, timeCol: cfg.timeCol!, idCol: cfg.idCol, limit: 500 }),
+          [cursor.at, cursor.at, cursor.id],
+        ) as any[];
       } else {
         // Reference table — pull everything (small tables only)
         rows = await cloudQuery(`SELECT ${colList} FROM \`${tableName}\``) as any[];
@@ -388,8 +550,12 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
       await query(sql, params);
       totalPulled += rows.length;
 
-      if (useTimeCol && latestTs) {
-        await setLastPull(tableName, latestTs);
+      // Advance to the last row of the batch (ordered by timeCol, id).
+      if (useTimeCol) {
+        const last = rows[rows.length - 1];
+        if (last[cfg.timeCol!]) {
+          await setPullCursor(tableName, toMysqlTs(last[cfg.timeCol!]), String(last[cfg.idCol]));
+        }
       }
     } catch (err) {
       const msg = (err as Error).message;
@@ -402,6 +568,14 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
   if (totalPulled > 0) {
     console.log(`[CloudSync] Pull complete: ${totalPulled} records applied`);
   }
+
+  // Apply pulled movement deltas to local stock (idempotent; see stock-reconcile.ts).
+  try {
+    await reconcileStockDeltas();
+  } catch (err) {
+    console.error('[CloudSync] Stock reconcile error:', (err as Error).message);
+  }
+
   return { pulled: totalPulled };
 }
 

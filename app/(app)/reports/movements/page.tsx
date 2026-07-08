@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
 import {
   Select,
@@ -21,10 +21,12 @@ import {
 } from "@/components/ui/select";
 import { Loader2, ArrowUpRight, ArrowDownLeft, Minus, RefreshCcw, Printer } from 'lucide-react';
 import { format } from 'date-fns';
-import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import { getApiUrl } from '@/lib/api-config';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { printReportTable } from '@/lib/report-print';
+
+const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 interface StockMovement {
   id: string;
@@ -56,12 +58,24 @@ export default function StockMovementPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  const componentRef = useRef<HTMLDivElement>(null);
-
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: 'Stock Movement Report',
-  });
+  const handlePrint = () => {
+    printReportTable<StockMovement>({
+      title: 'Stock Movement Report',
+      subtitle: 'History of stock changes (Sales, Purchases, Adjustments).',
+      period: `${startDate} to ${endDate}`,
+      columns: [
+        { header: 'Date', cell: (m) => format(new Date(m.created_at), 'MMM dd, yyyy HH:mm') },
+        { header: 'Type', cell: (m) => capitalize(m.movement_type) },
+        { header: 'Product', cell: (m) => m.product_name },
+        { header: 'Barcode', cell: (m) => m.barcode || '-' },
+        { header: 'Change', align: 'right', emphasize: true, cell: (m) => `${m.quantity_change > 0 ? '+' : ''}${m.quantity_change}` },
+        { header: 'Balance', align: 'right', cell: (m) => m.new_stock },
+        { header: 'Reference', cell: (m) => `${capitalize(m.reference_type || '')}${m.notes ? ` - ${m.notes}` : ''}`.trim() || '-' },
+      ],
+      rows: movements,
+      emptyMessage: 'No movements found for the selected period.',
+    });
+  };
 
   useEffect(() => {
     fetchData();
@@ -156,7 +170,7 @@ export default function StockMovementPage() {
         </CardHeader>
       </Card>
       
-      <div ref={componentRef} className="print:p-8 printable-area">
+      <div>
         <ReportHeader 
             title="Stock Movement Report" 
             subtitle="History of stock changes (Sales, Purchases, Adjustments)."

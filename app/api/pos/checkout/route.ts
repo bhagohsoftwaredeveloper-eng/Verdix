@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction, getNextReference, getNextReceiptNumber } from '@/lib/mysql';
+import { withTransaction, getNextReference, getNextReceiptNumber, getNextSINumber, formatSINumber } from '@/lib/mysql';
 import { deductFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 import { deductFromBatches, getBatchCostingSettings } from '@/lib/batch-deduction';
+import { ensureCustomerCreditColumn } from '@/lib/ensure-customer-credit';
 import { query } from '@/lib/mysql';
 
 async function ensurePosTransactionItemsSchema() {
@@ -36,6 +37,7 @@ async function ensurePosTransactionItemsSchema() {
 export async function POST(request: NextRequest) {
   try {
     await ensurePosTransactionItemsSchema();
+    await ensureCustomerCreditColumn();
     const body = await request.json();
 
     const {
@@ -97,9 +99,12 @@ export async function POST(request: NextRequest) {
       // Generate sequential reference (INV-XXXXXX)
       const nextRefVal = await getNextReference('sales_invoice');
       const sequentialRef = `INV-${nextRefVal.toString().padStart(6, '0')}`;
-      
+
       // Get terminal specific receipt (OR)
       const receiptNo = await getNextReceiptNumber(terminalId);
+
+      // Get next SI Number (consolidated sequence number)
+      const siNumber = await getNextSINumber();
 
       const isCharge = typeof paymentMethod === 'string' && paymentMethod.toUpperCase() === 'CHARGE';
       const invoiceStatus = isCharge ? 'Pending' : 'Paid';
@@ -108,13 +113,14 @@ export async function POST(request: NextRequest) {
       // 1. Insert into sales_transactions
       const insertSaleSql = `
         INSERT INTO sales_transactions (
-          id, reference, receipt_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, is_training, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, ?, 'POS', ?, ?, NOW(), NOW())
+          id, reference, receipt_number, si_number, customer_id, invoice_date, date, total, payment_method, status, transaction_source, notes, is_training, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, CURDATE(), CURDATE(), ?, ?, ?, 'POS', ?, ?, NOW(), NOW())
       `;
       await connection.query(insertSaleSql, [
         saleId,
         sequentialRef,
         receiptNo,
+        siNumber,
         (customer && customer.id !== 'walk-in') ? customer.id : null,
         totalDue,
         paymentMethod,
@@ -262,11 +268,15 @@ export async function POST(request: NextRequest) {
           }
       }
       
+      // Fully-paid (non-charge) sales are settled at the terminal, so record the
+      // full amount as paid. Charges start at 0 paid (settled later / via credit).
+      const initialPaid = isCharge ? 0 : totalDue;
+
       const insertInvoiceSql = `
         INSERT INTO sales_invoices (
-          id, reference, receipt_number, customer_id, invoice_date, due_date, total, payment_method,
+          id, reference, receipt_number, customer_id, invoice_date, due_date, total, amount_paid, payment_method,
           status, transaction_source, notes, is_training, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, CURDATE(), ${dueDateQuery}, ?, ?, ?, 'POS', ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, CURDATE(), ${dueDateQuery}, ?, ?, ?, ?, 'POS', ?, ?, NOW(), NOW())
       `;
       await connection.query(insertInvoiceSql, [
         invoiceId,
@@ -274,30 +284,62 @@ export async function POST(request: NextRequest) {
         receiptNo,
         (customer && customer.id !== 'walk-in') ? customer.id : null,
         totalDue,
+        initialPaid,
         paymentMethod,
         invoiceStatus,
         notes || 'POS Sale',
         isTrainingMode
       ]);
 
+      // 3a. Auto-apply any available account credit against a new charge (utang).
+      // Reduces the new invoice's outstanding balance and the customer's stored credit.
+      let creditApplied = 0;
+      if (isCharge && customer && customer.id !== 'walk-in') {
+        const [credRows]: any = await connection.query(
+          'SELECT COALESCE(credit_balance, 0) AS credit_balance FROM customers WHERE id = ? FOR UPDATE',
+          [customer.id]
+        );
+        const available = credRows && credRows.length > 0 ? parseFloat(credRows[0].credit_balance) || 0 : 0;
+        creditApplied = Math.min(available, totalDue);
+
+        if (creditApplied > 0) {
+          const creditCoversAll = creditApplied >= totalDue;
+          const newStatus = creditCoversAll ? 'Paid' : 'Pending';
+
+          await connection.query(
+            'UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + ?, status = ?, updated_at = NOW() WHERE id = ?',
+            [creditApplied, newStatus, invoiceId]
+          );
+          await connection.query(
+            'UPDATE sales_transactions SET status = ?, updated_at = NOW() WHERE id = ?',
+            [newStatus, saleId]
+          );
+          await connection.query(
+            'UPDATE customers SET credit_balance = COALESCE(credit_balance, 0) - ?, updated_at = NOW() WHERE id = ?',
+            [creditApplied, customer.id]
+          );
+        }
+      }
+
       // 4. Insert into pos_transactions with payment details reference
       const insertPosTransSql = `
         INSERT INTO pos_transactions (
-          id, sale_id, shift_id, user_id, terminal_id, transaction_type,
-          subtotal, tax_amount, discount_amount, total_amount, payment_method, 
+          id, sale_id, shift_id, user_id, terminal_id, transaction_type, si_number,
+          subtotal, tax_amount, discount_amount, total_amount, payment_method,
           payment_status, payment_details_id, payment_validated_at,
           notes, is_training, transaction_time, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, NOW(), NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, 'sale', ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, NOW(), NOW(), NOW())
       `;
-      
+
       const posNotes = `Tendered: ₱${(body.amountTendered || totalDue).toFixed(2)}, Change: ₱${(body.change || 0).toFixed(2)}${notes ? ' - ' + notes : ''}`;
-      
+
       await connection.query(insertPosTransSql, [
         posTransId,
         saleId,
         shiftId || null,
         userId,
         terminalId || null,
+        siNumber,
         body.subtotal || totalDue,
         body.taxAmount || 0,
         body.discountAmount || 0,
@@ -589,7 +631,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber, pointsEarned: totalPointsEarned, pointsRemaining },
+        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber, pointsEarned: totalPointsEarned, pointsRemaining, creditApplied },
         message: 'Transaction saved successfully'
       });
     });

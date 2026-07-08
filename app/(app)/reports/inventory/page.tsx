@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -21,9 +21,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Printer } from 'lucide-react';
 import { formatCurrency, formatQuantity, formatStockQuantity } from '@/lib/utils';
-import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import { getApiUrl } from '@/lib/api-config';
+import { printReportTable } from '@/lib/report-print';
 
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { getCategories } from '@/app/(app)/products/actions';
@@ -71,12 +71,55 @@ export default function InventoryReportPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [settings, setSettings] = useState<any>(null);
 
-  const componentRef = useRef<HTMLDivElement>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
 
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: 'Stock on Hand Report',
-  });
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const params = new URLSearchParams();
+      if (selectedCategory && selectedCategory !== 'all') params.append('category', selectedCategory);
+      params.append('page', '1');
+      params.append('limit', '100000');
+
+      let rows: Product[] = products;
+      let printSummary: Summary = summary;
+      try {
+        const res = await fetch(getApiUrl(`/reports/inventory?${params.toString()}`));
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          rows = data.data;
+          if (data.summary) printSummary = data.summary;
+        }
+      } catch {
+        // fall back to the currently loaded page
+      }
+
+      printReportTable<Product>({
+        title: 'Stock on Hand Report',
+        subtitle: 'Current inventory levels and valuation (based on batch-level FIFO costs).',
+        business: settings || undefined,
+        columns: [
+          { header: 'Product Name', cell: (p) => p.name },
+          { header: 'Barcode', cell: (p) => p.barcode || '-' },
+          { header: 'Category', cell: (p) => p.category },
+          { header: 'Cost', align: 'right', cell: (p) => formatCurrency(p.cost) },
+          { header: 'Price', align: 'right', cell: (p) => formatCurrency(p.price) },
+          { header: 'Stock', align: 'right', cell: (p) => `${formatStockQuantity(p.stock)} ${p.unit_of_measure || ''}`.trim() },
+          { header: 'Total Value', align: 'right', emphasize: true, cell: (p) => formatCurrency(p.total_value) },
+        ],
+        rows,
+        summary: [
+          { label: 'Total Items', value: String(printSummary.totalItems) },
+          { label: 'Total Quantity', value: formatStockQuantity(printSummary.totalStock) },
+          { label: 'Total Value (Avg Cost)', value: formatCurrency(printSummary.totalValue) },
+        ],
+        showSignature: true,
+        emptyMessage: 'No products found.',
+      });
+    } finally {
+      setIsPrinting(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -148,8 +191,8 @@ export default function InventoryReportPage() {
             Current inventory levels and valuation (based on batch-level FIFO costs).
           </p>
         </div>
-        <Button onClick={() => handlePrint()} variant="outline" className="gap-2">
-            <Printer className="h-4 w-4" />
+        <Button onClick={() => handlePrint()} variant="outline" className="gap-2" disabled={isPrinting}>
+            {isPrinting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             Print Report
         </Button>
       </div>
@@ -203,8 +246,8 @@ export default function InventoryReportPage() {
         </Card>
       </div>
 
-      {/* Printable Area */}
-      <div ref={componentRef} className="bg-background p-4 rounded-md border print:border-0 print:p-8 print:shadow-none printable-area">
+      {/* Report table */}
+      <div className="bg-background p-4 rounded-md border">
           <ReportHeader 
             title="Stock on Hand Report" 
             subtitle="Current inventory levels and valuation." 
@@ -305,7 +348,7 @@ export default function InventoryReportPage() {
               </div>
               <div className="text-right">
                   <p>Page 1 of 1</p>
-                  <p className="mt-1 font-bold text-primary/40">Powered by verdix</p>
+                  <p className="mt-1 font-bold text-primary/40">Powered by Vendix</p>
               </div>
           </div>
       </div>

@@ -1,23 +1,23 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
 import { Loader2, Printer, ClipboardX } from 'lucide-react';
 import { format } from 'date-fns';
-import { useReactToPrint } from 'react-to-print';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import { getApiUrl } from '@/lib/api-config';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
+import { printReportTable } from '@/lib/report-print';
 
 interface Adjustment {
   id: string;
@@ -44,12 +44,45 @@ export default function AdjustmentReportPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  const componentRef = useRef<HTMLDivElement>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
 
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: 'Stock Adjustment Report',
-  });
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      params.append('page', '1');
+      params.append('limit', '100000');
+
+      let rows: Adjustment[] = adjustments;
+      try {
+        const res = await fetch(getApiUrl(`/reports/adjustments?${params.toString()}`));
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) rows = data.data;
+      } catch {
+        // fall back to the currently loaded page
+      }
+
+      printReportTable<Adjustment>({
+        title: 'Stock Adjustment Report',
+        subtitle: 'Log of manual stock corrections, damaged goods, and losses.',
+        period: `${startDate} to ${endDate}`,
+        columns: [
+          { header: 'Date', cell: (a) => format(new Date(a.created_at), 'MMM dd, yyyy HH:mm') },
+          { header: 'Product', cell: (a) => a.product_name },
+          { header: 'Barcode', cell: (a) => a.barcode || '-' },
+          { header: 'Reason', cell: (a) => a.reason },
+          { header: 'Adjustment', align: 'right', emphasize: true, cell: (a) => `${a.quantity > 0 ? '+' : ''}${a.quantity}` },
+          { header: 'New Stock', align: 'right', cell: (a) => a.new_stock },
+        ],
+        rows,
+        emptyMessage: 'No adjustments found for this period.',
+      });
+    } finally {
+      setIsPrinting(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -91,8 +124,8 @@ export default function AdjustmentReportPage() {
             Log of manual stock corrections, damaged goods, and losses.
           </p>
         </div>
-        <Button onClick={() => handlePrint()} variant="outline" className="gap-2">
-            <Printer className="h-4 w-4" />
+        <Button onClick={() => handlePrint()} variant="outline" className="gap-2" disabled={isPrinting}>
+            {isPrinting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             Print Report
         </Button>
       </div>
@@ -123,7 +156,7 @@ export default function AdjustmentReportPage() {
         </CardHeader>
       </Card>
 
-      <div ref={componentRef} className="bg-background p-4 rounded-md border print:border-0 print:p-8 print:shadow-none printable-area">
+      <div className="bg-background p-4 rounded-md border">
           <ReportHeader 
               title="Stock Adjustment Report" 
               subtitle="Log of manual stock corrections, damaged goods, and losses." 

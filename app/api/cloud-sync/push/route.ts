@@ -40,7 +40,7 @@ const TABLE_COLUMNS: Record<string, { idCol: string; columns: string[] }> = {
   sales_transactions: {
     idCol: 'id',
     columns: [
-      'id','receipt_number','customer_id','total','subtotal','vat_amount',
+      'id','receipt_number','si_number','customer_id','total','subtotal','vat_amount',
       'discount_amount','payment_method','payment_reference','cashier_id',
       'terminal_id','shift_id','status','created_at',
     ],
@@ -48,7 +48,7 @@ const TABLE_COLUMNS: Record<string, { idCol: string; columns: string[] }> = {
   pos_transactions: {
     idCol: 'id',
     columns: [
-      'id','receipt_number','customer_id','total','payment_method',
+      'id','receipt_number','si_number','customer_id','total','payment_method',
       'cashier_id','terminal_id','shift_id','status','created_at',
     ],
   },

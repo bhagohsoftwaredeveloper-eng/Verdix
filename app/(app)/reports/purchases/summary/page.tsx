@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 
 interface PurchaseOrder {
   id: string;
@@ -125,128 +125,35 @@ export default function PurchasesSummaryPage() {
   };
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export. Please fetch the report first.",
-        variant: "destructive"
-      });
+    const fileName = `Purchases_Summary_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
+    const ok = exportReportPdf<PurchaseOrder>({
+      title: 'Purchases Summary Report',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Orders', value: String(totals.totalOrders) },
+        { label: 'Total Spent', value: formatCurrency(totals.totalSpent) },
+        { label: 'Avg Order Value', value: formatCurrency(totals.avgOrderValue) },
+        { label: 'Pending', value: String(totals.pendingOrders) },
+        { label: 'Received', value: String(totals.receivedOrders) },
+      ],
+      columns: [
+        { header: 'PO ID', width: 40, cell: (r) => r.id || 'N/A' },
+        { header: 'Date', width: 30, cell: (r) => r.date ? format(new Date(r.date), 'yyyy-MM-dd') : '-' },
+        { header: 'Supplier', width: 60, cell: (r) => r.supplierName || 'N/A' },
+        { header: 'Reference', width: 40, cell: (r) => r.referenceNumber || '-' },
+        { header: 'Payment', width: 35, cell: (r) => r.paymentMethod || '-' },
+        { header: 'Status', width: 30, cell: (r) => r.status || '-' },
+        { header: 'Total Amount', width: 40, align: 'right', cell: (r) => formatCurrency(r.total) },
+      ],
+      rows: records,
+      totals: [null, null, null, null, null, 'TOTAL', formatCurrency(totals.totalSpent)],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export. Please fetch the report first.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      let yPos = margin;
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Purchases Summary Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
-      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Orders: ${totals.totalOrders}`, margin, yPos);
-      doc.text(`Total Spent: ₱${totals.totalSpent.toFixed(2)}`, margin + 60, yPos);
-      doc.text(`Avg Order Value: ₱${totals.avgOrderValue.toFixed(2)}`, margin + 120, yPos);
-      yPos += 6;
-      doc.text(`Pending: ${totals.pendingOrders}`, margin, yPos);
-      doc.text(`Received: ${totals.receivedOrders}`, margin + 60, yPos);
-      yPos += 10;
-
-      const headers = ['PO ID', 'Date', 'Supplier', 'Reference', 'Payment', 'Status', 'Total Amount'];
-      const colWidths = [40, 30, 60, 40, 35, 30, 40];
-      
-      doc.setFillColor(37, 99, 235); // Blue-600
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      
-      let xPos = margin;
-      headers.forEach((header, i) => {
-        doc.text(header, xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-        xPos += colWidths[i];
-      });
-      yPos += 6;
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-
-      records.forEach((record, rowIndex) => {
-        if (yPos > pageHeight - 20) {
-          doc.addPage();
-          yPos = margin;
-          
-          doc.setFillColor(37, 99, 235);
-          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(255, 255, 255);
-          xPos = margin;
-          headers.forEach((header, i) => {
-            doc.text(header, xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-            xPos += colWidths[i];
-          });
-          yPos += 6;
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7);
-        }
-
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-
-        xPos = margin;
-        const rowData = [
-          record.id || 'N/A',
-          record.date ? format(new Date(record.date), 'yyyy-MM-dd') : '-',
-          record.supplierName || 'N/A',
-          record.referenceNumber || '-',
-          record.paymentMethod || '-',
-          record.status || '-',
-          `₱${record.total.toFixed(2)}`,
-        ];
-
-        rowData.forEach((cell, i) => {
-          doc.text(String(cell), xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-      });
-
-      const fileName = `Purchases_Summary_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "PDF Exported",
-        description: `Report saved as ${fileName}`,
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to generate PDF.",
-        variant: "destructive"
-      });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {

@@ -19,6 +19,7 @@ import {
   addProduct,
   getSuppliers,
   getWarehouses,
+  getShelfLocations,
   getDepartments,
 } from '../actions';
 import { productSchema, type ProductFormValues } from './product-schema';
@@ -62,17 +63,6 @@ export function useAddProductForm({
 
   const [isLoadingPriceLevels, setIsLoadingPriceLevels] = useState(false);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
-
-  const [dialogs, setDialogs] = useState({
-    categories: false,
-    brands: false,
-    subcategories: false,
-    suppliers: false,
-    warehouses: false,
-    shelfLocations: false,
-    units: false,
-    departments: false,
-  });
 
   const [selects, setSelects] = useState({
     categories: false,
@@ -252,22 +242,13 @@ export function useAddProductForm({
                       form.setValue(`priceLevels.${index}.price`, parseFloat(levelPrice.toFixed(2)));
                   }
               });
-
-              // Also update priceLevelFields for UI consistency
-              priceLevelFields.forEach((field, index) => {
-                  const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
-                  if (levelDef) {
-                      const levelPrice = calculateSuggestedPrice(watchedCost, markup, 0, levelDef);
-                      form.setValue(`priceLevels.${index}.price`, parseFloat(levelPrice.toFixed(2)));
-                  }
-              });
           }
       }
     } else {
       setMarkupSource(null);
     }
 
-  }, [watchedCost, watchedCategoryName, watchedSubcategoryName, watchedBrandName, watchedSupplierId, categories, subcategories, brands, suppliers, form, priceLevels, priceLevelFields, systemSettings]);
+  }, [watchedCost, watchedCategoryName, watchedSubcategoryName, watchedBrandName, watchedSupplierId, categories, subcategories, brands, suppliers, form, priceLevels, systemSettings]);
 
   // Auto-update main price when a price level is selected
   useEffect(() => {
@@ -460,17 +441,8 @@ export function useAddProductForm({
   const refreshSubcategories = () => getSubcategories().then(setSubcategories);
   const refreshSuppliers = () => getSuppliers().then(setSuppliers);
   const refreshWarehouses = () => getWarehouses().then(setWarehouses);
+  const refreshShelfLocations = () => getShelfLocations().then(setShelfLocations);
   const refreshUnits = () => getUnitsOfMeasure().then(setUnitsOfMeasure);
-
-  const handleShelfLocationAdded = (newLocationId?: string) => {
-    if (onOptionsRefresh) onOptionsRefresh();
-    if (newLocationId) {
-      const currentIds = form.getValues('shelfLocationIds') || [];
-      if (!currentIds.includes(newLocationId)) {
-        form.setValue('shelfLocationIds', [...currentIds, newLocationId], { shouldValidate: true, shouldDirty: true });
-      }
-    }
-  };
 
   return {
     // dialog + submit state
@@ -493,8 +465,7 @@ export function useAddProductForm({
     taxRates,
     systemSettings,
 
-    // nested popover/select/dialog open state
-    dialogs, setDialogs,
+    // nested popover/select open state
     selects, setSelects,
 
     // field arrays
@@ -517,8 +488,8 @@ export function useAddProductForm({
     refreshSubcategories,
     refreshSuppliers,
     refreshWarehouses,
+    refreshShelfLocations,
     refreshUnits,
-    handleShelfLocationAdded,
   };
 }
 

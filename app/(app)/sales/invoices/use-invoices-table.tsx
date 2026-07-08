@@ -84,13 +84,16 @@ export function useInvoicesTable({
       enableSorting: false,
     },
     {
-      id: 'receiptNo',
-      header: 'Receipt No',
-      cell: ({ row }) => (
-        <span className="text-primary font-medium">
-          {(row.original as any).receiptNo || row.original.orderNumber || ''}
-        </span>
-      ),
+      id: 'siNumber',
+      header: 'SI No',
+      cell: ({ row }) => {
+        const siNo = (row.original as any).siNumber ? String((row.original as any).siNumber).padStart(6, '0') : (row.original.orderNumber ? String(row.original.orderNumber).padStart(6, '0') : '');
+        return (
+          <span className="text-primary font-medium">
+            {siNo}
+          </span>
+        );
+      },
       enableSorting: false,
     },
     {

@@ -33,8 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { exportReportPdf } from '@/lib/report-print';
 
 // Type definitions matching the API response
 interface BatchAnalysisRecord {
@@ -135,73 +134,38 @@ export default function BatchProfitPage() {
   const paginatedRecords = filteredRecords.slice(startIndex, endIndex);
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export.",
-        variant: "destructive"
-      });
+    const fileName = `Batch_Profit_Report_${format(new Date(), 'yyyyMMdd')}.pdf`;
+    const ok = exportReportPdf<BatchAnalysisRecord>({
+      title: 'Batch Profit Analysis Report',
+      dateRange: `Period: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} to ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Qty', value: totals.qty.toLocaleString() },
+        { label: 'Total Revenue', value: formatCurrency(totals.revenue) },
+        { label: 'Total Profit', value: formatCurrency(totals.profit) },
+        { label: 'Avg Margin', value: `${totals.marginPct}%` },
+      ],
+      columns: [
+        { header: 'Sale Date', width: 26, cell: (r) => r.saleDate || 'N/A' },
+        { header: 'Ref', width: 24, cell: (r) => r.saleReference },
+        { header: 'Product', width: 40, cell: (r) => r.productName },
+        { header: 'Batch ID', width: 26, cell: (r) => (r.batchId === 'fallback' ? 'Untracked' : r.batchId) },
+        { header: 'Qty', width: 16, align: 'right', cell: (r) => String(r.qtySold) },
+        { header: 'U.Cost', width: 20, align: 'right', cell: (r) => r.unitCost.toFixed(2) },
+        { header: 'U.Sell', width: 20, align: 'right', cell: (r) => r.unitSellingPrice.toFixed(2) },
+        { header: 'Revenue', width: 24, align: 'right', cell: (r) => r.lineRevenue.toFixed(2) },
+        { header: 'Cost', width: 22, align: 'right', cell: (r) => r.lineCost.toFixed(2) },
+        { header: 'Profit', width: 22, align: 'right', cell: (r) => r.lineProfit.toFixed(2) },
+        { header: 'Margin', width: 16, align: 'right', cell: (r) => r.marginPct.toFixed(1) + '%' },
+      ],
+      rows: filteredRecords,
+      totals: ['TOTALS', null, null, null, totals.qty.toLocaleString(), null, null, totals.revenue.toFixed(2), totals.cost.toFixed(2), totals.profit.toFixed(2), `${totals.marginPct}%`],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 10;
-      let yPos = margin;
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Batch Profit Analysis Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = `Period: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} to ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
-      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      // Summary on PDF
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Qty: ${totals.qty.toLocaleString()}`, margin, yPos);
-      doc.text(`Total Revenue: P${totals.revenue.toLocaleString()}`, margin + 60, yPos);
-      doc.text(`Total Profit: P${totals.profit.toLocaleString()}`, margin + 120, yPos);
-      doc.text(`Avg Margin: ${totals.marginPct}%`, margin + 180, yPos);
-      yPos += 10;
-
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Sale Date', 'Ref', 'Product', 'Batch ID', 'Qty', 'U.Cost', 'U.Sell', 'Revenue', 'Cost', 'Profit', 'Margin']],
-        body: filteredRecords.map(r => [
-          r.saleDate || 'N/A',
-          r.saleReference,
-          r.productName,
-          r.batchId === 'fallback' ? 'Untracked' : r.batchId,
-          r.qtySold,
-          r.unitCost.toFixed(2),
-          r.unitSellingPrice.toFixed(2),
-          r.lineRevenue.toFixed(2),
-          r.lineCost.toFixed(2),
-          r.lineProfit.toFixed(2),
-          r.marginPct.toFixed(1) + '%'
-        ]),
-        headStyles: { fillColor: [217, 119, 6] }, // Amber 600
-        styles: { fontSize: 7 },
-        margin: { left: margin, right: margin }
-      });
-
-      doc.save(`Batch_Profit_Report_${format(new Date(), 'yyyyMMdd')}.pdf`);
-      toast({ title: "Report Exported", description: "PDF has been generated successfully." });
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Export Error", description: "Failed to generate PDF.", variant: "destructive" });
-    }
+    toast({ title: 'Report Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {

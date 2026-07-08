@@ -116,7 +116,7 @@ export class ReceiptGenerator {
         // ─── HEADER (centered) ───────────────────────────────────────────
 
 
-        const bizName = settings?.businessName?.trim() || 'verdix';
+        const bizName = settings?.businessName?.trim() || 'VENDIX';
         const address = settings?.address?.trim() || 'General Merchandise';
         const minNumber = sale.terminalMin || settings?.minNumber || '1234567890';
         const serialNumber = sale.terminalSerialNumber || settings?.serialNumber || '0987654321-11';
@@ -305,7 +305,7 @@ export class ReceiptGenerator {
         // Matches: text-center mt-6
         enc.newline();
         enc.align('center');
-        enc.line('Shop smart, save more! Thank you for visiting verdix.');
+        enc.line('Shop smart, save more! Thank you for visiting VENDIX.');
         if (sale.isTrainingMode) {
             enc.newline();
             enc.line('THIS IS NOT A CASH SALE/');
@@ -353,7 +353,7 @@ export class ReceiptGenerator {
 
         const paymentDate = new Date(payment.date);
         const dateStr = format(paymentDate, 'PP p');
-        const bizName = settings?.businessName?.trim() || 'verdix';
+        const bizName = settings?.businessName?.trim() || 'VENDIX';
         const address = settings?.address?.trim() || 'General Merchandise';
         const minNumber = settings?.minNumber || '';
         const serialNumber = settings?.serialNumber || '';
@@ -377,8 +377,11 @@ export class ReceiptGenerator {
 
         // DETAILS
         enc.line(`Received From: ${payment.customerName.substring(0, W - 15)}`);
-        if (payment.invoiceNo) enc.line(padRow('Invoice Ref:', payment.invoiceNo.substring(0, 14)));
-        if (payment.reference) enc.line(padRow('Receipt Ref:', payment.reference.substring(0, 14)));
+        // Keep the full reference so it matches the payment history; only trim if it
+        // would overflow the paper width (label is 12 chars + 1 space separator).
+        const refMax = Math.max(8, W - 13);
+        if (payment.invoiceNo) enc.line(padRow('Invoice Ref:', payment.invoiceNo.substring(0, refMax)));
+        if (payment.reference) enc.line(padRow('Receipt Ref:', payment.reference.substring(0, refMax)));
         enc.line(padRow('Method:', payment.paymentMethod));
         if (payment.note) enc.line(`Note: ${payment.note.substring(0, W - 6)}`);
         enc.line('-'.repeat(W));

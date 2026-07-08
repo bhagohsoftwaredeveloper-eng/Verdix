@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { getApiUrl } from "@/lib/api-config"
 import { TrendingUp, Loader2 } from "lucide-react"
-import { Bar, BarChart, XAxis, YAxis, LabelList, Cell, CartesianGrid } from "recharts"
+import { Bar, BarChart, XAxis, YAxis, LabelList, CartesianGrid } from "recharts"
 
 import {
   Card,
@@ -31,7 +31,7 @@ type ProductData = {
 const chartConfig = {
   sales: {
     label: "Sales",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(var(--primary))",
   },
   label: {
     color: "hsl(var(--foreground))",
@@ -124,10 +124,8 @@ export function TopSellingProductsChart({ data: initialData }: { data?: any[] })
               dataKey="sales"
               layout="vertical"
               radius={4}
+              fill="var(--color-sales)"
             >
-              {displayData.map((entry, index) => (
-                 <Cell key={`cell-${index}`} fill={entry.fill} />
-              ))}
               <LabelList
                 dataKey="name"
                 position="insideLeft"

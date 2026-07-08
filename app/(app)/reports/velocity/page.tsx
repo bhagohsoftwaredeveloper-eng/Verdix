@@ -19,11 +19,10 @@ import {
 import { Loader2, TrendingUp, TrendingDown, Printer, MinusCircle } from 'lucide-react';
 import { formatCurrency, formatQuantity } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
-import { useRef } from 'react';
-import { useReactToPrint } from 'react-to-print';
 import { Button } from '@/components/ui/button';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import { getApiUrl } from '@/lib/api-config';
+import { printReportTable } from '@/lib/report-print';
 
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 
@@ -53,12 +52,48 @@ export default function FastSlowMovingReportPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  const componentRef = useRef<HTMLDivElement>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
 
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: 'Product Velocity Report',
-  });
+  const tabLabel = (t: string) => (t === 'fast' ? 'Fast Moving' : t === 'slow' ? 'Slow Moving' : 'None Moving');
+
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('type', activeTab);
+      params.append('startDate', startDate);
+      params.append('endDate', endDate);
+      params.append('page', '1');
+      params.append('limit', '100000');
+
+      let rows: VelocityProduct[] = products;
+      try {
+        const res = await fetch(getApiUrl(`/reports/velocity?${params.toString()}`));
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) rows = data.data;
+      } catch {
+        // fall back to the currently loaded page
+      }
+
+      printReportTable<VelocityProduct>({
+        title: `Product Velocity Report — ${tabLabel(activeTab)}`,
+        subtitle: 'Analysis of fast and slow moving products.',
+        period: `${startDate} to ${endDate}`,
+        columns: [
+          { header: 'Barcode', cell: (p) => p.barcode || '-' },
+          { header: 'Product Name', cell: (p) => p.name },
+          { header: 'Category', cell: (p) => p.category },
+          { header: 'Units Sold (30d)', align: 'right', emphasize: true, cell: (p) => p.total_sold },
+          { header: 'Revenue Generated', align: 'right', cell: (p) => formatCurrency(p.total_revenue) },
+          { header: 'Current Stock', align: 'right', cell: (p) => formatQuantity(p.stock) },
+        ],
+        rows,
+        emptyMessage: 'No data available.',
+      });
+    } finally {
+      setIsPrinting(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -102,13 +137,13 @@ export default function FastSlowMovingReportPage() {
             Analysis of fast and slow moving products over the last 30 days.
           </p>
         </div>
-        <Button onClick={() => handlePrint()} variant="outline" className="gap-2">
-            <Printer className="h-4 w-4" />
+        <Button onClick={() => handlePrint()} variant="outline" className="gap-2" disabled={isPrinting}>
+            {isPrinting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             Print Report
         </Button>
       </div>
 
-      <div ref={componentRef} className="print:p-8 printable-area">
+      <div>
         <ReportHeader 
             title="Product Velocity Report" 
             subtitle="Analysis of fast and slow moving products."

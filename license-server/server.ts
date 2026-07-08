@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import { migrate } from './schema';
+import { initCache } from './cache';
 import {
   getAdminByUsername,
   verifyPassword,
@@ -36,7 +37,8 @@ import { hasPrivateKey } from './keys';
 
 dotenv.config();
 
-const PORT = parseInt(process.env.LICENSE_UI_PORT || '4100', 10);
+// Railway injects PORT; LICENSE_UI_PORT is the local dev override.
+const PORT = parseInt(process.env.PORT || process.env.LICENSE_UI_PORT || '4100', 10);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -113,6 +115,17 @@ function clientIp(req: Req): string {
     req.socket.remoteAddress ||
     ''
   );
+}
+
+async function cloudConfigFor(license: { id: string; features: string[] | null }) {
+  if (!license.features || !license.features.includes('cloud-sync')) return undefined;
+  try {
+    const cfg = await svc.getCloudConfig(license.id);
+    return cfg || undefined;
+  } catch (e) {
+    console.error('[license] cloudConfig lookup failed (check CLOUD_CONFIG_SECRET):', (e as Error).message);
+    return undefined;
+  }
 }
 
 // ── Router ───────────────────────────────────────────────────────────────────
@@ -197,10 +210,12 @@ async function handle(req: Req, res: Res) {
       });
       await svc.log(license.id, payload.machineId, 'activate.online', 'Online activation', ip);
 
+      const cloudConfig = await cloudConfigFor(license);
       return sendJson(res, 200, {
         success: true,
         signedLicense,
         info: { customer: payload.customer, edition: payload.edition, expires: payload.expires },
+        ...(cloudConfig ? { cloudConfig } : {}),
       });
     } catch (e: any) {
       console.error('Activation error:', e);
@@ -224,7 +239,10 @@ async function handle(req: Req, res: Res) {
         appVersion: body.appVersion,
         ip: clientIp(req),
       });
-      return sendJson(res, 200, { success: true, ...result });
+      const license = await svc.getLicense(licenseId);
+      const cloudConfig =
+        result.status === 'active' && license ? await cloudConfigFor(license) : undefined;
+      return sendJson(res, 200, { success: true, ...result, ...(cloudConfig ? { cloudConfig } : {}) });
     } catch (e: any) {
       console.error('Validate error:', e);
       return sendJson(res, 500, { success: false, error: 'Validation failed on the server.' });
@@ -392,6 +410,37 @@ async function handle(req: Req, res: Res) {
         }
       }
 
+      // System configuration (admin only)
+      if (p.startsWith('/api/config')) {
+        if (session.role !== 'admin')
+          return sendJson(res, 403, { success: false, error: 'Only administrators can access system configuration.' });
+
+        if (method === 'GET' && p === '/api/config/backup') {
+          const backup = await svc.exportBackup();
+          const json = JSON.stringify(backup, null, 2);
+          const filename = `verdix-license-backup-${new Date().toISOString().slice(0, 10)}.json`;
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+          });
+          return res.end(json);
+        }
+
+        if (method === 'POST' && p === '/api/config/reset') {
+          await svc.resetAllData();
+          await svc.log(null, null, 'system.reset', `All data reset by ${session.username}`);
+          return sendJson(res, 200, { success: true });
+        }
+
+        if (method === 'POST' && p === '/api/config/restore') {
+          const body = await readBody(req);
+          const result = await svc.importBackup(body);
+          await svc.log(null, null, 'system.restore',
+            `Backup restored by ${session.username}: ${result.customers} customers, ${result.licenses} licenses, ${result.activations} activations`);
+          return sendJson(res, 200, { success: true, data: result });
+        }
+      }
+
       return sendJson(res, 404, { success: false, error: 'Unknown endpoint.' });
     } catch (e: any) {
       console.error('API error:', e);
@@ -414,6 +463,8 @@ async function boot() {
     process.exit(1);
   }
 
+  await initCache();
+
   if (!hasPrivateKey()) {
     console.warn('⚠️  No signing key found. Run `npm run license:keygen` (signing will fail).');
   }
@@ -432,7 +483,7 @@ async function boot() {
       }
     });
   }).listen(PORT, () => {
-    console.log('\n🔑 Verdix License Management System');
+    console.log('\n🔑 Vendix License Management System');
     console.log('   ▶ http://localhost:' + PORT + '\n');
   });
 }

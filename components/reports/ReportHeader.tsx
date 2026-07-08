@@ -14,7 +14,7 @@ export function ReportHeader({
   title, 
   subtitle, 
   period,
-  businessName = 'verdix',
+  businessName = 'Vendix',
   address,
   contactNumber,
   tin

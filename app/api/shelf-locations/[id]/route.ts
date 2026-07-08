@@ -62,6 +62,10 @@ export async function DELETE(
     const sql = 'DELETE FROM shelf_locations WHERE id = ?';
     await query(sql, [id]);
 
+    // Propagate the delete across machines via cloud sync.
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('shelf_locations', id);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to delete shelf location:', error);

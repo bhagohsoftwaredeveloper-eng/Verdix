@@ -141,6 +141,10 @@ export async function DELETE(request: NextRequest) {
     const sql = 'DELETE FROM sales_areas WHERE id = ?';
     await query(sql, [id]);
 
+    // Propagate the delete across machines via cloud sync.
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('sales_areas', id);
+
     return NextResponse.json({
       success: true,
       message: 'Sales area deleted successfully',

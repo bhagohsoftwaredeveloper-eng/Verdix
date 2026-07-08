@@ -1,15 +1,16 @@
 'use client';
 
-import { PlusCircle, Wand2 } from 'lucide-react';
+import { Wand2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Category, Brand } from '@/lib/types';
 
 import { useEditProductFormContext } from '../edit-product-form-context';
+import { InlineEditableSelect } from '../../components/inline-editable-select';
+import { addBrand, updateBrand, addCategory, updateCategory, addSubcategory, updateSubcategory } from '../../actions';
 
 export function BasicInfoTab() {
   const {
@@ -17,13 +18,12 @@ export function BasicInfoTab() {
     brands,
     categories,
     subcategories,
-    watchedBrandName,
-    watchedCategoryName,
-    watchedSubcategoryName,
     setSelects,
     selects,
-    setDialogs,
     generateBarcode,
+    refreshBrands,
+    refreshCategories,
+    refreshSubcategories,
   } = useEditProductFormContext();
 
   return (
@@ -49,62 +49,33 @@ export function BasicInfoTab() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Brand</FormLabel>
-              <Select
-                open={selects.brands}
-                onOpenChange={(open) => setSelects(prev => ({ ...prev, brands: open }))}
-                onValueChange={field.onChange}
+              <InlineEditableSelect
+                items={brands}
+                isLoading={false}
                 value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a brand" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {(() => {
-                    const items = [];
-
-                    // Add orphan brand if it exists and isn't in the list
-                    if (watchedBrandName && !brands.some(b => b.name === watchedBrandName)) {
-                      items.push(
-                        <SelectItem key="orphan-brand" value={watchedBrandName}>
-                          {watchedBrandName} (Missing in Settings)
-                        </SelectItem>
-                      );
-                    }
-
-                    if (brands?.length > 0) {
-                      brands.forEach((brand: Brand) => {
-                        items.push(
-                          <SelectItem key={brand.id} value={brand.name}>
-                            {brand.name}
-                          </SelectItem>
-                        );
-                      });
-                    }
-
-                    return items.length > 0 ? items : (
-                      <SelectItem value="none" disabled>No brands found</SelectItem>
-                    );
-                  })()}
-                  <div className="border-t mt-1 pt-1 px-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDialogs(prev => ({ ...prev, brands: true }));
-                        setSelects(prev => ({ ...prev, brands: false }));
-                      }}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Brand
-                    </Button>
-                  </div>
-                </SelectContent>
-              </Select>
+                onChange={field.onChange}
+                open={selects.brands}
+                onOpenChange={(o) => setSelects((p) => ({ ...p, brands: o }))}
+                placeholder="Select a brand"
+                addLabel="Add Brand"
+                emptyLabel="No brands found"
+                orphanLabel={(v) => `${v} (Missing in Settings)`}
+                getId={(b: Brand) => b.id}
+                getValue={(b: Brand) => b.name}
+                getOptionLabel={(b: Brand) => b.name}
+                getName={(b: Brand) => b.name}
+                onAdd={async (name) => {
+                  const r = await addBrand(name, 0);
+                  if (r.success) { await refreshBrands(); return name; }
+                  return undefined;
+                }}
+                onRename={async (id, name) => {
+                  const existing = brands.find((b: Brand) => b.id === id);
+                  const r = await updateBrand(id, name, existing?.markupPercentage);
+                  if (r.success) { await refreshBrands(); return name; }
+                  return undefined;
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}
@@ -210,62 +181,33 @@ export function BasicInfoTab() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Category</FormLabel>
-              <Select
-                open={selects.categories}
-                onOpenChange={(open) => setSelects(prev => ({ ...prev, categories: open }))}
-                onValueChange={field.onChange}
+              <InlineEditableSelect
+                items={categories}
+                isLoading={false}
                 value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {(() => {
-                    const items = [];
-
-                    // Add orphan category if it exists and isn't in the list
-                    if (watchedCategoryName && !categories.some(cat => cat.name === watchedCategoryName)) {
-                      items.push(
-                        <SelectItem key="orphan-category" value={watchedCategoryName}>
-                          {watchedCategoryName} (Missing in Settings)
-                        </SelectItem>
-                      );
-                    }
-
-                    if (categories?.length > 0) {
-                      categories.forEach((cat: Category) => {
-                        items.push(
-                          <SelectItem key={cat.id} value={cat.name}>
-                            {cat.name}
-                          </SelectItem>
-                        );
-                      });
-                    }
-
-                    return items.length > 0 ? items : (
-                      <SelectItem value="none" disabled>No categories found</SelectItem>
-                    );
-                  })()}
-                  <div className="border-t mt-1 pt-1 px-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDialogs(prev => ({ ...prev, categories: true }));
-                        setSelects(prev => ({ ...prev, categories: false }));
-                      }}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Category
-                    </Button>
-                  </div>
-                </SelectContent>
-              </Select>
+                onChange={field.onChange}
+                open={selects.categories}
+                onOpenChange={(o) => setSelects((p) => ({ ...p, categories: o }))}
+                placeholder="Select a category"
+                addLabel="Add Category"
+                emptyLabel="No categories found"
+                orphanLabel={(v) => `${v} (Missing in Settings)`}
+                getId={(c: Category) => c.id}
+                getValue={(c: Category) => c.name}
+                getOptionLabel={(c: Category) => c.name}
+                getName={(c: Category) => c.name}
+                onAdd={async (name) => {
+                  const r = await addCategory(name, 0);
+                  if (r.success) { await refreshCategories(); return name; }
+                  return undefined;
+                }}
+                onRename={async (id, name) => {
+                  const existing = categories.find((c: Category) => c.id === id);
+                  const r = await updateCategory(id, name, existing?.markupPercentage);
+                  if (r.success) { await refreshCategories(); return name; }
+                  return undefined;
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}
@@ -276,62 +218,33 @@ export function BasicInfoTab() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Subcategory (Optional)</FormLabel>
-              <Select
-                open={selects.subcategories}
-                onOpenChange={(open) => setSelects(prev => ({ ...prev, subcategories: open }))}
-                onValueChange={field.onChange}
+              <InlineEditableSelect
+                items={subcategories}
+                isLoading={false}
                 value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a subcategory" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {(() => {
-                    const items = [];
-
-                    // Add orphan subcategory if it exists and isn't in the list
-                    if (watchedSubcategoryName && !subcategories.some(sub => sub.name === watchedSubcategoryName)) {
-                      items.push(
-                        <SelectItem key="orphan-subcategory" value={watchedSubcategoryName}>
-                          {watchedSubcategoryName} (Missing in Settings)
-                        </SelectItem>
-                      );
-                    }
-
-                    if (subcategories?.length > 0) {
-                      subcategories.forEach((sub: Category) => {
-                        items.push(
-                          <SelectItem key={sub.id} value={sub.name}>
-                            {sub.name}
-                          </SelectItem>
-                        );
-                      });
-                    }
-
-                    return items.length > 0 ? items : (
-                      <SelectItem value="none" disabled>No subcategories found</SelectItem>
-                    );
-                  })()}
-                  <div className="border-t mt-1 pt-1 px-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDialogs(prev => ({ ...prev, subcategories: true }));
-                        setSelects(prev => ({ ...prev, subcategories: false }));
-                      }}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Subcategory
-                    </Button>
-                  </div>
-                </SelectContent>
-              </Select>
+                onChange={field.onChange}
+                open={selects.subcategories}
+                onOpenChange={(o) => setSelects((p) => ({ ...p, subcategories: o }))}
+                placeholder="Select a subcategory"
+                addLabel="Add Subcategory"
+                emptyLabel="No subcategories found"
+                orphanLabel={(v) => `${v} (Missing in Settings)`}
+                getId={(s: Category) => s.id}
+                getValue={(s: Category) => s.name}
+                getOptionLabel={(s: Category) => s.name}
+                getName={(s: Category) => s.name}
+                onAdd={async (name) => {
+                  const r = await addSubcategory(name, 0);
+                  if (r.success) { await refreshSubcategories(); return name; }
+                  return undefined;
+                }}
+                onRename={async (id, name) => {
+                  const existing = subcategories.find((s: Category) => s.id === id);
+                  const r = await updateSubcategory(id, name, existing?.markupPercentage);
+                  if (r.success) { await refreshSubcategories(); return name; }
+                  return undefined;
+                }}
+              />
               <FormMessage />
             </FormItem>
           )}

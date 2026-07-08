@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/api-config';
-import jsPDF from 'jspdf';
+import { exportReportPdf } from '@/lib/report-print';
 
 interface ProductPurchase {
   productId: string;
@@ -125,125 +125,33 @@ export default function PurchasesByProductPage() {
   };
 
   const exportToPDF = () => {
-    if (records.length === 0) {
-      toast({
-        title: "No Data",
-        description: "No records to export. Please fetch the report first.",
-        variant: "destructive"
-      });
+    const fileName = `Purchases_By_Product_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
+    const ok = exportReportPdf<ProductPurchase>({
+      title: 'Purchases by Product Report',
+      dateRange: `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`,
+      summary: [
+        { label: 'Total Products', value: String(totals.totalProducts) },
+        { label: 'Total Units Purchased', value: String(totals.totalQuantity) },
+        { label: 'Total Spend', value: formatCurrency(totals.totalCost) },
+      ],
+      columns: [
+        { header: 'Product Name', width: 50, cell: (r) => r.productName || 'N/A' },
+        { header: 'Barcode', width: 40, cell: (r) => r.barcode || '-' },
+        { header: 'Category', width: 40, cell: (r) => r.category || '-' },
+        { header: 'Quantity', width: 25, align: 'right', cell: (r) => r.totalQuantity.toString() },
+        { header: 'UOM', width: 20, cell: (r) => r.uom || '-' },
+        { header: 'Avg Cost', width: 30, align: 'right', cell: (r) => formatCurrency(r.avgCost) },
+        { header: 'Total Spend', width: 40, align: 'right', cell: (r) => formatCurrency(r.totalCost) },
+      ],
+      rows: records,
+      totals: ['TOTAL', null, null, String(totals.totalQuantity), null, null, formatCurrency(totals.totalCost)],
+      fileName,
+    });
+    if (!ok) {
+      toast({ title: 'No Data', description: 'No records to export. Please fetch the report first.', variant: 'destructive' });
       return;
     }
-
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      let yPos = margin;
-
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Purchases by Product Report', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = `From: ${fromDate ? format(fromDate, 'yyyy-MM-dd') : 'N/A'} To: ${toDate ? format(toDate, 'yyyy-MM-dd') : 'N/A'}`;
-      doc.text(dateRangeText, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total Products: ${totals.totalProducts}`, margin, yPos);
-      doc.text(`Total Units Purchased: ${totals.totalQuantity}`, margin + 60, yPos);
-      doc.text(`Total Spend: ₱${totals.totalCost.toFixed(2)}`, margin + 120, yPos);
-      yPos += 10;
-
-      const headers = ['Product Name', 'Barcode', 'Category', 'Quantity', 'UOM', 'Avg Cost', 'Total Spend'];
-      const colWidths = [50, 40, 40, 25, 20, 30, 40];
-      
-      doc.setFillColor(37, 99, 235);
-      doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-      
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      
-      let xPos = margin;
-      headers.forEach((header, i) => {
-        doc.text(header, xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-        xPos += colWidths[i];
-      });
-      yPos += 6;
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-
-      records.forEach((record, rowIndex) => {
-        if (yPos > pageHeight - 20) {
-          doc.addPage();
-          yPos = margin;
-          
-          doc.setFillColor(37, 99, 235);
-          doc.rect(margin, yPos - 4, pageWidth - margin * 2, 8, 'F');
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(255, 255, 255);
-          xPos = margin;
-          headers.forEach((header, i) => {
-            doc.text(header, xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-            xPos += colWidths[i];
-          });
-          yPos += 6;
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7);
-        }
-
-        if (rowIndex % 2 === 0) {
-          doc.setFillColor(245, 245, 245);
-          doc.rect(margin, yPos - 3, pageWidth - margin * 2, 6, 'F');
-        }
-
-        xPos = margin;
-        const rowData = [
-          record.productName || 'N/A',
-          record.barcode || '-',
-          record.category || '-',
-          record.totalQuantity.toString(),
-          record.uom || '-',
-          `₱${record.avgCost.toFixed(2)}`,
-          `₱${record.totalCost.toFixed(2)}`,
-        ];
-
-        rowData.forEach((cell, i) => {
-          doc.text(String(cell), xPos + 2, yPos, { maxWidth: colWidths[i] - 4 });
-          xPos += colWidths[i];
-        });
-        yPos += 6;
-      });
-
-      const fileName = `Purchases_By_Product_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
-      doc.save(fileName);
-
-      toast({
-        title: "PDF Exported",
-        description: `Report saved as ${fileName}`,
-      });
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast({
-        title: "Export Failed",
-        description: "Failed to generate PDF.",
-        variant: "destructive"
-      });
-    }
+    toast({ title: 'PDF Exported', description: `Report saved as ${fileName}` });
   };
 
   const formatCurrency = (value: number) => {

@@ -1,9 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -34,7 +30,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import {
   Table,
   TableBody,
@@ -43,13 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getApiUrl } from '@/lib/api-config';
-
-const salesAreaSchema = z.object({
-  name: z.string().min(1, 'Area name is required'),
-});
-
-type SalesAreaFormValues = z.infer<typeof salesAreaSchema>;
+import { useAddSalesArea } from './use-add-sales-area';
 
 interface AddSalesAreaDialogProps {
   onAreaAdded: (area: { id: string; name: string }) => void;
@@ -57,116 +46,18 @@ interface AddSalesAreaDialogProps {
 }
 
 export function AddSalesAreaDialog({ onAreaAdded, onSalesAreasUpdated }: AddSalesAreaDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [salesAreas, setSalesAreas] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [areaToDelete, setAreaToDelete] = useState<{ id: string; name: string } | null>(null);
-  const { toast } = useToast();
-
-  const form = useForm<SalesAreaFormValues>({
-    resolver: zodResolver(salesAreaSchema),
-    defaultValues: {
-      name: '',
-    },
-  });
-
-  const fetchSalesAreas = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(getApiUrl('/sales-areas'));
-      if (!response.ok) throw new Error(`API error ${response.status}`);
-      const result = await response.json();
-      if (result.success) {
-        setSalesAreas(result.data);
-      }
-    } catch (error) {
-      console.error('Error fetching sales areas:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (open) {
-      fetchSalesAreas();
-    }
-  }, [open]);
-
-  async function onSubmit(values: SalesAreaFormValues) {
-    setIsSaving(true);
-    try {
-      const response = await fetch(getApiUrl('/sales-areas'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        toast({
-          title: 'Sales Area Added',
-          description: `Sales area "${values.name}" has been successfully added.`,
-        });
-        onAreaAdded(result.data);
-        form.reset();
-        fetchSalesAreas(); // Refresh the list
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: result.error || 'Failed to add sales area.',
-        });
-      }
-    } catch (error) {
-      console.error('Error adding sales area:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to add sales area. Please try again.',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!areaToDelete) return;
-
-    try {
-      const response = await fetch(getApiUrl(`/sales-areas?id=${areaToDelete.id}`), {
-        method: 'DELETE',
-      });
-      const result = await response.json();
-
-      if (result.success) {
-        toast({
-          title: 'Sales Area Deleted',
-          description: `Sales area "${areaToDelete.name}" has been successfully deleted.`,
-        });
-        fetchSalesAreas();
-        if (onSalesAreasUpdated) {
-          onSalesAreasUpdated();
-        }
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: result.error || 'Failed to delete sales area.',
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting sales area:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to delete sales area. Please try again.',
-      });
-    } finally {
-      setAreaToDelete(null);
-    }
-  }
+  const {
+    open,
+    setOpen,
+    isSaving,
+    salesAreas,
+    isLoading,
+    areaToDelete,
+    setAreaToDelete,
+    form,
+    handleSubmit,
+    handleConfirmDelete,
+  } = useAddSalesArea({ onAreaAdded, onSalesAreasUpdated });
 
   return (
     <>
@@ -187,7 +78,7 @@ export function AddSalesAreaDialog({ onAreaAdded, onSalesAreasUpdated }: AddSale
           {/* Add Area Form */}
           <div className="py-4 border-b">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-end gap-2">
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="flex items-end gap-2">
                 <FormField
                   control={form.control}
                   name="name"
@@ -280,7 +171,7 @@ export function AddSalesAreaDialog({ onAreaAdded, onSalesAreasUpdated }: AddSale
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={(e) => { e.stopPropagation(); confirmDelete(); }} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={(e) => { e.stopPropagation(); handleConfirmDelete(); }} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

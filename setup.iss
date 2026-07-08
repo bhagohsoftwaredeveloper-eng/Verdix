@@ -1,6 +1,6 @@
-; verdix Inno Setup Script
-#define AppName "verdix"
-#define AppVersion "1.14"
+; Vendix Inno Setup Script
+#define AppName "Vendix"
+#define AppVersion "1.16"
 #define AppPublisher "BHAGOH SYSTEMS"
 #define AppExeName "verdix.exe"
 
@@ -11,12 +11,18 @@ AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
-OutputBaseFilename=verdixSetup_{#AppVersion}
-Compression=lzma
+SetupIconFile=public\verdix_logo.ico
+OutputBaseFilename=VendixSetup_{#AppVersion}
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
 DisableFinishedPage=yes
+; Install as a true 64-bit app into C:\Program Files\Vendix (no "(x86)").
+; The bundled node.exe and MySQL are x64, and a paren-free path avoids batch
+; quoting pitfalls during MySQL setup.
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -28,35 +34,73 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "{commonappdata}\Verdix"; Permissions: users-modify
 
 [Files]
-; App Files
+; Electron app binary
 Source: "dist\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Runtime config
 Source: ".env"; DestDir: "{app}"; Flags: ignoreversion
-Source: "establish_mysql_connection.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "start_mysql.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "migrate.js"; DestDir: "{app}"; Flags: ignoreversion
-Source: "init_database.js"; DestDir: "{app}"; Flags: ignoreversion
-Source: "schema.sql"; DestDir: "{app}"; Flags: ignoreversion
-Source: "run_migration.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\Program Files\nodejs\node.exe"; DestDir: "{app}"; Flags: ignoreversion
 
+; Microsoft VC++ 2015-2022 Redistributable — required by bundled mysqld.exe.
+; Fresh Windows PCs often lack it; installed silently before MySQL setup.
+Source: "redist\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+
+; Database setup — verdix_install.sql holds the full 75-table structure,
+; reference data, and the default admin. Applied via bundled mysql.exe (no Node).
+Source: "verdix_install.sql"; DestDir: "{app}"; Flags: ignoreversion
+Source: "setup_mysql_service.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "uninstall_mysql_service.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "start_server.bat"; DestDir: "{app}"; Flags: ignoreversion
+; Hidden launcher for start_server.bat — runs it with no visible console window
+; at boot (see [Icons] {commonstartup} entry).
+Source: "start_server_hidden.vbs"; DestDir: "{app}"; Flags: ignoreversion
+
+; Bundled MySQL 8.0 (portable — no separate MySQL install needed on client PC)
+; Excludes drop ~600MB of files the server never needs at runtime: debug symbols
+; (*.pdb incl. the 352MB mysqld.pdb), debug plugins, dev headers/libs, Perl tools,
+; docs, and the MeCab CJK full-text dictionaries (unused by this POS).
+Source: "mysql-bundle\*"; DestDir: "{app}\mysql"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,*.lib,*.pl,lib\plugin\debug\*,lib\mecab\*,docs\*,include\*"
+
 ; Next.js Standalone Files
-Source: ".next\standalone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "backups\*"
+; IMPORTANT: exclude stale operational scripts that Next traced into the standalone
+; folder. This copy runs AFTER our explicit copies, so without these excludes the
+; OLD bundled copies (e.g. a setup_mysql_service.bat that calls run_migration.bat)
+; would overwrite the up-to-date ones we ship deliberately.
+Source: ".next\standalone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.sql,*.log,server.log,dev_server.log,.env,setup_mysql_service.bat,uninstall_mysql_service.bat,start_server.bat,run_migration.bat,init_database.js,migrate.js"
+; Explicit node_modules copy — the wildcard above does NOT reliably recurse into
+; node_modules, which left the install without next/dist/server/next.js and broke
+; server startup. This dedicated entry guarantees the full traced node_modules ships.
+Source: ".next\standalone\node_modules\*"; DestDir: "{app}\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Full 'next' package from dev node_modules — the standalone trace OMITS turbopack
+; runtime files (e.g. next\dist\compiled\next-server\app-route-turbo.runtime.prod.js)
+; that every API route loads at request time. Without this, routes 500 with
+; "Cannot find module ...app-route-turbo.runtime.prod.js". Overlaying the complete
+; package fills those gaps.
+Source: "node_modules\next\*"; DestDir: "{app}\node_modules\next"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: ".next\static\*"; DestDir: "{app}\.next\static"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 
 [Icons]
-Name: "{autoprograms}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
-Name: "{autodesktop}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
-Name: "{userstartup}\verdix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
-Name: "{commonstartup}\verdix Server"; Filename: "{app}\start_server.bat"; Flags: runminimized
+Name: "{autoprograms}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+Name: "{autodesktop}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+Name: "{userstartup}\Vendix POS"; Filename: "{app}\{#AppExeName}"; Parameters: "--route=/pos --role=""POS Terminal"""; IconFilename: "{app}\public\verdix_logo.ico"
+; Launch the server at boot through wscript + the hidden VBS wrapper so no
+; console window appears (start_server.bat directly would flash a cmd window
+; even with runminimized). wscript is the default, no-console host for .vbs.
+Name: "{commonstartup}\Vendix Server"; Filename: "wscript.exe"; Parameters: """{app}\start_server_hidden.vbs"""
 
 
 [Run]
-Filename: "{app}\run_migration.bat"; Flags: runhidden waituntilterminated
+; Install VC++ runtime first — bundled mysqld.exe depends on it.
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing runtime components..."; Flags: waituntilterminated
+; Sets up bundled MySQL as a Windows service, creates the DB, applies schema + admin
+Filename: "{app}\setup_mysql_service.bat"; Flags: runhidden waituntilterminated; StatusMsg: "Setting up database..."
 Filename: "{app}\{#AppExeName}"; Flags: nowait skipifsilent
+
+[UninstallRun]
+Filename: "{app}\uninstall_mysql_service.bat"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveMySQLService"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
+Type: filesandordirs; Name: "{commonappdata}\Verdix\mysql-data"

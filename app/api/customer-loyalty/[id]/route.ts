@@ -98,6 +98,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // Delete the loyalty record
     await query('DELETE FROM customer_loyalty WHERE id = ?', [loyaltyId]);
 
+    // Propagate the delete across machines via cloud sync.
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('customer_loyalty', loyaltyId);
+
     return NextResponse.json({
       success: true,
       message: 'Customer loyalty deleted successfully',

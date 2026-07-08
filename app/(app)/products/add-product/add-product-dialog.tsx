@@ -15,15 +15,6 @@ import {
 import { Form } from '@/components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-import { ManageCategoriesDialog } from '../categories/ManageCategoriesDialog';
-import { ManageBrandsDialog } from '../brands/ManageBrandsDialog';
-import { ManageDepartmentsDialog } from '../departments/ManageDepartmentsDialog';
-import { ManageSubcategoriesDialog } from '../subcategories/ManageSubcategoriesDialog';
-import { ManageUnitOfMeasureDialog } from '../units-of-measure/ManageUnitOfMeasureDialog';
-import { ManageWarehousesDialog } from '../../sales/ManageWarehousesDialog';
-import { ManageSuppliersDialog } from '../suppliers/ManageSuppliersDialog';
-import { ManageShelfLocationsDialog } from '../shelf-locations/ManageShelfLocationsDialog';
-
 import { useAddProductForm, type UseAddProductFormProps } from './use-add-product-form';
 import { AddProductFormProvider } from './add-product-form-context';
 import { BasicInfoTab } from './tabs/basic-info-tab';
@@ -38,18 +29,9 @@ export function AddProductDialog(props: UseAddProductFormProps) {
     isOpen, setIsOpen,
     isSubmitting,
     form,
-    dialogs, setDialogs,
     tabErrors,
     markupSource,
     onSubmit,
-    refreshBrands,
-    refreshDepartments,
-    refreshCategories,
-    refreshSubcategories,
-    refreshSuppliers,
-    refreshWarehouses,
-    refreshUnits,
-    handleShelfLocationAdded,
   } = controller;
 
   return (
@@ -151,54 +133,6 @@ export function AddProductDialog(props: UseAddProductFormProps) {
             )}
           </Button>
         </DialogFooter>
-
-        {/* Lifted Manage Dialogs */}
-        <ManageBrandsDialog
-          trigger={null}
-          open={dialogs.brands}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, brands: open }))}
-          onBrandAdded={refreshBrands}
-        />
-        <ManageDepartmentsDialog
-          trigger={null}
-          open={dialogs.departments}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, departments: open }))}
-          onDepartmentAdded={refreshDepartments}
-        />
-        <ManageCategoriesDialog
-          trigger={null}
-          open={dialogs.categories}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, categories: open }))}
-          onCategoryAdded={refreshCategories}
-        />
-        <ManageSubcategoriesDialog
-          trigger={null}
-          open={dialogs.subcategories}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, subcategories: open }))}
-          onSubcategoryAdded={refreshSubcategories}
-        />
-        <ManageSuppliersDialog
-          trigger={null}
-          open={dialogs.suppliers}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, suppliers: open }))}
-          onSupplierAdded={refreshSuppliers}
-        />
-        <ManageWarehousesDialog
-          open={dialogs.warehouses}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, warehouses: open }))}
-          onChange={refreshWarehouses}
-        />
-        <ManageShelfLocationsDialog
-          open={dialogs.shelfLocations}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, shelfLocations: open }))}
-          onLocationAdded={handleShelfLocationAdded}
-        />
-        <ManageUnitOfMeasureDialog
-          trigger={null}
-          open={dialogs.units}
-          onOpenChange={(open) => setDialogs(prev => ({ ...prev, units: open }))}
-          onUnitAdded={refreshUnits}
-        />
       </DialogContent>
     </Dialog>
   );

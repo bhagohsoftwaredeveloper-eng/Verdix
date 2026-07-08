@@ -80,7 +80,16 @@ import './079_create_payment_allocations_table';
 import './080_backfill_payment_allocations';
 import './081_normalize_payment_invoice_notes';
 import './082_alter_pos_settings_add_vat_registration';
-
+import './083_add_si_number_to_tables';
+import './084_add_si_number_to_transaction_references';
+import './085_backfill_si_numbers';
+import './086_redesign_sales_order_flow';
+import './087_add_due_date_to_purchase_orders';
+import './088_create_supplier_credit_memos_table';
+import './089_seed_default_units_of_measure';
+import './090_create_sync_tombstones_table';
+import './091_add_si_prefix_to_transaction_references';
+import './092_create_stock_movement_applied_table';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

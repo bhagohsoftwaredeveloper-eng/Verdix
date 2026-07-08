@@ -1,11 +1,39 @@
 import type {NextConfig} from 'next';
 
+// Kuhaa ang app version gikan sa package.json aron i-inline sa client bundle.
+// Gamiton ang `npm_package_version` (gi-set sa npm kada `npm run build/dev`)
+// imbes i-import ang root package.json — kay ang pag-import sa root-level nga
+// file maghimo sa NFT nga i-trace ang tibuok project (mag-bloat sa standalone).
+// Mag-sync gihapon awtomatik sa package.json version.
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: process.env.npm_package_version,
+  },
   // Tugoti ang separate dist dir (env-driven) aron ang e2e test server makasabay
   // sa usa ka running nga dev server (lahi ang Next dev singleton lock). Default
   // gihapon '.next' kung walay env — walay kausaban sa normal nga dev/build.
   distDir: process.env.NEXT_DIST_DIR || '.next',
   output: 'standalone',
+  // Keep heavy, non-runtime folders out of the standalone trace. Without this
+  // Next copies these multi-GB folders into .next/standalone, bloating it to
+  // 30GB+ and causing the installer to silently fail copying node_modules/next.
+  outputFileTracingExcludes: {
+    '*': [
+      'backups/**',
+      'vendor/**',
+      'mysql-bundle/**',
+      'dist/**',
+      'Output/**',
+      'temp_docs/**',
+      'scratch/**',
+      'playwright-report/**',
+      'tests/**',
+      'license-server/**',
+      '**/*.sql',
+      '**/*.log',
+      '**/*.pdf',
+    ],
+  },
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,

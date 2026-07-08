@@ -175,10 +175,14 @@ export async function DELETE(request: NextRequest) {
     await withTransaction(async (connection) => {
       // Delete user permissions first
       await connection.execute('DELETE FROM user_permissions WHERE user_uid = ?', [uid]);
-      
+
       // Delete user
       await connection.execute('DELETE FROM users WHERE uid = ?', [uid]);
     });
+
+    // Propagate the delete across machines via cloud sync (keyed by uid PK).
+    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
+    await recordTombstone('users', uid);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

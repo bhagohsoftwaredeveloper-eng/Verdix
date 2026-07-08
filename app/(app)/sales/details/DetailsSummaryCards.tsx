@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DollarSign, ShoppingCart, TrendingUp, CreditCard, Percent, Receipt, FileText, Banknote, Tag, Wallet } from 'lucide-react';
+import { ShoppingCart, TrendingUp, CreditCard, Percent, Receipt, FileText, Banknote, Tag, Wallet } from 'lucide-react';
 import { formatAmount } from './use-details-utils';
 
 type SummaryTotals = {
@@ -20,7 +20,7 @@ type SummaryTotals = {
 type Props = { totals: SummaryTotals; transactionCount: number };
 
 const CARDS = [
-  { key: 'revenue',         label: 'Total Revenue',      Icon: DollarSign,  color: 'text-green-600' },
+  { key: 'revenue',         label: 'Total Revenue',      Icon: () => <span className="text-green-600 font-bold text-base leading-none">₱</span>,  color: 'text-green-600' },
   { key: 'transactionCount',label: 'Transactions',        Icon: ShoppingCart, color: 'text-blue-600' },
   { key: 'grossProfit',     label: 'Gross Profit',        Icon: TrendingUp,  color: 'text-emerald-600' },
   { key: 'amountPaid',      label: 'Amount Paid',         Icon: CreditCard,  color: 'text-indigo-600' },

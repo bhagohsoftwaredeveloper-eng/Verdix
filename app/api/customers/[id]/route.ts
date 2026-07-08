@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../../lib/mysql';
+import { ensureCustomerCreditColumn } from '@/lib/ensure-customer-credit';
+import { recordTombstone } from '@/lib/services/sync-tombstones';
 
 // GET endpoint to fetch a single customer
 export async function GET(
@@ -7,6 +9,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureCustomerCreditColumn();
+
     const resolvedParams = await params;
     const customerId = resolvedParams.id;
 
@@ -26,12 +30,13 @@ export async function GET(
         c.billing_address,
         c.discount,
         c.credit_limit,
+        COALESCE(c.credit_balance, 0) AS credit_balance,
         c.price_level_id,
         c.created_at,
         c.updated_at,
         (SELECT COALESCE(SUM(total), 0) FROM sales_invoices WHERE customer_id = c.id AND LOWER(status) NOT IN ('voided', 'returned')) AS credit_sales,
         (SELECT COALESCE(SUM(amount_paid), 0) FROM sales_invoices WHERE customer_id = c.id AND LOWER(status) NOT IN ('voided', 'returned')) AS total_payment,
-        (SELECT COALESCE(SUM(total - COALESCE(amount_paid, 0)), 0) FROM sales_invoices WHERE customer_id = c.id AND status != 'Paid') AS balance
+        (SELECT COALESCE(SUM(total - COALESCE(amount_paid, 0)), 0) FROM sales_invoices WHERE customer_id = c.id AND status != 'Paid') - COALESCE(c.credit_balance, 0) AS balance
       FROM customers c
       LEFT JOIN customer_loyalty cl ON c.id = cl.customer_id
       WHERE c.id = ?
@@ -235,6 +240,10 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    // Record a tombstone so cloud sync removes this customer on Railway and on
+    // sibling terminals (otherwise the deleted row would resurrect on next pull).
+    await recordTombstone('customers', customerId);
 
     return NextResponse.json({
       success: true,

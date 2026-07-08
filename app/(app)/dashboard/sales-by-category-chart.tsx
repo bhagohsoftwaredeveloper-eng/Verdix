@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { getApiUrl } from "@/lib/api-config"
 import { TrendingUp, Loader2 } from "lucide-react"
-import { Pie, PieChart, Label, Cell } from "recharts"
+import { Pie, PieChart, Label, Cell, Bar, BarChart, XAxis, YAxis, LabelList } from "recharts"
 
 import {
   Card,
@@ -31,12 +31,16 @@ type CategoryData = {
 const chartConfig = {
   value: {
     label: "Sales",
+    color: "hsl(var(--primary))",
   },
   category: {
     label: "Category",
     color: "hsl(var(--chart-1))",
   },
 } satisfies ChartConfig
+
+// Above this many slices a pie becomes cluttered — switch to a ranked bar chart.
+const MAX_PIE_SLICES = 5
 
 export function SalesByCategoryChart({ data: initialData }: { data?: any[] }) {
   const [data, setData] = useState<CategoryData[]>(initialData || [])
@@ -70,6 +74,8 @@ export function SalesByCategoryChart({ data: initialData }: { data?: any[] }) {
   }, [initialData])
 
   const totalSales = data.reduce((acc, curr) => acc + curr.value, 0)
+  const useBarChart = data.length > MAX_PIE_SLICES
+  const rankedData = [...data].sort((a, b) => b.value - a.value)
 
   if (loading) {
      return (
@@ -97,64 +103,101 @@ export function SalesByCategoryChart({ data: initialData }: { data?: any[] }) {
         <CardDescription>Breakdown of sales revenue</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
-        <ChartContainer
-          config={chartConfig}
-          className="mx-auto aspect-square max-h-[250px]"
-        >
-          <PieChart>
-            <ChartTooltip
-              cursor={false}
-              content={<ChartTooltipContent hideLabel />}
-            />
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={60}
-              strokeWidth={5}
+        {useBarChart ? (
+          <ChartContainer config={chartConfig} className="h-[250px] w-full">
+            <BarChart
+              accessibilityLayer
+              data={rankedData}
+              layout="vertical"
+              margin={{ left: 12, right: 64 }}
             >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.fill} />
-              ))}
-              <Label
-                content={({ viewBox }) => {
-                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                    return (
-                      <text
-                        x={viewBox.cx}
-                        y={viewBox.cy}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        <tspan
+              <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} hide />
+              <XAxis dataKey="value" type="number" hide />
+              <ChartTooltip
+                cursor={false}
+                content={<ChartTooltipContent hideLabel />}
+              />
+              <Bar dataKey="value" layout="vertical" radius={4} fill="var(--color-value)">
+                <LabelList
+                  dataKey="name"
+                  position="insideLeft"
+                  offset={8}
+                  fill="white"
+                  fontSize={13}
+                  fontWeight="500"
+                />
+                <LabelList
+                  dataKey="value"
+                  position="right"
+                  offset={8}
+                  fill="hsl(var(--foreground))"
+                  fontSize={13}
+                  fontWeight="600"
+                  formatter={(value: number) => `₱${value.toLocaleString()}`}
+                />
+              </Bar>
+            </BarChart>
+          </ChartContainer>
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className="mx-auto aspect-square max-h-[250px]"
+          >
+            <PieChart>
+              <ChartTooltip
+                cursor={false}
+                content={<ChartTooltipContent hideLabel />}
+              />
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={60}
+                strokeWidth={5}
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+                <Label
+                  content={({ viewBox }) => {
+                    if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                      return (
+                        <text
                           x={viewBox.cx}
                           y={viewBox.cy}
-                          className="fill-foreground text-3xl font-bold"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
                         >
-                          {data.length}
-                        </tspan>
-                        <tspan
-                          x={viewBox.cx}
-                          y={(viewBox.cy || 0) + 24}
-                          className="fill-muted-foreground"
-                        >
-                          Categories
-                        </tspan>
-                      </text>
-                    )
-                  }
-                }}
-              />
-            </Pie>
-          </PieChart>
-        </ChartContainer>
+                          <tspan
+                            x={viewBox.cx}
+                            y={viewBox.cy}
+                            className="fill-foreground text-2xl font-bold"
+                          >
+                            ₱{totalSales.toLocaleString()}
+                          </tspan>
+                          <tspan
+                            x={viewBox.cx}
+                            y={(viewBox.cy || 0) + 24}
+                            className="fill-muted-foreground"
+                          >
+                            Total Sales
+                          </tspan>
+                        </text>
+                      )
+                    }
+                  }}
+                />
+              </Pie>
+            </PieChart>
+          </ChartContainer>
+        )}
       </CardContent>
       <CardFooter className="flex-col gap-2 text-sm">
         <div className="flex items-center gap-2 font-medium leading-none">
-          Total Sales: ₱{totalSales.toLocaleString()} <TrendingUp className="h-4 w-4" />
+          Across {data.length} {data.length === 1 ? 'category' : 'categories'} <TrendingUp className="h-4 w-4" />
         </div>
         <div className="leading-none text-muted-foreground">
-          Showing distribution across product categories
+          Showing distribution of sales revenue
         </div>
       </CardFooter>
     </Card>

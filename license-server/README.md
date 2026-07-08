@@ -1,7 +1,7 @@
-# Verdix License Management System (LMS)
+# Vendix License Management System (LMS)
 
 A standalone server + admin dashboard that stores customers, issues **Product
-Keys**, and signs **machine-locked license keys** for Verdix POS. It holds the
+Keys**, and signs **machine-locked license keys** for Vendix POS. It holds the
 **private key**; the POS ships only the **public key**, so licenses cannot be
 forged even if the POS is decompiled.
 

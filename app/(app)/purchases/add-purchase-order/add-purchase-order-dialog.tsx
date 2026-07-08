@@ -45,8 +45,8 @@ import {
 } from '@/components/ui/table';
 import { Loader2, Trash2, Search, ArrowRight, Wand2 } from 'lucide-react';
 
-import { ManagePaymentMethodsDialog } from '../../sales/ManagePaymentMethodsDialog';
-import { ManageWarehousesDialog } from '../../sales/ManageWarehousesDialog';
+import { ManagePaymentMethodsDialog } from '../../sales/manage-payment-methods/ManagePaymentMethodsDialog';
+import { ManageWarehousesDialog } from '../../sales/manage-warehouses/ManageWarehousesDialog';
 import { SupplierFormDialog } from '../../products/suppliers/ManageSuppliersDialog';
 
 import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purchase-utils';
@@ -118,7 +118,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                       </div>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger className="h-8 bg-white text-xs">
+                          <SelectTrigger className="h-8 bg-background text-xs">
                             <SelectValue placeholder="Select..." />
                           </SelectTrigger>
                         </FormControl>
@@ -144,7 +144,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                         <FormLabel className="text-xs font-semibold text-muted-foreground">Issue Date</FormLabel>
                       </div>
                       <FormControl>
-                        <Input type="date" className="h-8 bg-white text-xs" {...field} />
+                        <Input type="date" className="h-8 bg-background text-xs" {...field} />
                       </FormControl>
                       <FormMessage className="text-xs" />
                     </FormItem>
@@ -160,7 +160,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                         <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
                       </div>
                       <FormControl>
-                        <Input type="date" className="h-8 bg-white text-xs" {...field} />
+                        <Input type="date" className="h-8 bg-background text-xs" {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -179,7 +179,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                       </div>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger className="h-8 bg-white text-xs">
+                          <SelectTrigger className="h-8 bg-background text-xs">
                             <SelectValue placeholder="Select..." />
                           </SelectTrigger>
                         </FormControl>
@@ -205,7 +205,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                         <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
                       </div>
                       <FormControl>
-                        <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
+                        <Input className="h-8 bg-background text-xs" placeholder="Deliver to..." {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -222,7 +222,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                       </div>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger className="h-8 bg-white text-xs">
+                          <SelectTrigger className="h-8 bg-background text-xs">
                             <SelectValue placeholder="Type" />
                           </SelectTrigger>
                         </FormControl>
@@ -245,7 +245,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                         <FormLabel className="text-xs font-semibold text-muted-foreground">Ref #</FormLabel>
                       </div>
                       <FormControl>
-                        <Input className="h-8 bg-white text-xs" {...field} />
+                        <Input className="h-8 bg-background text-xs" {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -265,7 +265,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                       </div>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger className="h-8 bg-white text-xs">
+                          <SelectTrigger className="h-8 bg-background text-xs">
                             <SelectValue placeholder="Select..." />
                           </SelectTrigger>
                         </FormControl>
@@ -294,7 +294,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                         <Input
                           type="number"
                           step="0.01"
-                          className="h-8 bg-white text-xs"
+                          className="h-8 bg-background text-xs"
                           placeholder="0.00"
                           {...field}
                           value={field.value ?? ''}
@@ -314,7 +314,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                       </div>
                       <FormControl>
                         <Input
-                          className="h-8 bg-white text-xs"
+                          className="h-8 bg-background text-xs"
                           placeholder="Notes/Payment..."
                           {...field}
                           value={field.value || ''}
@@ -337,7 +337,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                 <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col relative">
                   <div className="overflow-y-auto flex-1 h-full relative">
                     <table className="w-full caption-bottom text-sm text-left border-collapse">
-                      <TableHeader className="sticky top-0 bg-white z-50 shadow-sm">
+                      <TableHeader className="sticky top-0 bg-background z-50 shadow-sm">
                         <TableRow className="hover:bg-transparent border-b">
                           <TableHead className="w-[15%] pl-4 h-10">Product</TableHead>
                           <TableHead className="w-[10%] text-center h-10">Remaining QTY</TableHead>
@@ -356,12 +356,12 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                       <TableBody>
                         {fields.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={11} className="h-[300px] text-center text-zinc-600 flex flex-col items-center justify-center border-none">
-                              <div className="bg-zinc-100 p-4 rounded-full mb-4">
-                                <Search className="h-8 w-8 text-zinc-400 opacity-50" />
+                            <TableCell colSpan={11} className="h-[300px] text-center text-muted-foreground flex flex-col items-center justify-center border-none">
+                              <div className="bg-muted p-4 rounded-full mb-4">
+                                <Search className="h-8 w-8 text-muted-foreground opacity-50" />
                               </div>
                               <p className="font-bold text-lg">No items added</p>
-                              <p className="text-xs text-zinc-500 font-medium">Scan barcode or search above to add products.</p>
+                              <p className="text-xs text-muted-foreground font-medium">Scan barcode or search above to add products.</p>
                             </TableCell>
                           </TableRow>
                         ) : (
@@ -391,16 +391,16 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                             const suggestedPrice = calculateSuggestedPrice(baseCost, markup, shippingPerUnit, defaultLevel);
 
                             return (
-                              <TableRow key={field.id} className="group bg-white hover:bg-muted/5">
+                              <TableRow key={field.id} className="group bg-background hover:bg-muted/5">
                                 <TableCell className="font-medium pl-4 py-2 border-r">
-                                  <span className="font-bold text-sm text-zinc-900">{field.productName}</span>
-                                  <div className="flex items-center gap-2 text-xs text-zinc-700">
+                                  <span className="font-bold text-sm text-foreground">{field.productName}</span>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <span className="font-mono font-bold">{field.barcode || '-'}</span>
                                   </div>
                                 </TableCell>
 
                                 <TableCell className="py-2 text-center border-r font-mono text-xs">
-                                  <span className={(field.currentStock || 0) <= 0 ? 'text-destructive font-black' : 'text-zinc-700 font-bold'}>
+                                  <span className={(field.currentStock || 0) <= 0 ? 'text-destructive font-black' : 'text-muted-foreground font-bold'}>
                                     {formatQuantity(field.currentStock || 0)}
                                   </span>
                                 </TableCell>
@@ -413,7 +413,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                                       render={({ field }) => (
                                         <Input
                                           type="number"
-                                          className="h-8 w-20 text-center bg-white"
+                                          className="h-8 w-20 text-center bg-background"
                                           {...field}
                                           onFocus={(e) => e.target.select()}
                                         />
@@ -428,7 +428,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                                     name={`items.${index}.cost`}
                                     render={({ field }) => (
                                       <CurrencyInput
-                                        className="h-8 w-24 text-right ml-auto border-transparent hover:border-input focus:border-input bg-white p-1 font-mono text-xs"
+                                        className="h-8 w-24 text-right ml-auto border-transparent hover:border-input focus:border-input bg-background p-1 font-mono text-xs"
                                         placeholder="0.00"
                                         {...field}
                                       />
@@ -442,7 +442,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                                     name={`items.${index}.sellingPrice`}
                                     render={({ field }) => (
                                       <CurrencyInput
-                                        className="h-8 w-24 text-right ml-auto border-transparent hover:border-input focus:border-input bg-white p-1 font-mono text-xs"
+                                        className="h-8 w-24 text-right ml-auto border-transparent hover:border-input focus:border-input bg-background p-1 font-mono text-xs"
                                         placeholder="0.00"
                                         {...field}
                                       />
@@ -488,7 +488,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                                         <FormItem className="space-y-0 text-center">
                                           <Select onValueChange={field.onChange} defaultValue={field.value || 'amount'}>
                                             <FormControl>
-                                              <SelectTrigger className="h-8 w-[40px] px-1 text-xs bg-white border-transparent hover:border-input focus:border-input">
+                                              <SelectTrigger className="h-8 w-[40px] px-1 text-xs bg-background border-transparent hover:border-input focus:border-input">
                                                 <SelectValue />
                                               </SelectTrigger>
                                             </FormControl>
@@ -509,7 +509,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                                             <Input
                                               type="number"
                                               step="0.01"
-                                              className="h-8 w-16 text-right border-transparent hover:border-input focus:border-input bg-white p-1 text-xs"
+                                              className="h-8 w-16 text-right border-transparent hover:border-input focus:border-input bg-background p-1 text-xs"
                                               {...field}
                                             />
                                           </FormControl>
@@ -543,14 +543,14 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                                     render={({ field }) => (
                                       <Input
                                         type="date"
-                                        className="h-8 w-full border-transparent hover:border-input focus:border-input bg-white text-xs p-1"
+                                        className="h-8 w-full border-transparent hover:border-input focus:border-input bg-background text-xs p-1"
                                         {...field}
                                       />
                                     )}
                                   />
                                 </TableCell>
 
-                                <TableCell className="text-right py-2 text-xs font-mono text-zinc-700 font-bold italic bg-zinc-50 border-r">
+                                <TableCell className="text-right py-2 text-xs font-mono text-muted-foreground font-bold italic bg-muted/50 border-r">
                                   ₱{landedCostPerUnit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </TableCell>
 
@@ -568,7 +568,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                                           type="button"
                                           variant="ghost"
                                           size="icon"
-                                          className={`h-8 w-8 transition-colors ${hasRop ? 'text-primary hover:text-primary/80' : 'text-zinc-400 hover:text-zinc-600'}`}
+                                          className={`h-8 w-8 transition-colors ${hasRop ? 'text-primary hover:text-primary/80' : 'text-muted-foreground hover:text-foreground'}`}
                                           title={hasRop ? `Suggest Order Qty: ${rop}` : 'No Reorder Point set'}
                                           onClick={(e) => {
                                             e.preventDefault();
@@ -599,7 +599,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-8 w-8 text-zinc-400 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                      className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                                       onClick={() => remove(index)}
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -617,27 +617,27 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
 
                 {/* SUMMARY BAR */}
                 <div className="bg-background border-t p-3 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
-                  <div className="text-xs text-zinc-700 font-medium">
-                    <span className="font-black text-zinc-900">{fields.length}</span> items added.
+                  <div className="text-xs text-muted-foreground font-medium">
+                    <span className="font-black text-foreground">{fields.length}</span> items added.
                   </div>
                   <div className="flex items-center gap-8">
                     <div className="flex flex-col items-end">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-800 font-bold">Subtotal</span>
-                      <span className="font-mono text-sm font-bold text-zinc-900">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Subtotal</span>
+                      <span className="font-mono text-sm font-bold text-foreground">
                         ₱{(total - (form.watch('shipping') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-800 font-bold">Shipping</span>
-                      <span className="font-mono text-sm font-bold text-zinc-900">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Shipping</span>
+                      <span className="font-mono text-sm font-bold text-foreground">
                         ₱{(form.watch('shipping') || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="text-[10px] uppercase tracking-wider text-zinc-800 font-bold">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                         VAT {activeTaxRate ? `(${activeTaxRate.rate}%)` : ''}
                       </span>
-                      <span className="font-mono text-sm font-bold text-zinc-900">
+                      <span className="font-mono text-sm font-bold text-foreground">
                         ₱{vatTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
@@ -653,7 +653,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
             </div>
 
             <DialogFooter className="p-4 bg-background border-t">
-              <div className="flex items-center text-xs text-zinc-700 font-bold mr-auto">
+              <div className="flex items-center text-xs text-muted-foreground font-bold mr-auto">
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-600" /> Ready to process
                 </span>

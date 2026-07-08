@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn, formatStockQuantity } from '@/lib/utils';
-import { ManageWarehousesDialog } from '../../sales/ManageWarehousesDialog';
+import { ManageWarehousesDialog } from '../../sales/manage-warehouses/ManageWarehousesDialog';
 
 import type { WarehouseStockItem } from './transfer-board-types';
 

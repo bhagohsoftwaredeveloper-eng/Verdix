@@ -1,0 +1,183 @@
+'use client';
+
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Globe, ShieldCheck, Loader2, ArrowUp, ArrowDown, ArrowUpDown, Cloud } from 'lucide-react';
+import type { ApiForm } from './use-external-api';
+import type { ExternalApi, AllowedMethods, ApiRole } from './external-api-types';
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editingApi: ExternalApi | null;
+  form: ApiForm;
+  setForm: React.Dispatch<React.SetStateAction<ApiForm>>;
+  isSaving: boolean;
+  onSave: () => void;
+}
+
+export function ApiFormDialog({ open, onOpenChange, editingApi, form, setForm, isSaving, onSave }: Props) {
+  const set = <K extends keyof ApiForm>(key: K, value: ApiForm[K]) => setForm(f => ({ ...f, [key]: value }));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{editingApi ? 'Edit API' : 'Add New API'}</DialogTitle>
+          <DialogDescription>
+            {editingApi ? `Update the configuration for "${editingApi.name}".` : 'Configure a new external API connection.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="api-name">Name <span className="text-destructive">*</span></Label>
+              <Input id="api-name" placeholder="e.g., Accounting System" value={form.name} onChange={e => set('name', e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>API Role</Label>
+              <Select value={form.role} onValueChange={v => set('role', v as ApiRole)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">
+                    <div className="flex items-center gap-2"><Globe className="h-4 w-4 text-muted-foreground" />General API</div>
+                  </SelectItem>
+                  <SelectItem value="cloud_sync">
+                    <div className="flex items-center gap-2"><Cloud className="h-4 w-4 text-sky-500" />Cloud Sync (Offline → Railway)</div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {form.role === 'cloud_sync' && (
+            <div className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 dark:border-sky-900 p-3 text-sm text-sky-800 dark:text-sky-300">
+              <strong>Cloud Sync mode:</strong> This entry will be used as the offline-first sync target.
+              Set the <strong>Endpoint</strong> to your Railway app URL (e.g. <code>https://xxx.up.railway.app</code>)
+              and use <strong>API Key</strong> auth with your shared <code>CLOUD_SYNC_API_KEY</code>.
+              Only one Cloud Sync entry should be enabled at a time.
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Allowed Methods <span className="text-destructive">*</span></Label>
+            <Select value={form.allowedMethods} onValueChange={v => set('allowedMethods', v as AllowedMethods)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="send_only"><div className="flex items-center gap-2"><ArrowUp className="h-4 w-4 text-blue-500" />Send Only (POST) — push data to this API</div></SelectItem>
+                <SelectItem value="receive_only"><div className="flex items-center gap-2"><ArrowDown className="h-4 w-4 text-purple-500" />Receive Only (GET) — pull data from this API</div></SelectItem>
+                <SelectItem value="full_access"><div className="flex items-center gap-2"><ArrowUpDown className="h-4 w-4 text-emerald-500" />Full Access (GET + POST + PUT)</div></SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="api-desc">Description (Optional)</Label>
+            <Textarea id="api-desc" placeholder="What is this API used for?" rows={2} value={form.description} onChange={e => set('description', e.target.value)} />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="api-endpoint">API Endpoint URL <span className="text-destructive">*</span></Label>
+            <div className="relative">
+              <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input id="api-endpoint" className="pl-9" placeholder="https://api.example.com" value={form.apiEndpoint} onChange={e => set('apiEndpoint', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Authentication Type</Label>
+              <Select value={form.authType} onValueChange={v => set('authType', v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="api_key">API Key (X-API-Key)</SelectItem>
+                  <SelectItem value="bearer_token">Bearer Token</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.authType === 'api_key' && (
+              <div className="space-y-2">
+                <Label htmlFor="api-key">API Key</Label>
+                <div className="relative">
+                  <ShieldCheck className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input id="api-key" type="password" className="pl-9" placeholder="Enter API key" value={form.apiKey} onChange={e => set('apiKey', e.target.value)} />
+                </div>
+              </div>
+            )}
+            {form.authType === 'bearer_token' && (
+              <div className="space-y-2">
+                <Label htmlFor="bearer-token">Bearer Token</Label>
+                <div className="relative">
+                  <ShieldCheck className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input id="bearer-token" type="password" className="pl-9" placeholder="Enter bearer token" value={form.bearerToken} onChange={e => set('bearerToken', e.target.value)} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Sync Mode</Label>
+              <Select value={form.syncMode} onValueChange={v => set('syncMode', v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="realtime">Real-time</SelectItem>
+                  <SelectItem value="batch">Batch</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>On Error Action</Label>
+              <Select value={form.onErrorAction} onValueChange={v => set('onErrorAction', v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="log_only">Log Error Only</SelectItem>
+                  <SelectItem value="retry">Automatic Retry</SelectItem>
+                  <SelectItem value="queue">Queue for Manual Sync</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="timeout">Timeout (ms)</Label>
+              <Input id="timeout" type="number" min={1000} step={1000} value={form.timeout} onChange={e => set('timeout', parseInt(e.target.value) || 30000)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="retry-attempts">Retry Attempts</Label>
+              <Input id="retry-attempts" type="number" min={0} max={10} value={form.retryAttempts} onChange={e => set('retryAttempts', parseInt(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="retry-delay">Retry Delay (ms)</Label>
+              <Input id="retry-delay" type="number" min={500} step={500} value={form.retryDelay} onChange={e => set('retryDelay', parseInt(e.target.value) || 2000)} />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-base">Enable this API</Label>
+              <p className="text-sm text-muted-foreground">Active APIs will be used for sync operations.</p>
+            </div>
+            <Switch checked={form.enabled} onCheckedChange={v => set('enabled', v)} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={onSave} disabled={isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {editingApi ? 'Save Changes' : 'Add API'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -4,6 +4,14 @@ import { calculatePurchaseCosts } from './purchase-utils';
 import { toSafeNumber } from './utils';
 import { findUltimateRoot, addFamilyStock } from './family-sync';
 
+function parseDueDays(paymentTerms: string | undefined | null): number {
+  if (!paymentTerms) return 0;
+  const lower = paymentTerms.toLowerCase();
+  if (lower.includes('cod') || lower.includes('cash')) return 0;
+  const match = paymentTerms.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
 export async function processPurchaseOrderCreation(body: any, userId: string = 'system') {
   const {
     id,
@@ -31,16 +39,29 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
   const formattedDate = new Date(date || new Date()).toISOString().slice(0, 19).replace('T', ' ');
 
   return await withTransaction(async (connection) => {
+    // Look up supplier payment terms to compute due_date
+    const [supplierRows]: any = await connection.query(
+      'SELECT payment_terms FROM suppliers WHERE id = ?',
+      [supplierId]
+    );
+    const paymentTerms = supplierRows?.[0]?.payment_terms as string | undefined;
+    const dueDays = parseDueDays(paymentTerms);
+    const baseDateObj = new Date(date || new Date());
+    const dueDateObj = new Date(baseDateObj);
+    dueDateObj.setDate(dueDateObj.getDate() + dueDays);
+    const formattedDueDate = dueDateObj.toISOString().slice(0, 10);
+
     // 1. Insert or Update order
-    // Using ON DUPLICATE KEY UPDATE to allow the same process to be used for initial (Pending) 
+    // Using ON DUPLICATE KEY UPDATE to allow the same process to be used for initial (Pending)
     // and final (Approved) states without duplicate entries.
     const insertOrderQuery = `
       INSERT INTO purchase_orders (
-        id, supplier_id, supplier_name, date, total, payment_method, status, 
+        id, supplier_id, supplier_name, date, due_date, total, payment_method, status,
         reference_number, shipping_fee, ordered_by, vat_amount, warehouse_id, warehouse_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE 
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
         status = VALUES(status),
+        due_date = COALESCE(due_date, VALUES(due_date)),
         updated_at = NOW()
     `;
 
@@ -49,6 +70,7 @@ export async function processPurchaseOrderCreation(body: any, userId: string = '
       supplierId,
       supplierName,
       formattedDate,
+      formattedDueDate,
       finalTotal,
       paymentMethod || '',
       (purchaseType === 'Receive' && (isInternalFinalization || status !== 'Pending')) ? 'Received' : (isInternalFinalization ? 'Approved' : (status || 'Pending')),

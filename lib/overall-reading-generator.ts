@@ -40,7 +40,7 @@ export class OverallReadingGenerator {
         enc.raw([0x1b, 0x61, 0x31]); // Native Center
         enc.line(businessSettings.businessName.toUpperCase());
         if (businessSettings.address) enc.line(businessSettings.address);
-        if (businessSettings.tin) enc.line(`VAT REG TIN: ${businessSettings.tin}`);
+        if (businessSettings.tin) enc.line(`${businessSettings.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: ${businessSettings.tin}`);
         if (terminalInfo.min) enc.line(`MIN: ${terminalInfo.min}`);
         if (terminalInfo.sn) enc.line(`S/N: ${terminalInfo.sn}`);
         enc.line(`Terminal: ${terminalId}`);

@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { ManageWarehousesDialog } from '../../ManageWarehousesDialog';
-import { ManagePaymentMethodsDialog } from '../../ManagePaymentMethodsDialog';
+import { ManageWarehousesDialog } from '../../manage-warehouses/ManageWarehousesDialog';
+import { ManagePaymentMethodsDialog } from '../../manage-payment-methods/ManagePaymentMethodsDialog';
 import { CustomerSelectionField } from '../customer-selection/customer-selection-field';
 import type { SalesInvoiceFormValues } from './add-invoice-types';
 import type { Customer, PaymentMethod, Warehouse } from '@/lib/types';
@@ -41,7 +41,7 @@ export function AddInvoiceFormHeader({
         <CustomerSelectionField
           control={form.control}
           customerList={customers}
-          className="bg-white h-8 text-xs"
+          className="bg-background h-8 text-xs"
           formItemClassName="space-y-1"
           onCustomerAdded={refetchCustomers}
           labelClassName="text-xs font-semibold text-muted-foreground"
@@ -55,7 +55,7 @@ export function AddInvoiceFormHeader({
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Address</FormLabel>
               </div>
               <FormControl>
-                <Input className="h-8 bg-white text-xs" placeholder="Deliver to..." {...field} />
+                <Input className="h-8 bg-background text-xs" placeholder="Deliver to..." {...field} />
               </FormControl>
             </FormItem>
           )}
@@ -73,7 +73,7 @@ export function AddInvoiceFormHeader({
                 <div className="flex items-center justify-between h-5">
                   <FormLabel className="text-xs font-semibold text-muted-foreground">Invoice Date</FormLabel>
                 </div>
-                <FormControl><Input type="date" className="h-8 bg-white text-xs" {...field} /></FormControl>
+                <FormControl><Input type="date" className="h-8 bg-background text-xs" {...field} /></FormControl>
               </FormItem>
             )}
           />
@@ -85,7 +85,7 @@ export function AddInvoiceFormHeader({
                 <div className="flex items-center justify-between h-5">
                   <FormLabel className="text-xs font-semibold text-muted-foreground">Due Date</FormLabel>
                 </div>
-                <FormControl><Input type="date" className="h-8 bg-white text-xs" {...field} /></FormControl>
+                <FormControl><Input type="date" className="h-8 bg-background text-xs" {...field} /></FormControl>
               </FormItem>
             )}
           />
@@ -103,7 +103,7 @@ export function AddInvoiceFormHeader({
               </div>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
-                  <SelectTrigger className="h-8 bg-white text-xs"><SelectValue placeholder="Select warehouse" /></SelectTrigger>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Select warehouse" /></SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   {warehouses.map(w => <SelectItem key={w.id} value={w.id.toString()} className="text-xs">{w.name}</SelectItem>)}
@@ -130,7 +130,7 @@ export function AddInvoiceFormHeader({
               </div>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
-                  <SelectTrigger className="h-8 bg-white text-xs"><SelectValue placeholder="Select method" /></SelectTrigger>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Select method" /></SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   {paymentMethods.map(m => <SelectItem key={m.id} value={m.name} className="text-xs">{m.name}</SelectItem>)}
@@ -148,7 +148,7 @@ export function AddInvoiceFormHeader({
               <div className="flex items-center justify-between h-5">
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Shipping</FormLabel>
               </div>
-              <FormControl><Input type="number" step="0.01" className="h-8 bg-white text-xs" {...field} /></FormControl>
+              <FormControl><Input type="number" step="0.01" className="h-8 bg-background text-xs" {...field} /></FormControl>
             </FormItem>
           )}
         />
@@ -168,7 +168,7 @@ export function AddInvoiceFormHeader({
               </div>
               <FormControl>
                 <Input
-                  className="h-8 bg-white text-xs"
+                  className="h-8 bg-background text-xs"
                   placeholder={isReferenceRequired ? 'Reference required...' : 'Optional reference...'}
                   {...field}
                   value={field.value || ''}
@@ -187,7 +187,7 @@ export function AddInvoiceFormHeader({
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Notes</FormLabel>
               </div>
               <FormControl>
-                <Input className="h-8 bg-white text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
+                <Input className="h-8 bg-background text-xs" placeholder="Brief notes..." {...field} value={field.value || ''} />
               </FormControl>
             </FormItem>
           )}

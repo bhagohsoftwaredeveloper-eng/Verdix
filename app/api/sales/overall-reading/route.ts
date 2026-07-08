@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
     const cashVariance = safeParseFloat(shiftResult.total_cash_difference);
 
     // ── 9. Business settings & terminal info ─────────────────────────────────
-    const [settingsResult] = await query(`SELECT business_name, address, tin, contact_number FROM pos_settings LIMIT 1`) as any[];
+    const [settingsResult] = await query(`SELECT business_name, address, tin, contact_number, vat_registration FROM pos_settings LIMIT 1`) as any[];
 
     let headerTerminalInfo = { min: '', sn: '', name: '' };
     if (!isAllTerminals) {
@@ -353,7 +353,8 @@ export async function GET(request: NextRequest) {
             businessName:  settingsResult?.business_name || 'Business Name',
             address:       settingsResult?.address || '',
             tin:           settingsResult?.tin || '',
-            contactNumber: settingsResult?.contact_number || ''
+            contactNumber: settingsResult?.contact_number || '',
+            vatRegistration: settingsResult?.vat_registration || 'VAT'
         },
         terminalInfo: headerTerminalInfo
     };

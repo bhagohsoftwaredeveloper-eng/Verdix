@@ -23,6 +23,12 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# Next 16's standalone output tracing drops runtime modules for this project
+# (Turbopack app-route runtime, node-cron, next internals like ./cpu-profile),
+# crashing routes/scheduler at runtime. Overlay the full node_modules so every
+# runtime dependency is present regardless of what tracing missed.
+COPY --from=builder /app/node_modules ./node_modules
+
 # Expose port
 EXPOSE 3000
 

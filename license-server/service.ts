@@ -15,6 +15,18 @@ import {
 } from '../lib/licensing/core';
 import { getPrivateKeyPem } from './keys';
 import { query, withTransaction } from './db';
+import {
+  getCachedLicense,
+  getCachedLicenseByKey,
+  getCachedActivation,
+  countCachedActiveActivations,
+  isMachineActivatedInCache,
+  cachePutLicense,
+  cacheUpdateLicenseStatus,
+  cachePutActivation,
+  cacheReleaseActivation,
+  CachedLicense,
+} from './cache';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface Customer {
@@ -151,7 +163,9 @@ export async function createLicense(input: {
   );
 
   await log(id, null, 'license.created', `Product key ${productKey} issued`);
-  return getLicense(id) as Promise<License>;
+  const created = await getLicense(id) as License;
+  if (created) cachePutLicense(created as unknown as CachedLicense);
+  return created;
 }
 
 function normalizeLicenseRow(row: any): License {
@@ -176,15 +190,25 @@ function safeJson(s: string): string[] {
 }
 
 export async function getLicense(id: string): Promise<License | null> {
-  const rows = await query<any[]>(`SELECT * FROM licenses WHERE id = ?`, [id]);
-  return rows[0] ? normalizeLicenseRow(rows[0]) : null;
+  try {
+    const rows = await query<any[]>(`SELECT * FROM licenses WHERE id = ?`, [id]);
+    return rows[0] ? normalizeLicenseRow(rows[0]) : null;
+  } catch {
+    const cached = getCachedLicense(id);
+    return cached ? normalizeLicenseRow(cached) : null;
+  }
 }
 
 export async function getLicenseByProductKey(productKey: string): Promise<License | null> {
-  const rows = await query<any[]>(`SELECT * FROM licenses WHERE product_key = ?`, [
-    productKey.trim().toUpperCase(),
-  ]);
-  return rows[0] ? normalizeLicenseRow(rows[0]) : null;
+  try {
+    const rows = await query<any[]>(`SELECT * FROM licenses WHERE product_key = ?`, [
+      productKey.trim().toUpperCase(),
+    ]);
+    return rows[0] ? normalizeLicenseRow(rows[0]) : null;
+  } catch {
+    const cached = getCachedLicenseByKey(productKey);
+    return cached ? normalizeLicenseRow(cached) : null;
+  }
 }
 
 export async function listLicenses(): Promise<any[]> {
@@ -200,7 +224,49 @@ export async function listLicenses(): Promise<any[]> {
 
 export async function setLicenseStatus(id: string, status: LicenseStatus): Promise<void> {
   await query(`UPDATE licenses SET status = ? WHERE id = ?`, [status, id]);
+  cacheUpdateLicenseStatus(id, status);
   await log(id, null, 'license.' + status, `Status set to ${status}`);
+}
+
+export async function addLicenseFeature(licenseId: string, feature: string): Promise<void> {
+  const license = await getLicense(licenseId);
+  if (!license) throw new Error('License not found: ' + licenseId);
+  const features = Array.from(new Set([...(license.features || []), feature]));
+  await query(`UPDATE licenses SET features = ? WHERE id = ?`, [JSON.stringify(features), licenseId]);
+  cacheUpdateLicenseStatus(licenseId, license.status); // keep cache warm; status unchanged
+  await log(licenseId, null, 'license.feature.added', feature);
+}
+
+// ── Cloud Config (per-license multi-tenant DB storage) ────────────────────────
+export interface CloudConfig {
+  host: string;
+  port: number;
+  name: string;
+  user: string;
+  password: string;
+}
+
+export async function upsertCloudConfig(licenseId: string, cfg: CloudConfig): Promise<void> {
+  const { encryptDbPassword } = await import('./cloud-config-crypto');
+  await query(
+    `INSERT INTO cloud_configs (license_id, db_host, db_port, db_name, db_user, db_password_enc)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       db_host = VALUES(db_host), db_port = VALUES(db_port), db_name = VALUES(db_name),
+       db_user = VALUES(db_user), db_password_enc = VALUES(db_password_enc)`,
+    [licenseId, cfg.host, cfg.port, cfg.name, cfg.user, encryptDbPassword(cfg.password)]
+  );
+  await log(licenseId, null, 'cloud.config.saved', `Cloud DB ${cfg.name}`);
+}
+
+export async function getCloudConfig(licenseId: string): Promise<CloudConfig | null> {
+  const rows = await query<any[]>(`SELECT * FROM cloud_configs WHERE license_id = ?`, [licenseId]);
+  const r = rows[0];
+  if (!r) return null;
+  const { decryptDbPassword } = await import('./cloud-config-crypto');
+  const password = decryptDbPassword(r.db_password_enc);
+  if (password === null) return null;
+  return { host: r.db_host, port: Number(r.db_port), name: r.db_name, user: r.db_user, password };
 }
 
 // ── Signing (machine binding) ────────────────────────────────────────────────
@@ -234,6 +300,7 @@ export async function issueSignedLicense(
   const signedLicense = signLicense(payload, getPrivateKeyPem());
 
   if (opts.record !== false) {
+    const activationId = crypto.randomUUID();
     await query(
       `INSERT INTO activations
          (id, license_id, machine_id, machine_label, signed_license, app_version, ip_address, last_seen_at)
@@ -246,7 +313,7 @@ export async function issueSignedLicense(
          status         = 'active',
          last_seen_at   = NOW()`,
       [
-        crypto.randomUUID(),
+        activationId,
         license.id,
         machineId,
         opts.machineLabel || null,
@@ -255,6 +322,18 @@ export async function issueSignedLicense(
         opts.ip || null,
       ]
     );
+    cachePutActivation({
+      id: activationId,
+      license_id: license.id,
+      machine_id: machineId,
+      machine_label: opts.machineLabel || null,
+      signed_license: signedLicense,
+      app_version: opts.appVersion || null,
+      ip_address: opts.ip || null,
+      status: 'active',
+      activated_at: new Date().toISOString(),
+      last_seen_at: new Date().toISOString(),
+    });
     await log(license.id, machineId, 'license.signed', 'Machine-bound license issued');
   }
 
@@ -262,19 +341,27 @@ export async function issueSignedLicense(
 }
 
 export async function countActiveActivations(licenseId: string): Promise<number> {
-  const rows = await query<any[]>(
-    `SELECT COUNT(*) AS n FROM activations WHERE license_id = ? AND status = 'active'`,
-    [licenseId]
-  );
-  return Number(rows[0]?.n || 0);
+  try {
+    const rows = await query<any[]>(
+      `SELECT COUNT(*) AS n FROM activations WHERE license_id = ? AND status = 'active'`,
+      [licenseId]
+    );
+    return Number(rows[0]?.n || 0);
+  } catch {
+    return countCachedActiveActivations(licenseId);
+  }
 }
 
 export async function machineAlreadyActivated(licenseId: string, machineId: string): Promise<boolean> {
-  const rows = await query<any[]>(
-    `SELECT id FROM activations WHERE license_id = ? AND machine_id = ? AND status = 'active'`,
-    [licenseId, normalizeMachineId(machineId)]
-  );
-  return rows.length > 0;
+  try {
+    const rows = await query<any[]>(
+      `SELECT id FROM activations WHERE license_id = ? AND machine_id = ? AND status = 'active'`,
+      [licenseId, normalizeMachineId(machineId)]
+    );
+    return rows.length > 0;
+  } catch {
+    return isMachineActivatedInCache(licenseId, normalizeMachineId(machineId));
+  }
 }
 
 export async function listActivations(licenseId?: string): Promise<any[]> {
@@ -300,11 +387,15 @@ export async function listActivations(licenseId?: string): Promise<any[]> {
 }
 
 export async function getActivation(licenseId: string, machineId: string): Promise<any | null> {
-  const rows = await query<any[]>(
-    `SELECT * FROM activations WHERE license_id = ? AND machine_id = ?`,
-    [licenseId, normalizeMachineId(machineId)]
-  );
-  return rows[0] || null;
+  try {
+    const rows = await query<any[]>(
+      `SELECT * FROM activations WHERE license_id = ? AND machine_id = ?`,
+      [licenseId, normalizeMachineId(machineId)]
+    );
+    return rows[0] || null;
+  } catch {
+    return getCachedActivation(licenseId, normalizeMachineId(machineId));
+  }
 }
 
 export async function touchActivation(
@@ -372,6 +463,7 @@ export async function releaseActivation(activationId: string): Promise<void> {
     activationId,
   ]);
   await query(`UPDATE activations SET status = 'released' WHERE id = ?`, [activationId]);
+  cacheReleaseActivation(activationId);
   if (rows[0]) await log(rows[0].license_id, rows[0].machine_id, 'activation.released', 'Seat released');
 }
 
@@ -392,6 +484,95 @@ export async function log(
   } catch {
     /* logging must never break the main flow */
   }
+}
+
+// ── System configuration (backup / restore / reset) ──────────────────────────
+export async function exportBackup(): Promise<object> {
+  const customers = await query<any[]>(`SELECT * FROM customers ORDER BY created_at ASC`);
+  const licenses = await query<any[]>(`SELECT * FROM licenses ORDER BY created_at ASC`);
+  const activations = await query<any[]>(`SELECT * FROM activations ORDER BY activated_at ASC`);
+  const logs = await query<any[]>(`SELECT * FROM activation_logs ORDER BY created_at ASC`);
+  return {
+    version: 1,
+    exported_at: new Date().toISOString(),
+    tables: { customers, licenses, activations, activation_logs: logs },
+  };
+}
+
+export async function resetAllData(): Promise<void> {
+  await query(`SET FOREIGN_KEY_CHECKS = 0`);
+  try {
+    await query(`TRUNCATE TABLE activation_logs`);
+    await query(`TRUNCATE TABLE activations`);
+    await query(`TRUNCATE TABLE licenses`);
+    await query(`TRUNCATE TABLE customers`);
+  } finally {
+    await query(`SET FOREIGN_KEY_CHECKS = 1`);
+  }
+}
+
+export async function importBackup(
+  data: any
+): Promise<{ customers: number; licenses: number; activations: number }> {
+  if (!data?.tables) throw new Error('Invalid backup format — missing "tables" key.');
+  const {
+    customers = [],
+    licenses = [],
+    activations = [],
+    activation_logs: logs = [],
+  } = data.tables;
+
+  await query(`SET FOREIGN_KEY_CHECKS = 0`);
+  try {
+    await query(`TRUNCATE TABLE activation_logs`);
+    await query(`TRUNCATE TABLE activations`);
+    await query(`TRUNCATE TABLE licenses`);
+    await query(`TRUNCATE TABLE customers`);
+
+    for (const c of customers) {
+      await query(
+        `INSERT INTO customers (id, business_name, contact_name, email, phone, address, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [c.id, c.business_name, c.contact_name ?? null, c.email ?? null, c.phone ?? null,
+         c.address ?? null, c.notes ?? null, c.created_at]
+      );
+    }
+    for (const l of licenses) {
+      await query(
+        `INSERT INTO licenses
+           (id, customer_id, product_key, edition, type, expires_at, max_activations,
+            features, status, notes, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [l.id, l.customer_id, l.product_key, l.edition, l.type, l.expires_at ?? null,
+         l.max_activations,
+         typeof l.features === 'string' ? l.features : JSON.stringify(l.features ?? []),
+         l.status, l.notes ?? null, l.created_by ?? null, l.created_at]
+      );
+    }
+    for (const a of activations) {
+      await query(
+        `INSERT INTO activations
+           (id, license_id, machine_id, machine_label, signed_license, app_version,
+            ip_address, status, activated_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [a.id, a.license_id, a.machine_id, a.machine_label ?? null, a.signed_license,
+         a.app_version ?? null, a.ip_address ?? null, a.status, a.activated_at,
+         a.last_seen_at ?? null]
+      );
+    }
+    for (const lg of logs) {
+      await query(
+        `INSERT INTO activation_logs (license_id, machine_id, action, detail, ip_address, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [lg.license_id ?? null, lg.machine_id ?? null, lg.action, lg.detail ?? null,
+         lg.ip_address ?? null, lg.created_at]
+      );
+    }
+  } finally {
+    await query(`SET FOREIGN_KEY_CHECKS = 1`);
+  }
+
+  return { customers: customers.length, licenses: licenses.length, activations: activations.length };
 }
 
 export async function dashboardStats(): Promise<any> {

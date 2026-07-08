@@ -23,9 +23,9 @@ export function Logo({ className, enableLink = true, variant = 'default', size, 
       isIcon ? "rounded-xl p-1" : "",
       className
     )}>
-      <Image 
+      <Image
         src="/verdix_logo.png"
-        alt="verdix"
+        alt="VENDIX"
         width={currentSize} 
         height={isIcon ? currentSize : 80} 
         className={cn("object-contain", isIcon ? "p-0.5" : "p-1")}

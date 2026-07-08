@@ -1,20 +1,25 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../../lib/mysql';
+import { ensureCustomerCreditColumn } from '@/lib/ensure-customer-credit';
 
 export async function GET(request: NextRequest) {
   try {
+    await ensureCustomerCreditColumn();
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
 
+    // Net balance = outstanding invoices minus any available account credit.
     let sql = `
       SELECT
         c.id,
         c.name,
         c.contact_number AS contactNumber,
         c.payment_terms AS paymentTerms,
+        COALESCE(c.credit_balance, 0) AS creditBalance,
         COUNT(si.id) AS invoiceCount,
-        SUM(si.total - COALESCE(si.amount_paid, 0)) AS balance
+        SUM(si.total - COALESCE(si.amount_paid, 0)) - COALESCE(c.credit_balance, 0) AS balance
       FROM customers c
       JOIN sales_invoices si ON c.id = si.customer_id
       WHERE si.status != 'Paid' AND COALESCE(si.amount_paid, 0) < si.total
@@ -28,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
 
     sql += `
-      GROUP BY c.id, c.name, c.contact_number, c.payment_terms
+      GROUP BY c.id, c.name, c.contact_number, c.payment_terms, c.credit_balance
       ORDER BY balance DESC
     `;
 

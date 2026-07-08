@@ -155,7 +155,7 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
             <div style={{ fontSize: '10px' }}>Operated by: {businessSettings.operatedBy}</div>
         )}
         <div style={{ fontSize: '10px' }}>{businessSettings?.address || 'Paniqui, Tarlac'}</div>
-        <div style={{ fontSize: '10px' }}>VAT REG TIN: {businessSettings?.tin || '123-456-789-00000'}</div>
+        <div style={{ fontSize: '10px' }}>{businessSettings?.vatRegistration === 'NON_VAT' ? 'NON-VAT REG TIN' : 'VAT REG TIN'}: {businessSettings?.tin || '123-456-789-00000'}</div>
         <div style={{ fontSize: '10px' }}>MIN: {data.terminalMin || businessSettings?.minNumber || '1234567890'}</div>
         <div style={{ fontSize: '10px' }}>S/N: {data.terminalSerialNumber || businessSettings?.serialNumber || '0987654321-11'}</div>
         {data.terminalName && <div style={{ fontSize: '10px' }}>Terminal: {data.terminalName}</div>}

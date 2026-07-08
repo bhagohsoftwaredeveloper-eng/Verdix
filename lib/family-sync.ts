@@ -260,7 +260,9 @@ export async function syncFamilyStockDuringTransfer(
   const quantityInRootUnits = quantity / soldItemFactor;
 
   // 5. Sync each family member
-  for (const sourceMember of sourceFamily) {
+  // Rows come from `SELECT *`, so they carry all product columns even though
+  // getAllDescendants types them narrowly — treat as full product rows here.
+  for (const sourceMember of sourceFamily as any[]) {
     const memberFactor = await getFactorToRoot(sourceMember.id);
     const memberQtyChange = quantityInRootUnits * memberFactor;
     
