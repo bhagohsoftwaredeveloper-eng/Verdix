@@ -30,7 +30,8 @@ export function filterPullColumns(tableName: string, cols: string[]): string[] {
  */
 export const PULL_EXCLUDE_TABLES: Set<string> = new Set([
   // stock-authoritative
-  'stock_movements',
+  // NOTE: stock_movements is intentionally PULLABLE — its deltas drive
+  // reconcileStockDeltas() (see lib/services/stock-reconcile.ts).
   'stock_adjustments',
   'stock_counts',
   'stock_count_items',
