@@ -45,6 +45,7 @@ const EXCLUDE_TABLES = new Set<string>([
   'pos_terminals',          // per-terminal OR/X/Z counters
   'pos_settings',           // local terminal settings
   'stock_movement_applied', // local-only: which movements have hit this node's stock
+  'sync_conflicts',         // local-only conflict log
 ]);
 
 // ---------------------------------------------------------------------------

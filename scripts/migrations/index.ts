@@ -91,6 +91,7 @@ import './090_create_sync_tombstones_table';
 import './091_add_si_prefix_to_transaction_references';
 import './092_create_stock_movement_applied_table';
 import './093_backfill_stock_movement_applied';
+import './094_create_sync_conflicts_table';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';
