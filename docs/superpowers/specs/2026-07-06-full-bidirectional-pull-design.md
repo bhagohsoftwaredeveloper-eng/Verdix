@@ -51,10 +51,13 @@ Added to the zero-import module `lib/services/cloud-sync-columns.ts` as
 `PULL_EXCLUDE_TABLES.has(table)`).
 - **Stock-authoritative (→ Sub-project 3):** `stock_movements`, `stock_adjustments`,
   `stock_counts`, `stock_count_items`, `inventory_transfers`,
-  `inventory_transfer_items`, `inventory_batches`, `product_shelves`.
-- **Per-terminal fiscal (→ Sub-project 5):** `shifts`, `cash_transfers`, and any
-  X/Z-reading tables. The plan verifies exact table names against the live schema
-  (via information_schema) and includes only those that actually exist.
+  `inventory_transfer_items`, `inventory_batches`, `product_shelves`, `bad_orders`.
+- **Per-terminal fiscal (→ Sub-project 5):** `shifts`, `cash_transfers`. (X/Z
+  readings are per-terminal counters on `pos_terminals`, already in
+  `EXCLUDE_TABLES` — no separate reading table exists.)
+
+The exclude set is a plain membership filter, so a name that does not exist in a
+given schema is simply never matched (harmless).
 
 ### ③ Column exclusion (unchanged)
 `products.stock` stays branch-owned via `filterPullColumns` / `PULL_EXCLUDE_COLUMNS`.
