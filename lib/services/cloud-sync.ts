@@ -20,7 +20,7 @@
  */
 
 import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '../mysql';
-import { filterPullColumns } from './cloud-sync-columns';
+import { filterPullColumns, isPullExcluded } from './cloud-sync-columns';
 import { buildKeysetSelect, buildTombstoneSelect } from './cloud-sync-cursor';
 import { hasCloudSyncFeature } from '../licensing/cloud-config';
 
@@ -87,25 +87,15 @@ async function discoverPushTables(): Promise<SyncTable[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Pull tables — Railway → local master data (curated; these are the records
-// that may be edited centrally and need to flow back down to each machine).
-// timeCol null = full reference pull (small lookup tables).
+// Pull tables — symmetric with push: auto-discover every table, then drop the
+// ones that are push-only (branch/terminal-authoritative). New tables sync both
+// ways automatically. products.stock is still dropped at column level by
+// filterPullColumns; per-DB counters/config are already in EXCLUDE_TABLES.
 // ---------------------------------------------------------------------------
-const PULL_CONFIG: Record<string, { idCol: string; timeCol: string | null }> = {
-  products:         { idCol: 'id',  timeCol: 'updated_at' },
-  categories:       { idCol: 'id',  timeCol: 'updated_at' },
-  brands:           { idCol: 'id',  timeCol: 'updated_at' },
-  warehouses:       { idCol: 'id',  timeCol: 'updated_at' },
-  payment_methods:  { idCol: 'id',  timeCol: 'updated_at' },
-  price_levels:     { idCol: 'id',  timeCol: null },
-  users:            { idCol: 'uid', timeCol: 'creation_time' },
-  user_permissions: { idCol: 'id',  timeCol: null },
-  // Centrally-managed approval process: edits flow down to every terminal.
-  // Saving a workflow delete+inserts rows with fresh ids, so created_at always
-  // advances — incremental pull picks up new steps; removed steps arrive as
-  // tombstones (see app/api/approvals/workflows POST).
-  approval_workflows: { idCol: 'id', timeCol: 'created_at' },
-};
+async function discoverPullTables(): Promise<SyncTable[]> {
+  const tables = await discoverPushTables();
+  return tables.filter(t => !isPullExcluded(t.tableName));
+}
 
 // ---------------------------------------------------------------------------
 // Tracker tables (local) — record sync progress per table
@@ -519,7 +509,8 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
     console.error('[CloudSync] Tombstone pull error:', (err as Error).message);
   }
 
-  for (const [tableName, cfg] of Object.entries(PULL_CONFIG)) {
+  for (const cfg of await discoverPullTables()) {
+    const { tableName } = cfg;
     try {
       // Only sync columns present in BOTH cloud and local (handles schema drift)
       const cloudCols = await getTableColumns(cloudQuery, 'cloud', tableName);
