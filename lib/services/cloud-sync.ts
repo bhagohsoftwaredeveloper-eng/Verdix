@@ -23,6 +23,7 @@ import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '..
 import { filterPullColumns, isPullExcluded } from './cloud-sync-columns';
 import { buildKeysetSelect, buildTombstoneSelect } from './cloud-sync-cursor';
 import { hasCloudSyncFeature } from '../licensing/cloud-config';
+import { reconcileStockDeltas } from './stock-reconcile';
 
 const BATCH = 100;
 
@@ -567,6 +568,14 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
   if (totalPulled > 0) {
     console.log(`[CloudSync] Pull complete: ${totalPulled} records applied`);
   }
+
+  // Apply pulled movement deltas to local stock (idempotent; see stock-reconcile.ts).
+  try {
+    await reconcileStockDeltas();
+  } catch (err) {
+    console.error('[CloudSync] Stock reconcile error:', (err as Error).message);
+  }
+
   return { pulled: totalPulled };
 }
 
