@@ -116,6 +116,30 @@ Local sale on desktop → recordStockMovement → local stock already adjusted +
   double-apply; drive concurrent oversell → stock goes negative and is surfaced by
   the `stock < 0` query.
 
+## Fresh-node bootstrap precondition (important)
+
+Reconciliation reconstructs stock as *(baseline + sum of applied movement deltas)*.
+A product's INITIAL stock is written directly to `products.stock` and is NOT
+recorded as a `stock_movements` row. Therefore a brand-new node must NOT be
+bootstrapped by "run migrations then replay pulled movement history" — pulled
+products arrive with `stock` column-excluded (default 0), so replaying only the
+movement deltas would systematically undercount every product's initial stock-in.
+
+A fresh/second node must instead be seeded from an authoritative stock snapshot
+(e.g. a DB clone, or a full products **push** which carries absolute
+`products.stock`), and have all movements present at seed time marked applied
+(migration 093 does this for whatever movements exist when it runs). Only genuinely
+NEW foreign movements arriving after seeding should be reconciled. This is latent in
+the current single-store deployment (terminals share one local DB; the cloud is
+populated by push with absolute stock) but MUST be observed before provisioning a
+from-empty node. A turnkey bootstrap flow is out of scope here.
+
+Note: `stock_movements.product_id` has a hard FK to `products` (ON DELETE CASCADE),
+so a movement can never be applied for an absent product — the pull inserts the
+product first (or the movement batch retries). The reconciler is also claim-first
+(`INSERT IGNORE` gates the `UPDATE`), so overlapping reconcile runs cannot
+double-apply a delta.
+
 ## Out of Scope (later sub-projects / deferred)
 
 FIFO batch/COGS cross-node merge (stays per-node); conflict policy beyond
