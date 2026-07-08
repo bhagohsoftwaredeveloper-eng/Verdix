@@ -32,18 +32,30 @@ export async function reconcileStockDeltas(
     // delta applied-but-unmarked (which would double-apply) or marked-but-unapplied.
     await withTransaction(async (conn) => {
       for (const r of rows) {
-        await conn.query(
-          `UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [Number(r.quantityChange || 0), r.productId],
-        );
-        await conn.query(
+        // Claim the movement first: INSERT IGNORE on the PK is the atomic gate. If a
+        // concurrent (or prior) run already claimed/applied it, affectedRows is 0 and
+        // we skip — this prevents a double-apply when two reconcile runs overlap.
+        const [claim]: any = await conn.query(
           `INSERT IGNORE INTO stock_movement_applied (movement_id) VALUES (?)`,
           [r.id],
         );
+        if (!claim || claim.affectedRows !== 1) continue; // already applied/claimed
+
+        const [upd]: any = await conn.query(
+          `UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [Number(r.quantityChange || 0), r.productId],
+        );
+
+        if (!upd || upd.affectedRows === 0) {
+          // Product not present locally yet — release the claim so this delta is
+          // retried on a later cycle once the product row arrives (never lost).
+          await conn.query(`DELETE FROM stock_movement_applied WHERE movement_id = ?`, [r.id]);
+          continue;
+        }
+        applied++;
       }
     });
 
-    applied += rows.length;
     if (rows.length < batchSize) break;
   }
 
