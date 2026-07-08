@@ -7,26 +7,16 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Supplier } from '@/lib/types';
 
-import { SupplierFormDialog } from './supplier-form-dialog';
-
 export function SupplierRow({
   supplier,
-  onUpdateSupplier,
+  onEdit,
   onDeleteSupplier,
 }: {
   supplier: Supplier;
-  onUpdateSupplier: (data: any) => void;
+  onEdit: (supplier: Supplier) => void;
   onDeleteSupplier: () => void;
 }) {
   const { toast } = useToast();
-
-  const handleUpdate = async (data: any) => {
-    onUpdateSupplier(data);
-    toast({
-      title: 'Supplier Updated',
-      description: `Supplier "${data.name}" has been successfully updated.`,
-    });
-  };
 
   const handleDelete = () => {
     onDeleteSupplier();
@@ -46,11 +36,9 @@ export function SupplierRow({
       <TableCell>{supplier.paymentTerms || '-'}</TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-2">
-          <SupplierFormDialog supplier={supplier} onSave={handleUpdate}>
-            <Button variant="outline" size="sm">
-              <Pencil className="mr-2 h-4 w-4" /> Edit
-            </Button>
-          </SupplierFormDialog>
+          <Button variant="outline" size="sm" onClick={() => onEdit(supplier)}>
+            <Pencil className="mr-2 h-4 w-4" /> Edit
+          </Button>
           <Button variant="destructive" size="sm" onClick={handleDelete}>
             <Trash2 className="mr-2 h-4 w-4" /> Delete
           </Button>

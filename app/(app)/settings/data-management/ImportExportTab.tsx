@@ -1,51 +1,68 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CsvImportExportSection } from './CsvImportExportSection';
+import { Button } from '@/components/ui/button';
+import { Download, Upload, RefreshCw } from 'lucide-react';
+import { ImportWizard } from '@/components/import-wizard/ImportWizard';
+import type { EntityKey } from '@/lib/import/entity-schemas';
 
 interface Props {
-  exporting: boolean; importFile: File | null; importing: boolean;
-  onExport: () => void; onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void; onImport: () => void;
-  customerExporting: boolean; customerImportFile: File | null; customerImporting: boolean;
-  onCustomerExport: () => void; onCustomerFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void; onCustomerImport: () => void;
-  supplierExporting: boolean; supplierImportFile: File | null; supplierImporting: boolean;
-  onSupplierExport: () => void; onSupplierFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void; onSupplierImport: () => void;
+  exporting: boolean; onExport: () => void;
+  customerExporting: boolean; onCustomerExport: () => void;
+  supplierExporting: boolean; onSupplierExport: () => void;
 }
 
+const ENTITIES: { key: EntityKey; title: string; exportDesc: string }[] = [
+  { key: 'products', title: 'Products', exportDesc: 'Download your entire product list as a CSV file.' },
+  { key: 'customers', title: 'Customers', exportDesc: 'Download your entire customer list as a CSV file.' },
+  { key: 'suppliers', title: 'Suppliers', exportDesc: 'Download your entire supplier list as a CSV file.' },
+];
+
 export function ImportExportTab({
-  exporting, importFile, importing, onExport, onFileChange, onImport,
-  customerExporting, customerImportFile, customerImporting, onCustomerExport, onCustomerFileChange, onCustomerImport,
-  supplierExporting, supplierImportFile, supplierImporting, onSupplierExport, onSupplierFileChange, onSupplierImport,
+  exporting, onExport, customerExporting, onCustomerExport, supplierExporting, onSupplierExport,
 }: Props) {
+  const [wizard, setWizard] = useState<EntityKey | null>(null);
+  const exportState: Record<EntityKey, { loading: boolean; onExport: () => void }> = {
+    products: { loading: exporting, onExport },
+    customers: { loading: customerExporting, onExport: onCustomerExport },
+    suppliers: { loading: supplierExporting, onExport: onSupplierExport },
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Import & Export</CardTitle>
-        <CardDescription>Manage your data in bulk using CSV files.</CardDescription>
+        <CardDescription>Manage your data in bulk using CSV or Excel files.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <CsvImportExportSection
-          title="Products"
-          exportDescription="Download your entire product list as a CSV file."
-          importDescription="Add new products via CSV upload. Duplicate SKUs will be skipped."
-          exportLoading={exporting} onExport={onExport}
-          importFile={importFile} importLoading={importing} onFileChange={onFileChange} onImport={onImport}
-        />
-        <CsvImportExportSection
-          title="Customers"
-          exportDescription="Download your entire customer list as a CSV file."
-          importDescription="Add/Update customers via CSV. Use `id` as unique identifier."
-          exportLoading={customerExporting} onExport={onCustomerExport}
-          importFile={customerImportFile} importLoading={customerImporting} onFileChange={onCustomerFileChange} onImport={onCustomerImport}
-        />
-        <CsvImportExportSection
-          title="Suppliers"
-          exportDescription="Download your entire supplier list as a CSV file."
-          importDescription="Add/Update suppliers via CSV. Use `name` as unique identifier."
-          exportLoading={supplierExporting} onExport={onSupplierExport}
-          importFile={supplierImportFile} importLoading={supplierImporting} onFileChange={onSupplierFileChange} onImport={onSupplierImport}
-        />
+        {ENTITIES.map(({ key, title, exportDesc }) => (
+          <div key={key} className="space-y-4">
+            <h3 className="text-lg font-medium border-b pb-2">{title}</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="p-4 border rounded-lg space-y-3">
+                <div className="font-medium flex items-center text-blue-600"><Download className="mr-2 h-4 w-4" /> Export {title}</div>
+                <div className="text-sm text-muted-foreground">{exportDesc}</div>
+                <Button variant="outline" className="w-full" onClick={exportState[key].onExport} disabled={exportState[key].loading}>
+                  {exportState[key].loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Export CSV
+                </Button>
+              </div>
+              <div className="p-4 border rounded-lg space-y-3">
+                <div className="font-medium flex items-center text-green-600"><Upload className="mr-2 h-4 w-4" /> Import {title}</div>
+                <div className="text-sm text-muted-foreground">Guided import from CSV or Excel with column mapping and preview.</div>
+                <Button className="w-full" variant="secondary" onClick={() => setWizard(key)}>
+                  <Upload className="mr-2 h-4 w-4" /> Import from file
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
       </CardContent>
+
+      {wizard && (
+        <ImportWizard entity={wizard} open={!!wizard} onOpenChange={(v) => !v && setWizard(null)} />
+      )}
     </Card>
   );
 }

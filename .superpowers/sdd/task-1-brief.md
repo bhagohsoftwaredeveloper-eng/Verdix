@@ -1,365 +1,138 @@
-### Task 1: `InlineEditableSelect` component + wire Brand in Add Product
+### Task 1: Sentinel constant + hosted-aware verifier
 
 **Files:**
-- Create: `app/(app)/products/components/inline-editable-select.tsx`
-- Modify: `app/(app)/products/add-product/tabs/basic-info-tab.tsx` (Brand `FormField`, lines ~42-92)
+- Modify: `lib/licensing/core.ts` (add `HOSTED_MACHINE_ID`)
+- Modify: `lib/licensing/verify.ts` (env-key precedence, `isMachineMatch`, use it)
+- Create: `tests/unit/license-machine-match.test.ts`
+- Modify: `tests/unit/run.ts`
 
 **Interfaces:**
-- Produces: `InlineEditableSelect<T>` with props:
-  ```ts
-  interface InlineEditableSelectProps<T> {
-    items: T[];
-    isLoading: boolean;
-    value: string;
-    onChange: (value: string) => void;
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    placeholder: string;
-    addLabel: string;
-    emptyLabel: string;
-    loadingLabel?: string;
-    getId: (item: T) => string;
-    getValue: (item: T) => string;        // form value: name, or id for Supplier
-    getOptionLabel: (item: T) => string;  // text shown in row + trigger
-    getName: (item: T) => string;         // editable text in rename input
-    onAdd: (name: string) => Promise<string | undefined>;          // returns value to auto-select
-    onRename: (id: string, name: string) => Promise<string | undefined>; // returns new value for this item
-  }
-  ```
-  `onAdd`/`onRename` return the value the component should select (or `undefined` to leave selection unchanged). On a successful rename of the currently-selected item, the component re-selects the returned value.
+- Produces:
+  - `HOSTED_MACHINE_ID: string` (value `'HOSTED'`) exported from `lib/licensing/core.ts`.
+  - `isMachineMatch(payloadMachineId: string, actualMachineId: string): boolean` exported from `lib/licensing/verify.ts` — true when the normalized ids are equal OR when the payload id is the normalized sentinel.
+  - `readLicenseKey()` now returns `process.env.LICENSE_KEY` (trimmed) when set, else the file contents (unchanged signature: `(): string | null`).
 
-- [ ] **Step 1: Create the component**
+- [ ] **Step 1: Write the failing test**
 
-Create `app/(app)/products/components/inline-editable-select.tsx`:
+Create `tests/unit/license-machine-match.test.ts`:
 
-```tsx
-'use client';
+```ts
+import assert from 'node:assert/strict';
+import { isMachineMatch, readLicenseKey } from '../../lib/licensing/verify';
 
-import { useState } from 'react';
-import { PlusCircle, Pencil, Check, X, Loader2 } from 'lucide-react';
+// (a) exact hardware match (and normalization: dashes/case ignored)
+assert.equal(isMachineMatch('ABCD-1234', 'ABCD-1234'), true, 'exact match');
+assert.equal(isMachineMatch('abcd1234', 'ABCD-1234'), true, 'normalized match');
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { FormControl } from '@/components/ui/form';
+// (b) sentinel skips the hardware check entirely
+assert.equal(isMachineMatch('HOSTED', 'ANY-OTHER-MACHINE'), true, 'sentinel bypasses hardware');
+assert.equal(isMachineMatch('hosted', 'whatever'), true, 'sentinel normalized');
+
+// (c) genuine mismatch (not sentinel) is rejected
+assert.equal(isMachineMatch('MACHINE-A', 'MACHINE-B'), false, 'mismatch rejected');
+
+// readLicenseKey: env var takes precedence over the file
+process.env.LICENSE_KEY = 'VRDX1.env-token';
+assert.equal(readLicenseKey(), 'VRDX1.env-token', 'env LICENSE_KEY wins over file');
+delete process.env.LICENSE_KEY;
+
+console.log('license-machine-match: all assertions passed');
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx tsx tests/unit/license-machine-match.test.ts`
+Expected: FAIL — `isMachineMatch` is not exported yet.
+
+- [ ] **Step 3: Add the sentinel constant to core.ts**
+
+In `lib/licensing/core.ts`, right after the `PRODUCT_ID` export (line ~24), add:
+
+```ts
+/** Sentinel machineId marking a web/hosted license (no hardware binding). */
+export const HOSTED_MACHINE_ID = 'HOSTED';
+```
+
+- [ ] **Step 4: Update verify.ts — import, env precedence, helper, and use**
+
+In `lib/licensing/verify.ts`:
+
+(a) Add `HOSTED_MACHINE_ID` to the existing `./core` import:
+
+```ts
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  verifyLicenseSignature,
+  normalizeMachineId,
+  PRODUCT_ID,
+  HOSTED_MACHINE_ID,
+  LicensePayload,
+} from './core';
+```
 
-export interface InlineEditableSelectProps<T> {
-  items: T[];
-  isLoading: boolean;
-  value: string;
-  onChange: (value: string) => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  placeholder: string;
-  addLabel: string;
-  emptyLabel: string;
-  loadingLabel?: string;
-  getId: (item: T) => string;
-  getValue: (item: T) => string;
-  getOptionLabel: (item: T) => string;
-  getName: (item: T) => string;
-  onAdd: (name: string) => Promise<string | undefined>;
-  onRename: (id: string, name: string) => Promise<string | undefined>;
-}
+(b) Replace the body of `readLicenseKey()` so the env var wins:
 
-export function InlineEditableSelect<T>({
-  items,
-  isLoading,
-  value,
-  onChange,
-  open,
-  onOpenChange,
-  placeholder,
-  addLabel,
-  emptyLabel,
-  loadingLabel = 'Loading...',
-  getId,
-  getValue,
-  getOptionLabel,
-  getName,
-  onAdd,
-  onRename,
-}: InlineEditableSelectProps<T>) {
-  const [adding, setAdding] = useState(false);
-  const [addDraft, setAddDraft] = useState('');
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState('');
-  const [renameOldValue, setRenameOldValue] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
-
-  const resetAdd = () => {
-    setAdding(false);
-    setAddDraft('');
-  };
-  const resetRename = () => {
-    setRenamingId(null);
-    setRenameDraft('');
-    setRenameOldValue('');
-  };
-
-  const commitAdd = async () => {
-    const name = addDraft.trim();
-    if (!name || isSaving) return;
-    setIsSaving(true);
-    try {
-      const newValue = await onAdd(name);
-      if (newValue !== undefined) onChange(newValue);
-      resetAdd();
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const startRename = (item: T) => {
-    setRenamingId(getId(item));
-    setRenameDraft(getName(item));
-    setRenameOldValue(getValue(item));
-    setAdding(false);
-  };
-
-  const commitRename = async () => {
-    const name = renameDraft.trim();
-    if (!name || renamingId === null || isSaving) return;
-    setIsSaving(true);
-    try {
-      const newValue = await onRename(renamingId, name);
-      if (newValue !== undefined && renameOldValue === value) onChange(newValue);
-      resetRename();
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <Select
-      open={open}
-      onOpenChange={onOpenChange}
-      onValueChange={onChange}
-      value={value}
-    >
-      <FormControl>
-        <SelectTrigger>
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-      </FormControl>
-      <SelectContent>
-        {isLoading ? (
-          <SelectItem value="loading" disabled>{loadingLabel}</SelectItem>
-        ) : items.length > 0 ? (
-          items.map((item) => {
-            const id = getId(item);
-            if (renamingId === id) {
-              return (
-                <div
-                  key={id}
-                  className="flex items-center gap-1 px-2 py-1"
-                  onPointerDown={stop}
-                >
-                  <Input
-                    autoFocus
-                    value={renameDraft}
-                    onChange={(e) => setRenameDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        commitRename();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        resetRename();
-                      }
-                    }}
-                    className="h-8"
-                  />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 shrink-0 text-green-600"
-                    disabled={isSaving || !renameDraft.trim()}
-                    onClick={(e) => { e.preventDefault(); commitRename(); }}
-                  >
-                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 shrink-0 text-muted-foreground"
-                    onClick={(e) => { e.preventDefault(); resetRename(); }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              );
-            }
-            return (
-              <div key={id} className="relative">
-                <SelectItem value={getValue(item)} className="pr-9">
-                  {getOptionLabel(item)}
-                </SelectItem>
-                <button
-                  type="button"
-                  aria-label={`Rename ${getName(item)}`}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); startRename(item); }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            );
-          })
-        ) : (
-          <SelectItem value="none" disabled>{emptyLabel}</SelectItem>
-        )}
-
-        <div className="border-t mt-1 pt-1 px-1">
-          {adding ? (
-            <div className="flex items-center gap-1 px-1 py-1" onPointerDown={stop}>
-              <Input
-                autoFocus
-                value={addDraft}
-                placeholder="New name..."
-                onChange={(e) => setAddDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    commitAdd();
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    resetAdd();
-                  }
-                }}
-                className="h-8"
-              />
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 shrink-0 text-green-600"
-                disabled={isSaving || !addDraft.trim()}
-                onClick={(e) => { e.preventDefault(); commitAdd(); }}
-              >
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 shrink-0 text-muted-foreground"
-                onClick={(e) => { e.preventDefault(); resetAdd(); }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full justify-start h-8 px-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setAdding(true);
-              }}
-            >
-              <PlusCircle className="mr-2 h-4 w-4" />
-              {addLabel}
-            </Button>
-          )}
-        </div>
-      </SelectContent>
-    </Select>
-  );
+```ts
+export function readLicenseKey(): string | null {
+  const envKey = process.env.LICENSE_KEY?.trim();
+  if (envKey) return envKey;
+  try {
+    const p = getLicenseFilePath();
+    if (!fs.existsSync(p)) return null;
+    const raw = fs.readFileSync(p, 'utf8').trim();
+    return raw || null;
+  } catch {
+    return null;
+  }
 }
 ```
 
-- [ ] **Step 2: Wire Brand in Add Product basic-info tab**
+(c) Add the pure helper (place it just above `evaluateLicenseKey`):
 
-In `app/(app)/products/add-product/tabs/basic-info-tab.tsx`:
-
-Add imports near the top (keep existing imports):
-```tsx
-import { InlineEditableSelect } from '../../components/inline-editable-select';
-import { addBrand, updateBrand } from '../../actions';
+```ts
+/**
+ * True when the license's machineId matches this machine, OR when it is the
+ * HOSTED sentinel (web/hosted licenses carry no hardware binding). The sentinel
+ * only ever appears in a vendor-signed payload, so this cannot be forged.
+ */
+export function isMachineMatch(payloadMachineId: string, actualMachineId: string): boolean {
+  const pid = normalizeMachineId(payloadMachineId);
+  if (pid === normalizeMachineId(HOSTED_MACHINE_ID)) return true;
+  return pid === normalizeMachineId(actualMachineId);
+}
 ```
 
-Add `refreshBrands` to the destructured context:
-```tsx
-  const {
-    form,
-    brands, isLoadingBrands,
-    categories, isLoadingCategories,
-    subcategories, isLoadingSubcategories,
-    selects, setSelects,
-    setDialogs,
-    refreshBrands,
-    generateSku,
-    generateBarcode,
-  } = useAddProductFormContext();
+(d) In `evaluateLicenseKey`, replace the inline machine comparison:
+
+```ts
+  if (normalizeMachineId(p.machineId) !== normalizeMachineId(machineId)) {
 ```
 
-Replace the Brand `FormField`'s `<Select>...</Select>` block (the whole thing currently spanning from `<Select open={selects.brands}` to its closing `</Select>`) with:
-```tsx
-            <InlineEditableSelect
-              items={brands}
-              isLoading={isLoadingBrands}
-              value={field.value}
-              onChange={field.onChange}
-              open={selects.brands}
-              onOpenChange={(o) => setSelects((p) => ({ ...p, brands: o }))}
-              placeholder="Select a brand"
-              addLabel="Add Brand"
-              emptyLabel="No brands found"
-              getId={(b: Brand) => b.id}
-              getValue={(b: Brand) => b.name}
-              getOptionLabel={(b: Brand) => b.name}
-              getName={(b: Brand) => b.name}
-              onAdd={async (name) => {
-                const r = await addBrand(name, 0);
-                if (r.success) { await refreshBrands(); return name; }
-                return undefined;
-              }}
-              onRename={async (id, name) => {
-                const existing = brands.find((b: Brand) => b.id === id);
-                const r = await updateBrand(id, name, existing?.markupPercentage);
-                if (r.success) { await refreshBrands(); return name; }
-                return undefined;
-              }}
-            />
+with:
+
+```ts
+  if (!isMachineMatch(p.machineId, machineId)) {
 ```
 
-- [ ] **Step 3: Verify types and lint pass**
+(leave the `return { status: 'wrong-machine', ... }` block that follows unchanged).
 
-Run: `npm run typecheck`
-Expected: PASS (no errors).
+- [ ] **Step 5: Register the test**
 
-Run: `npm run lint`
-Expected: PASS (no new errors in the two changed files).
+In `tests/unit/run.ts`, add:
 
-- [ ] **Step 4: Manual verification**
+```ts
+import './license-machine-match.test';
+```
 
-Start dev (`npm run dev`), open Products → Add Product → Basic Info → Brand dropdown:
-- Click "Add Brand" → an inline input row with ✓/✗ replaces the button (no dialog opens).
-- Type a name, press Enter → row collapses, new brand appears in the list and is selected.
-- Click the pencil next to an existing brand → row becomes an editable input with ✓/✗; rename it and press Enter → list shows the new name.
-- Press ✗ / Escape on either row → cancels without saving.
+- [ ] **Step 6: Run test to verify it passes**
 
-- [ ] **Step 5: Commit**
+Run: `npx tsx tests/unit/license-machine-match.test.ts`
+Expected: PASS — prints `license-machine-match: all assertions passed`.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add "app/(app)/products/components/inline-editable-select.tsx" "app/(app)/products/add-product/tabs/basic-info-tab.tsx"
-git commit -m "feat(products): inline add/rename for Brand select via InlineEditableSelect"
+git add lib/licensing/core.ts lib/licensing/verify.ts tests/unit/license-machine-match.test.ts tests/unit/run.ts
+git commit -m "feat: hosted-license sentinel + env LICENSE_KEY precedence in verifier"
 ```
 
 ---

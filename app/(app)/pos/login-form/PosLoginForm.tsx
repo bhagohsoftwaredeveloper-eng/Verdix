@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Loader2, Eye, EyeOff, Settings, User, Lock, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import { ConnectionSettingsDialog } from '../connection-settings/ConnectionSettingsDialog';
@@ -112,10 +113,17 @@ export function PosLoginForm({ onLoginSuccess }: PosLoginFormProps) {
             </Button>
           </form>
 
-          <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-            Secure cashier access
-          </p>
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+              Secure cashier access
+            </p>
+            {process.env.NEXT_PUBLIC_APP_VERSION && (
+              <Badge variant="secondary" className="text-xs font-medium text-muted-foreground">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </Badge>
+            )}
+          </div>
         </CardContent>
       </Card>
 

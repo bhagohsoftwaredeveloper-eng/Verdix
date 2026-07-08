@@ -5,7 +5,8 @@ import {
   saveLicenseKey,
   removeLicenseKey,
 } from '@/lib/licensing/verify';
-import { getMachineId } from '@/lib/licensing/machine';
+import { saveCloudConfig, removeCloudConfig, cloudConfigMatches } from '@/lib/licensing/cloud-config';
+import { resetCloudPool } from '@/lib/mysql';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +23,6 @@ export async function POST() {
       return NextResponse.json({ success: true, status: 'unlicensed', changed: false });
     }
 
-    const machineId = getMachineId();
-
     let resp: Response;
     try {
       resp = await fetch(LICENSE_SERVER_URL + '/api/validate', {
@@ -31,7 +30,7 @@ export async function POST() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           licenseId: payload.lid,
-          machineId,
+          machineId: payload.machineId,
           appVersion: process.env.npm_package_version || '1.0',
         }),
         signal: AbortSignal.timeout(10000),
@@ -55,12 +54,18 @@ export async function POST() {
         const info = evaluateLicenseKey(json.signedLicense);
         if (info.status === 'active' || info.status === 'expired') saveLicenseKey(json.signedLicense);
       }
+      if (json.cloudConfig && !cloudConfigMatches(json.cloudConfig)) {
+        saveCloudConfig(json.cloudConfig);
+        resetCloudPool();
+      }
       return NextResponse.json({ success: true, status: 'active', changed: false });
     }
 
     // Explicit vendor actions → enforce a lock by clearing the local license.
     if (status === 'revoked' || status === 'suspended' || status === 'released') {
       removeLicenseKey();
+      removeCloudConfig();
+      resetCloudPool();
       return NextResponse.json({ success: true, status, changed: true });
     }
 

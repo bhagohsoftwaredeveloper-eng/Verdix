@@ -194,10 +194,18 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-          
+
+          {process.env.NEXT_PUBLIC_APP_VERSION && (
+            <div className="flex justify-center">
+              <Badge variant="secondary" className="text-xs font-medium text-muted-foreground">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </Badge>
+            </div>
+          )}
+
         </div>
       </div>
-      
+
       {/* Right Side - Abstract/Branded Background */}
       <div className="hidden bg-muted lg:block relative overflow-hidden">
          <div className="absolute inset-0 bg-slate-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black z-0" />

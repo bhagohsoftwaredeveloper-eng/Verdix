@@ -23,6 +23,9 @@ export const LICENSE_FORMAT_VERSION = 1;
 /** Product identifier embedded in every license. The POS rejects mismatches. */
 export const PRODUCT_ID = 'verdix-pos';
 
+/** Sentinel machineId marking a web/hosted license (no hardware binding). */
+export const HOSTED_MACHINE_ID = 'HOSTED';
+
 /** Human-friendly prefix so a key is recognizable at a glance. */
 export const KEY_PREFIX = 'VRDX1';
 

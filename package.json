@@ -1,12 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "nextn",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "private": true,
   "main": "main.js",
   "scripts": {
     "dev": "next dev --turbopack -p 3000",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -20,6 +20,7 @@
     "license:seed-admin": "tsx license-server/seed-admin.ts",
     "license:reset-admin": "tsx license-server/reset-admin.ts",
     "license:server": "tsx license-server/server.ts",
+    "cloud:provision": "tsx license-server/provision-cloud.ts",
     "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000/pos && node start-electron.js --route=/pos --role=\"POS Terminal\"\"",
     "electron-only": "node start-electron.js --route=/pos --role=\"POS Terminal\"",
     "electron-admin-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000/dashboard && node start-electron.js --route=/dashboard --role=\"Admin Dashboard\"\"",
@@ -95,6 +96,7 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^13.0.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {

@@ -20,6 +20,7 @@ import {
   LicensePayload,
   PRODUCT_ID,
   LICENSE_FORMAT_VERSION,
+  HOSTED_MACHINE_ID,
 } from '../lib/licensing/core';
 import { getPrivateKeyPem } from './keys';
 
@@ -47,8 +48,8 @@ function fail(msg: string): never {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const machineRaw = args.machine?.trim();
-  if (!machineRaw) fail('Missing --machine "MACHINE-ID" (from the POS activation screen).');
+  const machineRaw = args.web ? HOSTED_MACHINE_ID : args.machine?.trim();
+  if (!machineRaw) fail('Missing --machine "MACHINE-ID" (from the POS activation screen), or use --web for a hosted/web license.');
 
   if (args.adhoc) {
     // Sign directly without touching the database.

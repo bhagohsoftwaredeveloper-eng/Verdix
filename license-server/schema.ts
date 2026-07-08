@@ -94,6 +94,21 @@ const TABLES: { name: string; sql: string }[] = [
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `,
   },
+  {
+    name: 'cloud_configs',
+    sql: `
+      CREATE TABLE IF NOT EXISTS cloud_configs (
+        license_id       VARCHAR(36) PRIMARY KEY,
+        db_host          VARCHAR(255) NOT NULL,
+        db_port          INT NOT NULL DEFAULT 3306,
+        db_name          VARCHAR(128) NOT NULL,
+        db_user          VARCHAR(128) NOT NULL,
+        db_password_enc  TEXT NOT NULL,
+        updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_cloudcfg_license FOREIGN KEY (license_id) REFERENCES licenses(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {

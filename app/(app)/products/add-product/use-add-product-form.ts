@@ -242,22 +242,13 @@ export function useAddProductForm({
                       form.setValue(`priceLevels.${index}.price`, parseFloat(levelPrice.toFixed(2)));
                   }
               });
-
-              // Also update priceLevelFields for UI consistency
-              priceLevelFields.forEach((field, index) => {
-                  const levelDef = priceLevels.find((l: any) => l.id === field.levelId);
-                  if (levelDef) {
-                      const levelPrice = calculateSuggestedPrice(watchedCost, markup, 0, levelDef);
-                      form.setValue(`priceLevels.${index}.price`, parseFloat(levelPrice.toFixed(2)));
-                  }
-              });
           }
       }
     } else {
       setMarkupSource(null);
     }
 
-  }, [watchedCost, watchedCategoryName, watchedSubcategoryName, watchedBrandName, watchedSupplierId, categories, subcategories, brands, suppliers, form, priceLevels, priceLevelFields, systemSettings]);
+  }, [watchedCost, watchedCategoryName, watchedSubcategoryName, watchedBrandName, watchedSupplierId, categories, subcategories, brands, suppliers, form, priceLevels, systemSettings]);
 
   // Auto-update main price when a price level is selected
   useEffect(() => {
