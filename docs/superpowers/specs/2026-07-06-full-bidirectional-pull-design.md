@@ -90,9 +90,19 @@ Excluded tables (stock_*, inventory_*, shifts, …) are pushed up but never pull
 
 ## Error Handling
 
-- **FK ordering:** a child row pulled before its parent exists locally → the insert
-  is best-effort; the row is retried on the next pull cycle once the parent arrives
-  (existing pull-loop behavior — one bad row never stalls the batch).
+- **FK ordering:** each table's rows are upserted as ONE `INSERT … ON DUPLICATE KEY
+  UPDATE` batch (≤500 rows). A child row whose parent is not yet local fails the
+  WHOLE batch, and that table's cursor does not advance — so the batch is re-pulled
+  next cycle. Because auto-discovery iterates tables alphabetically (not by
+  dependency), children can precede parents within a cycle; steady state self-heals
+  in ~2 cycles, and an initial backfill of historical data may churn child-table
+  batches for several cycles. This is acceptable ONLY when both parent and child are
+  pullable — a child whose parent is intentionally pull-excluded would fail forever,
+  so such children are themselves added to `PULL_EXCLUDE_TABLES` (e.g.
+  `bad_order_items`, whose parent `bad_orders` is excluded). Note the pull catch
+  block only silences `"doesn't exist"`/`"Unknown column"`, so a genuine `foreign
+  key` error would be logged each cycle — another reason orphaned children must be
+  excluded.
 - **Schema drift:** only columns present in BOTH cloud and local are pulled
   (existing `getTableColumns` intersection).
 - **Watermark/cursor:** per-table `last_pull_at`/`last_pull_id` (existing keyset
