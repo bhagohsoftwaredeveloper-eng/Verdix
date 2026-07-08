@@ -49,6 +49,13 @@ applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`. Add it to the cloud-sync
 `EXCLUDE_TABLES` so it is never synced (it is per-node bookkeeping). It records
 which movements have already been applied to THIS node's `products.stock`.
 
+**Backfill (critical):** a second migration marks EVERY pre-existing
+`stock_movements` row as applied (`INSERT IGNORE … SELECT id FROM stock_movements`).
+Historical movements are already reflected in the current `products.stock`, so
+without this backfill the very first `reconcileStockDeltas()` would re-apply the
+entire movement history and double-count stock. (Caught during integration
+verification; fixed as migration 093.)
+
 ### ③ `recordStockMovement` marks locally-created movements applied
 `lib/stock-movements.ts` `recordStockMovement` is the single choke point for every
 locally-created movement. Within the same connection/transaction as the insert,
