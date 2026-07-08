@@ -106,6 +106,27 @@ Converge: both = T2 (the newest edit); the discarded T1 is recorded.
   `sync_conflicts` row exists naming the correct winner. A same-value/older incoming
   row does not overwrite a newer local row.
 
+## Known limitations & pre-production requirements (from final review)
+
+- **Same-second edits (TIMESTAMP 1-second resolution).** `updated_at` is
+  `TIMESTAMP` (1s). Two writers editing the SAME row within the same wall-clock
+  second produce equal `updated_at` with different data. The strict-`>` guard then
+  keeps each side's own value → the row can diverge, and because the detector skips
+  equal timestamps this divergence is NOT logged to `sync_conflicts`. Rare for a
+  backoffice (same row, two devices, same second). The proper fix is `TIMESTAMP(3)`
+  (millisecond) on synced `updated_at` columns — deferred (broad multi-table
+  migration). Documented as a known limitation.
+- **Cross-node timezone alignment (REQUIRED before production).** Each DB generates
+  `updated_at` from its own session `CURRENT_TIMESTAMP`; mysql2 (`timezone:'local'`)
+  round-trips the literal digits. If the Railway/cloud MySQL session `time_zone`
+  differs from the desktop's (e.g. UTC vs Asia/Manila), contemporaneous edits carry
+  a fixed offset and true-LWW is biased toward the node whose clock reads "later".
+  **Before production, set both the cloud and every local MySQL to the SAME session
+  time zone** (verify `SELECT @@session.time_zone`). This is now load-bearing for
+  overwrite decisions, not just watermarks.
+- Empty/NULL incoming `updated_at` is normalized to NULL in the `sync_conflicts`
+  insert (avoids a spurious DATETIME error).
+
 ## Out of Scope (deferred)
 
 Field-level merge; central/pushed conflict log (local-only here); a conflict-review

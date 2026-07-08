@@ -537,7 +537,7 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
         try {
           await query(
             `INSERT INTO sync_conflicts (table_name, record_id, local_updated_at, cloud_updated_at, resolution) VALUES (?, ?, ?, ?, ?)`,
-            [tableName, cf.recordId, cf.localUpdatedAt, cf.cloudUpdatedAt, cf.resolution],
+            [tableName, cf.recordId, cf.localUpdatedAt || null, cf.cloudUpdatedAt || null, cf.resolution],
           );
         } catch (logErr) {
           console.error(`[CloudSync] Conflict log failed ${tableName}/${cf.recordId}:`, (logErr as Error).message);
