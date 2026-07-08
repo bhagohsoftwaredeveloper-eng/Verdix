@@ -42,6 +42,7 @@ const EXCLUDE_TABLES = new Set<string>([
   'transaction_references', // global receipt/reference counters
   'pos_terminals',          // per-terminal OR/X/Z counters
   'pos_settings',           // local terminal settings
+  'stock_movement_applied', // local-only: which movements have hit this node's stock
 ]);
 
 // ---------------------------------------------------------------------------
