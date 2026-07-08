@@ -22,6 +22,8 @@
 import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '../mysql';
 import { filterPullColumns, isPullExcluded } from './cloud-sync-columns';
 import { buildKeysetSelect, buildTombstoneSelect } from './cloud-sync-cursor';
+import { buildBulkUpsert } from './cloud-sync-upsert';
+import { detectConflicts } from './cloud-sync-conflicts';
 import { hasCloudSyncFeature } from '../licensing/cloud-config';
 import { reconcileStockDeltas } from './stock-reconcile';
 
@@ -44,6 +46,7 @@ const EXCLUDE_TABLES = new Set<string>([
   'pos_terminals',          // per-terminal OR/X/Z counters
   'pos_settings',           // local terminal settings
   'stock_movement_applied', // local-only: which movements have hit this node's stock
+  'sync_conflicts',         // local-only conflict log
 ]);
 
 // ---------------------------------------------------------------------------
@@ -265,48 +268,6 @@ export async function checkCloudHealth(): Promise<boolean> {
   return await checkCloudConnection();
 }
 
-// Objects/arrays (e.g. JSON columns that mysql2 already parsed) must be
-// re-serialized before re-insertion, otherwise they bind as "[object Object]".
-function normalizeValue(v: unknown): unknown {
-  if (v === undefined || v === null) return null;
-  if (typeof v === 'object' && !(v instanceof Date) && !Buffer.isBuffer(v)) {
-    return JSON.stringify(v);
-  }
-  return v;
-}
-
-// ---------------------------------------------------------------------------
-// Bulk upsert helper — builds one INSERT ... ON DUPLICATE KEY UPDATE statement
-// ---------------------------------------------------------------------------
-function buildBulkUpsert(
-  tableName: string,
-  rows: any[],
-  columns: string[],
-  idCol: string,
-): { sql: string; params: any[] } {
-  const colList = columns.map(c => `\`${c}\``).join(', ');
-  const placeholders = rows
-    .map(() => `(${columns.map(() => '?').join(', ')})`)
-    .join(', ');
-  const updates = columns
-    .filter(c => c !== idCol)
-    .map(c => `\`${c}\` = VALUES(\`${c}\`)`)
-    .join(', ');
-
-  const params: any[] = [];
-  for (const row of rows) {
-    for (const col of columns) {
-      params.push(normalizeValue(row[col]));
-    }
-  }
-
-  const sql = `
-    INSERT INTO \`${tableName}\` (${colList})
-    VALUES ${placeholders}
-    ${updates ? `ON DUPLICATE KEY UPDATE ${updates}` : ''}
-  `;
-  return { sql, params };
-}
 
 // ---------------------------------------------------------------------------
 // Tombstones — propagate hard-deletes across machines.
@@ -453,7 +414,7 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
       if (!rows.length) continue;
 
       try {
-        const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol);
+        const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol, cols.includes('updated_at') ? 'updated_at' : undefined);
         await cloudQuery(sql, params);
 
         totalPushed += rows.length;
@@ -546,9 +507,42 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
 
       if (!rows.length) continue;
 
-      const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol);
+      // Conflict surfacing: only for tables keyed on updated_at. A row edited on
+      // BOTH sides since the last pull is a conflict; true-LWW resolves it, we log it.
+      let conflicts: ReturnType<typeof detectConflicts> = [];
+      if (useTimeCol && cfg.timeCol === 'updated_at') {
+        try {
+          const ids = rows.map(r => String(r[cfg.idCol]));
+          const localRows = await query(
+            `SELECT \`${cfg.idCol}\` AS id, updated_at FROM \`${tableName}\` WHERE \`${cfg.idCol}\` IN (${ids.map(() => '?').join(',')})`,
+            ids,
+          ) as any[];
+          const localMap = new Map<string, string>();
+          for (const lr of localRows) {
+            if (lr.updated_at) localMap.set(String(lr.id), toMysqlTs(lr.updated_at));
+          }
+          const incoming = rows.map(r => ({ id: String(r[cfg.idCol]), updatedAt: r['updated_at'] ? toMysqlTs(r['updated_at']) : '' }));
+          conflicts = detectConflicts(incoming, localMap, cursor.at);
+        } catch (cErr) {
+          console.error(`[CloudSync] Conflict detect error on ${tableName}:`, (cErr as Error).message);
+        }
+      }
+
+      const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol, cols.includes('updated_at') ? 'updated_at' : undefined);
       await query(sql, params);
       totalPulled += rows.length;
+
+      // Best-effort conflict log — never abort the pull.
+      for (const cf of conflicts) {
+        try {
+          await query(
+            `INSERT INTO sync_conflicts (table_name, record_id, local_updated_at, cloud_updated_at, resolution) VALUES (?, ?, ?, ?, ?)`,
+            [tableName, cf.recordId, cf.localUpdatedAt || null, cf.cloudUpdatedAt || null, cf.resolution],
+          );
+        } catch (logErr) {
+          console.error(`[CloudSync] Conflict log failed ${tableName}/${cf.recordId}:`, (logErr as Error).message);
+        }
+      }
 
       // Advance to the last row of the batch (ordered by timeCol, id).
       if (useTimeCol) {
