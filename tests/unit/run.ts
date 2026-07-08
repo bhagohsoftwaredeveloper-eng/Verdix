@@ -2,6 +2,7 @@
 // and throws (non-zero exit) on failure.
 import './cloud-sync-columns.test';
 import './cloud-sync-cursor.test';
+import './cloud-sync-upsert.test';
 import './sidebar-search.test';
 import './sku.test';
 import './import-schemas.test';

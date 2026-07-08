@@ -22,6 +22,7 @@
 import { query, cloudQuery, checkCloudConnection, isCloudDbConfigured } from '../mysql';
 import { filterPullColumns, isPullExcluded } from './cloud-sync-columns';
 import { buildKeysetSelect, buildTombstoneSelect } from './cloud-sync-cursor';
+import { buildBulkUpsert } from './cloud-sync-upsert';
 import { hasCloudSyncFeature } from '../licensing/cloud-config';
 import { reconcileStockDeltas } from './stock-reconcile';
 
@@ -265,48 +266,6 @@ export async function checkCloudHealth(): Promise<boolean> {
   return await checkCloudConnection();
 }
 
-// Objects/arrays (e.g. JSON columns that mysql2 already parsed) must be
-// re-serialized before re-insertion, otherwise they bind as "[object Object]".
-function normalizeValue(v: unknown): unknown {
-  if (v === undefined || v === null) return null;
-  if (typeof v === 'object' && !(v instanceof Date) && !Buffer.isBuffer(v)) {
-    return JSON.stringify(v);
-  }
-  return v;
-}
-
-// ---------------------------------------------------------------------------
-// Bulk upsert helper — builds one INSERT ... ON DUPLICATE KEY UPDATE statement
-// ---------------------------------------------------------------------------
-function buildBulkUpsert(
-  tableName: string,
-  rows: any[],
-  columns: string[],
-  idCol: string,
-): { sql: string; params: any[] } {
-  const colList = columns.map(c => `\`${c}\``).join(', ');
-  const placeholders = rows
-    .map(() => `(${columns.map(() => '?').join(', ')})`)
-    .join(', ');
-  const updates = columns
-    .filter(c => c !== idCol)
-    .map(c => `\`${c}\` = VALUES(\`${c}\`)`)
-    .join(', ');
-
-  const params: any[] = [];
-  for (const row of rows) {
-    for (const col of columns) {
-      params.push(normalizeValue(row[col]));
-    }
-  }
-
-  const sql = `
-    INSERT INTO \`${tableName}\` (${colList})
-    VALUES ${placeholders}
-    ${updates ? `ON DUPLICATE KEY UPDATE ${updates}` : ''}
-  `;
-  return { sql, params };
-}
 
 // ---------------------------------------------------------------------------
 // Tombstones — propagate hard-deletes across machines.
@@ -453,7 +412,7 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
       if (!rows.length) continue;
 
       try {
-        const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol);
+        const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol, cols.includes('updated_at') ? 'updated_at' : undefined);
         await cloudQuery(sql, params);
 
         totalPushed += rows.length;
@@ -546,7 +505,7 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
 
       if (!rows.length) continue;
 
-      const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol);
+      const { sql, params } = buildBulkUpsert(tableName, rows, cols, cfg.idCol, cols.includes('updated_at') ? 'updated_at' : undefined);
       await query(sql, params);
       totalPulled += rows.length;
 
