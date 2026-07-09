@@ -57,6 +57,27 @@ const EXCLUDE_TABLES = new Set<string>([
 // ---------------------------------------------------------------------------
 let _pushTablesCache: { tables: SyncTable[]; at: number } | null = null;
 
+// Gate: cloud sync runs only when a cloud DB is configured AND the installed
+// license grants the 'cloud-sync' feature. Warn ONCE per process when the cloud DB
+// is configured but the feature is missing — otherwise sync silently no-ops and the
+// misconfiguration is hard to diagnose.
+let _cloudSyncFeatureWarned = false;
+function cloudSyncGateOpen(): boolean {
+  if (!isCloudDbConfigured()) return false;
+  if (!hasCloudSyncFeature()) {
+    if (!_cloudSyncFeatureWarned) {
+      console.warn(
+        "[CloudSync] Cloud DB is configured but the license lacks the 'cloud-sync' feature — sync is DISABLED. " +
+        'Add it (npm run cloud:provision -- --license <key>) and re-activate the POS.',
+      );
+      _cloudSyncFeatureWarned = true;
+    }
+    return false;
+  }
+  _cloudSyncFeatureWarned = false; // feature is back on — allow a fresh warning if it later drops
+  return true;
+}
+
 async function discoverPushTables(): Promise<SyncTable[]> {
   if (_pushTablesCache && Date.now() - _pushTablesCache.at < COLUMN_TTL) {
     return _pushTablesCache.tables;
@@ -368,7 +389,7 @@ async function pullTombstones(): Promise<number> {
 // Push — scan local tables, bulk-upsert new/updated rows to Railway
 // ---------------------------------------------------------------------------
 export async function processPushToCloud(): Promise<{ pushed: number; failed: number }> {
-  if (!isCloudDbConfigured() || !hasCloudSyncFeature()) return { pushed: 0, failed: 0 };
+  if (!cloudSyncGateOpen()) return { pushed: 0, failed: 0 };
 
   const online = await checkCloudConnection();
   if (!online) return { pushed: 0, failed: 0 };
@@ -455,7 +476,7 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 // Pull — query Railway directly for master data and upsert locally
 // ---------------------------------------------------------------------------
 export async function processPullFromCloud(): Promise<{ pulled: number }> {
-  if (!isCloudDbConfigured() || !hasCloudSyncFeature()) return { pulled: 0 };
+  if (!cloudSyncGateOpen()) return { pulled: 0 };
 
   const online = await checkCloudConnection();
   if (!online) return { pulled: 0 };
