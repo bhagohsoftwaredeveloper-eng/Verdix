@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Settings as SettingsIcon, Bell, Users, Database, Key, Palette, Globe, RefreshCw } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Users, Database, Key, Palette, Globe, RefreshCw, CloudCog } from 'lucide-react';
 
 export default function SettingsPage() {
   return (
@@ -151,6 +151,21 @@ export default function SettingsPage() {
             </CardDescription>
             <div className="text-xs text-muted-foreground">
               Safe refresh — does not delete any data
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-accent transition-colors" onClick={() => window.location.href = '/settings/cloud-sync'}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Cloud Sync</CardTitle>
+            <CloudCog className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <CardDescription className="mb-4">
+              Enable/disable cloud sync and view sync status
+            </CardDescription>
+            <div className="text-xs text-muted-foreground">
+              Push/pull status, last sync times, manual sync
             </div>
           </CardContent>
         </Card>
