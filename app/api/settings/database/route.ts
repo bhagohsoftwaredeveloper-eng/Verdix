@@ -58,6 +58,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { host, port, user, password, database, action } = body;
 
+    // Blank password means "keep the one already configured" (matches the UI hint).
+    const effectivePassword = password || readEnvFile().DB_PASSWORD || '';
+
     if (action === 'test') {
       // Test connection
       try {
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
           host,
           port: parseInt(port),
           user,
-          password,
+          password: effectivePassword,
           database
         });
         await connection.end();
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
         DB_HOST: host,
         DB_PORT: port.toString(),
         DB_USER: user,
-        DB_PASSWORD: password,
+        DB_PASSWORD: effectivePassword,
         DB_NAME: database
       });
       

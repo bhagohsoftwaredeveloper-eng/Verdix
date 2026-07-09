@@ -13,32 +13,34 @@ declare global {
   var __mysqlPool: mysql.Pool | undefined;
 }
 
-// Create connection pool singleton
-let pool: mysql.Pool;
-
-if (process.env.NODE_ENV === 'production') {
-  pool = mysql.createPool({
+// Create connection pool singleton.
+// DB_SSL=true enables TLS for remote/cloud MySQL (e.g. Railway proxy).
+// DB_POOL_LIMIT caps connections per app instance — keep it low when several
+// terminals share one cloud DB so they don't exhaust the server's max_connections.
+function buildPoolConfig(connectionLimit: number): mysql.PoolOptions {
+  return {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '3306'),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'verdix',
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
     waitForConnections: true,
-    connectionLimit: 50, // Increased for production
+    connectionLimit: parseInt(process.env.DB_POOL_LIMIT || '') || connectionLimit,
     queueLimit: 0,
-  });
+    connectTimeout: 15000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10_000,
+  };
+}
+
+let pool: mysql.Pool;
+
+if (process.env.NODE_ENV === 'production') {
+  pool = mysql.createPool(buildPoolConfig(50));
 } else {
   if (!global.__mysqlPool) {
-    global.__mysqlPool = mysql.createPool({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '3306'),
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'verdix',
-      waitForConnections: true,
-      connectionLimit: 20, // Moderate for development reloads
-      queueLimit: 0,
-    });
+    global.__mysqlPool = mysql.createPool(buildPoolConfig(20));
     console.log('--- Database Connection Pool Created ---');
   }
   pool = global.__mysqlPool;
