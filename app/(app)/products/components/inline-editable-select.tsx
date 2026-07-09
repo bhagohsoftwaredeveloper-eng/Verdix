@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { PlusCircle, Pencil, Check, X, Loader2 } from 'lucide-react';
 
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormControl } from '@/components/ui/form';
@@ -32,6 +33,8 @@ export interface InlineEditableSelectProps<T> {
   getName: (item: T) => string;
   onAdd: (name: string) => Promise<string | undefined>;
   onRename: (id: string, name: string) => Promise<string | undefined>;
+  triggerClassName?: string;
+  itemClassName?: string;
 }
 
 export function InlineEditableSelect<T>({
@@ -52,6 +55,8 @@ export function InlineEditableSelect<T>({
   getName,
   onAdd,
   onRename,
+  triggerClassName,
+  itemClassName,
 }: InlineEditableSelectProps<T>) {
   const [adding, setAdding] = useState(false);
   const [addDraft, setAddDraft] = useState('');
@@ -113,13 +118,13 @@ export function InlineEditableSelect<T>({
       value={value}
     >
       <FormControl>
-        <SelectTrigger>
+        <SelectTrigger className={triggerClassName}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
       </FormControl>
       <SelectContent>
         {isLoading ? (
-          <SelectItem value="loading" disabled>{loadingLabel}</SelectItem>
+          <SelectItem value="loading" disabled className={itemClassName}>{loadingLabel}</SelectItem>
         ) : items.length > 0 ? (
           items.map((item) => {
             const id = getId(item);
@@ -170,7 +175,7 @@ export function InlineEditableSelect<T>({
             }
             return (
               <div key={id} className="relative">
-                <SelectItem value={getValue(item)} className="pr-9">
+                <SelectItem value={getValue(item)} className={cn('pr-9', itemClassName)}>
                   {getOptionLabel(item)}
                 </SelectItem>
                 <button
@@ -186,11 +191,11 @@ export function InlineEditableSelect<T>({
             );
           })
         ) : (
-          <SelectItem value="none" disabled>{emptyLabel}</SelectItem>
+          <SelectItem value="none" disabled className={itemClassName}>{emptyLabel}</SelectItem>
         )}
 
         {!isLoading && orphanLabel && value && !items.some((item) => getValue(item) === value) && (
-          <SelectItem value={value}>{orphanLabel(value)}</SelectItem>
+          <SelectItem value={value} className={itemClassName}>{orphanLabel(value)}</SelectItem>
         )}
 
         <div className="border-t mt-1 pt-1 px-1">
