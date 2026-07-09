@@ -43,16 +43,6 @@ export async function recordStockMovement(
     await query(sql, params);
   }
 
-  // Locally-created movements have already adjusted this node's products.stock,
-  // so mark them applied — the delta reconciler must skip them (see
-  // lib/services/stock-reconcile.ts). INSERT IGNORE keeps this idempotent.
-  const appliedSql = `INSERT IGNORE INTO stock_movement_applied (movement_id) VALUES (?)`;
-  if (connection) {
-    await connection.query(appliedSql, [id]);
-  } else {
-    await query(appliedSql, [id]);
-  }
-
   return {
     ...movement,
     id,

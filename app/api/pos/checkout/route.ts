@@ -5,7 +5,12 @@ import { deductFromBatches, getBatchCostingSettings } from '@/lib/batch-deductio
 import { ensureCustomerCreditColumn } from '@/lib/ensure-customer-credit';
 import { query } from '@/lib/mysql';
 
+// Cached per process — the columns can't disappear once ensured, so don't pay
+// an INFORMATION_SCHEMA round trip on every checkout.
+let posItemsSchemaEnsured = false;
+
 async function ensurePosTransactionItemsSchema() {
+  if (posItemsSchemaEnsured) return;
   try {
     const currentColumnsResult = await query(
       "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'pos_transaction_items' AND TABLE_SCHEMA = DATABASE()"
@@ -28,6 +33,7 @@ async function ensurePosTransactionItemsSchema() {
       await query("ALTER TABLE pos_transaction_items ADD COLUMN discount_holder_name VARCHAR(255) DEFAULT NULL");
       console.log('✅ Added discount_holder_name column to pos_transaction_items');
     }
+    posItemsSchemaEnsured = true;
   } catch (error) {
     console.error('Error ensuring pos_transaction_items schema:', error);
   }
@@ -96,15 +102,17 @@ export async function POST(request: NextRequest) {
           id, transaction_id, payment_method, action, status, amount, user_id, created_at
         ) VALUES (?, ?, ?, 'initiated', 'pending', ?, ?, NOW())
       `, [auditLogId, posTransId, paymentMethod, totalDue, userId]);
-      // Generate sequential reference (INV-XXXXXX)
-      const nextRefVal = await getNextReference('sales_invoice');
+      // Generate sequential reference (INV-XXXXXX). All three counters run on
+      // THIS transaction: fewer round trips, and a rolled-back sale releases
+      // its numbers instead of leaving gaps.
+      const nextRefVal = await getNextReference('sales_invoice', connection);
       const sequentialRef = `INV-${nextRefVal.toString().padStart(6, '0')}`;
 
       // Get terminal specific receipt (OR)
-      const receiptNo = await getNextReceiptNumber(terminalId);
+      const receiptNo = await getNextReceiptNumber(terminalId, connection);
 
       // Get next SI Number (consolidated sequence number)
-      const siNumber = await getNextSINumber();
+      const siNumber = await getNextSINumber(connection);
 
       const isCharge = typeof paymentMethod === 'string' && paymentMethod.toUpperCase() === 'CHARGE';
       const invoiceStatus = isCharge ? 'Pending' : 'Paid';
@@ -137,27 +145,15 @@ export async function POST(request: NextRequest) {
         return _batchSettings;
       };
 
-      // 2. Insert into sale_items and update stock
-      const insertItemSql = `
-        INSERT INTO sale_items (
-          id, sale_id, product_id, product_name, quantity, price, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, NOW())
-      `;
-
+      // 2. Deduct batches + stock and insert sale_items (cost folded into the
+      //    insert — no separate UPDATE per item).
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const itemId = `${saleId}-ITEM-${i + 1}`;
 
-        await connection.query(insertItemSql, [
-          itemId,
-          saleId,
-          item.id,
-          item.name,
-          item.quantity,
-          item.price * (1 - (item.discount || 0) / 100)
-        ]);
-
         // --- BATCH COSTING: FIFO deduction & cost recording ---
+        let costAtSale: number | null = null;
+        let batchSource: string | null = null;
         try {
           const bcs = await getBCS();
           const deduction = await deductFromBatches(
@@ -166,11 +162,8 @@ export async function POST(request: NextRequest) {
             bcs.oversellBlock,
             connection as any
           );
-          // Update the sale_items row with batch source data
-          await connection.query(
-            'UPDATE sale_items SET cost_at_sale = ?, batch_source = ? WHERE id = ?',
-            [deduction.weightedAvgCost, JSON.stringify(deduction.splits), itemId]
-          );
+          costAtSale = deduction.weightedAvgCost;
+          batchSource = JSON.stringify(deduction.splits);
         } catch (batchErr: any) {
           // If oversell_block is ON, rethrow to abort the transaction
           if (batchErr.message && batchErr.message.startsWith('Batch stock exhausted')) {
@@ -181,11 +174,26 @@ export async function POST(request: NextRequest) {
         }
         // --- END BATCH COSTING ---
 
+        await connection.query(`
+          INSERT INTO sale_items (
+            id, sale_id, product_id, product_name, quantity, price, cost_at_sale, batch_source, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `, [
+          itemId,
+          saleId,
+          item.id,
+          item.name,
+          item.quantity,
+          item.price * (1 - (item.discount || 0) / 100),
+          costAtSale,
+          batchSource
+        ]);
+
         // --- Stock Deduction with Full Hierarchy Sync & Loyalty Calculation ---
         const [soldProdResult]: any = await connection.query(`
-          SELECT 
-            p.id, p.parent_id, p.unit_of_measure, p.name, p.stock, 
-            c.markup_percentage, p.category, p.earns_points 
+          SELECT
+            p.id, p.parent_id, p.unit_of_measure, p.name, p.stock,
+            c.markup_percentage, p.category, p.earns_points
           FROM products p
           LEFT JOIN categories c ON p.category = c.name
           WHERE p.id = ?
@@ -206,6 +214,7 @@ export async function POST(request: NextRequest) {
 
           // Walk the FULL ancestor chain to find the ultimate root and the
           // cumulative factor (handles grandchildren, great-grandchildren, etc.)
+          // Products with no parent ARE the root — skip the walk entirely.
           //
           // Example — selling Sugar 500g (grandchild):
           //   findUltimateRoot(Sugar500g)
@@ -215,7 +224,9 @@ export async function POST(request: NextRequest) {
           //     → deduct 0.2 from Sugar25kg
           //     → find Sugar1kg (factor 25) → deduct 5 from Sugar1kg
           //         → find Sugar500g (factor 2) → deduct 10 from Sugar500g ✓
-          const { rootId, factorToRoot } = await findUltimateRoot(soldProd.id, connection);
+          const { rootId, factorToRoot } = soldProd.parent_id
+            ? await findUltimateRoot(soldProd.id, connection)
+            : { rootId: soldProd.id, factorToRoot: 1 };
 
           if (factorToRoot > 1 || rootId !== soldProd.id) {
             // Sold item is NOT the root — convert qty to root units and deduct from root down
@@ -351,50 +362,50 @@ export async function POST(request: NextRequest) {
         isTrainingMode
       ]);
 
-      // 5. Insert items into sales_invoice_items and pos_transaction_items
+      // 5. Insert items into sales_invoice_items and pos_transaction_items —
+      //    one multi-row INSERT per table instead of two round trips per item.
+      const invoiceItemRows: any[] = [];
+      const posItemRows: any[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const itemId = `${saleId}-ITEM-${i + 1}`;
         const invoiceItemId = `${invoiceId}-ITEM-${i + 1}`;
         const posItemId = `${posTransId}-DETAIL-${i + 1}`;
 
-        // Insert into sales_invoice_items
-        await connection.query(`
-          INSERT INTO sales_invoice_items (
-            id, sales_invoice_id, product_id, product_name, quantity, price, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, NOW())
-        `, [invoiceItemId, invoiceId, item.id, item.name, item.quantity, item.price * (1 - (item.discount || 0) / 100)]);
+        invoiceItemRows.push([
+          invoiceItemId, invoiceId, item.id, item.name, item.quantity,
+          item.price * (1 - (item.discount || 0) / 100)
+        ]);
 
-        // Insert into pos_transaction_items (POS Details)
         const originalPrice = item.price;
         const discountPercent = item.discount || 0;
         const discAmount = (originalPrice * item.quantity) * (discountPercent / 100);
         const lTotal = (originalPrice * item.quantity) - discAmount;
 
-        await connection.query(`
-          INSERT INTO pos_transaction_items (
-            id, pos_transaction_id, sale_item_id, product_id, product_name,
-            quantity, unit_price, discount_percentage, discount_amount,
-            discount_type, discount_id_number, discount_holder_name, tax_type, line_total, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-        `, [
-          posItemId,
-          posTransId,
-          itemId,
-          item.id,
-          item.name,
-          item.quantity,
-          originalPrice,
-          discountPercent,
-          discAmount,
+        posItemRows.push([
+          posItemId, posTransId, itemId, item.id, item.name,
+          item.quantity, originalPrice, discountPercent, discAmount,
           item.discountType || 'percent',
           item.discountIdNumber || null,
           item.discountHolderName || null,
           item.taxType || 'VAT',
           lTotal
         ]);
-
       }
+
+      await connection.query(`
+        INSERT INTO sales_invoice_items (
+          id, sales_invoice_id, product_id, product_name, quantity, price, created_at
+        ) VALUES ${invoiceItemRows.map(() => '(?, ?, ?, ?, ?, ?, NOW())').join(', ')}
+      `, invoiceItemRows.flat());
+
+      await connection.query(`
+        INSERT INTO pos_transaction_items (
+          id, pos_transaction_id, sale_item_id, product_id, product_name,
+          quantity, unit_price, discount_percentage, discount_amount,
+          discount_type, discount_id_number, discount_holder_name, tax_type, line_total, created_at
+        ) VALUES ${posItemRows.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())').join(', ')}
+      `, posItemRows.flat());
 
       // 6. Insert payment details
       const pointsUsedValue = paymentDetails?.pointsUsed ? parseFloat(paymentDetails.pointsUsed) : 0;
@@ -623,11 +634,14 @@ export async function POST(request: NextRequest) {
       const [orderResult]: any = await connection.query('SELECT order_number FROM pos_transactions WHERE id = ?', [posTransId]);
       const orderNumber = orderResult[0]?.order_number;
 
-      const [updatedLoyalty]: any = await connection.query(
-        'SELECT current_points FROM customer_loyalty WHERE customer_id = ? LIMIT 1',
-        [customer.id]
-      );
-      const pointsRemaining = updatedLoyalty && updatedLoyalty.length > 0 ? updatedLoyalty[0].current_points : 0;
+      let pointsRemaining = 0;
+      if (customer && customer.id !== 'walk-in') {
+        const [updatedLoyalty]: any = await connection.query(
+          'SELECT current_points FROM customer_loyalty WHERE customer_id = ? LIMIT 1',
+          [customer.id]
+        );
+        pointsRemaining = updatedLoyalty && updatedLoyalty.length > 0 ? updatedLoyalty[0].current_points : 0;
+      }
 
       return NextResponse.json({
         success: true,

@@ -94,27 +94,37 @@ export async function withTransaction<T>(callback: (connection: mysql.PoolConnec
   }
 }
 
+// Counter helpers accept an optional live transaction connection. When given,
+// the increment joins the caller's transaction — one fewer connection + the
+// number is released again if the caller rolls back (no gaps on failed sales).
+async function onConnection<T>(
+  connection: mysql.PoolConnection | undefined,
+  work: (conn: mysql.PoolConnection) => Promise<T>
+): Promise<T> {
+  return connection ? work(connection) : withTransaction(work);
+}
+
 /**
  * Atomicly gets and increments the next reference number for a given transaction type
  * @param type - The column name in transaction_references table (e.g. 'sales_invoice')
  * @returns The next reference number
  */
-export async function getNextReference(type: string): Promise<number> {
-  return await withTransaction(async (connection) => {
+export async function getNextReference(type: string, connection?: mysql.PoolConnection): Promise<number> {
+  return await onConnection(connection, async (connection) => {
     // 1. Increment the counter
     await connection.query(
       `UPDATE transaction_references SET ${type} = CAST(${type} AS UNSIGNED) + 1 WHERE id = 1`
     );
-    
+
     // 2. Fetch the new value
     const [rows]: any = await connection.query(
       `SELECT ${type} as next_val FROM transaction_references WHERE id = 1`
     );
-    
+
     if (!rows || rows.length === 0) {
       throw new Error(`Failed to fetch next reference for ${type}`);
     }
-    
+
     return parseInt(rows[0].next_val);
   });
 }
@@ -124,8 +134,8 @@ export async function getNextReference(type: string): Promise<number> {
  * @param terminalId - Optional terminal ID. If provided, increments terminal-specific OR.
  * @returns The next receipt number string
  */
-export async function getNextReceiptNumber(terminalId?: string): Promise<string> {
-  return await withTransaction(async (connection) => {
+export async function getNextReceiptNumber(terminalId?: string, connection?: mysql.PoolConnection): Promise<string> {
+  return await onConnection(connection, async (connection) => {
     let nextVal: string;
     
     if (terminalId) {
@@ -228,8 +238,8 @@ export async function getNextZReadingNumber(terminalId: string): Promise<string>
  * Atomically gets and increments the next SI Number (Sales Invoice Number)
  * @returns The next SI number string (plain sequential digits, e.g. "001234")
  */
-export async function getNextSINumber(): Promise<string> {
-  return await withTransaction(async (connection) => {
+export async function getNextSINumber(connection?: mysql.PoolConnection): Promise<string> {
+  return await onConnection(connection, async (connection) => {
     // 1. Atomically increment the numeric counter.
     await connection.query(
       `UPDATE transaction_references SET si_number = LPAD(IF(si_number IS NULL OR si_number = '', 0, CAST(si_number AS UNSIGNED)) + 1, 6, '0') WHERE id = 1`

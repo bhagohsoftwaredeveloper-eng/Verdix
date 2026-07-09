@@ -129,26 +129,20 @@ export async function deductFamilyStock(
     connection
   );
 
-  // 2. Fetch this node's conversion_factors → tells us how its children relate
-  const [convFactors]: any = await connection.query(
-    'SELECT unit, factor FROM conversion_factors WHERE product_id = ?',
-    [nodeId]
+  // 2. Fetch direct children together with their conversion factor in one query.
+  //    Children whose unit has no factor defined are excluded (same as skipping).
+  const [children]: any = await connection.query(
+    `SELECT p.id, cf.factor
+     FROM products p
+     JOIN conversion_factors cf ON cf.product_id = ? AND cf.unit = p.unit_of_measure
+     WHERE p.parent_id = ?`,
+    [nodeId, nodeId]
   );
-  if (!convFactors || convFactors.length === 0) return; // No children to sync
+  if (!children || children.length === 0) return; // No children to sync
 
-  // 3. Fetch direct children of this node
-  const [directChildren]: any = await connection.query(
-    'SELECT id, name, unit_of_measure FROM products WHERE parent_id = ?',
-    [nodeId]
-  );
-  if (!directChildren || directChildren.length === 0) return;
-
-  // 4. For each child, calculate how much to deduct and recurse
-  for (const child of directChildren) {
-    const cf = convFactors.find((c: any) => c.unit === child.unit_of_measure);
-    if (!cf) continue; // No conversion factor defined for this child's unit → skip
-
-    const factorNum = Number(cf.factor || 0);
+  // 3. For each child, calculate how much to deduct and recurse
+  for (const child of children) {
+    const factorNum = Number(child.factor || 0);
     const childDeduction = numericQty * factorNum;
     await deductFamilyStock(
       child.id,
@@ -189,23 +183,17 @@ export async function addFamilyStock(
     connection
   );
 
-  const [convFactors]: any = await connection.query(
-    'SELECT unit, factor FROM conversion_factors WHERE product_id = ?',
-    [nodeId]
+  const [children]: any = await connection.query(
+    `SELECT p.id, cf.factor
+     FROM products p
+     JOIN conversion_factors cf ON cf.product_id = ? AND cf.unit = p.unit_of_measure
+     WHERE p.parent_id = ?`,
+    [nodeId, nodeId]
   );
-  if (!convFactors || convFactors.length === 0) return;
+  if (!children || children.length === 0) return;
 
-  const [directChildren]: any = await connection.query(
-    'SELECT id, name, unit_of_measure FROM products WHERE parent_id = ?',
-    [nodeId]
-  );
-  if (!directChildren || directChildren.length === 0) return;
-
-  for (const child of directChildren) {
-    const cf = convFactors.find((c: any) => c.unit === child.unit_of_measure);
-    if (!cf) continue;
-
-    const factorNum = Number(cf.factor || 0);
+  for (const child of children) {
+    const factorNum = Number(child.factor || 0);
     const childAddition = numericQty * factorNum;
     await addFamilyStock(
       child.id,
