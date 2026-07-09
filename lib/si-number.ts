@@ -3,19 +3,10 @@
  * (and other pure code) can use them without pulling in lib/mysql → the DB pool
  * and scheduler.
  *
- * Full SI number format: `${prefix}-${counter}` where prefix is a per-deployment
- * series (WEB, MAIN, BR2…) and counter is the numeric sequence zero-padded to at
- * least 6 digits — e.g. `WEB-000045`. Legacy rows are plain digits (`001234`).
+ * New SI numbers are plain sequential digits zero-padded to 6 (e.g. `001234`).
+ * Historical rows from the old multi-writer scheme may carry a series prefix
+ * (`MAIN-001234`) — validation/formatting still accepts them for display.
  */
-
-export function isValidSeriesPrefix(prefix: string): boolean {
-  return /^[A-Z0-9]{1,8}$/.test(prefix);
-}
-
-export function composeSINumber(prefix: string, counter: string | number): string {
-  const digits = String(counter).replace(/\D/g, '') || '0';
-  return `${prefix}-${digits.padStart(6, '0')}`;
-}
 
 export function validateSINumber(siNumber: string | null | undefined): boolean {
   if (!siNumber) return false;
@@ -25,6 +16,6 @@ export function validateSINumber(siNumber: string | null | undefined): boolean {
 export function formatSINumber(siNumber: string | number | null | undefined): string {
   if (!siNumber) return '000000';
   const s = String(siNumber);
-  if (s.includes('-')) return s; // already prefixed — leave as-is
+  if (s.includes('-')) return s; // legacy prefixed — leave as-is
   return s.padStart(6, '0');
 }

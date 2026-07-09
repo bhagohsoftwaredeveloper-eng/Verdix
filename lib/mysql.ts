@@ -1,6 +1,5 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
-import { composeSINumber, isValidSeriesPrefix } from './si-number';
 export { formatSINumber, validateSINumber } from './si-number';
 
 // Load environment variables
@@ -225,42 +224,23 @@ export async function getNextZReadingNumber(terminalId: string): Promise<string>
 
 /**
  * Atomically gets and increments the next SI Number (Sales Invoice Number)
- * @returns The next SI number string (e.g., "PREFIX-001234")
+ * @returns The next SI number string (plain sequential digits, e.g. "001234")
  */
 export async function getNextSINumber(): Promise<string> {
   return await withTransaction(async (connection) => {
-    // 1. Resolve this deployment's series prefix (stored column first, else env).
-    //    Optional: single-writer deployments emit plain sequential numbers.
-    const [prefixRows]: any = await connection.query(
-      `SELECT si_prefix FROM transaction_references WHERE id = 1`
-    );
-    let prefix: string = (prefixRows?.[0]?.si_prefix || '').trim();
-    if (!prefix) {
-      const envPrefix = (process.env.SI_SERIES_PREFIX || '').trim().toUpperCase();
-      if (envPrefix && isValidSeriesPrefix(envPrefix)) {
-        await connection.query(
-          `UPDATE transaction_references SET si_prefix = ? WHERE id = 1`,
-          [envPrefix]
-        );
-        prefix = envPrefix;
-      }
-    }
-
-    // 2. Atomically increment the numeric counter (unchanged behavior).
+    // 1. Atomically increment the numeric counter.
     await connection.query(
       `UPDATE transaction_references SET si_number = LPAD(IF(si_number IS NULL OR si_number = '', 0, CAST(si_number AS UNSIGNED)) + 1, 6, '0') WHERE id = 1`
     );
 
-    // 3. Read it back; compose PREFIX-NNNNNN when a prefix is set, else plain digits.
+    // 2. Read it back.
     const [rows]: any = await connection.query(
       `SELECT si_number as next_val FROM transaction_references WHERE id = 1`
     );
     if (!rows || rows.length === 0) {
       throw new Error('Failed to fetch next SI number');
     }
-    return prefix && isValidSeriesPrefix(prefix)
-      ? composeSINumber(prefix, rows[0].next_val)
-      : String(rows[0].next_val);
+    return String(rows[0].next_val);
   });
 }
 
