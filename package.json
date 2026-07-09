@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "nextn",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "private": true,
   "main": "main.js",
   "scripts": {
@@ -26,7 +26,8 @@
     "electron-admin-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000/dashboard && node start-electron.js --route=/dashboard --role=\"Admin Dashboard\"\"",
     "electron-admin": "node start-electron.js --route=/dashboard --role=\"Admin Dashboard\"",
     "dist": "electron-builder --win",
-    "build:installer": "iscc setup.iss",
+    "protect": "node scripts/protect-standalone.js",
+    "build:installer": "npm run protect && iscc /DAppVersion=%npm_package_version% setup.iss",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
@@ -104,6 +105,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "bytenode": "^1.6.0",
     "concurrently": "^9.2.1",
     "electron": "^33.2.1",
     "electron-builder": "^26.8.1",
