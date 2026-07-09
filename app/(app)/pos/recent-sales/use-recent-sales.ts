@@ -161,6 +161,7 @@ export function useRecentSales({
       const receiptData = {
         ...mapSaleToReceiptDetails(sale),
         orderNumber: String(sale.orderNumber || sale.id),
+        isReprint: true,
       };
       const bytes = generator.generateReceipt(receiptData, posSettings);
       await print(bytes);

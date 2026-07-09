@@ -26,7 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useReactToPrint } from 'react-to-print';
 import { ReceiptView } from '../receipt/ReceiptView';
 import { usePrinter } from '@/lib/use-printer';
-import { ReceiptGenerator } from '@/lib/receipt-generator';
+import { ReceiptGenerator, saleOpensDrawer } from '@/lib/receipt-generator';
 import { useTender } from './use-tender';
 import type { TenderDialogProps } from './tender-types';
 
@@ -136,7 +136,7 @@ export function TenderDialog(props: TenderDialogProps) {
         `
     });
 
-    const handlePrintReceipt = async (dataToPrint?: any) => {
+    const handlePrintReceipt = async (dataToPrint?: any, isReprint = false) => {
          const details = dataToPrint || completedSale;
          if (!details) return;
 
@@ -152,10 +152,26 @@ export function TenderDialog(props: TenderDialogProps) {
 
          try {
              const generator = new ReceiptGenerator();
-             const bytes = generator.generateReceipt(details, settings);
+             const bytes = generator.generateReceipt({ ...details, isReprint }, settings);
              await print(bytes);
          } catch (e) {
              console.error("Printing error", e);
+         }
+    };
+
+    // A cash sale still has to open the drawer when the cashier declines the receipt.
+    const kickDrawerOnly = async (details: any) => {
+         if (printMode === 'browser' || !saleOpensDrawer(details)) return;
+
+         if (!isConnected) {
+             const connected = await connect();
+             if (!connected) return;
+         }
+
+         try {
+             await print(new ReceiptGenerator().generateDrawerKick());
+         } catch (e) {
+             console.error("Drawer kick error", e);
          }
     };
 
@@ -177,7 +193,8 @@ export function TenderDialog(props: TenderDialogProps) {
             if (settings?.printTwoReceipts) {
                 // Short delay to allow the printer/buffer to breathe
                 await new Promise(resolve => setTimeout(resolve, 800));
-                await handlePrintReceipt(completedSale);
+                // Duplicate copy: the drawer was already kicked by the first receipt.
+                await handlePrintReceipt(completedSale, true);
             }
 
             // Small delay to ensure print command is sent
@@ -186,6 +203,7 @@ export function TenderDialog(props: TenderDialogProps) {
                 onOpenChange(false);
             }, 500);
         } else {
+            await kickDrawerOnly(completedSale);
             props.onSuccess(selectedMethod, props.totalDue);
             onOpenChange(false);
         }
