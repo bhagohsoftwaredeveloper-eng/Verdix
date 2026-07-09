@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
         t.min_number as terminal_min,
         t.serial_number as terminal_sn,
         pt.order_number,
+        COALESCE(pt.si_number, st.si_number) as si_number,
         u.display_name as cashier_name,
         pd.amount_tendered,
         pd.change_given,
@@ -56,8 +57,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (queryParam) {
-        salesQuery += ' AND (pt.order_number LIKE ? OR st.id LIKE ?)';
-        params.push(`%${queryParam}%`, `%${queryParam}%`);
+        salesQuery += ' AND (pt.order_number LIKE ? OR st.id LIKE ? OR pt.si_number LIKE ?)';
+        params.push(`%${queryParam}%`, `%${queryParam}%`, `%${queryParam}%`);
     }
 
     if (customerId) {
@@ -140,6 +141,7 @@ export async function GET(request: NextRequest) {
           status: sale.status,
           notes: sale.notes,
           orderNumber: sale.order_number,
+          siNumber: sale.si_number,
           reference: sale.reference,
           paymentReference: sale.payment_reference,
           pointsEarned: sale.points_earned ? parseFloat(sale.points_earned) : 0,

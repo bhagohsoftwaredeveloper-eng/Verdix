@@ -21,3 +21,4 @@ import './license-machine-match.test';
 import './si-number.test';
 import './pull-exclude-tables.test';
 import './drawer-kick.test';
+import './receipt-si-number.test';

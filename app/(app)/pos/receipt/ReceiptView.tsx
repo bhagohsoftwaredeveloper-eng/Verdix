@@ -3,6 +3,7 @@
 import React, { forwardRef } from 'react';
 import { format } from 'date-fns';
 import { formatQuantity } from '@/lib/utils';
+import { formatSINumber } from '@/lib/si-number';
 import { useReceipt } from './use-receipt';
 import type { ReceiptViewProps } from './receipt-types';
 
@@ -39,7 +40,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 <div className="font-bold text-center border-y border-black py-1 mb-1 uppercase">
                     {paymentMethod?.toUpperCase() === 'CHARGE' ? 'CHARGE SLIP' : 'CASH SALE'}
                 </div>
-                <div className="font-bold">SI NO.: {((saleDetails.siNumber || saleDetails.orderNumber || '000000').toString()).padStart(6, '0')}</div>
+                <div className="font-bold">SI NO.: {formatSINumber(saleDetails.siNumber || saleDetails.orderNumber)}</div>
                 <div>Cust: {customer?.name || 'Walk-in'}</div>
                 <div>Cashier: {saleDetails.cashierName || 'Admin'}</div>
                 {saleDetails.terminalName && <div>Terminal: {saleDetails.terminalName}</div>}

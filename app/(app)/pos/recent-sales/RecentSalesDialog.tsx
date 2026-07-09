@@ -12,6 +12,7 @@ import { SaleDetailView } from './SaleDetailView';
 import { useRecentSales } from './use-recent-sales';
 import type { RecentSalesDialogProps } from './recent-sales-types';
 import { formatCurrency } from './recent-sales-utils';
+import { formatSINumber } from '@/lib/si-number';
 
 export function RecentSalesDialog({
   isOpen,
@@ -174,7 +175,7 @@ export function RecentSalesDialog({
                             }`}
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="truncate font-mono text-sm font-semibold">{sale.siNumber ? String(sale.siNumber).padStart(6, '0') : (sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7))}</span>
+                              <span className="truncate font-mono text-sm font-semibold">{sale.siNumber ? formatSINumber(sale.siNumber) : (sale.orderNumber ? sale.orderNumber : sale.id.substring(0, 7))}</span>
                               <span className="shrink-0 font-mono text-sm font-bold">₱{formatCurrency(sale.total)}</span>
                             </div>
                             <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">

@@ -2,6 +2,7 @@ import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import { format } from 'date-fns';
 import type { POSSaleItem, Customer } from './types';
 import { SystemSettings } from './types';
+import { formatSINumber } from './si-number';
 
 // Default for 58mm
 const DEFAULT_COLS = 32;
@@ -60,6 +61,7 @@ export class ReceiptGenerator {
         change: number;
         paymentMethod: string;
         orderNumber?: string;
+        siNumber?: string;
         amountTendered?: number;
         pointsEarned?: number;
         pointsUsedCount?: number;
@@ -166,8 +168,10 @@ export class ReceiptGenerator {
         // ─── SALE HEADER ───────────────────────────────────────────
         const title = paymentMethod?.toUpperCase() === 'CHARGE' ? 'CHARGE SLIP' : 'CASH SALE';
         enc.raw([0x1b, 0x61, 0x31]).line(title).raw([0x1b, 0x61, 0x30]);
-        const formattedOrderNo = (orderNumber || '000000').padStart(6, '0');
-        enc.bold(true).line(`SI NO.: ${formattedOrderNo}`).bold(false);
+        // orderNumber is a per-terminal counter, not a BIR series — only a fallback
+        // for rows written before si_number existed.
+        const formattedSiNo = formatSINumber(sale.siNumber || orderNumber);
+        enc.bold(true).line(`SI NO.: ${formattedSiNo}`).bold(false);
         enc.line(`Cust: ${customer?.name || 'Walk-in'}`);
         enc.line(`Cashier: ${sale.cashierName || 'Admin'}`);
         if (sale.terminalName) {

@@ -631,7 +631,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber, pointsEarned: totalPointsEarned, pointsRemaining, creditApplied },
+        data: { saleId, posTransId, invoiceId, paymentDetailsId, orderNumber, siNumber, pointsEarned: totalPointsEarned, pointsRemaining, creditApplied },
         message: 'Transaction saved successfully'
       });
     });

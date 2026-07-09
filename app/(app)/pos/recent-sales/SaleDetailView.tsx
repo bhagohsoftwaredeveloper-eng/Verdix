@@ -12,6 +12,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Printer, User, CreditCard, Hash, Calendar, Clock, ShoppingBag } from 'lucide-react';
 import type { Sale } from '@/lib/types';
+import { formatSINumber } from '@/lib/si-number';
 import { format } from 'date-fns';
 import { formatCurrency } from './recent-sales-utils';
 
@@ -46,7 +47,7 @@ export function SaleDetailView({ sale, onReprint }: SaleDetailViewProps) {
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">SI Number</p>
-              <p className="truncate font-mono text-lg font-bold leading-tight">{sale.siNumber ? String(sale.siNumber).padStart(6, '0') : (sale.orderNumber || sale.id?.substring(0, 8))}</p>
+              <p className="truncate font-mono text-lg font-bold leading-tight">{sale.siNumber ? formatSINumber(sale.siNumber) : (sale.orderNumber || sale.id?.substring(0, 8))}</p>
             </div>
           </div>
           <div className="text-right shrink-0">
