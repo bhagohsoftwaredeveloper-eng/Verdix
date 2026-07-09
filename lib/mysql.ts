@@ -1,6 +1,5 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
-import { readCloudConfig } from './licensing/cloud-config';
 import { composeSINumber, isValidSeriesPrefix } from './si-number';
 export { formatSINumber, validateSINumber } from './si-number';
 
@@ -13,7 +12,6 @@ import './init-scheduler';
 // Extend the global object to hold the pool
 declare global {
   var __mysqlPool: mysql.Pool | undefined;
-  var __cloudMysqlPool: mysql.Pool | null | undefined;
 }
 
 // Create connection pool singleton
@@ -45,94 +43,6 @@ if (process.env.NODE_ENV === 'production') {
     console.log('--- Database Connection Pool Created ---');
   }
   pool = global.__mysqlPool;
-}
-
-// ---------------------------------------------------------------------------
-// Cloud (Railway) MySQL pool — used by cloud-sync for direct DB push/pull
-// Lazy-initialized so an offline machine never blocks on cloud connection
-// ---------------------------------------------------------------------------
-
-// Resolve cloud connection: delivered per-customer config file first, then env (dev).
-function resolveCloudConn(): { host: string; port: number; user: string; password: string; database: string } | null {
-  const cfg = readCloudConfig();
-  if (cfg) return { host: cfg.host, port: cfg.port, user: cfg.user, password: cfg.password, database: cfg.name };
-  if (process.env.CLOUD_DB_HOST) {
-    return {
-      host: process.env.CLOUD_DB_HOST,
-      port: parseInt(process.env.CLOUD_DB_PORT || '3306'),
-      user: process.env.CLOUD_DB_USER || 'root',
-      password: process.env.CLOUD_DB_PASSWORD || '',
-      database: process.env.CLOUD_DB_NAME || 'railway',
-    };
-  }
-  return null;
-}
-
-function getCloudPool(): mysql.Pool | null {
-  const conn = resolveCloudConn();
-  if (!conn) return null;
-
-  if (global.__cloudMysqlPool === undefined) {
-    try {
-      global.__cloudMysqlPool = mysql.createPool({
-        ...conn,
-        ssl: { rejectUnauthorized: false },
-        waitForConnections: true,
-        connectionLimit: 5,
-        queueLimit: 0,
-        connectTimeout: 8000,
-        enableKeepAlive: true,
-        keepAliveInitialDelay: 10_000,
-      });
-      console.log('--- Cloud (Railway) Database Pool Created ---');
-    } catch (err) {
-      console.error('Failed to create cloud pool:', err);
-      global.__cloudMysqlPool = null;
-    }
-  }
-  return global.__cloudMysqlPool ?? null;
-}
-
-/** Drop the cached cloud pool so a newly-saved config is picked up without restart. */
-export function resetCloudPool(): void {
-  if (global.__cloudMysqlPool) {
-    try { global.__cloudMysqlPool.end(); } catch { /* ignore */ }
-  }
-  global.__cloudMysqlPool = undefined;
-}
-
-export function isCloudDbConfigured(): boolean {
-  return resolveCloudConn() !== null;
-}
-
-export async function cloudQuery(sql: string, params?: any[]): Promise<any> {
-  const cp = getCloudPool();
-  if (!cp) throw new Error('Cloud DB not configured');
-  if (params && params.length > 0) {
-    const [rows] = await cp.query(sql, params);
-    return rows;
-  }
-  const [rows] = await cp.query(sql);
-  return rows;
-}
-
-export async function checkCloudConnection(): Promise<boolean> {
-  const cp = getCloudPool();
-  if (!cp) return false;
-  try {
-    const conn = await Promise.race([
-      cp.getConnection(),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('cloud-connect-timeout')), 8000)),
-    ]);
-    try {
-      await conn.query('SELECT 1');
-      return true;
-    } finally {
-      conn.release();
-    }
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -320,8 +230,7 @@ export async function getNextZReadingNumber(terminalId: string): Promise<string>
 export async function getNextSINumber(): Promise<string> {
   return await withTransaction(async (connection) => {
     // 1. Resolve this deployment's series prefix (stored column first, else env).
-    //    Fail loud if unresolved — never emit an unprefixed/ambiguous number that
-    //    could collide with another writer.
+    //    Optional: single-writer deployments emit plain sequential numbers.
     const [prefixRows]: any = await connection.query(
       `SELECT si_prefix FROM transaction_references WHERE id = 1`
     );
@@ -336,26 +245,22 @@ export async function getNextSINumber(): Promise<string> {
         prefix = envPrefix;
       }
     }
-    if (!prefix || !isValidSeriesPrefix(prefix)) {
-      throw new Error(
-        'SI series prefix is not configured. Set SI_SERIES_PREFIX (e.g. WEB, MAIN, BR2) ' +
-        'so invoice numbers do not collide across writers.'
-      );
-    }
 
     // 2. Atomically increment the numeric counter (unchanged behavior).
     await connection.query(
       `UPDATE transaction_references SET si_number = LPAD(IF(si_number IS NULL OR si_number = '', 0, CAST(si_number AS UNSIGNED)) + 1, 6, '0') WHERE id = 1`
     );
 
-    // 3. Read it back and compose PREFIX-NNNNNN.
+    // 3. Read it back; compose PREFIX-NNNNNN when a prefix is set, else plain digits.
     const [rows]: any = await connection.query(
       `SELECT si_number as next_val FROM transaction_references WHERE id = 1`
     );
     if (!rows || rows.length === 0) {
       throw new Error('Failed to fetch next SI number');
     }
-    return composeSINumber(prefix, rows[0].next_val);
+    return prefix && isValidSeriesPrefix(prefix)
+      ? composeSINumber(prefix, rows[0].next_val)
+      : String(rows[0].next_val);
   });
 }
 

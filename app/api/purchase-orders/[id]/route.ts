@@ -6,7 +6,6 @@ import { calculatePurchaseCosts } from '../../../../lib/purchase-utils';
 import { toSafeNumber } from '../../../../lib/utils';
 import { checkApprovalRequired, submitToApprovalQueue } from '../../../../lib/approvals';
 import { processPurchaseOrderReceipt } from '../../../../lib/purchase-actions';
-import { recordTombstone } from '../../../../lib/services/sync-tombstones';
 
 export async function PATCH(
   request: NextRequest,
@@ -217,7 +216,6 @@ export async function PATCH(
   }
 }
 
-
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -225,10 +223,6 @@ export async function DELETE(
     try {
         const { id } = await params;
         await query('DELETE FROM purchase_orders WHERE id = ?', [id]);
-
-        // Propagate the delete to Railway and sibling terminals via cloud sync.
-        // purchase_order_items cascade on FK, so only the parent needs a tombstone.
-        await recordTombstone('purchase_orders', id);
 
         return NextResponse.json({
             success: true,

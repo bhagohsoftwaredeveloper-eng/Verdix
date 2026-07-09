@@ -82,8 +82,6 @@ export async function POST(request: NextRequest) {
     // Propagate the replaced steps as deletes so sibling terminals drop the stale
     // rows; the freshly-inserted ids sync down normally via PULL_CONFIG.
     if (removedStepIds.length) {
-      const { recordTombstones } = await import('@/lib/services/sync-tombstones');
-      await recordTombstones('approval_workflows', removedStepIds);
     }
 
     return NextResponse.json({

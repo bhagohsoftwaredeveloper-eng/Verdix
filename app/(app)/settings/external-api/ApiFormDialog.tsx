@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Globe, ShieldCheck, Loader2, ArrowUp, ArrowDown, ArrowUpDown, Cloud } from 'lucide-react';
+import { Globe, ShieldCheck, Loader2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import type { ApiForm } from './use-external-api';
 import type { ExternalApi, AllowedMethods, ApiRole } from './external-api-types';
 
@@ -48,22 +48,10 @@ export function ApiFormDialog({ open, onOpenChange, editingApi, form, setForm, i
                   <SelectItem value="general">
                     <div className="flex items-center gap-2"><Globe className="h-4 w-4 text-muted-foreground" />General API</div>
                   </SelectItem>
-                  <SelectItem value="cloud_sync">
-                    <div className="flex items-center gap-2"><Cloud className="h-4 w-4 text-sky-500" />Cloud Sync (Offline → Railway)</div>
-                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-
-          {form.role === 'cloud_sync' && (
-            <div className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 dark:border-sky-900 p-3 text-sm text-sky-800 dark:text-sky-300">
-              <strong>Cloud Sync mode:</strong> This entry will be used as the offline-first sync target.
-              Set the <strong>Endpoint</strong> to your Railway app URL (e.g. <code>https://xxx.up.railway.app</code>)
-              and use <strong>API Key</strong> auth with your shared <code>CLOUD_SYNC_API_KEY</code>.
-              Only one Cloud Sync entry should be enabled at a time.
-            </div>
-          )}
 
           <div className="space-y-2">
             <Label>Allowed Methods <span className="text-destructive">*</span></Label>

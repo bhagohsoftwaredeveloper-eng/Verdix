@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../../lib/mysql';
-import { recordTombstone } from '@/lib/services/sync-tombstones';
 
 // GET endpoint to fetch a single supplier by ID
 export async function GET(
@@ -136,9 +135,6 @@ export async function DELETE(
     }
 
     await query('DELETE FROM suppliers WHERE id = ?', [id]);
-
-    // Propagate the delete to Railway and sibling terminals via cloud sync.
-    await recordTombstone('suppliers', id);
 
     return NextResponse.json({
       success: true,

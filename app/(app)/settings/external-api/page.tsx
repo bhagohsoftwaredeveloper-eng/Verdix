@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { AlertCircle, Cloud, Loader2, PlusCircle } from 'lucide-react';
+import { AlertCircle, Loader2, PlusCircle } from 'lucide-react';
 import { useExternalApi } from './use-external-api';
 import { ApiConnectionsTab } from './ApiConnectionsTab';
 import { SyncLogsTab } from './SyncLogsTab';
@@ -19,27 +19,6 @@ export default function ExternalApiSettingsPage() {
         <h2 className="text-3xl font-bold tracking-tight">External API Integrations</h2>
         <Button onClick={m.openAddDialog}><PlusCircle className="mr-2 h-4 w-4" />Add API</Button>
       </div>
-
-      {!m.isLoadingApis && !m.hasCloudSync && (
-        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                <Cloud className="h-6 w-6" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <p className="font-semibold text-blue-900 dark:text-blue-200">Offline → Cloud Sync not configured</p>
-                <p className="text-sm text-blue-700 dark:text-blue-400">
-                  Add an API entry and set its role to <strong>Cloud Sync</strong> to enable offline-first data sync to your Railway cloud backend.
-                </p>
-              </div>
-              <Button variant="outline" size="sm" className="border-blue-300 hover:bg-blue-100 dark:border-blue-800 shrink-0" onClick={m.openAddDialog}>
-                <PlusCircle className="mr-1.5 h-3.5 w-3.5" />Add
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {m.pendingCount > 0 && (
         <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">

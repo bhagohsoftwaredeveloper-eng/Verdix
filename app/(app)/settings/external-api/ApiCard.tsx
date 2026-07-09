@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Pencil, Send, Trash2, ArrowUp, ArrowDown, ArrowUpDown, Cloud } from 'lucide-react';
+import { Loader2, Pencil, Send, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { METHODS_BADGE, type ExternalApi } from './external-api-types';
 
 interface Props {
@@ -29,11 +29,6 @@ export function ApiCard({ api, testingId, onToggle, onEdit, onDelete, onTest }: 
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="font-semibold text-base">{api.name}</span>
-              {api.role === 'cloud_sync' && (
-                <Badge variant="outline" className="bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 border-sky-300">
-                  <Cloud className="mr-1 h-3 w-3" /> Cloud Sync
-                </Badge>
-              )}
               <Badge variant="outline" className={methods.class}>
                 {api.allowedMethods === 'send_only'    && <ArrowUp    className="mr-1 h-3 w-3" />}
                 {api.allowedMethods === 'receive_only' && <ArrowDown   className="mr-1 h-3 w-3" />}
