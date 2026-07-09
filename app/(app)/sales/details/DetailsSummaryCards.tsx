@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShoppingCart, TrendingUp, CreditCard, Percent, Receipt, FileText, Banknote, Tag, Wallet } from 'lucide-react';
+import { ShoppingCart, TrendingUp, CreditCard, Percent, PhilippinePeso, FileText, Banknote, Tag, Wallet } from 'lucide-react';
 import { formatAmount } from './use-details-utils';
 
 type SummaryTotals = {
@@ -27,7 +27,7 @@ const CARDS = [
   { key: 'discounts',       label: 'Total Discounts',     Icon: Percent,     color: 'text-orange-600' },
   { key: 'customerBalance', label: 'Customer Balance',    Icon: Wallet,      color: 'text-yellow-600' },
   { key: 'cost',            label: 'Total Cost',          Icon: Tag,         color: 'text-red-600' },
-  { key: 'vatableSales',    label: 'Vatable Sales',       Icon: Receipt,     color: 'text-purple-600' },
+  { key: 'vatableSales',    label: 'Vatable Sales',       Icon: PhilippinePeso, color: 'text-purple-600' },
   { key: 'vatAmount',       label: 'VAT Amount',          Icon: FileText,    color: 'text-pink-600' },
   { key: 'accountPayments', label: 'Account Payments',    Icon: Banknote,    color: 'text-cyan-600' },
 ] as const;
