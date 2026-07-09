@@ -26,6 +26,8 @@ import { buildBulkUpsert } from './cloud-sync-upsert';
 import { detectConflicts } from './cloud-sync-conflicts';
 import { hasCloudSyncFeature } from '../licensing/cloud-config';
 import { reconcileStockDeltas } from './stock-reconcile';
+import { evaluateSyncGate, SyncGateReason } from './cloud-sync-gate';
+import { getCloudSyncEnabled } from './cloud-sync-toggle';
 
 const BATCH = 100;
 
@@ -58,13 +60,17 @@ const EXCLUDE_TABLES = new Set<string>([
 let _pushTablesCache: { tables: SyncTable[]; at: number } | null = null;
 
 // Gate: cloud sync runs only when a cloud DB is configured AND the installed
-// license grants the 'cloud-sync' feature. Warn ONCE per process when the cloud DB
-// is configured but the feature is missing — otherwise sync silently no-ops and the
-// misconfiguration is hard to diagnose.
+// license grants the 'cloud-sync' feature AND the admin toggle is enabled.
+// Warn ONCE per process when the cloud DB is configured but the feature is missing —
+// otherwise sync silently no-ops and the misconfiguration is hard to diagnose.
 let _cloudSyncFeatureWarned = false;
-function cloudSyncGateOpen(): boolean {
-  if (!isCloudDbConfigured()) return false;
-  if (!hasCloudSyncFeature()) {
+async function cloudSyncGateOpen(): Promise<boolean> {
+  const gate = evaluateSyncGate({
+    configured: isCloudDbConfigured(),
+    licensed: hasCloudSyncFeature(),
+    enabled: await getCloudSyncEnabled(),
+  });
+  if (gate.reason === 'not_licensed') {
     if (!_cloudSyncFeatureWarned) {
       console.warn(
         "[CloudSync] Cloud DB is configured but the license lacks the 'cloud-sync' feature — sync is DISABLED. " +
@@ -72,10 +78,10 @@ function cloudSyncGateOpen(): boolean {
       );
       _cloudSyncFeatureWarned = true;
     }
-    return false;
+  } else if (gate.open) {
+    _cloudSyncFeatureWarned = false; // feature back on — allow a fresh warning if it later drops
   }
-  _cloudSyncFeatureWarned = false; // feature is back on — allow a fresh warning if it later drops
-  return true;
+  return gate.open;
 }
 
 async function discoverPushTables(): Promise<SyncTable[]> {
@@ -389,7 +395,7 @@ async function pullTombstones(): Promise<number> {
 // Push — scan local tables, bulk-upsert new/updated rows to Railway
 // ---------------------------------------------------------------------------
 export async function processPushToCloud(): Promise<{ pushed: number; failed: number }> {
-  if (!cloudSyncGateOpen()) return { pushed: 0, failed: 0 };
+  if (!(await cloudSyncGateOpen())) return { pushed: 0, failed: 0 };
 
   const online = await checkCloudConnection();
   if (!online) return { pushed: 0, failed: 0 };
@@ -476,7 +482,7 @@ export async function processPushToCloud(): Promise<{ pushed: number; failed: nu
 // Pull — query Railway directly for master data and upsert locally
 // ---------------------------------------------------------------------------
 export async function processPullFromCloud(): Promise<{ pulled: number }> {
-  if (!cloudSyncGateOpen()) return { pulled: 0 };
+  if (!(await cloudSyncGateOpen())) return { pulled: 0 };
 
   const online = await checkCloudConnection();
   if (!online) return { pulled: 0 };
@@ -599,6 +605,9 @@ export async function processPullFromCloud(): Promise<{ pulled: number }> {
 // ---------------------------------------------------------------------------
 export type CloudSyncStatus = {
   isConfigured: boolean;
+  isLicensed:   boolean;
+  isEnabled:    boolean;
+  gateReason:   SyncGateReason;
   isOnline:     boolean;
   lastPush:     string | null;
   lastPull:     string | null;
@@ -607,8 +616,11 @@ export type CloudSyncStatus = {
 
 export async function getCloudSyncStatus(): Promise<CloudSyncStatus> {
   const isConfigured = isCloudDbConfigured();
+  const isLicensed = hasCloudSyncFeature();
+  const isEnabled = await getCloudSyncEnabled();
+  const gateReason = evaluateSyncGate({ configured: isConfigured, licensed: isLicensed, enabled: isEnabled }).reason;
   if (!isConfigured) {
-    return { isConfigured: false, isOnline: false, lastPush: null, lastPull: null, pendingTables: 0 };
+    return { isConfigured: false, isLicensed, isEnabled, gateReason, isOnline: false, lastPush: null, lastPull: null, pendingTables: 0 };
   }
 
   await ensureTrackerTables();
@@ -634,6 +646,9 @@ export async function getCloudSyncStatus(): Promise<CloudSyncStatus> {
 
   return {
     isConfigured: true,
+    isLicensed,
+    isEnabled,
+    gateReason,
     isOnline:     online,
     lastPush,
     lastPull,
