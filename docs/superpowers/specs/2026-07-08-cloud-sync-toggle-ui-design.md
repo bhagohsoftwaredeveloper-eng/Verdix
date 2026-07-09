@@ -54,8 +54,15 @@ reason is `not_licensed` it keeps the once-per-process warning (from commit
 
 ### ⑤ Toggle API
 `POST /api/cloud-sync/toggle` with `{ enabled: boolean }` → `setCloudSyncEnabled`.
-Follows the existing API auth pattern (reads the user session like other routes);
-admin-gated. Returns the updated status.
+Returns the updated status. **Auth (resolved against reality):** this app does NOT
+enforce server-side admin auth on its settings/cloud-sync routes — the sibling
+`/api/cloud-sync/status` is unauthenticated and the legacy `/push` only optionally
+checks an `X-Sync-Key`. The toggle/run routes follow that SAME app-wide pattern
+(no server-side session/role check); security is provided by the app login + the
+license gate + the localhost Electron deployment. Adding an admin check to only
+these two routes would be inconsistent with the rest of the app. (Final review
+flagged this as a spec-vs-reality deviation; resolved by matching the app pattern
+and documenting it. A future app-wide route-auth pass would cover these too.)
 
 ### ⑥ Settings page
 `app/(app)/settings/cloud-sync/page.tsx` (+ a link/card on the settings index):
