@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger,
 } from '@/components/ui/sheet';
@@ -40,6 +40,7 @@ export function ProductSearchDialog({
 
   const [showCategory, setShowCategory] = useState(true);
   const [showBrand, setShowBrand]       = useState(true);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Load persisted visibility on first open
   useEffect(() => {
@@ -73,6 +74,12 @@ export function ProductSearchDialog({
       <SheetContent
         side="top"
         className="h-[65vh] w-full flex flex-col p-0 gap-0"
+        // Radix focuses the first tabbable child, which is the Category toggle in the
+        // header. The cashier types straight after F9, so claim focus for the input.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
         {/* Header */}
@@ -186,6 +193,7 @@ export function ProductSearchDialog({
               {/* Search input */}
               <div className="relative shrink-0 border-b">
                 <CommandInput
+                  ref={searchInputRef}
                   placeholder="Search by name or barcode..."
                   value={searchTerm}
                   onValueChange={setSearchTerm}
