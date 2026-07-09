@@ -6,10 +6,35 @@ import { SystemSettings } from './types';
 // Default for 58mm
 const DEFAULT_COLS = 32;
 
+// ESC p m t1 t2 — cash drawer kick on connector pin 2, 25ms on / 250ms off.
+// Emitted inside the receipt byte stream so it reaches the drawer through every
+// transport (native spooler, serial, USB, Epson SDK) rather than only the Epson path.
+export const DRAWER_KICK = [0x1b, 0x70, 0x00, 0x19, 0xfa];
+
+/**
+ * A sale kicks the drawer only when cash actually changes hands, including one leg of a
+ * split tender. Reprints and duplicate copies re-render a past sale, so they never kick.
+ */
+export function saleOpensDrawer(sale: {
+    paymentMethod?: string;
+    payments?: { method: string }[];
+    isReprint?: boolean;
+}): boolean {
+    if (sale.isReprint) return false;
+    const isCash = (method?: string) => method?.trim().toUpperCase() === 'CASH';
+    if (isCash(sale.paymentMethod)) return true;
+    return (sale.payments ?? []).some(p => isCash(p.method));
+}
+
 export class ReceiptGenerator {
     private encoder: any;
 
     constructor() { }
+
+    /** Kick bytes on their own, for a cash sale where the cashier declined the receipt. */
+    public generateDrawerKick(): Uint8Array {
+        return new Uint8Array(DRAWER_KICK);
+    }
 
     private getLayout(settings?: SystemSettings | null) {
         const paperSize = settings?.paperSize || '58mm';
@@ -48,6 +73,7 @@ export class ReceiptGenerator {
         paymentReference?: string;
         payments?: { method: string; amount: number; reference?: string }[];
         terminalName?: string;
+        isReprint?: boolean;
         taxBreakdown?: {
             vatableSales: number;
             vatAmount: number;
@@ -112,6 +138,9 @@ export class ReceiptGenerator {
         });
 
         const enc = this.encoder.initialize().codepage('cp437');
+
+        // Kick first so the drawer opens while the paper is still feeding.
+        if (saleOpensDrawer(sale)) enc.raw(DRAWER_KICK);
 
         // ─── HEADER (centered) ───────────────────────────────────────────
 
