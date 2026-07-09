@@ -180,10 +180,6 @@ export async function DELETE(request: NextRequest) {
       await connection.execute('DELETE FROM users WHERE uid = ?', [uid]);
     });
 
-    // Propagate the delete across machines via cloud sync (keyed by uid PK).
-    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
-    await recordTombstone('users', uid);
-
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error deleting user:', error);

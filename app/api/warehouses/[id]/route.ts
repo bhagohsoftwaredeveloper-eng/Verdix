@@ -219,10 +219,6 @@ export async function DELETE(
       );
     }
 
-    // Propagate the delete across machines via cloud sync.
-    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
-    await recordTombstone('warehouses', warehouseId);
-
     return NextResponse.json({
       success: true,
       message: 'Warehouse deleted successfully',

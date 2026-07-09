@@ -10,7 +10,6 @@ import {
   syncSalesTransaction,
   syncAccountsPayable
 } from './services/external-accounting-api';
-import { processPushToCloud, processPullFromCloud } from './services/cloud-sync';
 
 export interface BackupSchedule {
   enabled: boolean;
@@ -357,16 +356,6 @@ export function initScheduler(): void {
   cron.schedule('*/2 * * * *', async () => {
     await processSyncQueue();
     await processPullSync();
-  });
-
-  // Railway cloud sync — always register workers; config is read dynamically each tick
-  // (URL/key can be changed via External API settings UI without restarting)
-  console.log('Starting Railway cloud sync workers (push 1m, pull 5m)');
-  cron.schedule('* * * * *', async () => {
-    await processPushToCloud();
-  });
-  cron.schedule('*/5 * * * *', async () => {
-    await processPullFromCloud();
   });
 
   (global as any).__backupSchedulerInitialized = true;

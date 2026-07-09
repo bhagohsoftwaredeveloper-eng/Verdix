@@ -144,7 +144,6 @@ export function useExternalApi() {
     dialogOpen, setDialogOpen, editingApi, form, setForm, isSaving,
     testingId, deleteTarget, setDeleteTarget, isDeleting,
     pendingCount: logs.filter(l => l.status === 'pending').length,
-    hasCloudSync: apis.some(a => a.role === 'cloud_sync'),
     openAddDialog, openEditDialog,
     handleSave, handleToggleEnabled, handleDelete, handleTestConnection,
     fetchLogs,

@@ -1,7 +1,7 @@
 /**
  * Pure SI (sales-invoice) number helpers. ZERO imports on purpose so unit tests
  * (and other pure code) can use them without pulling in lib/mysql → the DB pool
- * and scheduler. See lib/services/cloud-sync-columns.ts for the same pattern.
+ * and scheduler.
  *
  * Full SI number format: `${prefix}-${counter}` where prefix is a per-deployment
  * series (WEB, MAIN, BR2…) and counter is the numeric sequence zero-padded to at

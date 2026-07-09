@@ -5,8 +5,6 @@ import {
   saveLicenseKey,
   removeLicenseKey,
 } from '@/lib/licensing/verify';
-import { saveCloudConfig, removeCloudConfig, cloudConfigMatches } from '@/lib/licensing/cloud-config';
-import { resetCloudPool } from '@/lib/mysql';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,18 +52,12 @@ export async function POST() {
         const info = evaluateLicenseKey(json.signedLicense);
         if (info.status === 'active' || info.status === 'expired') saveLicenseKey(json.signedLicense);
       }
-      if (json.cloudConfig && !cloudConfigMatches(json.cloudConfig)) {
-        saveCloudConfig(json.cloudConfig);
-        resetCloudPool();
-      }
       return NextResponse.json({ success: true, status: 'active', changed: false });
     }
 
     // Explicit vendor actions → enforce a lock by clearing the local license.
     if (status === 'revoked' || status === 'suspended' || status === 'released') {
       removeLicenseKey();
-      removeCloudConfig();
-      resetCloudPool();
       return NextResponse.json({ success: true, status, changed: true });
     }
 

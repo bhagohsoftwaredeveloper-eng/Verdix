@@ -162,8 +162,6 @@ export async function DELETE(request: NextRequest) {
 
     // Propagate the delete across machines via cloud sync.
     if (tombstoneId) {
-      const { recordTombstone } = await import('@/lib/services/sync-tombstones');
-      await recordTombstone('payment_term_types', tombstoneId);
     }
 
     return NextResponse.json({

@@ -161,10 +161,6 @@ export async function DELETE(
     // Delete bad order (cascade will delete items)
     await query('DELETE FROM bad_orders WHERE id = ?', [id]);
 
-    // Propagate the delete across machines via cloud sync (items cascade).
-    const { recordTombstone } = await import('@/lib/services/sync-tombstones');
-    await recordTombstone('bad_orders', id);
-
     return NextResponse.json({
       success: true,
       message: 'Bad order deleted successfully',
