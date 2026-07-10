@@ -31,7 +31,7 @@ async function seedSettings(endpoint: string) {
 
 test.describe('External API sync logs', () => {
   test.beforeEach(async () => {
-    await testQuery('DELETE FROM external_api_logs WHERE transaction_id = ?', [TXN_ID]);
+    await testQuery('DELETE FROM external_api_logs WHERE transaction_id LIKE ?', [`${TXN_ID}%`]);
   });
 
   test('retry sa usa ka pending log DILI mo-insert ug duplicate row', async ({ request }) => {
@@ -58,5 +58,54 @@ test.describe('External API sync logs', () => {
     expect(rows.length, `expected 1 pending row, got ${rows.length}`).toBe(1);
     expect(rows[0].id).toBe(logId);
     expect(Number(rows[0].retry_count)).toBeGreaterThan(0);
+  });
+
+  test('DELETE /api/external-api/logs → mo-papas sa success ug failed, mo-bilin sa pending', async ({ request }) => {
+    const stamp = Date.now();
+    const mk = (status: string, suffix: string) => testQuery(
+      `INSERT INTO external_api_logs
+         (id, transaction_type, transaction_id, endpoint, payload, response, status, retry_count)
+       VALUES (?, 'PURCHASE_ORDER', ?, 'http://x/', '{}', NULL, ?, 0)`,
+      [`log_del_${stamp}_${suffix}`, `${TXN_ID}_${suffix}`, status],
+    );
+
+    await mk('pending', 'p');
+    await mk('success', 's');
+    await mk('failed', 'f');
+
+    const res = await request.delete('/api/external-api/logs');
+    expect(res.ok(), await res.text()).toBeTruthy();
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.deleted).toBeGreaterThanOrEqual(2);
+
+    const remaining = await testQuery(
+      `SELECT status FROM external_api_logs WHERE transaction_id LIKE ?`,
+      [`${TXN_ID}\\_%`],
+    );
+    expect(remaining.map((r: any) => r.status)).toEqual(['pending']);
+  });
+
+  test('DELETE dili mo-papas sa pending bisan i-sulay i-pili sa client', async ({ request }) => {
+    const stamp = Date.now();
+    await testQuery(
+      `INSERT INTO external_api_logs
+         (id, transaction_type, transaction_id, endpoint, payload, response, status, retry_count)
+       VALUES (?, 'PURCHASE_ORDER', ?, 'http://x/', '{}', NULL, 'pending', 0)`,
+      [`log_del_${stamp}_guard`, `${TXN_ID}_guard`],
+    );
+
+    // Ang endpoint walay status param — i-ignore ang query string ug ang body.
+    const res = await request.delete('/api/external-api/logs?status=pending', {
+      data: { status: 'pending' },
+    });
+    expect(res.ok(), await res.text()).toBeTruthy();
+
+    const rows = await testQuery(
+      `SELECT status FROM external_api_logs WHERE transaction_id = ?`,
+      [`${TXN_ID}_guard`],
+    );
+    expect(rows.length, 'pending row must survive').toBe(1);
+    expect(rows[0].status).toBe('pending');
   });
 });
