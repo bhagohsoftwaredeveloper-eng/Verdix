@@ -26,6 +26,42 @@ export type ApiSyncLog = {
  */
 export async function logApiSync(log: Omit<ApiSyncLog, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
   try {
+    // Ang 'pending' kay usa ka QUEUE ENTRY, dili usa ka historical event. Kung
+    // naa nay pending row para niini nga transaction, i-update — ayaw i-insert
+    // ug duplicate. Kung wala kini, ang matag retry sweep sa scheduler mo-clone
+    // sa row, ug ang table mo-tubo nga walay katapusan.
+    if (log.status === 'pending') {
+      const existing = await query(
+        `SELECT id, retry_count FROM external_api_logs
+          WHERE transaction_type = ? AND transaction_id = ? AND status = 'pending'
+          ORDER BY created_at DESC LIMIT 1`,
+        [log.transactionType, log.transactionId],
+      );
+
+      if (existing.length > 0) {
+        await query(
+          `UPDATE external_api_logs
+              SET endpoint = ?,
+                  payload = ?,
+                  error_message = ?,
+                  retry_count = retry_count + 1,
+                  next_retry_at = ?,
+                  last_retry_at = ?
+            WHERE id = ?`,
+          [
+            log.endpoint,
+            log.payload,
+            log.errorMessage || null,
+            log.nextRetryAt || null,
+            log.lastRetryAt || null,
+            existing[0].id,
+          ],
+        );
+        return;
+      }
+    }
+
+    // Bag-o nga pending, o usa ka success/failed nga historical event.
     const logId = `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const insertQuery = `
       INSERT INTO external_api_logs (

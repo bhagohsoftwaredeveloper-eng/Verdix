@@ -49,3 +49,14 @@ export async function resetPosState(): Promise<void> {
     await conn.end();
   }
 }
+
+/** Modagan ug usa ka statement batok sa `verdix_test`. Para sa seed/assert sa specs. */
+export async function testQuery(sql: string, params: any[] = []): Promise<any> {
+  const conn = await getConn();
+  try {
+    const [rows] = await conn.query(sql, params);
+    return rows;
+  } finally {
+    await conn.end();
+  }
+}
