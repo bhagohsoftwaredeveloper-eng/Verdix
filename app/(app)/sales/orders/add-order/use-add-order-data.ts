@@ -17,10 +17,6 @@ export function useAddOrderData({ isOpen }: { isOpen: boolean }) {
   const [salesPersons, setSalesPersons] = useState<SalesPerson[]>([]);
   const [isLoadingSalesPersons, setIsLoadingSalesPersons] = useState(false);
 
-  const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
-  const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
-  const [showSalesPersonDialog, setShowSalesPersonDialog] = useState(false);
-
   const fetchPaymentMethods = async () => {
     try {
       setIsLoadingPaymentMethods(true);
@@ -80,8 +76,5 @@ export function useAddOrderData({ isOpen }: { isOpen: boolean }) {
     paymentMethods, isLoadingPaymentMethods, fetchPaymentMethods,
     warehouses, isLoadingWarehouses, fetchWarehouses,
     salesPersons, isLoadingSalesPersons, fetchSalesPersons,
-    showWarehouseDialog, setShowWarehouseDialog,
-    showPaymentMethodDialog, setShowPaymentMethodDialog,
-    showSalesPersonDialog, setShowSalesPersonDialog,
   };
 }

@@ -1,13 +1,11 @@
 'use client';
 
 import { UseFormReturn } from 'react-hook-form';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { ManageWarehousesDialog } from '../../manage-warehouses/ManageWarehousesDialog';
-import { ManagePaymentMethodsDialog } from '../../manage-payment-methods/ManagePaymentMethodsDialog';
-import { ManageSalesPersonsDialog } from '@/app/(app)/settings/pos-setup/manage-sales-persons/ManageSalesPersonsDialog';
+import { InlineWarehouseSelect } from '@/app/(app)/components/inline-selects/inline-warehouse-select';
+import { InlinePaymentMethodSelect } from '@/app/(app)/components/inline-selects/inline-payment-method-select';
+import { InlineSalesPersonSelect } from '@/app/(app)/components/inline-selects/inline-sales-person-select';
 import { CustomerSelectionField } from '../../invoices/customer-selection/customer-selection-field';
 import type { SalesOrderFormValues } from './add-order-types';
 import type { Customer, PaymentMethod, Warehouse, SalesPerson } from '@/lib/types';
@@ -20,12 +18,6 @@ type Props = {
   paymentMethods: PaymentMethod[];
   salesPersons: SalesPerson[];
   isReferenceRequired: boolean;
-  showWarehouseDialog: boolean;
-  setShowWarehouseDialog: (v: boolean) => void;
-  showPaymentMethodDialog: boolean;
-  setShowPaymentMethodDialog: (v: boolean) => void;
-  showSalesPersonDialog: boolean;
-  setShowSalesPersonDialog: (v: boolean) => void;
   fetchWarehouses: () => void;
   fetchPaymentMethods: () => void;
   fetchSalesPersons: () => void;
@@ -34,9 +26,6 @@ type Props = {
 export function AddOrderFormHeader({
   form, customers, refetchCustomers,
   warehouses, paymentMethods, salesPersons, isReferenceRequired,
-  showWarehouseDialog, setShowWarehouseDialog,
-  showPaymentMethodDialog, setShowPaymentMethodDialog,
-  showSalesPersonDialog, setShowSalesPersonDialog,
   fetchWarehouses, fetchPaymentMethods, fetchSalesPersons,
 }: Props) {
   return (
@@ -100,26 +89,18 @@ export function AddOrderFormHeader({
           name="warehouse"
           render={({ field }) => (
             <FormItem className="space-y-1">
-              <div className="flex justify-between items-center w-full h-5">
+              <div className="flex items-center h-5">
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
-                <Button variant="link" className="h-auto p-0 text-xs text-primary" type="button"
-                  onClick={e => { e.preventDefault(); setShowWarehouseDialog(true); }}>
-                  Manage
-                </Button>
               </div>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger className="h-8 bg-background text-xs">
-                    <SelectValue placeholder="Select warehouse" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {warehouses?.map(w => (
-                    <SelectItem key={w.id} value={w.id.toString()} className="text-xs">{w.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <ManageWarehousesDialog open={showWarehouseDialog} onOpenChange={setShowWarehouseDialog} onChange={fetchWarehouses} />
+              <InlineWarehouseSelect
+                warehouses={warehouses}
+                value={field.value || ''}
+                onChange={field.onChange}
+                onListChange={fetchWarehouses}
+                placeholder="Select warehouse"
+                triggerClassName="h-8 bg-background text-xs"
+                itemClassName="text-xs"
+              />
               <FormMessage className="text-xs" />
             </FormItem>
           )}
@@ -133,26 +114,18 @@ export function AddOrderFormHeader({
           name="salesPersonId"
           render={({ field }) => (
             <FormItem className="space-y-1">
-              <div className="flex justify-between items-center w-full h-5">
+              <div className="flex items-center h-5">
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Sales Person</FormLabel>
-                <Button variant="link" className="h-auto p-0 text-xs text-primary" type="button"
-                  onClick={e => { e.preventDefault(); setShowSalesPersonDialog(true); }}>
-                  Manage
-                </Button>
               </div>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger className="h-8 bg-background text-xs">
-                    <SelectValue placeholder="Select sales person" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {salesPersons?.map(p => (
-                    <SelectItem key={p.id} value={p.id.toString()} className="text-xs">{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <ManageSalesPersonsDialog open={showSalesPersonDialog} onOpenChange={setShowSalesPersonDialog} onChange={fetchSalesPersons} />
+              <InlineSalesPersonSelect
+                salesPersons={salesPersons}
+                value={field.value || ''}
+                onChange={field.onChange}
+                onListChange={fetchSalesPersons}
+                placeholder="Select sales person"
+                triggerClassName="h-8 bg-background text-xs"
+                itemClassName="text-xs"
+              />
               <FormMessage className="text-xs" />
             </FormItem>
           )}
@@ -180,26 +153,18 @@ export function AddOrderFormHeader({
           name="paymentMethod"
           render={({ field }) => (
             <FormItem className="space-y-1">
-              <div className="flex justify-between items-center w-full h-5">
+              <div className="flex items-center h-5">
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
-                <Button variant="link" className="h-auto p-0 text-xs text-primary" type="button"
-                  onClick={e => { e.preventDefault(); setShowPaymentMethodDialog(true); }}>
-                  Manage
-                </Button>
               </div>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger className="h-8 bg-background text-xs">
-                    <SelectValue placeholder="Select method" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {paymentMethods?.map(m => (
-                    <SelectItem key={m.id} value={m.name} className="text-xs">{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <ManagePaymentMethodsDialog open={showPaymentMethodDialog} onOpenChange={setShowPaymentMethodDialog} onChange={fetchPaymentMethods} />
+              <InlinePaymentMethodSelect
+                paymentMethods={paymentMethods}
+                value={field.value || ''}
+                onChange={field.onChange}
+                onListChange={fetchPaymentMethods}
+                placeholder="Select method"
+                triggerClassName="h-8 bg-background text-xs"
+                itemClassName="text-xs"
+              />
               <FormMessage className="text-xs" />
             </FormItem>
           )}

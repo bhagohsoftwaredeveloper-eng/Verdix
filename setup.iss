@@ -1,6 +1,10 @@
 ; Vendix Inno Setup Script
 #define AppName "Vendix"
-#define AppVersion "1.16"
+; Version comes from package.json via `npm run build:installer`
+; (iscc /DAppVersion=x.y.z). The fallback below is only for direct iscc runs.
+#ifndef AppVersion
+  #define AppVersion "1.17.0"
+#endif
 #define AppPublisher "BHAGOH SYSTEMS"
 #define AppExeName "verdix.exe"
 
@@ -8,6 +12,7 @@
 AppId={{D3F73FF9-A96F-4F5C-9E2B-62972F84B373}
 AppName={#AppName}
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
@@ -77,6 +82,10 @@ Source: ".next\standalone\node_modules\*"; DestDir: "{app}\node_modules"; Flags:
 ; "Cannot find module ...app-route-turbo.runtime.prod.js". Overlaying the complete
 ; package fills those gaps.
 Source: "node_modules\next\*"; DestDir: "{app}\node_modules\next"; Flags: ignoreversion recursesubdirs createallsubdirs
+; node-cron's standalone trace only captures package.json (its CJS entry is
+; resolved dynamically), which silently breaks the backup scheduler on installs.
+; Overlay the full package the same way as 'next' above.
+Source: "node_modules\node-cron\*"; DestDir: "{app}\node_modules\node-cron"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: ".next\static\*"; DestDir: "{app}\.next\static"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "public\*"; DestDir: "{app}\public"; Flags: ignoreversion recursesubdirs createallsubdirs
 

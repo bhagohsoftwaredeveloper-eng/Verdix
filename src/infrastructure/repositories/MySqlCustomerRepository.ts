@@ -76,9 +76,9 @@ export class MySqlCustomerRepository implements CustomerRepository {
     `;
 
     await query(sql, [
-      customer.id, customer.name, customer.contactNumber, customer.active ?? true, 
+      customer.id, customer.name, customer.contactNumber || null, customer.active ?? true,
       customer.salesPerson || null, customer.salesArea || null, customer.salesGroup || null,
-      customer.loyaltyPoints || 0, customer.paymentTerms || null, customer.address || null, 
+      customer.loyaltyPoints || 0, customer.paymentTerms || null, customer.address || null,
       customer.billingAddress || null, customer.discount || 0, customer.creditLimit || 0, customer.priceLevelId || null
     ]);
 

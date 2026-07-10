@@ -19,8 +19,6 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
     customers, refetchCustomers,
     warehouses, fetchWarehouses,
     paymentMethods, fetchPaymentMethods,
-    showWarehouseDialog, setShowWarehouseDialog,
-    showPaymentMethodDialog, setShowPaymentMethodDialog,
     form, fields, remove,
     total, isSubmitting, isReferenceRequired,
     handleAddProduct, onSubmit,
@@ -53,10 +51,6 @@ export function AddSalesInvoiceDialog({ onSuccess }: AddSalesInvoiceDialogProps 
                 warehouses={warehouses}
                 paymentMethods={paymentMethods}
                 isReferenceRequired={isReferenceRequired}
-                showWarehouseDialog={showWarehouseDialog}
-                setShowWarehouseDialog={setShowWarehouseDialog}
-                showPaymentMethodDialog={showPaymentMethodDialog}
-                setShowPaymentMethodDialog={setShowPaymentMethodDialog}
                 fetchWarehouses={fetchWarehouses}
                 fetchPaymentMethods={fetchPaymentMethods}
               />

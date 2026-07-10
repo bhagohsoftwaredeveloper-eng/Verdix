@@ -1,138 +1,99 @@
-### Task 1: Sentinel constant + hosted-aware verifier
+### Task 1: Allow name-only customer creation
 
 **Files:**
-- Modify: `lib/licensing/core.ts` (add `HOSTED_MACHINE_ID`)
-- Modify: `lib/licensing/verify.ts` (env-key precedence, `isMachineMatch`, use it)
-- Create: `tests/unit/license-machine-match.test.ts`
-- Modify: `tests/unit/run.ts`
+- Create: `tests/e2e/customer-inline-api.spec.ts`
+- Modify: `src/core/customers/application/CreateCustomerUseCase.ts:10-12`
+- Modify: `src/infrastructure/repositories/MySqlCustomerRepository.ts:79`
 
 **Interfaces:**
-- Produces:
-  - `HOSTED_MACHINE_ID: string` (value `'HOSTED'`) exported from `lib/licensing/core.ts`.
-  - `isMachineMatch(payloadMachineId: string, actualMachineId: string): boolean` exported from `lib/licensing/verify.ts` — true when the normalized ids are equal OR when the payload id is the normalized sentinel.
-  - `readLicenseKey()` now returns `process.env.LICENSE_KEY` (trimmed) when set, else the file contents (unchanged signature: `(): string | null`).
+- Produces: `POST /api/customers` accepts `{ customerId, name }` with no `contactNumber` and returns `{ success: true, data: { id, name } }`. Tasks 5 and 6 depend on this.
+
+Background: `CreateCustomerUseCase.execute()` throws unless `id`, `name`, **and** `contactNumber` are present. Even after relaxing that, `MySqlCustomerRepository.create()` binds `customer.contactNumber` with no fallback — `undefined` reaches `mysql2` and **throws**. Both must change together.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/unit/license-machine-match.test.ts`:
+Create `tests/e2e/customer-inline-api.spec.ts`:
 
 ```ts
-import assert from 'node:assert/strict';
-import { isMachineMatch, readLicenseKey } from '../../lib/licensing/verify';
+import { test, expect } from '@playwright/test';
 
-// (a) exact hardware match (and normalization: dashes/case ignored)
-assert.equal(isMachineMatch('ABCD-1234', 'ABCD-1234'), true, 'exact match');
-assert.equal(isMachineMatch('abcd1234', 'ABCD-1234'), true, 'normalized match');
-
-// (b) sentinel skips the hardware check entirely
-assert.equal(isMachineMatch('HOSTED', 'ANY-OTHER-MACHINE'), true, 'sentinel bypasses hardware');
-assert.equal(isMachineMatch('hosted', 'whatever'), true, 'sentinel normalized');
-
-// (c) genuine mismatch (not sentinel) is rejected
-assert.equal(isMachineMatch('MACHINE-A', 'MACHINE-B'), false, 'mismatch rejected');
-
-// readLicenseKey: env var takes precedence over the file
-process.env.LICENSE_KEY = 'VRDX1.env-token';
-assert.equal(readLicenseKey(), 'VRDX1.env-token', 'env LICENSE_KEY wins over file');
-delete process.env.LICENSE_KEY;
-
-console.log('license-machine-match: all assertions passed');
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `npx tsx tests/unit/license-machine-match.test.ts`
-Expected: FAIL — `isMachineMatch` is not exported yet.
-
-- [ ] **Step 3: Add the sentinel constant to core.ts**
-
-In `lib/licensing/core.ts`, right after the `PRODUCT_ID` export (line ~24), add:
-
-```ts
-/** Sentinel machineId marking a web/hosted license (no hardware binding). */
-export const HOSTED_MACHINE_ID = 'HOSTED';
-```
-
-- [ ] **Step 4: Update verify.ts — import, env precedence, helper, and use**
-
-In `lib/licensing/verify.ts`:
-
-(a) Add `HOSTED_MACHINE_ID` to the existing `./core` import:
-
-```ts
-import {
-  verifyLicenseSignature,
-  normalizeMachineId,
-  PRODUCT_ID,
-  HOSTED_MACHINE_ID,
-  LicensePayload,
-} from './core';
-```
-
-(b) Replace the body of `readLicenseKey()` so the env var wins:
-
-```ts
-export function readLicenseKey(): string | null {
-  const envKey = process.env.LICENSE_KEY?.trim();
-  if (envKey) return envKey;
-  try {
-    const p = getLicenseFilePath();
-    if (!fs.existsSync(p)) return null;
-    const raw = fs.readFileSync(p, 'utf8').trim();
-    return raw || null;
-  } catch {
-    return null;
-  }
-}
-```
-
-(c) Add the pure helper (place it just above `evaluateLicenseKey`):
-
-```ts
 /**
- * True when the license's machineId matches this machine, OR when it is the
- * HOSTED sentinel (web/hosted licenses carry no hardware binding). The sentinel
- * only ever appears in a vendor-signed payload, so this cannot be forged.
+ * Customer write-API behavior nga gikinahanglan sa inline add/rename.
+ * Tanan API-level (walay UI), batok sa verdix_test.
  */
-export function isMachineMatch(payloadMachineId: string, actualMachineId: string): boolean {
-  const pid = normalizeMachineId(payloadMachineId);
-  if (pid === normalizeMachineId(HOSTED_MACHINE_ID)) return true;
-  return pid === normalizeMachineId(actualMachineId);
-}
+
+test.describe('Customer inline write API', () => {
+  test('POST /api/customers → mo-create ug name-only customer (walay contactNumber)', async ({ request }) => {
+    const id = `cust_t${Date.now().toString(36)}`;
+    const res = await request.post('/api/customers', {
+      data: { customerId: id, name: 'Inline Only Name' },
+    });
+
+    expect(res.ok(), await res.text()).toBeTruthy();
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.id).toBe(id);
+
+    // Ang na-create nga row makita sa list ug NULL/empty ang contact number.
+    const list = await request.get('/api/customers?limit=200');
+    const listBody = await list.json();
+    const created = listBody.data.find((c: any) => c.id === id);
+    expect(created, 'created customer should appear in list').toBeTruthy();
+    expect(created.name).toBe('Inline Only Name');
+    expect(created.contactNumber ?? null).toBeNull();
+  });
+});
 ```
 
-(d) In `evaluateLicenseKey`, replace the inline machine comparison:
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `npx playwright test tests/e2e/customer-inline-api.spec.ts`
+Expected: FAIL. The POST returns a non-OK status; the response body contains `Customer ID, name and contact number are required` (thrown by `CreateCustomerUseCase`).
+
+- [ ] **Step 3: Relax the use-case validation**
+
+In `src/core/customers/application/CreateCustomerUseCase.ts`, replace the guard:
 
 ```ts
-  if (normalizeMachineId(p.machineId) !== normalizeMachineId(machineId)) {
+  async execute(request: CreateCustomerRequest): Promise<string> {
+    if (!request.id || !request.name) {
+      throw new Error('Customer ID and name are required');
+    }
+
+    const customerId = await this.customerRepository.create(request);
+    return customerId;
+  }
 ```
 
-with:
+- [ ] **Step 4: Fix the `undefined` bind**
+
+In `src/infrastructure/repositories/MySqlCustomerRepository.ts`, line 79 currently reads:
 
 ```ts
-  if (!isMachineMatch(p.machineId, machineId)) {
+      customer.id, customer.name, customer.contactNumber, customer.active ?? true, 
 ```
 
-(leave the `return { status: 'wrong-machine', ... }` block that follows unchanged).
-
-- [ ] **Step 5: Register the test**
-
-In `tests/unit/run.ts`, add:
+Change `customer.contactNumber` to coerce, matching every other optional field on that line:
 
 ```ts
-import './license-machine-match.test';
+      customer.id, customer.name, customer.contactNumber || null, customer.active ?? true, 
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [ ] **Step 5: Run the test to verify it passes**
 
-Run: `npx tsx tests/unit/license-machine-match.test.ts`
-Expected: PASS — prints `license-machine-match: all assertions passed`.
+Run: `npx playwright test tests/e2e/customer-inline-api.spec.ts`
+Expected: PASS (1 passed).
+
+- [ ] **Step 6: Verify typecheck**
+
+Run: `npm run typecheck`
+Expected: no error lines referencing `CreateCustomerUseCase.ts` or `MySqlCustomerRepository.ts`. (Pre-existing errors in `products/add-product`, `products/edit-product`, `.next/types`, `scratch/` are expected — ignore them.)
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add lib/licensing/core.ts lib/licensing/verify.ts tests/unit/license-machine-match.test.ts tests/unit/run.ts
-git commit -m "feat: hosted-license sentinel + env LICENSE_KEY precedence in verifier"
+git add tests/e2e/customer-inline-api.spec.ts src/core/customers/application/CreateCustomerUseCase.ts src/infrastructure/repositories/MySqlCustomerRepository.ts
+git commit -m "feat: allow name-only customer creation"
 ```
 
 ---

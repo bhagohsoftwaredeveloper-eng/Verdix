@@ -45,9 +45,9 @@ import {
 } from '@/components/ui/table';
 import { Loader2, Trash2, Search, ArrowRight, Wand2 } from 'lucide-react';
 
-import { ManagePaymentMethodsDialog } from '../../sales/manage-payment-methods/ManagePaymentMethodsDialog';
-import { ManageWarehousesDialog } from '../../sales/manage-warehouses/ManageWarehousesDialog';
-import { SupplierFormDialog } from '../../products/suppliers/ManageSuppliersDialog';
+import { InlineWarehouseSelect } from '../../components/inline-selects/inline-warehouse-select';
+import { InlinePaymentMethodSelect } from '../../components/inline-selects/inline-payment-method-select';
+import { InlineSupplierSelect } from '../../components/inline-selects/inline-supplier-select';
 
 import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purchase-utils';
 import { formatQuantity } from '@/lib/utils';
@@ -76,8 +76,9 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
     systemSettings,
     total, vatTotal, purchaseResults,
     handleAddProduct,
-    handleAddSupplier,
+    fetchSuppliers,
     fetchWarehouses,
+    refetchPaymentMethods,
     onSubmit,
     processSubmit,
   } = controller;
@@ -110,26 +111,17 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                   name="supplierId"
                   render={({ field }) => (
                     <FormItem className="space-y-1">
-                      <div className="flex items-center justify-between h-5">
+                      <div className="flex items-center h-5">
                         <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier</FormLabel>
-                        <SupplierFormDialog onSave={handleAddSupplier}>
-                          <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
-                        </SupplierFormDialog>
                       </div>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-8 bg-background text-xs">
-                            <SelectValue placeholder="Select..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {suppliers.map((sup) => (
-                            <SelectItem key={sup.id} value={sup.id} className="text-xs">
-                              {sup.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <InlineSupplierSelect
+                        suppliers={suppliers}
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        onListChange={fetchSuppliers}
+                        triggerClassName="h-8 bg-background text-xs"
+                        itemClassName="text-xs"
+                      />
                       <FormMessage className="text-xs" />
                     </FormItem>
                   )}
@@ -171,26 +163,17 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                   name="paymentMethod"
                   render={({ field }) => (
                     <FormItem className="space-y-1">
-                      <div className="flex items-center justify-between h-5">
+                      <div className="h-5 flex items-center">
                         <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
-                        <ManagePaymentMethodsDialog
-                          trigger={<span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>}
-                        />
                       </div>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-8 bg-background text-xs">
-                            <SelectValue placeholder="Select..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {paymentMethods?.map((method) => (
-                            <SelectItem key={method.id} value={method.name} className="text-xs">
-                              {method.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <InlinePaymentMethodSelect
+                        paymentMethods={paymentMethods}
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        onListChange={refetchPaymentMethods}
+                        triggerClassName="h-8 bg-background text-xs"
+                        itemClassName="text-xs"
+                      />
                       <FormMessage className="text-xs" />
                     </FormItem>
                   )}
@@ -256,27 +239,17 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                   name="receiveToWarehouse"
                   render={({ field }) => (
                     <FormItem className="space-y-1">
-                      <div className="flex items-center justify-between h-5">
+                      <div className="h-5 flex items-center">
                         <FormLabel className="text-xs font-semibold text-muted-foreground">Receive To</FormLabel>
-                        <ManageWarehousesDialog
-                          trigger={<span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>}
-                          onChange={fetchWarehouses}
-                        />
                       </div>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-8 bg-background text-xs">
-                            <SelectValue placeholder="Select..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {warehouses?.map((warehouse) => (
-                            <SelectItem key={warehouse.id} value={warehouse.id.toString()} className="text-xs">
-                              {warehouse.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <InlineWarehouseSelect
+                        warehouses={warehouses}
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        onListChange={fetchWarehouses}
+                        triggerClassName="h-8 bg-background text-xs"
+                        itemClassName="text-xs"
+                      />
                       <FormMessage className="text-xs" />
                     </FormItem>
                   )}

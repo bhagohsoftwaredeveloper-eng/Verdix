@@ -2,11 +2,9 @@
 
 import { UseFormReturn } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { ManageWarehousesDialog } from '../../manage-warehouses/ManageWarehousesDialog';
-import { ManagePaymentMethodsDialog } from '../../manage-payment-methods/ManagePaymentMethodsDialog';
+import { InlineWarehouseSelect } from '@/app/(app)/components/inline-selects/inline-warehouse-select';
+import { InlinePaymentMethodSelect } from '@/app/(app)/components/inline-selects/inline-payment-method-select';
 import { CustomerSelectionField } from '../customer-selection/customer-selection-field';
 import type { SalesInvoiceFormValues } from './add-invoice-types';
 import type { Customer, PaymentMethod, Warehouse } from '@/lib/types';
@@ -18,10 +16,6 @@ type Props = {
   warehouses: Warehouse[];
   paymentMethods: PaymentMethod[];
   isReferenceRequired: boolean;
-  showWarehouseDialog: boolean;
-  setShowWarehouseDialog: (v: boolean) => void;
-  showPaymentMethodDialog: boolean;
-  setShowPaymentMethodDialog: (v: boolean) => void;
   fetchWarehouses: () => void;
   fetchPaymentMethods: () => void;
 };
@@ -29,8 +23,6 @@ type Props = {
 export function AddInvoiceFormHeader({
   form, customers, refetchCustomers,
   warehouses, paymentMethods, isReferenceRequired,
-  showWarehouseDialog, setShowWarehouseDialog,
-  showPaymentMethodDialog, setShowPaymentMethodDialog,
   fetchWarehouses, fetchPaymentMethods,
 }: Props) {
   return (
@@ -95,21 +87,18 @@ export function AddInvoiceFormHeader({
           name="warehouse"
           render={({ field }) => (
             <FormItem className="space-y-1">
-              <div className="flex justify-between items-center w-full h-5">
+              <div className="flex items-center h-5">
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Warehouse</FormLabel>
-                <Button variant="link" className="h-auto p-0 text-xs text-primary" type="button" onClick={e => { e.preventDefault(); setShowWarehouseDialog(true); }}>
-                  Manage
-                </Button>
               </div>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Select warehouse" /></SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {warehouses.map(w => <SelectItem key={w.id} value={w.id.toString()} className="text-xs">{w.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <ManageWarehousesDialog open={showWarehouseDialog} onOpenChange={setShowWarehouseDialog} onChange={fetchWarehouses} />
+              <InlineWarehouseSelect
+                warehouses={warehouses}
+                value={field.value || ''}
+                onChange={field.onChange}
+                onListChange={fetchWarehouses}
+                placeholder="Select warehouse"
+                triggerClassName="h-8 bg-background text-xs"
+                itemClassName="text-xs"
+              />
             </FormItem>
           )}
         />
@@ -122,21 +111,18 @@ export function AddInvoiceFormHeader({
           name="paymentMethod"
           render={({ field }) => (
             <FormItem className="space-y-1">
-              <div className="flex justify-between items-center w-full h-5">
+              <div className="flex items-center h-5">
                 <FormLabel className="text-xs font-semibold text-muted-foreground">Payment Method</FormLabel>
-                <Button variant="link" className="h-auto p-0 text-xs text-primary" type="button" onClick={e => { e.preventDefault(); setShowPaymentMethodDialog(true); }}>
-                  Manage
-                </Button>
               </div>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Select method" /></SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {paymentMethods.map(m => <SelectItem key={m.id} value={m.name} className="text-xs">{m.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <ManagePaymentMethodsDialog open={showPaymentMethodDialog} onOpenChange={setShowPaymentMethodDialog} onChange={fetchPaymentMethods} />
+              <InlinePaymentMethodSelect
+                paymentMethods={paymentMethods}
+                value={field.value || ''}
+                onChange={field.onChange}
+                onListChange={fetchPaymentMethods}
+                placeholder="Select method"
+                triggerClassName="h-8 bg-background text-xs"
+                itemClassName="text-xs"
+              />
             </FormItem>
           )}
         />

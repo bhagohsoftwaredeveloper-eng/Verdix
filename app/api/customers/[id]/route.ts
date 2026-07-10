@@ -73,64 +73,52 @@ export async function PUT(
     const resolvedParams = await params;
     const customerId = resolvedParams.id;
     const body = await request.json();
-    const {
-      name,
-      contactNumber,
-      active,
-      salesPerson,
-      salesArea,
-      salesGroup,
-      loyaltyPoints,
-      paymentTerms,
-      address,
-      billingAddress,
-      discount,
-      creditLimit,
-      priceLevelId
-    } = body;
 
-    if (!name || !contactNumber) {
+    // Column map. Ang `coerce` mo-preserve sa daan nga per-field semantics:
+    // strings: '' → NULL (aron ma-clear), numbers/booleans: adunay default.
+    const FIELDS: Array<{ key: string; column: string; coerce: (v: any) => any }> = [
+      { key: 'name', column: 'name', coerce: (v) => v },
+      { key: 'contactNumber', column: 'contact_number', coerce: (v) => v || null },
+      { key: 'active', column: 'active', coerce: (v) => v ?? true },
+      { key: 'salesPerson', column: 'sales_person', coerce: (v) => v || null },
+      { key: 'salesArea', column: 'sales_area', coerce: (v) => v || null },
+      { key: 'salesGroup', column: 'sales_group', coerce: (v) => v || null },
+      { key: 'loyaltyPoints', column: 'loyalty_points', coerce: (v) => v ?? 0 },
+      { key: 'paymentTerms', column: 'payment_terms', coerce: (v) => v || null },
+      { key: 'address', column: 'address', coerce: (v) => v || null },
+      { key: 'billingAddress', column: 'billing_address', coerce: (v) => v || null },
+      { key: 'discount', column: 'discount', coerce: (v) => v ?? 0 },
+      { key: 'creditLimit', column: 'credit_limit', coerce: (v) => v ?? 0 },
+      { key: 'priceLevelId', column: 'price_level_id', coerce: (v) => v || null },
+    ];
+
+    // Ang name required kung gi-apil sa body (dili pwede blangko).
+    if ('name' in body && (typeof body.name !== 'string' || !body.name.trim())) {
       return NextResponse.json(
-        { success: false, error: 'Name and contact number are required' },
+        { success: false, error: 'Name is required' },
         { status: 400 }
       );
     }
 
+    const present = FIELDS.filter((f) => f.key in body);
+    if (present.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No fields to update' },
+        { status: 400 }
+      );
+    }
+
+    const setClause = present.map((f) => `${f.column} = ?`).join(',\n        ');
+    const values = present.map((f) => f.coerce(body[f.key]));
+
     const sql = `
       UPDATE customers SET
-        name = ?,
-        contact_number = ?,
-        active = ?,
-        sales_person = ?,
-        sales_area = ?,
-        sales_group = ?,
-        loyalty_points = ?,
-        payment_terms = ?,
-        address = ?,
-        billing_address = ?,
-        discount = ?,
-        credit_limit = ?,
-        price_level_id = ?,
+        ${setClause},
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
 
-    const result = await query(sql, [
-      name,
-      contactNumber,
-      active ?? true,
-      salesPerson || null,
-      salesArea || null,
-      salesGroup || null,
-      loyaltyPoints ?? 0,
-      paymentTerms || null,
-      address || null,
-      billingAddress || null,
-      discount ?? 0,
-      creditLimit ?? 0,
-      priceLevelId || null,
-      customerId
-    ]);
+    const result = await query(sql, [...values, customerId]);
 
     if (result.affectedRows === 0) {
       return NextResponse.json(
@@ -142,7 +130,7 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       message: 'Customer updated successfully',
-      data: { id: customerId, name },
+      data: { id: customerId, name: body.name },
       timestamp: new Date().toISOString()
     });
   } catch (error) {

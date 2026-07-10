@@ -100,7 +100,25 @@ export async function PUT(
       WHERE id = ?
     `;
 
-    await query(sql, [name, contactNumber, address, email, telephone, mobilePhone, company, tin, paymentTerms, markupPercentage, orderSchedule, id]);
+    // COALESCE(?, col) sa SQL mo-preserve sa daan nga value kung null ang bind,
+    // mao nga ang partial body (pananglitan { name } ra) dili mo-wipe sa uban.
+    // Ang `?? null` explicit — ang pool.query() mo-coerce na sa undefined ngadto
+    // sa NULL, apan ang pool.execute() mo-throw. Gamiton ang `??` dili `||` kay
+    // ang markupPercentage pwede tinuod nga 0.
+    await query(sql, [
+      name ?? null,
+      contactNumber ?? null,
+      address ?? null,
+      email ?? null,
+      telephone ?? null,
+      mobilePhone ?? null,
+      company ?? null,
+      tin ?? null,
+      paymentTerms ?? null,
+      markupPercentage ?? null,
+      orderSchedule ?? null,
+      id,
+    ]);
 
     return NextResponse.json({
       success: true,

@@ -7,8 +7,8 @@ export class CreateCustomerUseCase {
   constructor(private customerRepository: CustomerRepository) {}
 
   async execute(request: CreateCustomerRequest): Promise<string> {
-    if (!request.id || !request.name || !request.contactNumber) {
-      throw new Error('Customer ID, name and contact number are required');
+    if (!request.id || !request.name) {
+      throw new Error('Customer ID and name are required');
     }
 
     const customerId = await this.customerRepository.create(request);
