@@ -121,7 +121,7 @@ test.describe('External API sync logs', () => {
     await testQuery(
       `INSERT INTO external_api_logs
          (id, transaction_type, transaction_id, endpoint, payload, response, status, error_message, retry_count)
-       VALUES (?, 'PURCHASE_ORDER', ?, 'http://127.0.0.1:9/', '{"total":1}', NULL, 'pending', 'seeded', 0)`,
+       VALUES (?, 'PURCHASE_ORDER', ?, 'http://127.0.0.1:9/', '{"total":1,"items":[]}', NULL, 'pending', 'seeded', 0)`,
       [logId, TXN_ID],
     );
 
@@ -141,6 +141,13 @@ test.describe('External API sync logs', () => {
   });
 });
 ```
+
+The seed payload **must** include `items`. `syncPurchaseTransaction` throws
+`'Purchase order items are missing in payload'` at
+`lib/services/external-accounting-api.ts:234` before it ever attempts the HTTP
+call, so a payload of `{"total":1}` never reaches the pending re-log path and the
+test would show `0` duplicates instead of `3` — a false RED. `items: []` is
+truthy and clears the guard without inventing line items.
 
 - [ ] **Step 3: Run the test to verify it fails**
 
