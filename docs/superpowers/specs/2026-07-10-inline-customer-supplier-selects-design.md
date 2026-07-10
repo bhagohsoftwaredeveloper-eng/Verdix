@@ -41,9 +41,22 @@ the API is adjusted to permit them.
    not by the schema. `customers.contact_number` is `NULL`-able.
 2. `MySqlCustomerRepository.create()` binds `customer.contactNumber` with no
    `|| null` fallback (`src/infrastructure/repositories/MySqlCustomerRepository.ts:79`),
-   unlike every other optional field on that line. `lib/mysql.ts` passes params
-   straight to `mysql2`, which **throws** on `undefined`. A name-only create
-   would crash, not 400.
+   unlike every other optional field on that line.
+
+   > **Correction (verified 2026-07-10, after implementation).** An earlier draft
+   > of this spec claimed `mysql2` **throws** on `undefined` binds, so a name-only
+   > create would crash. That is **false for this codebase**. `lib/mysql.ts:58`
+   > uses `pool.query()`, and mysql2's non-prepared `query()` path silently
+   > formats `undefined` as SQL `NULL`. Only the prepared `execute()` path throws
+   > (`Bind parameters must not contain undefined`). Empirically confirmed:
+   > `query('SELECT COALESCE(?, "kept")', [undefined])` returns `"kept"`;
+   > `execute(...)` with the same args throws.
+   >
+   > The `|| null` coercions specified below are therefore **defensive, not
+   > crash-fixes**: they make the NULL intent explicit and keep these routes
+   > correct if anyone ever migrates them to `execute()`. The blocker on
+   > name-only creation was solely the `CreateCustomerUseCase` validation guard
+   > in constraint 1.
 3. `PUT /api/customers/[id]` overwrites all 13 columns unconditionally and
    requires `contactNumber`. Two consequences: a name-only customer cannot be
    renamed, and echoing back the list's `loyaltyPoints` would corrupt data —
@@ -53,7 +66,14 @@ the API is adjusted to permit them.
 4. `PUT /api/suppliers/[id]` already uses `COALESCE(?, col)` for every column,
    but binds all 11 destructured fields positionally
    (`app/api/suppliers/[id]/route.ts:103`). A `{ name }`-only body sends 10
-   `undefined` binds and crashes.
+   `undefined` binds.
+
+   > **Correction (verified 2026-07-10).** Per the correction in constraint 2,
+   > this does **not** crash — `pool.query()` turns those `undefined`s into SQL
+   > `NULL`, and `COALESCE(NULL, col)` then preserves each column. The supplier
+   > PUT already accepted partial bodies correctly. The `?? null` change is
+   > defensive. The accompanying E2E test is a **characterization/regression
+   > test** (it locks in the preservation property), not a TDD RED test.
 5. `POST /api/suppliers` requires `id` + `name` only, and
    `MySqlSupplierRepository.create()` already guards every optional field with
    `|| null`. Supplier create needs no API change.

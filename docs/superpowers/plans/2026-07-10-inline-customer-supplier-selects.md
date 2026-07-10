@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- `lib/mysql.ts` passes bind params straight to `mysql2`, which **throws on `undefined`**. Every optional bind must be coerced to `null`.
+- ~~`lib/mysql.ts` passes bind params straight to `mysql2`, which **throws on `undefined`**.~~ **CORRECTED 2026-07-10:** `lib/mysql.ts:58` uses `pool.query()`, whose non-prepared path silently formats `undefined` as SQL `NULL`. Only `pool.execute()` throws. The `|| null` / `?? null` coercions in Tasks 1 and 3 are therefore **defensive** (explicit NULL intent; safe if a route ever migrates to `execute()`), not crash-fixes. Task 3 consequently has **no RED** — its test is a characterization/regression test.
 - The customer PUT change must stay **backward compatible**: existing callers (`AddCustomerDialog`, customer list page) send all 13 keys including explicit `null`s, and clearing a field by sending `null`/`''` must still write `NULL`.
 - Do **not** modify `app/(app)/products/components/inline-editable-select.tsx`. Both new wrappers consume it as-is.
 - Form value conventions: supplier field stores the **id** as string. The customer field stores the **whole `Customer` object** (`customer-selection-field.tsx:53-57`).
