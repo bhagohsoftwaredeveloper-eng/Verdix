@@ -101,7 +101,10 @@ export async function PUT(
     `;
 
     // COALESCE(?, col) sa SQL mo-preserve sa daan nga value kung null ang bind,
-    // apan ang mysql2 mo-throw sa `undefined` — mao nga i-coerce tanan.
+    // mao nga ang partial body (pananglitan { name } ra) dili mo-wipe sa uban.
+    // Ang `?? null` explicit — ang pool.query() mo-coerce na sa undefined ngadto
+    // sa NULL, apan ang pool.execute() mo-throw. Gamiton ang `??` dili `||` kay
+    // ang markupPercentage pwede tinuod nga 0.
     await query(sql, [
       name ?? null,
       contactNumber ?? null,
