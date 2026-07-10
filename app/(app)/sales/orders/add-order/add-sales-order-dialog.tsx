@@ -75,12 +75,6 @@ export function AddSalesOrderDialog({ initialData, isOpen: controlledIsOpen, onO
                 paymentMethods={data.paymentMethods}
                 salesPersons={data.salesPersons}
                 isReferenceRequired={formHook.isReferenceRequired}
-                showWarehouseDialog={data.showWarehouseDialog}
-                setShowWarehouseDialog={data.setShowWarehouseDialog}
-                showPaymentMethodDialog={data.showPaymentMethodDialog}
-                setShowPaymentMethodDialog={data.setShowPaymentMethodDialog}
-                showSalesPersonDialog={data.showSalesPersonDialog}
-                setShowSalesPersonDialog={data.setShowSalesPersonDialog}
                 fetchWarehouses={data.fetchWarehouses}
                 fetchPaymentMethods={data.fetchPaymentMethods}
                 fetchSalesPersons={data.fetchSalesPersons}
