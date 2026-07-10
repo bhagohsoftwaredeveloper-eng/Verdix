@@ -114,7 +114,11 @@ export function InlineEditableSelect<T>({
     <Select
       open={open}
       onOpenChange={onOpenChange}
-      onValueChange={onChange}
+      // Radix's hidden native <select> re-dispatches a change event when the
+      // controlled value changes before the matching <option> has mounted
+      // (e.g. right after an inline add); its value reads as '' and would
+      // clobber the just-committed selection. Real selections are never ''.
+      onValueChange={(v) => { if (v) onChange(v); }}
       value={value}
     >
       <FormControl>
