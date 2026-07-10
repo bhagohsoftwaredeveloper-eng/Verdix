@@ -100,7 +100,22 @@ export async function PUT(
       WHERE id = ?
     `;
 
-    await query(sql, [name, contactNumber, address, email, telephone, mobilePhone, company, tin, paymentTerms, markupPercentage, orderSchedule, id]);
+    // COALESCE(?, col) sa SQL mo-preserve sa daan nga value kung null ang bind,
+    // apan ang mysql2 mo-throw sa `undefined` — mao nga i-coerce tanan.
+    await query(sql, [
+      name ?? null,
+      contactNumber ?? null,
+      address ?? null,
+      email ?? null,
+      telephone ?? null,
+      mobilePhone ?? null,
+      company ?? null,
+      tin ?? null,
+      paymentTerms ?? null,
+      markupPercentage ?? null,
+      orderSchedule ?? null,
+      id,
+    ]);
 
     return NextResponse.json({
       success: true,
