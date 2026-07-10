@@ -4,7 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import type { ApiSyncLog } from '@/lib/services/api-sync-logger';
 
 interface Props {
@@ -15,9 +20,11 @@ interface Props {
   onRefresh: () => void;
   retryingLogId: string | null;
   onRetry: (log: ApiSyncLog) => void;
+  onClearLogs: () => void;
+  isClearingLogs: boolean;
 }
 
-export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterChange, onRefresh, retryingLogId, onRetry }: Props) {
+export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterChange, onRefresh, retryingLogId, onRetry, onClearLogs, isClearingLogs }: Props) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -39,6 +46,28 @@ export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterCh
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Refresh
           </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" disabled={isClearingLogs}>
+                {isClearingLogs ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Clear Logs
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear sync logs?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This deletes all <strong>success</strong> and <strong>failed</strong> entries.{' '}
+                  <strong>Pending</strong> entries are kept — they are still queued for retry.
+                  This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={onClearLogs}>Clear Logs</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </CardHeader>
       <CardContent>

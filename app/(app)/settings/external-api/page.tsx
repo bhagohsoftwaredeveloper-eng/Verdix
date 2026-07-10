@@ -60,6 +60,7 @@ export default function ExternalApiSettingsPage() {
             logs={m.logs} isLoading={m.isLoadingLogs}
             logStatusFilter={m.logStatusFilter} onStatusFilterChange={m.handleStatusFilterChange}
             onRefresh={() => m.fetchLogs()} retryingLogId={m.retryingLogId} onRetry={m.handleRetryLog}
+            onClearLogs={m.clearLogs} isClearingLogs={m.isClearingLogs}
           />
         </TabsContent>
       </Tabs>
