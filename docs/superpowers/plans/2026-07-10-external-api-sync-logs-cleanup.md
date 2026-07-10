@@ -288,20 +288,22 @@ const migration: Migration = {
     //    connection POOL, ug ang temporary table kay per-connection — ang sunod
     //    nga query basin lain nga connection, ug mawala ang table. Ihatod nato
     //    ang keep-list sa JS (14 ra ka rows).
+    //    Gamiton ang ROW_NUMBER() imbes GROUP BY: ang MySQL 8 naa'y
+    //    ONLY_FULL_GROUP_BY nga default sql_mode, busa ang `SELECT l.id ...
+    //    GROUP BY transaction_type, transaction_id` mo-error ug
+    //    ER_WRONG_FIELD_WITH_GROUP. Ang window function usab deterministic
+    //    kung parehas ang created_at (tie-break sa id).
     const keepRows = await query(`
-      SELECT l.id
-        FROM external_api_logs l
-        JOIN (
-          SELECT transaction_type, transaction_id, MAX(created_at) AS max_created
-            FROM external_api_logs
-           WHERE status = 'pending'
-           GROUP BY transaction_type, transaction_id
-        ) m
-          ON m.transaction_type = l.transaction_type
-         AND m.transaction_id   = l.transaction_id
-         AND m.max_created      = l.created_at
-       WHERE l.status = 'pending'
-       GROUP BY l.transaction_type, l.transaction_id
+      SELECT id FROM (
+        SELECT id,
+               ROW_NUMBER() OVER (
+                 PARTITION BY transaction_type, transaction_id
+                 ORDER BY created_at DESC, id DESC
+               ) AS rn
+          FROM external_api_logs
+         WHERE status = 'pending'
+      ) ranked
+      WHERE rn = 1
     `);
 
     const keepIds: string[] = keepRows.map((r: any) => r.id);
