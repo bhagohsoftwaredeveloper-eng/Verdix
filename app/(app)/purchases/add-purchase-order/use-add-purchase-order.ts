@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -20,7 +20,6 @@ import {
   getBrands,
   getSubcategories,
   getSuppliers,
-  addSupplier,
 } from '../../products/actions';
 import { purchaseOrderSchema, type PurchaseOrderFormValues } from './purchase-order-schema';
 
@@ -65,6 +64,11 @@ export function useAddPurchaseOrder({
   const { paymentMethods, refetch: refetchPaymentMethods } = usePaymentMethods();
   const { products } = useProducts();
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const fetchSuppliers = useCallback(async () => {
+    const mod = await import('../../products/actions');
+    const data = await mod.getSuppliers();
+    setSuppliers(data || []);
+  }, []);
   const { user } = useUser();
 
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
@@ -115,10 +119,8 @@ export function useAddPurchaseOrder({
   }, []);
 
   useEffect(() => {
-    import('../../products/actions').then((mod) =>
-      mod.getSuppliers().then((data) => setSuppliers(data)),
-    );
-  }, []);
+    fetchSuppliers();
+  }, [fetchSuppliers]);
 
   useEffect(() => {
     fetch(getApiUrl('/settings/tax-rates'))
@@ -454,18 +456,6 @@ export function useAddPurchaseOrder({
     }
   }
 
-  // ---- supplier management -------------------------------------------------
-
-  const handleAddSupplier = async (data: any) => {
-    const result = await addSupplier(data);
-    if (result.success) {
-      const newSuppliers = await import('../../products/actions').then((mod) => mod.getSuppliers());
-      setSuppliers(newSuppliers);
-    } else {
-      throw new Error(result.message);
-    }
-  };
-
   return {
     // open state
     isOpen, setOpen,
@@ -489,7 +479,7 @@ export function useAddPurchaseOrder({
     total, vatTotal, purchaseResults,
     // handlers
     handleAddProduct,
-    handleAddSupplier,
+    fetchSuppliers,
     fetchWarehouses,
     refetchPaymentMethods,
     onSubmit,

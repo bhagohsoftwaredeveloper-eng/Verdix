@@ -45,9 +45,9 @@ import {
 } from '@/components/ui/table';
 import { Loader2, Trash2, Search, ArrowRight, Wand2 } from 'lucide-react';
 
-import { SupplierFormDialog } from '../../products/suppliers/ManageSuppliersDialog';
 import { InlineWarehouseSelect } from '../../components/inline-selects/inline-warehouse-select';
 import { InlinePaymentMethodSelect } from '../../components/inline-selects/inline-payment-method-select';
+import { InlineSupplierSelect } from '../../components/inline-selects/inline-supplier-select';
 
 import { calculateMarkupPercentage, calculateSuggestedPrice } from '@/lib/purchase-utils';
 import { formatQuantity } from '@/lib/utils';
@@ -76,7 +76,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
     systemSettings,
     total, vatTotal, purchaseResults,
     handleAddProduct,
-    handleAddSupplier,
+    fetchSuppliers,
     fetchWarehouses,
     refetchPaymentMethods,
     onSubmit,
@@ -111,26 +111,17 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                   name="supplierId"
                   render={({ field }) => (
                     <FormItem className="space-y-1">
-                      <div className="flex items-center justify-between h-5">
+                      <div className="flex items-center h-5">
                         <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier</FormLabel>
-                        <SupplierFormDialog onSave={handleAddSupplier}>
-                          <span className="text-xs text-primary cursor-pointer hover:underline">Manage</span>
-                        </SupplierFormDialog>
                       </div>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-8 bg-background text-xs">
-                            <SelectValue placeholder="Select..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {suppliers.map((sup) => (
-                            <SelectItem key={sup.id} value={sup.id} className="text-xs">
-                              {sup.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <InlineSupplierSelect
+                        suppliers={suppliers}
+                        value={field.value || ''}
+                        onChange={field.onChange}
+                        onListChange={fetchSuppliers}
+                        triggerClassName="h-8 bg-background text-xs"
+                        itemClassName="text-xs"
+                      />
                       <FormMessage className="text-xs" />
                     </FormItem>
                   )}
