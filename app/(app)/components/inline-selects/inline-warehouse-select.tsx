@@ -52,6 +52,7 @@ export function InlineWarehouseSelect({
     try {
       // PUT is a full-row update — fetch the record so location/contact/isMain survive the rename
       const getRes = await fetch(getApiUrl(`/warehouses/${id}`));
+      if (!getRes.ok) throw new Error('Failed to load warehouse');
       const existing = await getRes.json();
       if (!existing.success) throw new Error(existing.error || 'Failed to load warehouse');
       const res = await fetch(getApiUrl(`/warehouses/${id}`), {

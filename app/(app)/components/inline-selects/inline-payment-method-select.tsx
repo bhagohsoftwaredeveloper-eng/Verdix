@@ -52,6 +52,7 @@ export function InlinePaymentMethodSelect({
     try {
       // PUT is a full-row update — fetch the record so reference/points settings survive the rename
       const getRes = await fetch(getApiUrl(`/payment-methods/${id}`));
+      if (!getRes.ok) throw new Error('Failed to load payment method');
       const existing = await getRes.json();
       if (!existing.success) throw new Error(existing.error || 'Failed to load payment method');
       const res = await fetch(getApiUrl(`/payment-methods/${id}`), {

@@ -177,7 +177,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                       </div>
                       <InlinePaymentMethodSelect
                         paymentMethods={paymentMethods}
-                        value={field.value}
+                        value={field.value || ''}
                         onChange={field.onChange}
                         onListChange={refetchPaymentMethods}
                         triggerClassName="h-8 bg-background text-xs"
@@ -253,7 +253,7 @@ export function AddPurchaseOrderDialog(props: UseAddPurchaseOrderProps & { trigg
                       </div>
                       <InlineWarehouseSelect
                         warehouses={warehouses}
-                        value={field.value}
+                        value={field.value || ''}
                         onChange={field.onChange}
                         onListChange={fetchWarehouses}
                         triggerClassName="h-8 bg-background text-xs"
