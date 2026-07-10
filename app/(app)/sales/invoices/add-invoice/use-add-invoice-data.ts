@@ -12,8 +12,6 @@ export function useAddInvoiceData({ isOpen }: { isOpen: boolean }) {
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(false);
-  const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
-  const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
 
   const fetchWarehouses = async () => {
     try {
@@ -60,7 +58,5 @@ export function useAddInvoiceData({ isOpen }: { isOpen: boolean }) {
     customers, refetchCustomers,
     warehouses, isLoadingWarehouses, fetchWarehouses,
     paymentMethods, isLoadingPaymentMethods, fetchPaymentMethods,
-    showWarehouseDialog, setShowWarehouseDialog,
-    showPaymentMethodDialog, setShowPaymentMethodDialog,
   };
 }
