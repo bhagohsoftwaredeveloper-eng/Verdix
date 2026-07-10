@@ -36,9 +36,14 @@ export function InlineCustomerSelect({
   const pendingRef = useRef<Customer | null>(null);
 
   const handleSelect = (id: string) => {
-    const found = customers.find((c) => c.id === id) ?? pendingRef.current ?? undefined;
+    // pendingRef WINS when it matches the requested id: `customers` is a stale
+    // render closure, and on rename it still holds the record under its OLD
+    // name, so a bare `find` would silently discard the rename. Single-use —
+    // cleared on every read regardless of whether it matched.
+    const pending = pendingRef.current;
     pendingRef.current = null;
-    onChange(found);
+    const found = pending?.id === id ? pending : customers.find((c) => c.id === id);
+    onChange(found ?? undefined);
   };
 
   const handleAdd = async (name: string) => {
@@ -74,7 +79,9 @@ export function InlineCustomerSelect({
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to rename customer');
       const existing = customers.find((c) => c.id === id);
-      if (existing) pendingRef.current = { ...existing, name };
+      pendingRef.current = existing
+        ? { ...existing, name }
+        : { id, name, contactNumber: '' };
       await onListChange();
       return id;
     } catch (e: any) {
