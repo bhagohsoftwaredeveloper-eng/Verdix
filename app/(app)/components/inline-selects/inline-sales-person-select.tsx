@@ -11,7 +11,7 @@ interface InlineSalesPersonSelectProps {
   salesPersons: SalesPerson[];
   value: string;
   onChange: (value: string) => void;
-  onListChange: () => void;
+  onListChange: () => void | Promise<void>;
   placeholder?: string;
   triggerClassName?: string;
   itemClassName?: string;
@@ -38,7 +38,7 @@ export function InlineSalesPersonSelect({
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to add sales person');
-      onListChange();
+      await onListChange();
       return String(result.data.id);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to add sales person.' });
@@ -61,7 +61,7 @@ export function InlineSalesPersonSelect({
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to rename sales person');
-      onListChange();
+      await onListChange();
       return id;
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to rename sales person.' });

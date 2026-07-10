@@ -12,7 +12,7 @@ interface InlineWarehouseSelectProps {
   warehouses: Warehouse[];
   value: string;
   onChange: (value: string) => void;
-  onListChange: () => void;
+  onListChange: () => void | Promise<void>;
   placeholder?: string;
   triggerClassName?: string;
   itemClassName?: string;
@@ -40,7 +40,7 @@ export function InlineWarehouseSelect({
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to add warehouse');
-      onListChange();
+      await onListChange();
       return id;
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to add warehouse.' });
@@ -67,7 +67,7 @@ export function InlineWarehouseSelect({
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to rename warehouse');
-      onListChange();
+      await onListChange();
       return id;
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to rename warehouse.' });

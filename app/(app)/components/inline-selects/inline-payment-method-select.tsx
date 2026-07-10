@@ -11,7 +11,7 @@ interface InlinePaymentMethodSelectProps {
   paymentMethods: PaymentMethod[];
   value: string;
   onChange: (value: string) => void;
-  onListChange: () => void;
+  onListChange: () => void | Promise<void>;
   placeholder?: string;
   triggerClassName?: string;
   itemClassName?: string;
@@ -40,7 +40,7 @@ export function InlinePaymentMethodSelect({
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to add payment method');
-      onListChange();
+      await onListChange();
       return name;
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to add payment method.' });
@@ -67,7 +67,7 @@ export function InlinePaymentMethodSelect({
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || 'Failed to rename payment method');
-      onListChange();
+      await onListChange();
       return name;
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to rename payment method.' });
