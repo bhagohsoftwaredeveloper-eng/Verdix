@@ -62,7 +62,7 @@ export function useAddPurchaseOrder({
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(false);
 
   const { toast } = useToast();
-  const { paymentMethods } = usePaymentMethods();
+  const { paymentMethods, refetch: refetchPaymentMethods } = usePaymentMethods();
   const { products } = useProducts();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const { user } = useUser();
@@ -491,6 +491,7 @@ export function useAddPurchaseOrder({
     handleAddProduct,
     handleAddSupplier,
     fetchWarehouses,
+    refetchPaymentMethods,
     onSubmit,
     processSubmit,
   };
