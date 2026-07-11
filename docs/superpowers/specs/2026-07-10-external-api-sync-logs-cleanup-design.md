@@ -108,7 +108,8 @@ Constraints:
 
 - The delete must be **chunked** (e.g. `LIMIT 5000` in a loop) rather than one
   statement over 123k rows, to avoid a long lock and a bloated undo log.
-- It must never delete a `pending` or `failed` row.
+- It only ever deletes `pending` **duplicates**; it must never delete a
+  `success` or `failed` row.
 - It must leave exactly one `pending` row per distinct
   `(transaction_type, transaction_id)`, so the scheduler still retries all 14
   stranded transactions.
