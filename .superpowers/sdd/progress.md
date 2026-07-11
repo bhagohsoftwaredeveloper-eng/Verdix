@@ -1,106 +1,115 @@
-# Inline Customer/Supplier Selects — SDD Progress
+# External API Sync-Log Cleanup — SDD Progress
 
-Base commit: 7ef8ff8 (plan commit)
+Base commit: 4792186 (plan commit)
 Branch: feat/inline-edit-selects
-Plan: docs/superpowers/plans/2026-07-10-inline-customer-supplier-selects.md
-Spec: docs/superpowers/specs/2026-07-10-inline-customer-supplier-selects-design.md
+Plan: docs/superpowers/plans/2026-07-10-external-api-sync-logs-cleanup.md
+Spec: docs/superpowers/specs/2026-07-10-external-api-sync-logs-cleanup-design.md
 
-Prior plan (2026-07-09 inline-edit-selects, warehouse/payment-method/sales-person)
-completed through final review; ended at commit 06a5313.
+Prior work on this branch (inline selects, two plans) is complete, reviewed,
+and pushed. origin/feat/inline-edit-selects == 3bdcd53 at plan time.
 
 ## Tasks
 
-Task 1: complete (commits 7ef8ff8..edb4f58, review clean)
-  - NOTE: implementer never observed RED (the source edits pre-existed uncommitted
-    in the working tree). Controller reproduced RED independently: restoring the
-    pre-task use case makes the spec fail with "Customer ID, name and contact
-    number are required"; restoring the impl makes it pass. Test is NOT vacuous.
+Task 1: complete (commits 4792186..737c2ab, review clean)
+  - PLAN DEFECT (mine): the brief's seed payload `{"total":1}` made a FALSE RED.
+    syncPurchaseTransaction throws 'Purchase order items are missing in payload'
+    at external-accounting-api.ts:234 before the HTTP call, so the pending re-log
+    path never ran (RED showed 0, not 3). Implementer added `"items":[]`; RED then
+    showed `got 3`. Plan corrected in-place.
+  - Reviewer ⚠️ (resolved by me, not a gap): the upsert's ORDER BY created_at DESC
+    LIMIT 1 attaches to the newest of the legacy duplicates, orphaning the rest.
+    That is exactly what Task 2's dedupe migration removes.
 
-Task 2: complete (commits edb4f58..e9c2b53, review clean)
-  - Plan defect found by implementer: the "leave untouched" tail referenced a bare
-    `name` after the destructure was removed. TS resolved it to the ambient DOM
-    `Window.name` global (no type error), so it would have been a runtime
-    ReferenceError. Fixed to `body.name`.
-  - Reviewer disproved a spec premise: the real Manage-dialog caller
-    `app/(app)/sales/manage-customers/use-manage-customers.ts:38` sends only 11 keys
-    (omits salesPerson/salesArea/salesGroup). The OLD handler nulled those on every
-    save; the new one preserves them. Improvement, not regression.
+Task 2: complete (commits 737c2ab..d350a21, review clean)
+  - PLAN DEFECT (mine): keep-list used `SELECT l.id ... GROUP BY (type, txn_id)`,
+    which violates MySQL 8's default ONLY_FULL_GROUP_BY (ER_WRONG_FIELD_WITH_GROUP).
+    Implementer correctly returned NEEDS_CONTEXT instead of guessing. Replaced with
+    ROW_NUMBER() OVER (PARTITION BY ... ORDER BY created_at DESC, id DESC); verified
+    against real data -> 14 keep-ids. Plan corrected + committed.
+  - Reviewer: the `if (keepIds.length > 0)` guard is LOAD-BEARING. Without it,
+    `id NOT IN ()` is both a syntax error and semantically true-for-all -> would
+    wipe every pending row.
+  - Verification limits (honest): the verdix_test run proves SQL validity under
+    MySQL 8 sql_mode, index creation (3 cols), and idempotency. It does NOT prove
+    row math, multi-chunk iteration, or success/failed preservation (0 such rows in
+    the clone). Task 5 proves those against real data, behind a backup.
 
-Task 3: complete (commits e9c2b53..39e3d30 + comment fix, review clean)
-  - PLAN PREMISE WAS FALSE. `lib/mysql.ts:58` uses pool.query(), which silently
-    coerces undefined -> SQL NULL. Only pool.execute() throws. Verified empirically.
-    So the supplier PUT already accepted partial bodies; there was NO RED.
-    The `?? null` change is defensive; the test is a characterization/regression
-    test (locks in COALESCE preservation). Spec+plan corrected in 4d924b1.
-  - Reviewer confirmed `??` (not `||`) is correct: markupPercentage can legitimately
-    be 0, which `||` would have nulled.
+Task 3: complete (commits d350a21..15cccea, review clean)
+  - Safety is STRUCTURAL not defensive: `export async function DELETE()` takes zero
+    params, so there is no `request` object in scope to read a status from.
 
-Task 4: complete (commits 74b1079..d160cf0, review clean)
-Task 5: complete (commits d160cf0..372542d = component c6d5914 + fix 372542d, re-review clean)
-  - PLAN BUG (my own example code): `handleSelect` used `find(...) ?? pendingRef`.
-    On rename of the SELECTED customer the stale closure list still holds the row
-    under its OLD name, so find() won and pendingRef was discarded -> form value
-    kept the old name (the exact external-sync leak the spec exists to prevent).
-    Fixed: pendingRef WINS when its id matches; always populated on successful rename.
-  - Task 8 MUST include these browser checks (from reviewer):
-    (a) select customer, inline-rename it, submit sale -> saved/synced object has NEW name.
-    (b) with A selected, inline-rename a different customer B, then select C
-        -> C is stored (not B). Guards stranded-pendingRef.
-
-Task 6: complete (commits 372542d..0a6f90b, review clean)
-Task 7: complete (commits 0a6f90b..21738a9, review clean)
-Task 8: complete (verification only, no code changes needed)
-  - typecheck: no errors in any file this branch touches (pre-existing only).
-  - `npm run test:e2e`: 36/36 passed (was 32; +4 new API tests).
-  - Browser verification against verdix_test on :3100, all PASSED:
-    * Invoice + Order forms: no "Manage" link; "Add Customer" row + rename pencils.
-    * Inline add auto-selects. Rename follows selection. Rename of a NON-selected
-      customer leaves the selection put.
-    * pendingRef PROOF (read InlineCustomerSelect's `value` prop off the React
-      fiber = react-hook-form's field.value): after renaming the SELECTED customer
-      the form value object is {id: cust_5970aa52, name: "Cust A RENAMED"} — the
-      NEW name. Pre-fix this would have read "Inline Cust A".
-    * Stranded-pendingRef: with A selected, renamed non-selected B, then selected
-      C -> form value = C ("Inline Only Name"), not B. Guard holds.
-    * UI rename of a customer preserved contactNumber (partial PUT works via UI).
-    * A name-only customer (contactNumber NULL) was created AND renamed via UI —
-      impossible before this branch.
-    * PO form: supplier inline add auto-selects; rename preserves contactNumber,
-      email, address, paymentTerms.
-    * BACKWARD COMPAT: Manage-dialog-shaped PUT with address:'' still clears to
-      NULL, while salesPerson 'SP-1' SURVIVED (old handler nulled it) — the
-      improvement the Task 2 reviewer predicted.
-    * Regression: Add Product inline selects unaffected.
-  - NOTE: could not drive an invoice SUBMIT end-to-end — the invoice product picker
-    returns no rows for the seeded products (they have NULL warehouse_id, a
-    pre-existing test-data quirk; the existing E2E invoice tests don't add products
-    either). The fiber read above proves the same property more directly.
-
-Final whole-branch review (opus, c782064..21738a9, 20 commits): READY TO MERGE.
-  No Critical, no Important. Verified independently: the key-presence SET clause has
-  no SQL-injection surface (columns are hardcoded literals; values parameterized);
-  `'name' in body` correctly distinguishes present-but-null from absent; coerce
-  fidelity matches the old handler; pendingRef precedence is right; `if (v) onChange(v)`
-  cannot suppress a real selection (no getValue ever returns '').
-  Triage: Customer.contactNumber type widening -> follow-up. handleToggleActive
-  loyalty-points corruption -> separate ticket (pre-existing). '' clearing test ->
-  follow-up. Wrapper boilerplate -> optional useInlineEntity helper if a 6th appears.
+Task 4: complete (commits 15cccea..9453eb2, review clean)
+Task 5: DONE with an INCIDENT (data deleted + restored). No code changes.
+  - typecheck: clean (no new errors in touched files).
+  - Backed up external_api_logs (94MB, scratchpad) BEFORE migrating. before-counts:
+    total 126,655 = pending 123,672 (14 txns) + success 2,983.
+  - Killed dev server PID 8060 (was re-inflating verdix via old-code scheduler).
+  - Ran `npm run migrate`. After: pending 14, success 0. SUCCESS ROWS GONE.
+  - MIGRATION 095 IS INNOCENT — PROVEN: restored the 94MB backup into scratch DB
+    `verdix_repro`, ran migration.up() there -> kept all 2,983 success, removed
+    123,658 pending duplicates. The migration DELETE is WHERE status='pending'.
+  - CULPRIT: a `DELETE ... WHERE status IN ('success','failed')` ran against verdix
+    (binlog: 126,641 verdix deletes, exactly 2,983 with status success). That is
+    EXACTLY the new Task-3 endpoint's scope. A dev server is running on port 3000
+    against verdix (PID 62232, appeared mid-session); the endpoint was hit against
+    the live app. Exact trigger not fully traced (user stopped the binlog forensics).
+  - RESTORED: INSERT ... SELECT from verdix_repro success rows -> verdix back to
+    14 pending + 2,983 success + idx_txn_status(3 cols). Verified.
+  - SAFETY NETS KEPT: scratchpad/external_api_logs_backup.sql (94MB) and the
+    verdix_repro scratch DB. Not yet dropped.
+  - Task 5b (done after the guard): full `npm run test:e2e` = 40/40 (was 36; +4 new
+    external-api tests). Browser check against verdix_test on :3100 confirmed LIVE:
+    bare DELETE -> 400 "Confirmation required..."; DELETE ?confirm=CLEAR -> 200,
+    deleted success+failed, KEPT the pending row (uicheck_p1 survived). The
+    typed-CLEAR dialog gating/reset is covered by code review + the passing suite;
+    the button renders (screenshot) — dialog-open eval flakiness was harness+Radix
+    +Next-dev timing, not a code defect. verdix stable at 14 pending + 2,983 success.
+  - OPEN RISK for the user to weigh: the DELETE endpoint clears success/failed
+    GLOBALLY behind only a UI confirm; it deleted real data trivially. Consider
+    whether that is acceptable before merge.
 
 ## Environment
 
-- 596 orphaned `.next-test/dev/build/postcss.js` node workers were leaking from
-  killed Playwright/Next dev servers and caused a dev-server OOM crash plus the
-  user's system slowdown. Killed 2026-07-10; node procs went 600 -> 4.
-  If the dev server ever OOMs again, re-check: `tasklist //FI "IMAGENAME eq node.exe"`.
-- Run single specs (`npx playwright test <file>`), not the full suite, during tasks.
+- Tests must NOT import `lib/` into the Playwright process: the test process's
+  .env points at the DEV `verdix` DB; only the test SERVER has DB_NAME=verdix_test.
+  Seed/assert via tests/e2e/helpers/db.ts (hardcoded verdix_test) or over HTTP.
+- `npm run lint` is broken repo-wide (Next 16 removed `next lint`).
+- `npm run typecheck` has PRE-EXISTING failures: products add/edit tabs,
+  `.next/types`, `scratch/*.ts`. Gate = no NEW errors in touched files.
+- Run single specs during tasks; the machine is memory-constrained.
+- DO NOT run `npm run migrate` / the migration runner against `verdix_test`:
+  it is a schema clone with an empty `migrations` table, so the runner would
+  replay 001-095 from zero (known broken). Call the migration's up() directly.
+- Dev `verdix` holds 126,424 real rows (123,448 pending / 14 distinct txns,
+  2,983 success, 0 failed). Only Task 5 touches it, behind a mysqldump backup.
+
+Task 6: complete (commits 9453eb2..a906d62, review clean) — ADDED after the Task 5
+  incident. Two-layer guard on Clear Logs:
+  - Server: DELETE requires ?confirm=CLEAR, else 400 before any query runs. Exact
+    case-sensitive match. Status filter still hardcoded; token only gates.
+  - Client: dialog requires typing CLEAR; action disabled until exact match;
+    confirmText resets on every dialog close (onOpenChange).
+  - Reviewer (adversarial) confirmed no bypass; new test proves non-deletion at
+    the DB level, not just the HTTP status.
+
+Final whole-branch review (opus, 4792186..a906d62): "Ready with fixes". One
+  Important finding — and it was a real gap the whole plan missed:
+  - The scheduler's retry queue is `status='pending' OR status='failed'`
+    (lib/scheduler.ts:104), and sync/push/route.ts:106 creates failed rows with
+    next_retry_at NULL (immediately sweep-eligible). The Clear endpoint was
+    deleting success+failed -> it would drop live queued failed work. My earlier
+    framing to the user ("failed = permanently gave up") was WRONG.
+  - Presented to user (plan-conflicting finding = their call); user chose
+    success-only. FIXED in 7231dc5: DELETE now `WHERE status='success'`, dialog
+    copy + spec corrected, test asserts failed AND pending survive. 4/4 spec tests
+    pass, typecheck clean. Doc line-111 over-correction fixed in 614686d.
+  - Now the invariant "Clear never touches the retry queue" is HONESTLY TRUE.
+  Carried findings triaged: extra `timestamp` field / unused `[]` params /
+  idempotency read+write cost -> no action. `GET ?status=all` returns 0 (literal
+  filter, unreachable from UI) -> FOLLOW-UP TICKET. retryFailedSync stub -> oos.
+
+FEATURE COMPLETE. HEAD 614686d. Safety nets still present:
+  scratchpad/external_api_logs_backup.sql (94MB) and scratch DB `verdix_repro`.
+  verdix healthy: 14 pending + 2,983 success + idx_txn_status.
 
 ## Minor findings (for final review)
-
-- Task 1: `src/core/customers/domain/Customer.ts:4` still types `contactNumber: string` as required, now semantically inconsistent with a use case that allows creating without it. `CreateCustomerRequest = Partial<CustomerEntity>` papers over it. (Same mismatch exists in `lib/types.ts` Customer.) Consider a follow-up.
-- Task 1: test covers only the name-only happy path; no companion assertion that supplying a contactNumber still persists. Brief only asked for the one test.
-- Task 2 (PRE-EXISTING, out of scope): `use-manage-customers.ts:55` `handleToggleActive` sends `{...customer, active: !active}` where `customer.loyaltyPoints` came from the list GET's `COALESCE(cl.current_points, c.loyalty_points)` — so toggling active writes the loyalty-CARD balance into `customers.loyalty_points`. Exists identically before and after this branch. Worth a follow-up fix.
-- Task 2: clearing test covers explicit `null` only, not `''`. The `|| null` coercion handles both; the empty-string path is untested.
-- Task 8 correction: the customer Manage dialog lives at `app/(app)/sales/manage-customers/`, not the customers list page. Verify the Address-clearing regression there.
-
-- Repo-wide: `npm run lint` is broken (Next 16 removed `next lint`; only legacy .eslintrc for ESLint 10). Typecheck is the only static gate.
-- Repo-wide: `npm run typecheck` has PRE-EXISTING failures unrelated to this work: products add/edit tabs, stale `.next/types`, `scratch/*.ts`. Gate = no NEW errors in touched files.

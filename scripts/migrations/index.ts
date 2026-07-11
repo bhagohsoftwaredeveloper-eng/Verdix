@@ -92,6 +92,7 @@ import './091_add_si_prefix_to_transaction_references';
 import './092_create_stock_movement_applied_table';
 import './093_backfill_stock_movement_applied';
 import './094_create_sync_conflicts_table';
+import './095_dedupe_external_api_logs';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

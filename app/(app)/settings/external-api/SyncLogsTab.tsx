@@ -1,10 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import type { ApiSyncLog } from '@/lib/services/api-sync-logger';
 
 interface Props {
@@ -15,9 +22,12 @@ interface Props {
   onRefresh: () => void;
   retryingLogId: string | null;
   onRetry: (log: ApiSyncLog) => void;
+  onClearLogs: () => void;
+  isClearingLogs: boolean;
 }
 
-export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterChange, onRefresh, retryingLogId, onRetry }: Props) {
+export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterChange, onRefresh, retryingLogId, onRetry, onClearLogs, isClearingLogs }: Props) {
+  const [confirmText, setConfirmText] = useState('');
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -39,6 +49,36 @@ export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterCh
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Refresh
           </Button>
+          <AlertDialog onOpenChange={(open) => { if (!open) setConfirmText(''); }}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" disabled={isClearingLogs}>
+                {isClearingLogs ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Clear Logs
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear sync logs?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This deletes all <strong>success</strong> entries.{' '}
+                  <strong>Pending</strong> and <strong>failed</strong> entries are kept — they are still queued for retry.
+                  This cannot be undone. Type <strong>CLEAR</strong> to confirm.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <Input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="Type CLEAR"
+                autoComplete="off"
+              />
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction disabled={confirmText !== 'CLEAR'} onClick={onClearLogs}>
+                  Clear Logs
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </CardHeader>
       <CardContent>

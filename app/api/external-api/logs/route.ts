@@ -178,3 +178,50 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * DELETE /api/external-api/logs
+ * Clear completed sync-log history.
+ *
+ * Ang filter kay HARDCODED sa server: 'success' ra. Ang 'pending' ug
+ * 'failed' nga rows kay pareho nga bahin sa buhi nga retry queue (tan-awa
+ * ang processSyncQueue sa lib/scheduler.ts, nga mo-retry og 'pending' OR
+ * 'failed') — dili sila mapapas dinhi, ug walay status parameter nga
+ * madawat, aron walay client nga makahimo niini.
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    // Confirmation token: ang destructive nga clear kinahanglan ug ?confirm=CLEAR.
+    // Kini mo-pugong sa usa ka bare/stray DELETE gikan sa pag-wipe sa history
+    // (nahitabo na kini kausa sa live DB). Ang token mo-GATE ra — dili gyud
+    // makapalapad sa gipapas; ang status filter sa ubos hardcoded gihapon.
+    const { searchParams } = new URL(request.url);
+    if (searchParams.get('confirm') !== 'CLEAR') {
+      return NextResponse.json(
+        { success: false, error: 'Confirmation required. Pass ?confirm=CLEAR to clear sync logs.' },
+        { status: 400 },
+      );
+    }
+
+    await ensureTables();
+
+    const result = await query(
+      `DELETE FROM external_api_logs WHERE status = 'success'`,
+      [],
+    );
+
+    const deleted = result.affectedRows ?? 0;
+
+    return NextResponse.json({
+      success: true,
+      data: { deleted },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error clearing external API logs:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to clear sync logs' },
+      { status: 500 },
+    );
+  }
+}

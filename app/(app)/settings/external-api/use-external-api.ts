@@ -15,6 +15,7 @@ export function useExternalApi() {
   const [logs, setLogs] = useState<ApiSyncLog[]>([]);
   const [isLoadingApis, setIsLoadingApis] = useState(true);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [isClearingLogs, setIsClearingLogs] = useState(false);
   const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
   const [logStatusFilter, setLogStatusFilter] = useState('all');
 
@@ -64,6 +65,21 @@ export function useExternalApi() {
       else toast({ variant: 'destructive', title: 'Retry Failed', description: data.error || 'Failed to retry.' });
     } catch { toast({ variant: 'destructive', title: 'Retry Failed', description: 'Network error.' }); }
     finally { setRetryingLogId(null); }
+  };
+
+  const clearLogs = async () => {
+    setIsClearingLogs(true);
+    try {
+      const res = await fetch(getApiUrl('/external-api/logs?confirm=CLEAR'), { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to clear logs.');
+      toast({ title: 'Logs Cleared', description: `Cleared ${data.data.deleted} log entries.` });
+      await fetchLogs(logStatusFilter);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message || 'Failed to clear logs.' });
+    } finally {
+      setIsClearingLogs(false);
+    }
   };
 
   const openAddDialog = () => { setEditingApi(null); setForm(EMPTY_FORM); setDialogOpen(true); };
@@ -146,6 +162,6 @@ export function useExternalApi() {
     pendingCount: logs.filter(l => l.status === 'pending').length,
     openAddDialog, openEditDialog,
     handleSave, handleToggleEnabled, handleDelete, handleTestConnection,
-    fetchLogs,
+    fetchLogs, clearLogs, isClearingLogs,
   };
 }
