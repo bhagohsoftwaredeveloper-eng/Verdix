@@ -70,7 +70,7 @@ export function useExternalApi() {
   const clearLogs = async () => {
     setIsClearingLogs(true);
     try {
-      const res = await fetch(getApiUrl('/external-api/logs'), { method: 'DELETE' });
+      const res = await fetch(getApiUrl('/external-api/logs?confirm=CLEAR'), { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Failed to clear logs.');
       toast({ title: 'Logs Cleared', description: `Cleared ${data.data.deleted} log entries.` });

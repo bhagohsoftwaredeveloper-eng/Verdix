@@ -73,7 +73,7 @@ test.describe('External API sync logs', () => {
     await mk('success', 's');
     await mk('failed', 'f');
 
-    const res = await request.delete('/api/external-api/logs');
+    const res = await request.delete('/api/external-api/logs?confirm=CLEAR');
     expect(res.ok(), await res.text()).toBeTruthy();
     const body = await res.json();
     expect(body.success).toBe(true);
@@ -96,7 +96,7 @@ test.describe('External API sync logs', () => {
     );
 
     // Ang endpoint walay status param — i-ignore ang query string ug ang body.
-    const res = await request.delete('/api/external-api/logs?status=pending', {
+    const res = await request.delete('/api/external-api/logs?confirm=CLEAR&status=pending', {
       data: { status: 'pending' },
     });
     expect(res.ok(), await res.text()).toBeTruthy();
@@ -107,5 +107,26 @@ test.describe('External API sync logs', () => {
     );
     expect(rows.length, 'pending row must survive').toBe(1);
     expect(rows[0].status).toBe('pending');
+  });
+
+  test('DELETE nga walay confirm=CLEAR → 400, walay mapapas', async ({ request }) => {
+    const stamp = Date.now();
+    await testQuery(
+      `INSERT INTO external_api_logs
+         (id, transaction_type, transaction_id, endpoint, payload, response, status, retry_count)
+       VALUES (?, 'PURCHASE_ORDER', ?, 'http://x/', '{}', NULL, 'success', 0)`,
+      [`log_noconfirm_${stamp}`, `${TXN_ID}_noconfirm`],
+    );
+
+    const res = await request.delete('/api/external-api/logs');
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+
+    const rows = await testQuery(
+      `SELECT status FROM external_api_logs WHERE transaction_id = ?`,
+      [`${TXN_ID}_noconfirm`],
+    );
+    expect(rows.length, 'success row must survive a delete without confirm').toBe(1);
   });
 });

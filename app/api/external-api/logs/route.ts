@@ -188,8 +188,20 @@ export async function POST(request: NextRequest) {
  * lib/scheduler.ts) — dili sila mapapas dinhi, ug walay status parameter nga
  * madawat, aron walay client nga makahimo niini.
  */
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
+    // Confirmation token: ang destructive nga clear kinahanglan ug ?confirm=CLEAR.
+    // Kini mo-pugong sa usa ka bare/stray DELETE gikan sa pag-wipe sa history
+    // (nahitabo na kini kausa sa live DB). Ang token mo-GATE ra — dili gyud
+    // makapalapad sa gipapas; ang status filter sa ubos hardcoded gihapon.
+    const { searchParams } = new URL(request.url);
+    if (searchParams.get('confirm') !== 'CLEAR') {
+      return NextResponse.json(
+        { success: false, error: 'Confirmation required. Pass ?confirm=CLEAR to clear sync logs.' },
+        { status: 400 },
+      );
+    }
+
     await ensureTables();
 
     const result = await query(

@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -25,6 +27,7 @@ interface Props {
 }
 
 export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterChange, onRefresh, retryingLogId, onRetry, onClearLogs, isClearingLogs }: Props) {
+  const [confirmText, setConfirmText] = useState('');
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -46,7 +49,7 @@ export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterCh
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Refresh
           </Button>
-          <AlertDialog>
+          <AlertDialog onOpenChange={(open) => { if (!open) setConfirmText(''); }}>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm" disabled={isClearingLogs}>
                 {isClearingLogs ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
@@ -59,12 +62,20 @@ export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterCh
                 <AlertDialogDescription>
                   This deletes all <strong>success</strong> and <strong>failed</strong> entries.{' '}
                   <strong>Pending</strong> entries are kept — they are still queued for retry.
-                  This cannot be undone.
+                  This cannot be undone. Type <strong>CLEAR</strong> to confirm.
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              <Input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="Type CLEAR"
+                autoComplete="off"
+              />
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={onClearLogs}>Clear Logs</AlertDialogAction>
+                <AlertDialogAction disabled={confirmText !== 'CLEAR'} onClick={onClearLogs}>
+                  Clear Logs
+                </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
