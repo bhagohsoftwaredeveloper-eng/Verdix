@@ -60,8 +60,8 @@ export function SyncLogsTab({ logs, isLoading, logStatusFilter, onStatusFilterCh
               <AlertDialogHeader>
                 <AlertDialogTitle>Clear sync logs?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This deletes all <strong>success</strong> and <strong>failed</strong> entries.{' '}
-                  <strong>Pending</strong> entries are kept — they are still queued for retry.
+                  This deletes all <strong>success</strong> entries.{' '}
+                  <strong>Pending</strong> and <strong>failed</strong> entries are kept — they are still queued for retry.
                   This cannot be undone. Type <strong>CLEAR</strong> to confirm.
                 </AlertDialogDescription>
               </AlertDialogHeader>

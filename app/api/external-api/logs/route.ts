@@ -183,9 +183,10 @@ export async function POST(request: NextRequest) {
  * DELETE /api/external-api/logs
  * Clear completed sync-log history.
  *
- * Ang filter kay HARDCODED sa server: 'success' ug 'failed' ra. Ang 'pending'
- * nga rows kay mao ang buhi nga retry queue (tan-awa ang processSyncQueue sa
- * lib/scheduler.ts) — dili sila mapapas dinhi, ug walay status parameter nga
+ * Ang filter kay HARDCODED sa server: 'success' ra. Ang 'pending' ug
+ * 'failed' nga rows kay pareho nga bahin sa buhi nga retry queue (tan-awa
+ * ang processSyncQueue sa lib/scheduler.ts, nga mo-retry og 'pending' OR
+ * 'failed') — dili sila mapapas dinhi, ug walay status parameter nga
  * madawat, aron walay client nga makahimo niini.
  */
 export async function DELETE(request: NextRequest) {
@@ -205,7 +206,7 @@ export async function DELETE(request: NextRequest) {
     await ensureTables();
 
     const result = await query(
-      `DELETE FROM external_api_logs WHERE status IN ('success', 'failed')`,
+      `DELETE FROM external_api_logs WHERE status = 'success'`,
       [],
     );
 

@@ -108,7 +108,7 @@ Constraints:
 
 - The delete must be **chunked** (e.g. `LIMIT 5000` in a loop) rather than one
   statement over 123k rows, to avoid a long lock and a bloated undo log.
-- It must never delete a `success` or `failed` row.
+- It must never delete a `pending` or `failed` row.
 - It must leave exactly one `pending` row per distinct
   `(transaction_type, transaction_id)`, so the scheduler still retries all 14
   stranded transactions.
@@ -117,9 +117,15 @@ Constraints:
 
 New handler in the existing `app/api/external-api/logs/route.ts`.
 
-- The `WHERE status IN ('success','failed')` clause is **hard-coded server-side**.
-  The endpoint accepts no status parameter. A stray or malicious client call
+- The `WHERE status = 'success'` clause is **hard-coded server-side**. The
+  endpoint accepts no status parameter. A stray or malicious client call
   therefore cannot drop the retry queue.
+- **Correction:** an earlier draft of this design scoped the delete to
+  `status IN ('success','failed')`, treating `failed` as terminal history.
+  That was wrong — `lib/scheduler.ts`'s `processSyncQueue` retries rows where
+  `status = 'pending' OR status = 'failed'`, so a `failed` row is live queued
+  work, not settled history. The delete is scoped to `success` only; both
+  `pending` and `failed` are the retry queue and are protected.
 - Returns `{ success: true, data: { deleted: <count> } }`.
 - Calls the file's existing `ensureTables()` first, as `GET` does.
 
@@ -134,7 +140,7 @@ inventing a counts endpoint to populate a confirmation string is not worth the
 surface area. The dialog states the rule instead:
 
 > **Clear sync logs?**
-> This deletes all **success** and **failed** entries. **Pending** entries are
+> This deletes all **success** entries. **Pending** and **failed** entries are
 > kept — they are still queued for retry. This cannot be undone.
 
 The actual number is reported afterwards, from the `deleted` count the `DELETE`
@@ -154,7 +160,7 @@ the server's error message, dialog stays closed, list unchanged.
   logging must never break a sync. The new `SELECT` is inside the same
   `try`/`catch`.
 - A concurrent scheduler sweep during a Clear cannot lose queue rows, because
-  Clear never touches `pending`.
+  Clear never touches `pending` or `failed`.
 
 ## Testing
 
@@ -171,8 +177,8 @@ API or via the existing `tests/e2e/setup` connection helper, which connects to
 New E2E spec `tests/e2e/external-api-logs.spec.ts`:
 
 1. **Clear scope.** Seed one `pending`, one `success`, one `failed` row.
-   `DELETE /api/external-api/logs` → `deleted: 2`. A follow-up `GET` shows the
-   `pending` row surviving and the other two gone.
+   `DELETE /api/external-api/logs` → `deleted: 1`. A follow-up `GET` shows the
+   `pending` and `failed` rows surviving and only the `success` row gone.
 2. **Clear cannot drop the queue.** `DELETE` accepts no status parameter —
    asserting a request body or query string naming `pending` is ignored and the
    `pending` row still survives.

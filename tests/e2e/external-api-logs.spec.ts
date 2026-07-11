@@ -60,7 +60,7 @@ test.describe('External API sync logs', () => {
     expect(Number(rows[0].retry_count)).toBeGreaterThan(0);
   });
 
-  test('DELETE /api/external-api/logs → mo-papas sa success ug failed, mo-bilin sa pending', async ({ request }) => {
+  test('DELETE /api/external-api/logs → mo-papas sa success RA, mo-bilin sa pending ug failed', async ({ request }) => {
     const stamp = Date.now();
     const mk = (status: string, suffix: string) => testQuery(
       `INSERT INTO external_api_logs
@@ -77,13 +77,13 @@ test.describe('External API sync logs', () => {
     expect(res.ok(), await res.text()).toBeTruthy();
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(body.data.deleted).toBeGreaterThanOrEqual(2);
+    expect(body.data.deleted).toBeGreaterThanOrEqual(1);
 
     const remaining = await testQuery(
       `SELECT status FROM external_api_logs WHERE transaction_id LIKE ?`,
       [`${TXN_ID}\\_%`],
     );
-    expect(remaining.map((r: any) => r.status)).toEqual(['pending']);
+    expect(remaining.map((r: any) => r.status).sort()).toEqual(['failed', 'pending']);
   });
 
   test('DELETE dili mo-papas sa pending bisan i-sulay i-pili sa client', async ({ request }) => {
