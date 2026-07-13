@@ -198,8 +198,8 @@ export function ReviewDialog({
                     <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
                       <span>Expected: {item.snapshot_quantity}</span>
                       <span>Counted: {isUncounted ? '—' : item.counted_quantity}</span>
-                      {hasVar && !isUncounted && (
-                        <span className={variance! < 0 ? 'text-red-500' : 'text-emerald-500'}>
+                      {!isUncounted && (
+                        <span className={!hasVar ? 'text-muted-foreground' : variance! < 0 ? 'text-red-500' : 'text-emerald-500'}>
                           {formatCurrency(varianceAmt!)}
                         </span>
                       )}
@@ -267,7 +267,7 @@ export function ReviewDialog({
                             ? 'text-red-500'
                             : 'text-emerald-500'
                         }`}>
-                          {isUncounted || !hasVar ? '—' : formatCurrency(varianceAmt!)}
+                          {isUncounted ? '—' : formatCurrency(varianceAmt!)}
                         </TableCell>
                       </TableRow>
                     );
