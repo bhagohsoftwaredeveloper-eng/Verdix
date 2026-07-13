@@ -63,8 +63,8 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
 
   useEffect(() => {
     if (!(isOpen && step === 'input_so')) return;
-    setIsRecentLoading(true);
     const t = setTimeout(() => {
+      setIsRecentLoading(true);
       const qs = buildRecentSalesQuery({ query: searchText, dateFrom, dateTo });
       fetch(getApiUrl(`/pos/recent-sales${qs}`), { cache: 'no-store' })
         .then(res => res.json())

@@ -99,8 +99,8 @@ export function useReturnSales({
 
   useEffect(() => {
     if (!(isOpen && step === 'input_so')) return;
-    setIsRecentLoading(true);
     const t = setTimeout(() => {
+      setIsRecentLoading(true);
       const qs = buildRecentSalesQuery({ query: searchText, dateFrom, dateTo });
       fetch(getApiUrl(`/pos/recent-sales${qs}`), { cache: 'no-store' })
         .then(res => res.json())
@@ -165,16 +165,20 @@ export function useReturnSales({
           setReturnedItems(items);
           setStep('success');
         } else {
-          setSearchError(result.error || 'Failed to process return');
+          const message = result.error || 'Failed to process return';
+          setSearchError(message);
+          toast({ title: 'Return Failed', description: message, variant: 'destructive' });
         }
       } catch (err) {
         console.error('Error processing return:', err);
-        setSearchError('Error processing return. Please try again.');
+        const message = 'Error processing return. Please try again.';
+        setSearchError(message);
+        toast({ title: 'Return Failed', description: message, variant: 'destructive' });
       } finally {
         setIsLoading(false);
       }
     }
-  }, [selectedSale, terminalId, posSettings, currentUser]);
+  }, [selectedSale, terminalId, posSettings, currentUser, toast]);
 
   const handleBackToSearch = useCallback(() => {
     setStep('input_so');
