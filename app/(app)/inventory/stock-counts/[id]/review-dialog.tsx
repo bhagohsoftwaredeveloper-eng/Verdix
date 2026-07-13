@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle } from 'lucide-react';
+import { formatCurrency, toSafeNumber } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +32,17 @@ export function ReviewDialog({
   isCompleting: boolean;
   onComplete: () => void;
 }) {
+  const totalInventoryValue = items.reduce((sum, item) => {
+    if (item.counted_quantity === null) return sum;
+    return sum + item.counted_quantity * toSafeNumber(item.product_cost);
+  }, 0);
+
+  const totalVarianceAmount = items.reduce((sum, item) => {
+    if (item.counted_quantity === null) return sum;
+    const variance = item.counted_quantity - item.snapshot_quantity;
+    return sum + variance * toSafeNumber(item.product_cost);
+  }, 0);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
@@ -111,6 +123,30 @@ export function ReviewDialog({
             </div>
           </div>
 
+          {/* Valuation chips */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-muted/50 rounded-xl p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                Inventory Value
+              </p>
+              <p className="text-lg font-bold">{formatCurrency(totalInventoryValue)}</p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                Variance Value
+              </p>
+              <p className={`text-lg font-bold ${
+                totalVarianceAmount < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : totalVarianceAmount > 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-muted-foreground'
+              }`}>
+                {formatCurrency(totalVarianceAmount)}
+              </p>
+            </div>
+          </div>
+
           {/* All items table */}
           <div>
             <h3 className="text-sm font-semibold mb-2">
@@ -126,6 +162,7 @@ export function ReviewDialog({
                     : null;
                 const isUncounted = item.counted_quantity === null;
                 const hasVar = variance !== null && variance !== 0;
+                const varianceAmt = variance !== null ? variance * toSafeNumber(item.product_cost) : null;
                 return (
                   <div
                     key={item.id}
@@ -161,6 +198,11 @@ export function ReviewDialog({
                     <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
                       <span>Expected: {item.snapshot_quantity}</span>
                       <span>Counted: {isUncounted ? '—' : item.counted_quantity}</span>
+                      {hasVar && !isUncounted && (
+                        <span className={variance! < 0 ? 'text-red-500' : 'text-emerald-500'}>
+                          {formatCurrency(varianceAmt!)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -177,6 +219,7 @@ export function ReviewDialog({
                     <TableHead className="text-right">Expected</TableHead>
                     <TableHead className="text-right">Counted</TableHead>
                     <TableHead className="text-right">Variance</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -187,6 +230,7 @@ export function ReviewDialog({
                         : null;
                     const isUncounted = item.counted_quantity === null;
                     const hasVar = variance !== null && variance !== 0;
+                    const varianceAmt = variance !== null ? variance * toSafeNumber(item.product_cost) : null;
                     return (
                       <TableRow key={item.id} className={
                         isUncounted
@@ -215,6 +259,15 @@ export function ReviewDialog({
                             : 'text-emerald-500'
                         }`}>
                           {isUncounted ? 'Not counted' : !hasVar ? '±0' : variance! > 0 ? `+${variance}` : variance}
+                        </TableCell>
+                        <TableCell className={`text-right font-medium ${
+                          !hasVar || isUncounted
+                            ? 'text-muted-foreground'
+                            : variance! < 0
+                            ? 'text-red-500'
+                            : 'text-emerald-500'
+                        }`}>
+                          {isUncounted || !hasVar ? '—' : formatCurrency(varianceAmt!)}
                         </TableCell>
                       </TableRow>
                     );
