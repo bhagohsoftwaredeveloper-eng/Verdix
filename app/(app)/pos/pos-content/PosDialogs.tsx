@@ -103,6 +103,26 @@ export function PosDialogs(pos: Props) {
       />
 
       <AdminAuthDialog
+        isOpen={pos.isSuspendAuthOpen}
+        onOpenChange={pos.setIsSuspendAuthOpen}
+        title="Suspend Authorization"
+        description="Please provide credentials to suspend a transaction"
+        requiredCredentials={pos.suspendAuthCredentials}
+        onSuccess={pos.handleSuspendAuthSuccess}
+        preventCloseAutoFocus
+      />
+
+      <AdminAuthDialog
+        isOpen={pos.isSuspendedAuthOpen}
+        onOpenChange={pos.setIsSuspendedAuthOpen}
+        title="Suspended Authorization"
+        description="Please provide credentials to view suspended transactions"
+        requiredCredentials={pos.suspendedAuthCredentials}
+        onSuccess={pos.handleSuspendedAuthSuccess}
+        preventCloseAutoFocus
+      />
+
+      <AdminAuthDialog
         isOpen={pos.isLineVoidAuthOpen}
         onOpenChange={pos.setIsLineVoidAuthOpen}
         title="Authorization Required"

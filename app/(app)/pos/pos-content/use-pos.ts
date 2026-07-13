@@ -104,6 +104,10 @@ export function usePOS() {
   const [isPriceEditAuthOpen, setIsPriceEditAuthOpen] = useState(false);
   const [editItemAuthCredentials, setEditItemAuthCredentials] = useState<{ username?: string | null; password?: string | null } | null>(null);
   const [isEditItemAuthOpen, setIsEditItemAuthOpen] = useState(false);
+  const [suspendAuthCredentials, setSuspendAuthCredentials] = useState<{ username?: string | null; password?: string | null } | null>(null);
+  const [isSuspendAuthOpen, setIsSuspendAuthOpen] = useState(false);
+  const [suspendedAuthCredentials, setSuspendedAuthCredentials] = useState<{ username?: string | null; password?: string | null } | null>(null);
+  const [isSuspendedAuthOpen, setIsSuspendedAuthOpen] = useState(false);
   const [isOverallReadingAuthOpen, setIsOverallReadingAuthOpen] = useState(false);
   const [overallReadingAuthCredentials, setOverallReadingAuthCredentials] = useState<{ username?: string | null; password?: string | null } | null>(null);
   const [isTrainingMode, setIsTrainingMode] = useState(false);
@@ -266,6 +270,8 @@ export function usePOS() {
         setLineVoidAuthCredentials({ username: result.data.lineVoidAuthUsername, password: result.data.lineVoidAuthPassword });
         setPriceEditAuthCredentials({ username: result.data.priceEditAuthUsername, password: result.data.priceEditAuthPassword });
         setEditItemAuthCredentials({ username: result.data.editItemAuthUsername, password: result.data.editItemAuthPassword });
+        setSuspendAuthCredentials({ username: result.data.suspendAuthUsername, password: result.data.suspendAuthPassword });
+        setSuspendedAuthCredentials({ username: result.data.suspendedAuthUsername, password: result.data.suspendedAuthPassword });
         setOverallReadingAuthCredentials({ username: result.data.overallReadingAuthUsername, password: result.data.overallReadingAuthPassword });
         setIsTrainingMode(result.data.isTrainingMode || false);
         setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
@@ -463,7 +469,7 @@ export function usePOS() {
         case 'F2': e.preventDefault(); handleVoidLine(selectedItemId); break;
         case 'F3': handleOpenDiscountDialog(); break;
         case 'F4': handleHold(); break;
-        case 'F5': setIsHeldTransOpen(true); break;
+        case 'F5': handleOpenSuspended(); break;
         case 'F6': e.preventDefault(); focusInlineQuantity(selectedItemId); break;
         case 'F7': e.preventDefault(); handleRequestPriceEdit(); break;
         case 'F8': setIsShutdownConfirmOpen(true); break;
@@ -740,8 +746,27 @@ export function usePOS() {
   };
 
   const handleHold = () => {
-    if (items.length > 0) setIsSuspendNoteOpen(true);
-    else toast({ title: 'Empty Cart', description: 'There are no items to hold.', variant: 'destructive' });
+    if (items.length === 0) {
+      toast({ title: 'Empty Cart', description: 'There are no items to hold.', variant: 'destructive' });
+      return;
+    }
+    if (businessSettings?.enableSuspendAuth) setIsSuspendAuthOpen(true);
+    else setIsSuspendNoteOpen(true);
+  };
+
+  const handleSuspendAuthSuccess = () => {
+    setIsSuspendAuthOpen(false);
+    setIsSuspendNoteOpen(true);
+  };
+
+  const handleOpenSuspended = () => {
+    if (businessSettings?.enableSuspendedAuth) setIsSuspendedAuthOpen(true);
+    else setIsHeldTransOpen(true);
+  };
+
+  const handleSuspendedAuthSuccess = () => {
+    setIsSuspendedAuthOpen(false);
+    setIsHeldTransOpen(true);
   };
 
   const confirmHold = (note: string) => {
@@ -1150,6 +1175,9 @@ export function usePOS() {
     isLineVoidAuthOpen, setIsLineVoidAuthOpen, lineVoidAuthCredentials, pendingVoidItemId,
     isPriceEditAuthOpen, setIsPriceEditAuthOpen, priceEditAuthCredentials,
     isEditItemAuthOpen, setIsEditItemAuthOpen, editItemAuthCredentials, handleEditItemAuthSuccess,
+    isSuspendAuthOpen, setIsSuspendAuthOpen, suspendAuthCredentials, handleSuspendAuthSuccess,
+    isSuspendedAuthOpen, setIsSuspendedAuthOpen, suspendedAuthCredentials, handleSuspendedAuthSuccess,
+    handleOpenSuspended,
     isOverallReadingAuthOpen, setIsOverallReadingAuthOpen, overallReadingAuthCredentials,
     // price levels
     priceLevels, selectedPriceLevelId, setSelectedPriceLevelId,

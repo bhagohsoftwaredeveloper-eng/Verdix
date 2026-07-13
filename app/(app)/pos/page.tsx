@@ -76,7 +76,7 @@ function POSContent() {
             handleVoidLine={pos.handleVoidLine}
             handleOpenDiscountDialog={pos.handleOpenDiscountDialog}
             handleHold={pos.handleHold}
-            setIsHeldTransOpen={pos.setIsHeldTransOpen}
+            handleOpenSuspended={pos.handleOpenSuspended}
             focusInlineQuantity={pos.focusInlineQuantity}
             handleRequestPriceEdit={pos.handleRequestPriceEdit}
             handleShutdown={pos.handleShutdown}

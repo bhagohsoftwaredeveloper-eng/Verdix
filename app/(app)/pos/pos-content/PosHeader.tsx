@@ -20,7 +20,7 @@ type Props = {
   handleVoidLine: (id: string | null) => void;
   handleOpenDiscountDialog: () => void;
   handleHold: () => void;
-  setIsHeldTransOpen: (v: boolean) => void;
+  handleOpenSuspended: () => void;
   focusInlineQuantity: (id: string | null) => void;
   handleRequestPriceEdit: () => void;
   handleShutdown: () => void;
@@ -35,7 +35,7 @@ export function PosHeader({
   selectedItemId, shiftActive, heldTransactions, currentTerminalName, currentTime,
   enableCustomerDisplay, openOnSecondScreen,
   handleOpenEditDialog, handleVoidLine, handleOpenDiscountDialog, handleHold,
-  setIsHeldTransOpen, focusInlineQuantity, handleRequestPriceEdit, handleShutdown,
+  handleOpenSuspended, focusInlineQuantity, handleRequestPriceEdit, handleShutdown,
   isFrontliner, posMode, queuedOrdersCount = 0, setIsQueuePanelOpen,
 }: Props) {
 
@@ -44,7 +44,7 @@ export function PosHeader({
     { icon: X, label: 'Line Void', fKey: 'F2', action: () => handleVoidLine(selectedItemId), tint: 'text-rose-600' },
     { icon: Percent, label: 'Discount', fKey: 'F3', action: handleOpenDiscountDialog, tint: 'text-emerald-600' },
     { icon: Tag, label: 'Suspend', fKey: 'F4', action: handleHold, tint: 'text-orange-600' },
-    { icon: ListOrdered, label: 'Suspended', fKey: 'F5', action: () => setIsHeldTransOpen(true), tint: 'text-amber-600' },
+    { icon: ListOrdered, label: 'Suspended', fKey: 'F5', action: handleOpenSuspended, tint: 'text-amber-600' },
     { icon: Plus, label: 'Quantity', fKey: 'F6', action: () => focusInlineQuantity(selectedItemId), tint: 'text-indigo-600' },
     { icon: FilePenLine, label: 'Edit Price', fKey: 'F7', action: handleRequestPriceEdit, tint: 'text-purple-600' },
     { icon: Power, label: shiftActive ? 'Endorse/Out' : 'Shutdown', fKey: 'F8', action: handleShutdown, tint: 'text-slate-600' },
