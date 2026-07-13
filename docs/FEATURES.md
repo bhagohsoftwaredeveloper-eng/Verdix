@@ -156,6 +156,8 @@ Each of the following sensitive actions can be individually protected by a **sec
 | **Recent Sales Auth** | Viewing and reprinting previous transactions |
 | **Price Edit Auth** | Overriding an item price (F7) |
 | **Edit Item Auth** | Editing an item's name in the cart (F1) |
+| **Suspend Auth** | Suspending (holding) the current transaction (F4) |
+| **Suspended Auth** | Viewing the list of suspended/held transactions (F5) |
 | **Tax Rates Auth** | Modifying tax rate settings from the POS |
 | **Cash Count Auth** | Accessing the end-shift cash counting screen |
 
@@ -1138,6 +1140,8 @@ Enable or disable individual PIN/credential prompts for sensitive POS actions:
 | **Recent Sales Auth** | Viewing and reprinting previous transactions (F8) |
 | **Price Edit Auth** | Overriding an item price (F7) |
 | **Edit Item Auth** | Editing an item's name in the cart (F1) |
+| **Suspend Auth** | Suspending (holding) the current transaction (F4) |
+| **Suspended Auth** | Viewing the list of suspended/held transactions (F5) |
 | **Tax Rates Auth** | Modifying tax rates from within the POS |
 | **Cash Count Auth** | Accessing the end-of-shift cash counting screen |
 
