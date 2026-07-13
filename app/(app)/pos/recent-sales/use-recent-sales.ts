@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ReceiptGenerator } from '@/lib/receipt-generator';
 import { getApiUrl } from '@/lib/api-config';
 import { mapSaleToReceiptDetails } from './recent-sales-utils';
+import { buildRecentSalesQuery } from '../transaction-search/build-recent-sales-query';
 
 type Options = {
   isOpen: boolean;
@@ -30,6 +31,13 @@ type ReturnType = {
   handlePrintReceipt: (sale: any) => void;
   handleBackToList: () => void;
   handleOpenChange: (open: boolean) => void;
+  searchText: string;
+  setSearchText: (v: string) => void;
+  dateFrom: string;
+  setDateFrom: (v: string) => void;
+  dateTo: string;
+  setDateTo: (v: string) => void;
+  clearSearch: () => void;
 };
 
 export function useRecentSales({
@@ -43,6 +51,11 @@ export function useRecentSales({
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchText, setSearchText] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const searchParamsRef = useRef({ query: '', dateFrom: '', dateTo: '' });
+  searchParamsRef.current = { query: searchText, dateFrom, dateTo };
   const [posSettings, setPosSettings] = useState<SystemSettings | null>(initialSettings || null);
   const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
   const { toast } = useToast();
@@ -55,6 +68,9 @@ export function useRecentSales({
       setIsLoading(true);
       setSaleToPrint(null);
       setSelectedSale(null);
+      setSearchText('');
+      setDateFrom('');
+      setDateTo('');
 
       if (initialSettings) {
         setPosSettings(initialSettings);
@@ -93,7 +109,8 @@ export function useRecentSales({
     if (isOpen && step === 'list') {
       const fetchRecentSales = async () => {
         try {
-          const response = await fetch(getApiUrl(`/pos/recent-sales?_t=${Date.now()}`), { cache: 'no-store' });
+          const qs = buildRecentSalesQuery(searchParamsRef.current);
+          const response = await fetch(getApiUrl(`/pos/recent-sales${qs}`), { cache: 'no-store' });
           if (!response.ok) throw new Error(`API error ${response.status}`);
           const result = await response.json();
 
@@ -115,6 +132,18 @@ export function useRecentSales({
       return () => clearInterval(interval);
     }
   }, [isOpen, step]);
+
+  useEffect(() => {
+    if (!(isOpen && step === 'list')) return;
+    const t = setTimeout(() => {
+      const qs = buildRecentSalesQuery(searchParamsRef.current);
+      fetch(getApiUrl(`/pos/recent-sales${qs}`), { cache: 'no-store' })
+        .then(res => res.json())
+        .then(result => { if (result.success) setRecentSales(result.data); })
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchText, dateFrom, dateTo, isOpen, step]);
 
   const handleAuthSuccess = useCallback(() => {
     authSucceededRef.current = true;
@@ -188,6 +217,12 @@ export function useRecentSales({
     onOpenChange(open);
   }, [onOpenChange]);
 
+  const clearSearch = useCallback(() => {
+    setSearchText('');
+    setDateFrom('');
+    setDateTo('');
+  }, []);
+
   return {
     step,
     saleToPrint,
@@ -203,5 +238,12 @@ export function useRecentSales({
     handlePrintReceipt,
     handleBackToList,
     handleOpenChange,
+    searchText,
+    setSearchText,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    clearSearch,
   };
 }

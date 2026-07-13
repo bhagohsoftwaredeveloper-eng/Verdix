@@ -13,6 +13,7 @@ import { useRecentSales } from './use-recent-sales';
 import type { RecentSalesDialogProps } from './recent-sales-types';
 import { formatCurrency } from './recent-sales-utils';
 import { formatSINumber } from '@/lib/si-number';
+import { TransactionSearchBar } from '../transaction-search/TransactionSearchBar';
 
 export function RecentSalesDialog({
   isOpen,
@@ -34,6 +35,7 @@ export function RecentSalesDialog({
     handlePrintReceipt,
     handleBackToList,
     handleOpenChange,
+    searchText, setSearchText, dateFrom, setDateFrom, dateTo, setDateTo, clearSearch,
   } = useRecentSales({
     isOpen,
     onOpenChange,
@@ -42,18 +44,7 @@ export function RecentSalesDialog({
   });
 
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  const filteredSales = recentSales.filter((sale: any) => {
-    if (!searchTerm.trim()) return true;
-    const term = searchTerm.toLowerCase();
-    const siNumber = (sale.siNumber || sale.orderNumber)?.toString().toLowerCase() || '';
-    const saleId = sale.id?.substring(0, 7).toLowerCase() || '';
-    const customerName = sale.customer?.name?.toLowerCase() || '';
-
-    return siNumber.includes(term) || saleId.includes(term) || customerName.includes(term);
-  });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -80,22 +71,22 @@ export function RecentSalesDialog({
       switch (e.key) {
         case 'ArrowDown':
           if (selectedSale) return;
-          if (filteredSales.length === 0) return;
+          if (recentSales.length === 0) return;
           e.preventDefault();
-          setHighlightedIndex(prev => (prev === null ? 0 : (prev + 1) % filteredSales.length));
+          setHighlightedIndex(prev => (prev === null ? 0 : (prev + 1) % recentSales.length));
           break;
         case 'ArrowUp':
           if (selectedSale) return;
-          if (filteredSales.length === 0) return;
+          if (recentSales.length === 0) return;
           e.preventDefault();
-          setHighlightedIndex(prev => (prev === null ? filteredSales.length - 1 : (prev - 1 + filteredSales.length) % filteredSales.length));
+          setHighlightedIndex(prev => (prev === null ? recentSales.length - 1 : (prev - 1 + recentSales.length) % recentSales.length));
           break;
         case 'Enter':
           e.preventDefault();
           if (selectedSale) {
             handlePrintReceipt(selectedSale);
           } else if (highlightedIndex !== null) {
-            setSelectedSale(filteredSales[highlightedIndex]);
+            setSelectedSale(recentSales[highlightedIndex]);
           }
           break;
       }
@@ -105,12 +96,11 @@ export function RecentSalesDialog({
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, step, filteredSales, highlightedIndex, isLoading, selectedSale, saleToPrint, setSelectedSale, handlePrintReceipt, handlePrintReceiptAction, handleBackToList]);
+  }, [isOpen, step, recentSales, highlightedIndex, isLoading, selectedSale, saleToPrint, setSelectedSale, handlePrintReceipt, handlePrintReceiptAction, handleBackToList]);
 
   useEffect(() => {
     if (!isOpen) {
       setHighlightedIndex(null);
-      setSearchTerm('');
     }
   }, [isOpen]);
 
@@ -146,24 +136,23 @@ export function RecentSalesDialog({
                   <div className="flex flex-col border-b bg-muted/40 px-3 py-2 shrink-0 gap-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transactions</span>
-                      {!isLoading && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{filteredSales.length}/{recentSales.length}</span>}
+                      {!isLoading && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{recentSales.length}</span>}
                     </div>
-                    <input
-                      type="text"
-                      placeholder="Search by SI #, Transaction #..."
-                      value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setHighlightedIndex(null);
-                      }}
-                      className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    <TransactionSearchBar
+                      searchText={searchText}
+                      onSearchTextChange={(v) => { setSearchText(v); setHighlightedIndex(null); }}
+                      dateFrom={dateFrom}
+                      dateTo={dateTo}
+                      onDateFromChange={setDateFrom}
+                      onDateToChange={setDateTo}
+                      onClear={clearSearch}
                     />
                   </div>
                   <ScrollArea className="flex-1" ref={scrollAreaRef}>
                     {isLoading ? (
                       <div className="p-4 text-center text-sm text-muted-foreground">Loading recent sales...</div>
-                    ) : filteredSales && filteredSales.length > 0 ? (
-                      filteredSales.map((sale: any, index: number) => {
+                    ) : recentSales && recentSales.length > 0 ? (
+                      recentSales.map((sale: any, index: number) => {
                         const isActive = selectedSale?.id === sale.id;
                         const isHighlighted = highlightedIndex !== null && index === highlightedIndex;
                         return (
@@ -192,7 +181,7 @@ export function RecentSalesDialog({
                       })
                     ) : (
                       <div className="p-4 text-center text-sm text-muted-foreground">
-                        {searchTerm ? 'No transactions match your search.' : 'No recent sales found.'}
+                        {(searchText || dateFrom || dateTo) ? 'No transactions match your search.' : 'No recent sales found.'}
                       </div>
                     )}
                   </ScrollArea>
