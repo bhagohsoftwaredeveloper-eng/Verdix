@@ -6,6 +6,7 @@ import { usePrinter } from '@/lib/use-printer';
 import { VoidSlipGenerator } from '@/lib/void-slip-generator';
 import type { Sale } from '@/lib/types';
 import type { VoidStep, PosSettings } from './void-sales-types';
+import { buildRecentSalesQuery } from '../transaction-search/build-recent-sales-query';
 
 type Options = {
   isOpen: boolean;
@@ -15,7 +16,9 @@ type Options = {
 export function useVoidSales({ isOpen, onOpenChange }: Options) {
   const [step, setStep] = useState<VoidStep>('loading');
   const [isLoading, setIsLoading] = useState(false);
-  const [soNumber, setSoNumber] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [searchError, setSearchError] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [posSettings, setPosSettings] = useState<PosSettings | null>(null);
@@ -33,7 +36,9 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
     if (isOpen) {
       authSucceededRef.current = false;
       setStep('loading');
-      setSoNumber('');
+      setSearchText('');
+      setDateFrom('');
+      setDateTo('');
       setSearchError('');
       setSelectedSale(null);
 
@@ -57,15 +62,18 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && step === 'input_so') {
-      setIsRecentLoading(true);
-      fetch(getApiUrl(`/pos/recent-sales?_t=${Date.now()}`), { cache: 'no-store' })
+    if (!(isOpen && step === 'input_so')) return;
+    setIsRecentLoading(true);
+    const t = setTimeout(() => {
+      const qs = buildRecentSalesQuery({ query: searchText, dateFrom, dateTo });
+      fetch(getApiUrl(`/pos/recent-sales${qs}`), { cache: 'no-store' })
         .then(res => res.json())
         .then(result => { if (result.success) setRecentSales(result.data || []); })
         .catch(() => {})
         .finally(() => setIsRecentLoading(false));
-    }
-  }, [isOpen, step]);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [isOpen, step, searchText, dateFrom, dateTo]);
 
   const handlePickSale = useCallback((sale: Sale) => {
     setSelectedSale(sale);
@@ -85,32 +93,11 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
     authSucceededRef.current = false;
   }, [onOpenChange]);
 
-  const handleSearchSO = useCallback(async () => {
-    const term = soNumber.trim();
-    if (!term) return;
-
-    setIsLoading(true);
-    setSearchError('');
-
-    try {
-      const response = await fetch(getApiUrl(`/pos/recent-sales?query=${encodeURIComponent(term)}`));
-      if (!response.ok) throw new Error(`API error ${response.status}`);
-      const result = await response.json();
-
-      if (result.success && result.data && result.data.length > 0) {
-        const found = result.data.find((s: any) => String(s.orderNumber) === term || s.id === term) || result.data[0];
-        setSelectedSale(found);
-        setStep('select_items');
-      } else {
-        setSearchError('Transaction not found. Please check the SO Number.');
-      }
-    } catch (err) {
-      console.error('Search error', err);
-      setSearchError('Error searching transaction.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [soNumber]);
+  const clearSearch = useCallback(() => {
+    setSearchText('');
+    setDateFrom('');
+    setDateTo('');
+  }, []);
 
   const handlePrintVoid = useCallback(async (saleData: any) => {
     try {
@@ -159,15 +146,22 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
   const handleBackToSearch = useCallback(() => {
     setStep('input_so');
     setSelectedSale(null);
-    setSoNumber('');
+    setSearchText('');
+    setDateFrom('');
+    setDateTo('');
   }, []);
 
   return {
     step,
     setStep,
     isLoading,
-    soNumber,
-    setSoNumber,
+    searchText,
+    setSearchText,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    clearSearch,
     searchError,
     selectedSale,
     posSettings,
@@ -178,7 +172,6 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
     handlePickSale,
     handleAuthSuccess,
     handleAuthClose,
-    handleSearchSO,
     handleVoidTransaction,
     handleBackToSearch,
   };

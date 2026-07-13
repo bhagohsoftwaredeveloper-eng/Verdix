@@ -19,15 +19,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Ban, ArrowLeft, Search, AlertTriangle, Clock, User, Calendar, CreditCard, ShoppingBag, Loader2, ChevronRight } from 'lucide-react';
+import { Ban, ArrowLeft, AlertTriangle, Clock, User, Calendar, CreditCard, ShoppingBag, Loader2, ChevronRight } from 'lucide-react';
 import type { Sale } from '@/lib/types';
 import { format } from 'date-fns';
 import { formatQuantity } from '@/lib/utils';
 import { AdminAuthDialog } from '../admin-auth/AdminAuthDialog';
 import { useVoidSales } from './use-void-sales';
 import type { VoidSalesDialogProps } from './void-sales-types';
+import { TransactionSearchBar } from '../transaction-search/TransactionSearchBar';
 
 const peso = (n: number) => `₱${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -196,8 +196,13 @@ export function VoidSalesDialog(props: VoidSalesDialogProps) {
   const {
     step,
     isLoading,
-    soNumber,
-    setSoNumber,
+    searchText,
+    setSearchText,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    clearSearch,
     searchError,
     selectedSale,
     recentSales,
@@ -207,7 +212,6 @@ export function VoidSalesDialog(props: VoidSalesDialogProps) {
     handlePickSale,
     handleAuthSuccess,
     handleAuthClose,
-    handleSearchSO,
     handleVoidTransaction,
     handleBackToSearch,
   } = useVoidSales({ isOpen, onOpenChange });
@@ -277,28 +281,16 @@ export function VoidSalesDialog(props: VoidSalesDialogProps) {
                     </SheetHeader>
 
                     <div className="mt-4 shrink-0">
-                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">SO Number</label>
-                        <div className="mt-1.5 flex gap-2">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    className="h-11 pl-9"
-                                    placeholder="Enter SO Number (e.g. 10001)"
-                                    value={soNumber}
-                                    onChange={(e) => setSoNumber(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearchSO()}
-                                    autoFocus
-                                />
-                            </div>
-                            <Button className="h-11" onClick={handleSearchSO} disabled={isLoading || !soNumber.trim()}>
-                                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
-                            </Button>
-                        </div>
-                        {searchError && (
-                            <p className="mt-2 flex items-center gap-1.5 text-sm text-destructive">
-                                <AlertTriangle className="h-4 w-4" /> {searchError}
-                            </p>
-                        )}
+                        <TransactionSearchBar
+                          searchText={searchText}
+                          onSearchTextChange={(v) => { setSearchText(v); setHighlightedIndex(null); }}
+                          dateFrom={dateFrom}
+                          dateTo={dateTo}
+                          onDateFromChange={setDateFrom}
+                          onDateToChange={setDateTo}
+                          onClear={clearSearch}
+                          autoFocus
+                        />
                     </div>
 
                     <div className="mt-5 flex items-center gap-2 shrink-0">

@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CreditSlipGenerator, CreditSlipData } from '@/lib/credit-slip-generator';
 import { getApiUrl } from '@/lib/api-config';
 import { useReactToPrint } from 'react-to-print';
+import { buildRecentSalesQuery } from '../transaction-search/build-recent-sales-query';
 
 type Options = {
   isOpen: boolean;
@@ -29,7 +30,9 @@ export function useReturnSales({
   const [step, setStep] = useState<'loading' | 'auth' | 'input_so' | 'select_items' | 'success'>('loading');
   const [sales, setSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [soNumber, setSoNumber] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [searchError, setSearchError] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [itemsToReturn, setItemsToReturn] = useState<SaleItem[]>([]);
@@ -63,7 +66,9 @@ export function useReturnSales({
       authSucceededRef.current = false;
       setStep('loading');
       setIsLoading(false);
-      setSoNumber('');
+      setSearchText('');
+      setDateFrom('');
+      setDateTo('');
       setSearchError('');
       setSelectedSale(null);
       setReturnedTotal(0);
@@ -93,15 +98,18 @@ export function useReturnSales({
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && step === 'input_so') {
-      setIsRecentLoading(true);
-      fetch(getApiUrl(`/pos/recent-sales?_t=${Date.now()}`), { cache: 'no-store' })
+    if (!(isOpen && step === 'input_so')) return;
+    setIsRecentLoading(true);
+    const t = setTimeout(() => {
+      const qs = buildRecentSalesQuery({ query: searchText, dateFrom, dateTo });
+      fetch(getApiUrl(`/pos/recent-sales${qs}`), { cache: 'no-store' })
         .then(res => res.json())
         .then(result => { if (result.success) setRecentSales(result.data || []); })
         .catch(() => {})
         .finally(() => setIsRecentLoading(false));
-    }
-  }, [isOpen, step]);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [isOpen, step, searchText, dateFrom, dateTo]);
 
   const handlePickSale = useCallback((sale: Sale) => {
     setSelectedSale(sale);
@@ -121,32 +129,11 @@ export function useReturnSales({
     authSucceededRef.current = false;
   }, [onOpenChange]);
 
-  const handleSearchSO = useCallback(async () => {
-    const term = soNumber.trim();
-    if (!term) return;
-
-    setIsLoading(true);
-    setSearchError('');
-
-    try {
-      const response = await fetch(getApiUrl(`/pos/recent-sales?query=${encodeURIComponent(term)}`));
-      if (!response.ok) throw new Error(`API error ${response.status}`);
-      const result = await response.json();
-
-      if (result.success && result.data && result.data.length > 0) {
-        const found = result.data.find((s: any) => String(s.orderNumber) === term || s.id === term) || result.data[0];
-        setSelectedSale(found);
-        setStep('select_items');
-      } else {
-        setSearchError('Transaction not found. Please check the SO Number.');
-      }
-    } catch (err) {
-      console.error('Search error', err);
-      setSearchError('Error searching transaction.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [soNumber]);
+  const clearSearch = useCallback(() => {
+    setSearchText('');
+    setDateFrom('');
+    setDateTo('');
+  }, []);
 
   const handleReturnItems = useCallback(async (items: SaleItem[]) => {
     if (selectedSale && items.length > 0) {
@@ -192,7 +179,9 @@ export function useReturnSales({
   const handleBackToSearch = useCallback(() => {
     setStep('input_so');
     setSelectedSale(null);
-    setSoNumber('');
+    setSearchText('');
+    setDateFrom('');
+    setDateTo('');
   }, []);
 
   const handleCloseSuccess = useCallback(() => {
@@ -260,8 +249,13 @@ export function useReturnSales({
   return {
     step,
     isLoading,
-    soNumber,
-    setSoNumber,
+    searchText,
+    setSearchText,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    clearSearch,
     searchError,
     selectedSale,
     returnedItems,
@@ -272,7 +266,6 @@ export function useReturnSales({
     handlePickSale,
     handleAuthSuccess,
     handleAuthClose,
-    handleSearchSO,
     handleReturnItems,
     handleBackToSearch,
     handleCloseSuccess,

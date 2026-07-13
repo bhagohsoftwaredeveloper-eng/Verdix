@@ -3,9 +3,8 @@
 import { useRef, useEffect, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Undo, Search, AlertTriangle, Clock, Loader2 } from 'lucide-react';
+import { Undo, Clock, Loader2 } from 'lucide-react';
 import { AdminAuthDialog } from '../admin-auth/AdminAuthDialog';
 import { TransactionPickRow } from './TransactionPickRow';
 import { SelectItemsView } from './SelectItemsView';
@@ -14,6 +13,7 @@ import { CreditSlipView } from '../credit-slip/CreditSlipView';
 import { useReturnSales } from './use-return-sales';
 import type { ReturnSalesDialogProps } from './return-sales-types';
 import { format } from 'date-fns';
+import { TransactionSearchBar } from '../transaction-search/TransactionSearchBar';
 
 export function ReturnSalesDialog({
   isOpen,
@@ -28,8 +28,13 @@ export function ReturnSalesDialog({
   const {
     step,
     isLoading,
-    soNumber,
-    setSoNumber,
+    searchText,
+    setSearchText,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    clearSearch,
     searchError,
     selectedSale,
     returnedItems,
@@ -40,7 +45,6 @@ export function ReturnSalesDialog({
     handlePickSale,
     handleAuthSuccess,
     handleAuthClose,
-    handleSearchSO,
     handleReturnItems,
     handleBackToSearch,
     handleCloseSuccess,
@@ -122,28 +126,16 @@ export function ReturnSalesDialog({
               </SheetHeader>
 
               <div className="mt-4 shrink-0">
-                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">SO Number</label>
-                <div className="mt-1.5 flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      className="h-11 pl-9"
-                      placeholder="Enter SO Number (e.g. 10001)"
-                      value={soNumber}
-                      onChange={(e) => setSoNumber(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSearchSO()}
-                      autoFocus
-                    />
-                  </div>
-                  <Button className="h-11" onClick={handleSearchSO} disabled={isLoading || !soNumber.trim()}>
-                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
-                  </Button>
-                </div>
-                {searchError && (
-                  <p className="mt-2 flex items-center gap-1.5 text-sm text-destructive">
-                    <AlertTriangle className="h-4 w-4" /> {searchError}
-                  </p>
-                )}
+                <TransactionSearchBar
+                  searchText={searchText}
+                  onSearchTextChange={(v) => { setSearchText(v); setHighlightedIndex(null); }}
+                  dateFrom={dateFrom}
+                  dateTo={dateTo}
+                  onDateFromChange={setDateFrom}
+                  onDateToChange={setDateTo}
+                  onClear={clearSearch}
+                  autoFocus
+                />
               </div>
 
               <div className="mt-5 flex items-center gap-2 shrink-0">
