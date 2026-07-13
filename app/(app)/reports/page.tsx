@@ -34,6 +34,18 @@ export default function ReportsPage() {
             </Card>
           </Link>
 
+          <Link href="/reports/cost-vs-retail">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Percent className="h-5 w-5 text-emerald-600" />
+                  Cost vs Retail Valuation
+                </CardTitle>
+                <CardDescription>Stock value at cost vs selling price, with potential profit and margin.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
           <Link href="/reports/movements">
             <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
               <CardHeader>
