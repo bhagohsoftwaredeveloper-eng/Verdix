@@ -8,6 +8,8 @@ export async function GET(request: NextRequest) {
     const terminalId = searchParams.get('terminalId');
     const queryParam = searchParams.get('query');
     const customerId = searchParams.get('customerId');
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
 
     // 1. Fetch sales transactions
     // We join with pos_transactions to get terminal info and strictly filter POS sales
@@ -57,8 +59,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (queryParam) {
-        salesQuery += ' AND (pt.order_number LIKE ? OR st.id LIKE ? OR pt.si_number LIKE ?)';
-        params.push(`%${queryParam}%`, `%${queryParam}%`, `%${queryParam}%`);
+        salesQuery += ' AND (pt.order_number LIKE ? OR st.id LIKE ? OR pt.si_number LIKE ? OR c.name LIKE ?)';
+        params.push(`%${queryParam}%`, `%${queryParam}%`, `%${queryParam}%`, `%${queryParam}%`);
     }
 
     if (customerId) {
@@ -66,12 +68,20 @@ export async function GET(request: NextRequest) {
         params.push(customerId);
     }
 
-    salesQuery += ' ORDER BY st.created_at DESC';
-    
-    // Only limit if not searching, to ensure we find specific transactions
-    if (!queryParam) {
-        salesQuery += ' LIMIT 50';
+    if (dateFrom) {
+        salesQuery += ' AND DATE(st.created_at) >= ?';
+        params.push(dateFrom);
     }
+
+    if (dateTo) {
+        salesQuery += ' AND DATE(st.created_at) <= ?';
+        params.push(dateTo);
+    }
+
+    salesQuery += ' ORDER BY st.created_at DESC';
+
+    const isFiltered = !!(queryParam || dateFrom || dateTo);
+    salesQuery += isFiltered ? ' LIMIT 100' : ' LIMIT 50';
 
     const rawSales = await query(salesQuery, params);
     
@@ -83,8 +93,8 @@ export async function GET(request: NextRequest) {
         }
     });
 
-    // Take the first 20 unique sales
-    const sales = Array.from(uniqueSalesMap.values()).slice(0, 20);
+    // Cap results: more room when filtering, small "recent" view otherwise
+    const sales = Array.from(uniqueSalesMap.values()).slice(0, isFiltered ? 50 : 20);
 
     // 2. Fetch items for each sale
     const salesWithItems = await Promise.all(
