@@ -41,7 +41,10 @@ export async function GET(request: NextRequest) {
       { name: 'enable_cash_transfer_auth', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'cash_transfer_auth_username', type: 'VARCHAR(255) NULL' },
       { name: 'cash_transfer_auth_password', type: 'VARCHAR(255) NULL' },
-      { name: 'pos_mode', type: "ENUM('default','pharmacy') DEFAULT 'default'" }
+      { name: 'pos_mode', type: "ENUM('default','pharmacy') DEFAULT 'default'" },
+      { name: 'enable_edit_item_auth', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'edit_item_auth_username', type: 'VARCHAR(255) NULL' },
+      { name: 'edit_item_auth_password', type: 'VARCHAR(255) NULL' }
     ];
 
     const currentColumnsResult = await query(
@@ -100,6 +103,9 @@ export async function GET(request: NextRequest) {
         enable_price_edit_auth AS enablePriceEditAuth,
         price_edit_auth_username AS priceEditAuthUsername,
         price_edit_auth_password AS priceEditAuthPassword,
+        enable_edit_item_auth AS enableEditItemAuth,
+        edit_item_auth_username AS editItemAuthUsername,
+        edit_item_auth_password AS editItemAuthPassword,
         operated_by AS operatedBy,
         min_number AS minNumber,
         serial_number AS serialNumber,
@@ -322,6 +328,9 @@ export async function POST(request: NextRequest) {
         enablePriceEditAuth: 'enable_price_edit_auth',
         priceEditAuthUsername: 'price_edit_auth_username',
         priceEditAuthPassword: 'price_edit_auth_password',
+        enableEditItemAuth: 'enable_edit_item_auth',
+        editItemAuthUsername: 'edit_item_auth_username',
+        editItemAuthPassword: 'edit_item_auth_password',
         operatedBy: 'operated_by',
         minNumber: 'min_number',
         serialNumber: 'serial_number',

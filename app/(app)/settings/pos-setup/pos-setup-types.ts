@@ -32,6 +32,9 @@ export interface PosSettings {
   enablePriceEditAuth?: boolean;
   priceEditAuthUsername?: string | null;
   priceEditAuthPassword?: string | null;
+  enableEditItemAuth?: boolean;
+  editItemAuthUsername?: string | null;
+  editItemAuthPassword?: string | null;
   enableTaxRatesAuth?: boolean;
   taxRatesAuthUsername?: string | null;
   taxRatesAuthPassword?: string | null;
@@ -95,6 +98,9 @@ export const DEFAULT_POS_SETTINGS: PosSettings = {
   enablePriceEditAuth: false,
   priceEditAuthUsername: '',
   priceEditAuthPassword: '',
+  enableEditItemAuth: false,
+  editItemAuthUsername: '',
+  editItemAuthPassword: '',
   enableTaxRatesAuth: false,
   taxRatesAuthUsername: '',
   taxRatesAuthPassword: '',
