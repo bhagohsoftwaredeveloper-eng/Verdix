@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, Save, CheckCircle, Search, AlertTriangle, Printer, Package,
 } from 'lucide-react';
+import { formatCurrency, toSafeNumber } from '@/lib/utils';
 
 import { useCountDetail } from './use-count-detail';
 import { MobileItemCard } from './mobile-item-card';
@@ -208,6 +209,7 @@ export function CountDetailClient({ countId }: { countId: string }) {
                 <TableHead className="text-right">Expected (Snapshot)</TableHead>
                 <TableHead className="text-right w-48">Actual Count</TableHead>
                 {isCompleted && <TableHead className="text-right">Variance</TableHead>}
+                {isCompleted && <TableHead className="text-right">Amount</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -259,13 +261,28 @@ export function CountDetailClient({ countId }: { countId: string }) {
                           : variance}
                       </TableCell>
                     )}
+                    {isCompleted && (
+                      <TableCell
+                        className={`text-right font-medium ${
+                          variance < 0
+                            ? 'text-red-500'
+                            : variance > 0
+                            ? 'text-green-500'
+                            : ''
+                        }`}
+                      >
+                        {item.counted_quantity === null
+                          ? '-'
+                          : formatCurrency(variance * toSafeNumber(item.product_cost))}
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
               {filteredItems.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isCompleted ? 5 : 4}
+                    colSpan={isCompleted ? 6 : 4}
                     className="text-center py-8 text-muted-foreground"
                   >
                     No products found matching &quot;{search}&quot;

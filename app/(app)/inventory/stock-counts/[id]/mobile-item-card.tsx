@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, Package, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency, toSafeNumber } from '@/lib/utils';
 
 export function MobileItemCard({
   item,
@@ -110,7 +110,7 @@ export function MobileItemCard({
       {expanded && (
         <div className="px-3 pb-3 border-t border-border/60 pt-3 space-y-3">
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className={cn('grid gap-2 text-center', isCompleted ? 'grid-cols-4' : 'grid-cols-3')}>
             <div className="bg-muted/50 rounded-xl py-2 px-1">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
                 Snapshot
@@ -158,6 +158,36 @@ export function MobileItemCard({
                 </p>
               )}
             </div>
+            {isCompleted && (
+              <div
+                className={cn(
+                  'rounded-xl py-2 px-1',
+                  !isCounted
+                    ? 'bg-muted/50'
+                    : (variance ?? 0) === 0
+                    ? 'bg-muted/50'
+                    : (variance ?? 0) < 0
+                    ? 'bg-red-50 dark:bg-red-900/20'
+                    : 'bg-emerald-50 dark:bg-emerald-900/20'
+                )}
+              >
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Amount</p>
+                <p
+                  className={cn(
+                    'text-sm font-semibold',
+                    !isCounted
+                      ? 'text-muted-foreground'
+                      : (variance ?? 0) === 0
+                      ? 'text-muted-foreground'
+                      : (variance ?? 0) < 0
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  )}
+                >
+                  {!isCounted ? '—' : formatCurrency((variance ?? 0) * toSafeNumber(item.product_cost))}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Input (only when in progress) */}
