@@ -627,13 +627,6 @@ export function usePOS() {
     focusInlineField('pos-qty', itemId);
   };
 
-  const handleCancelAll = () => {
-    setItems([]);
-    setSelectedItemId(null);
-    setSelectedCustomer(WALK_IN_CUSTOMER);
-    toast({ title: 'Transaction Cleared', description: 'All items have been removed from the cart.' });
-  };
-
   const removeItem = (productId: string) => {
     setItems(items.filter(item => item.id !== productId));
   };
@@ -1168,7 +1161,7 @@ export function usePOS() {
     // handlers
     handleAddItem, handleAddItemBySKU, updateQuantity, handleUpdateItem,
     handleVoidLine, performVoidLine, focusInlineQuantity,
-    handleCancelAll, removeItem, handleSuccessfulSale,
+    removeItem, handleSuccessfulSale,
     handleOpenTender, handleDefaultTender,
     handleOpenEditDialog, handleOpenDiscountDialog, handleApplyDiscount,
     handleHold, confirmHold, handleRestore, handleDeleteHeld,

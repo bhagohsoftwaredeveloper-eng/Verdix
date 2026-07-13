@@ -105,7 +105,6 @@ function POSContent() {
               setEditingPriceItemId={pos.setEditingPriceItemId}
               qtyDraft={pos.qtyDraft}
               setQtyDraft={pos.setQtyDraft}
-              handleCancelAll={pos.handleCancelAll}
               startEditName={pos.startEditName}
               commitInlineName={pos.commitInlineName}
               requestInlinePriceEdit={pos.requestInlinePriceEdit}

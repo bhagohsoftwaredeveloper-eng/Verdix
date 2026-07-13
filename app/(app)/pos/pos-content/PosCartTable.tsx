@@ -4,7 +4,7 @@ import { RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Trash2, Search, ShoppingCart } from 'lucide-react';
+import { Search, ShoppingCart } from 'lucide-react';
 import { formatStockQuantity } from '@/lib/utils';
 import type { SaleItem } from './pos-types';
 
@@ -26,7 +26,6 @@ type Props = {
   setEditingPriceItemId: (id: string | null) => void;
   qtyDraft: string;
   setQtyDraft: (v: string) => void;
-  handleCancelAll: () => void;
   startEditName: (id: string) => void;
   commitInlineName: (id: string, value: string) => void;
   requestInlinePriceEdit: (id: string) => void;
@@ -44,7 +43,7 @@ export function PosCartTable({
   editingQtyItemId, setEditingQtyItemId,
   editingPriceItemId, setEditingPriceItemId,
   qtyDraft, setQtyDraft,
-  handleCancelAll, startEditName, commitInlineName, isFrontliner, handleSendToQueue,
+  startEditName, commitInlineName, isFrontliner, handleSendToQueue,
   requestInlinePriceEdit, commitInlinePrice, focusInlineQuantity, commitQty,
 }: Props) {
   return (
@@ -89,19 +88,6 @@ export function PosCartTable({
 
       {/* Items Table */}
       <div className="flex-1 bg-background rounded-xl border shadow-sm flex flex-col overflow-hidden">
-        {items.length > 0 && (
-          <div className="flex items-center justify-end border-b bg-muted/30 px-4 py-2 shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              onClick={handleCancelAll}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Clear all
-            </Button>
-          </div>
-        )}
         <div className="overflow-y-auto flex-1 scroll-pt-12">
           <table className="w-full caption-bottom text-sm">
             <TableHeader className="sticky top-0 bg-muted z-20 shadow-sm">
