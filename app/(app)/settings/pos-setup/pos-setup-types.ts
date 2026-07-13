@@ -35,6 +35,12 @@ export interface PosSettings {
   enableEditItemAuth?: boolean;
   editItemAuthUsername?: string | null;
   editItemAuthPassword?: string | null;
+  enableSuspendAuth?: boolean;
+  suspendAuthUsername?: string | null;
+  suspendAuthPassword?: string | null;
+  enableSuspendedAuth?: boolean;
+  suspendedAuthUsername?: string | null;
+  suspendedAuthPassword?: string | null;
   enableTaxRatesAuth?: boolean;
   taxRatesAuthUsername?: string | null;
   taxRatesAuthPassword?: string | null;
@@ -101,6 +107,12 @@ export const DEFAULT_POS_SETTINGS: PosSettings = {
   enableEditItemAuth: false,
   editItemAuthUsername: '',
   editItemAuthPassword: '',
+  enableSuspendAuth: false,
+  suspendAuthUsername: '',
+  suspendAuthPassword: '',
+  enableSuspendedAuth: false,
+  suspendedAuthUsername: '',
+  suspendedAuthPassword: '',
   enableTaxRatesAuth: false,
   taxRatesAuthUsername: '',
   taxRatesAuthPassword: '',

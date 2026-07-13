@@ -44,7 +44,13 @@ export async function GET(request: NextRequest) {
       { name: 'pos_mode', type: "ENUM('default','pharmacy') DEFAULT 'default'" },
       { name: 'enable_edit_item_auth', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'edit_item_auth_username', type: 'VARCHAR(255) NULL' },
-      { name: 'edit_item_auth_password', type: 'VARCHAR(255) NULL' }
+      { name: 'edit_item_auth_password', type: 'VARCHAR(255) NULL' },
+      { name: 'enable_suspend_auth', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'suspend_auth_username', type: 'VARCHAR(255) NULL' },
+      { name: 'suspend_auth_password', type: 'VARCHAR(255) NULL' },
+      { name: 'enable_suspended_auth', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'suspended_auth_username', type: 'VARCHAR(255) NULL' },
+      { name: 'suspended_auth_password', type: 'VARCHAR(255) NULL' }
     ];
 
     const currentColumnsResult = await query(
@@ -106,6 +112,12 @@ export async function GET(request: NextRequest) {
         enable_edit_item_auth AS enableEditItemAuth,
         edit_item_auth_username AS editItemAuthUsername,
         edit_item_auth_password AS editItemAuthPassword,
+        enable_suspend_auth AS enableSuspendAuth,
+        suspend_auth_username AS suspendAuthUsername,
+        suspend_auth_password AS suspendAuthPassword,
+        enable_suspended_auth AS enableSuspendedAuth,
+        suspended_auth_username AS suspendedAuthUsername,
+        suspended_auth_password AS suspendedAuthPassword,
         operated_by AS operatedBy,
         min_number AS minNumber,
         serial_number AS serialNumber,
@@ -331,6 +343,12 @@ export async function POST(request: NextRequest) {
         enableEditItemAuth: 'enable_edit_item_auth',
         editItemAuthUsername: 'edit_item_auth_username',
         editItemAuthPassword: 'edit_item_auth_password',
+        enableSuspendAuth: 'enable_suspend_auth',
+        suspendAuthUsername: 'suspend_auth_username',
+        suspendAuthPassword: 'suspend_auth_password',
+        enableSuspendedAuth: 'enable_suspended_auth',
+        suspendedAuthUsername: 'suspended_auth_username',
+        suspendedAuthPassword: 'suspended_auth_password',
         operatedBy: 'operated_by',
         minNumber: 'min_number',
         serialNumber: 'serial_number',
