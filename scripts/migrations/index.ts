@@ -93,6 +93,7 @@ import './092_create_stock_movement_applied_table';
 import './093_backfill_stock_movement_applied';
 import './094_create_sync_conflicts_table';
 import './095_dedupe_external_api_logs';
+import './096_create_membership_payments';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';
