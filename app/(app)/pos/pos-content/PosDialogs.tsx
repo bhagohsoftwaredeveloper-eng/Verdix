@@ -93,6 +93,16 @@ export function PosDialogs(pos: Props) {
       />
 
       <AdminAuthDialog
+        isOpen={pos.isEditItemAuthOpen}
+        onOpenChange={pos.setIsEditItemAuthOpen}
+        title="Edit Item Authorization"
+        description="Please provide credentials to edit item name"
+        requiredCredentials={pos.editItemAuthCredentials}
+        onSuccess={pos.handleEditItemAuthSuccess}
+        preventCloseAutoFocus
+      />
+
+      <AdminAuthDialog
         isOpen={pos.isLineVoidAuthOpen}
         onOpenChange={pos.setIsLineVoidAuthOpen}
         title="Authorization Required"

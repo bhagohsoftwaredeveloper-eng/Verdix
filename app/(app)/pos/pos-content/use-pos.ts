@@ -102,6 +102,8 @@ export function usePOS() {
   const [isLineVoidAuthOpen, setIsLineVoidAuthOpen] = useState(false);
   const [priceEditAuthCredentials, setPriceEditAuthCredentials] = useState<{ username?: string | null; password?: string | null } | null>(null);
   const [isPriceEditAuthOpen, setIsPriceEditAuthOpen] = useState(false);
+  const [editItemAuthCredentials, setEditItemAuthCredentials] = useState<{ username?: string | null; password?: string | null } | null>(null);
+  const [isEditItemAuthOpen, setIsEditItemAuthOpen] = useState(false);
   const [isOverallReadingAuthOpen, setIsOverallReadingAuthOpen] = useState(false);
   const [overallReadingAuthCredentials, setOverallReadingAuthCredentials] = useState<{ username?: string | null; password?: string | null } | null>(null);
   const [isTrainingMode, setIsTrainingMode] = useState(false);
@@ -213,12 +215,18 @@ export function usePOS() {
     setTimeout(tryFocus, 130);
   };
 
-  const startEditName = (itemId: string) => {
+  const unlockInlineName = (itemId: string) => {
     setSelectedItemId(itemId);
     setEditingNameItemId(itemId);
     setEditingQtyItemId(null);
     setEditingPriceItemId(null);
     focusInlineField('pos-name', itemId);
+  };
+
+  const startEditName = (itemId: string) => {
+    setSelectedItemId(itemId);
+    if (businessSettings?.enableEditItemAuth) setIsEditItemAuthOpen(true);
+    else unlockInlineName(itemId);
   };
 
   const commitInlineName = (itemId: string, rawValue: string) => {
@@ -257,6 +265,7 @@ export function usePOS() {
         setEnableLineVoidAuth(result.data.enableLineVoidAuth);
         setLineVoidAuthCredentials({ username: result.data.lineVoidAuthUsername, password: result.data.lineVoidAuthPassword });
         setPriceEditAuthCredentials({ username: result.data.priceEditAuthUsername, password: result.data.priceEditAuthPassword });
+        setEditItemAuthCredentials({ username: result.data.editItemAuthUsername, password: result.data.editItemAuthPassword });
         setOverallReadingAuthCredentials({ username: result.data.overallReadingAuthUsername, password: result.data.overallReadingAuthPassword });
         setIsTrainingMode(result.data.isTrainingMode || false);
         setShowQuantityInSearch(result.data.showQuantityInSearch ?? true);
@@ -1009,6 +1018,11 @@ export function usePOS() {
     if (selectedItemId) unlockInlinePrice(selectedItemId);
   };
 
+  const handleEditItemAuthSuccess = () => {
+    setIsEditItemAuthOpen(false);
+    if (selectedItemId) unlockInlineName(selectedItemId);
+  };
+
   const handleSelectCustomer = (customer: Customer | null) => {
     setSelectedCustomer(customer);
     setIsCustomerSelectOpen(false);
@@ -1142,6 +1156,7 @@ export function usePOS() {
     // auth dialogs
     isLineVoidAuthOpen, setIsLineVoidAuthOpen, lineVoidAuthCredentials, pendingVoidItemId,
     isPriceEditAuthOpen, setIsPriceEditAuthOpen, priceEditAuthCredentials,
+    isEditItemAuthOpen, setIsEditItemAuthOpen, editItemAuthCredentials, handleEditItemAuthSuccess,
     isOverallReadingAuthOpen, setIsOverallReadingAuthOpen, overallReadingAuthCredentials,
     // price levels
     priceLevels, selectedPriceLevelId, setSelectedPriceLevelId,
@@ -1164,7 +1179,7 @@ export function usePOS() {
     requestInlinePriceEdit,
     handleSelectCustomer, handleOpenLoyalty,
     handleOpenEndShift, handleOpenOverallReading,
-    startEditName, commitInlineName, commitQty,
+    startEditName, unlockInlineName, commitInlineName, commitQty,
     handleCheckoutComplete,
   };
 }

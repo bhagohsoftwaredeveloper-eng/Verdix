@@ -369,6 +369,9 @@ export interface SystemSettings {
   enablePriceEditAuth?: boolean;
   priceEditAuthUsername?: string | null;
   priceEditAuthPassword?: string | null;
+  enableEditItemAuth?: boolean;
+  editItemAuthUsername?: string | null;
+  editItemAuthPassword?: string | null;
   enableRecentSalesAuth?: boolean;
   recentSalesAuthUsername?: string | null;
   recentSalesAuthPassword?: string | null;
