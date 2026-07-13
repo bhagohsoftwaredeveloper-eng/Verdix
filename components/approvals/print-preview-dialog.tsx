@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Printer, X, Download, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface ApprovalItem {
   id: string;
@@ -382,6 +382,7 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                       <th className="p-2 text-[9pt] font-bold uppercase text-right">Expected</th>
                       <th className="p-2 text-[9pt] font-bold uppercase text-right">Counted</th>
                       <th className="p-2 text-[9pt] font-bold uppercase text-right">Variance</th>
+                      <th className="p-2 text-[9pt] font-bold uppercase text-right">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -399,11 +400,30 @@ export function PrintPreviewDialog({ item, open, onOpenChange }: PrintPreviewDia
                           <td className={`p-2 text-[10pt] text-right font-bold ${variance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                             {variance > 0 ? `+${variance}` : variance}
                           </td>
+                          <td className={`p-2 text-[10pt] text-right font-bold ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-emerald-600' : ''}`}>
+                            {formatCurrency(variance * (Number(it.product_cost) || 0))}
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+                {(() => {
+                  const totalVarianceValue = (item.transaction_data.items || []).reduce((sum: number, it: any) => {
+                    const v = (Number(it.counted_quantity) || 0) - (Number(it.snapshot_quantity) || 0);
+                    return sum + v * (Number(it.product_cost) || 0);
+                  }, 0);
+                  return (
+                    <div className="flex justify-end mb-5">
+                      <div className="text-right">
+                        <div className="text-[8pt] font-bold text-zinc-500 uppercase">Total Variance Value</div>
+                        <div className={`text-[12pt] font-bold ${totalVarianceValue < 0 ? 'text-red-600' : totalVarianceValue > 0 ? 'text-emerald-600' : ''}`}>
+                          {formatCurrency(totalVarianceValue)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
 
