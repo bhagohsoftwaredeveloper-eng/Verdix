@@ -34,6 +34,9 @@ import {
   REASSIGN_PARENT_A,
   REASSIGN_PARENT_B,
   REASSIGN_CHILD,
+  REASSIGN_TOP_MOVER,
+  REASSIGN_TOP_TARGET,
+  REASSIGN_TOP_MOVER_CHILD,
   TEST_SUPPLIER,
   TEST_WAREHOUSE,
   PO_PRODUCT,
@@ -182,6 +185,37 @@ async function seedFixtures(): Promise<void> {
      VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE factor = VALUES(factor)`,
     ['rsn-parA-cf-piece', REASSIGN_PARENT_A.id, REASSIGN_CHILD.unitOfMeasure, 12],
+  );
+
+  // --- dedicated top-level mover family para sa top-level-reassignment test ---
+  for (const p of [REASSIGN_TOP_MOVER, REASSIGN_TOP_TARGET]) {
+    await conn.query(
+      `INSERT INTO products (id, name, price, stock, sku, description, brand, category, unit_of_measure, availability)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
+      [p.id, p.name, p.price, p.stock, p.sku, p.description, p.brand, p.category, p.unitOfMeasure],
+    );
+  }
+  await conn.query(
+    `INSERT INTO products (id, name, price, stock, sku, description, brand, category, unit_of_measure, parent_id, availability)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
+    [
+      REASSIGN_TOP_MOVER_CHILD.id,
+      REASSIGN_TOP_MOVER_CHILD.name,
+      REASSIGN_TOP_MOVER_CHILD.price,
+      REASSIGN_TOP_MOVER_CHILD.stock,
+      REASSIGN_TOP_MOVER_CHILD.sku,
+      REASSIGN_TOP_MOVER_CHILD.description,
+      REASSIGN_TOP_MOVER_CHILD.brand,
+      REASSIGN_TOP_MOVER_CHILD.category,
+      REASSIGN_TOP_MOVER_CHILD.unitOfMeasure,
+      REASSIGN_TOP_MOVER.id,
+    ],
+  );
+  await conn.query(
+    `INSERT INTO conversion_factors (id, product_id, unit, factor)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE factor = VALUES(factor)`,
+    ['rsn-topmover-cf-piece', REASSIGN_TOP_MOVER.id, REASSIGN_TOP_MOVER_CHILD.unitOfMeasure, 6],
   );
 
   // --- supplier + warehouse (para sa purchase-order test) ---

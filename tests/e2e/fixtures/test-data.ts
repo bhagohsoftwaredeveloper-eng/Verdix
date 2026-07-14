@@ -178,6 +178,49 @@ export const REASSIGN_CHILD: FullProduct & { parentId: string } = {
   parentId: REASSIGN_PARENT_A.id,
 };
 
+/**
+ * Dedicated family para sa TOP-LEVEL reassignment test. REASSIGN_TOP_MOVER is a
+ * top-level (parent_id NULL) mother nga naay usa ka anak (REASSIGN_TOP_MOVER_CHILD,
+ * unit "Piece", factor 6). REASSIGN_TOP_TARGET is an unrelated top-level product nga
+ * padulngan sa mover. Bulag ni sa REASSIGN_PARENT_* family aron walay cross-test coupling.
+ */
+export const REASSIGN_TOP_MOVER: FullProduct = {
+  id: 'test-reassign-top-mover',
+  name: 'Reassign Top Mover',
+  sku: 'RSN-TOP-MVR-001',
+  description: 'Top-level mother nga i-move under a new parent.',
+  price: 200,
+  stock: 8,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Box',
+};
+
+export const REASSIGN_TOP_TARGET: FullProduct = {
+  id: 'test-reassign-top-target',
+  name: 'Reassign Top Target',
+  sku: 'RSN-TOP-TGT-001',
+  description: 'Bag-ong parent para sa top-level mover.',
+  price: 500,
+  stock: 3,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Case',
+};
+
+export const REASSIGN_TOP_MOVER_CHILD: FullProduct & { parentId: string } = {
+  id: 'test-reassign-top-mover-child',
+  name: 'Reassign Top Mover Child',
+  sku: 'RSN-TOP-CHD-001',
+  description: 'Anak sa mover — kinahanglan magpabilin nested human sa move.',
+  price: 34,
+  stock: 0,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Piece',
+  parentId: REASSIGN_TOP_MOVER.id,
+};
+
 /** Supplier + warehouse para sa purchase-order test. */
 export const TEST_SUPPLIER = { id: 'sup-test', name: 'Test Supplier Co.' };
 export const TEST_WAREHOUSE = { id: 'wh-test', name: 'Test Warehouse' };

@@ -1,7 +1,14 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { seedSession, DEFAULT_ADMIN } from './helpers/auth';
-import { REASSIGN_PARENT_A, REASSIGN_PARENT_B, REASSIGN_CHILD } from './fixtures/test-data';
+import {
+  REASSIGN_PARENT_A,
+  REASSIGN_PARENT_B,
+  REASSIGN_CHILD,
+  REASSIGN_TOP_MOVER,
+  REASSIGN_TOP_TARGET,
+  REASSIGN_TOP_MOVER_CHILD,
+} from './fixtures/test-data';
 
 /**
  * Child reassignment (DB-backed) — i-drive ang view-product dialog "Reassign Parent"
@@ -65,5 +72,50 @@ test.describe('Child reassignment', () => {
     await expect(async () => {
       expect(await fetchParentId(request, REASSIGN_CHILD.sku)).toBe(REASSIGN_PARENT_B.id);
     }).toPass({ timeout: 10_000 });
+  });
+});
+
+test.describe('Top-level reassignment', () => {
+  test('admin mo-move sa top-level mother ngadto sa bag-ong parent', async ({ page, request }) => {
+    await seedSession(page, DEFAULT_ADMIN);
+    await page.goto('/products');
+
+    // Precondition: the mover is top-level, its child nests under it.
+    expect(await fetchParentId(request, REASSIGN_TOP_MOVER.sku)).toBeNull();
+    expect(await fetchParentId(request, REASSIGN_TOP_MOVER_CHILD.sku)).toBe(REASSIGN_TOP_MOVER.id);
+
+    // The ReassignParentDialog's legal-target list comes only from the CURRENT page's
+    // loaded `products` prop (same constraint documented on openViewDialog above). With
+    // the default page size of 10, REASSIGN_TOP_TARGET (an 11th+ product) can land on
+    // page 2 and be invisible to the picker — bump rows-per-page so everything is loaded.
+    await page.getByLabel('Rows per page:').click();
+    await page.getByRole('option', { name: '50' }).click();
+
+    // Open the mover's view dialog (top-level row — no parent expansion).
+    await openViewDialog(page, REASSIGN_TOP_MOVER.name);
+
+    const dialog = page.getByRole('dialog');
+    // NEW behavior: the Reassign button is present for a top-level product.
+    await dialog.getByRole('button', { name: 'Reassign Parent' }).click();
+
+    const reassignDialog = page.getByRole('dialog', { name: 'Reassign Parent' });
+    await expect(reassignDialog).toBeVisible();
+
+    // Detach must be HIDDEN for an already top-level product.
+    await reassignDialog.getByLabel('New parent').click();
+    await expect(page.getByRole('option', { name: 'Detach (no parent)' })).toHaveCount(0);
+
+    // Pick the target, set a factor, save.
+    await page.getByRole('option', { name: REASSIGN_TOP_TARGET.name }).click();
+    await reassignDialog.getByLabel(/Conversion factor/).fill('10');
+    await reassignDialog.getByRole('button', { name: 'Reassign' }).click();
+
+    // The mover now nests under the target...
+    await expect(async () => {
+      expect(await fetchParentId(request, REASSIGN_TOP_MOVER.sku)).toBe(REASSIGN_TOP_TARGET.id);
+    }).toPass({ timeout: 10_000 });
+
+    // ...and its own child still nests under the mover (subtree moved intact).
+    expect(await fetchParentId(request, REASSIGN_TOP_MOVER_CHILD.sku)).toBe(REASSIGN_TOP_MOVER.id);
   });
 });
