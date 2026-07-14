@@ -1,0 +1,205 @@
+import { test, expect } from '@playwright/test';
+import { seedSession, DEFAULT_ADMIN } from './helpers/auth';
+import { resetPosState, testQuery } from './helpers/db';
+import { TEST_BRAND, TEST_CATEGORY, TEST_UNIT } from './fixtures/test-data';
+
+/**
+ * Add Product Approval (DB-backed) — verifies the require_product_confirmation
+ * switch + approval_workflows gate on product creation:
+ *  - switch OFF: product is created immediately (legacy behavior unchanged).
+ *  - switch ON + a PRODUCT_CREATE workflow row: submitting a product routes it
+ *    into approval_queue as Pending instead of inserting into products.
+ *  - approving the queued item finalizes it and inserts the product.
+ *
+ * Drives the real Add Product dialog — dialog interaction and selectOption
+ * helper copied verbatim from add-product.spec.ts.
+ */
+
+const WORKFLOW_ID = 'wf-prodcreate-e2e';
+
+/** Pick a Radix Select option by label inside the dialog. */
+async function selectOption(
+  page: import('@playwright/test').Page,
+  dialog: import('@playwright/test').Locator,
+  label: string | RegExp,
+  optionName: string,
+) {
+  // exact:true so "Category" doesn't match "Subcategory" (substring).
+  await dialog.getByLabel(label, { exact: true }).click();
+  // The Radix Select content portals to body — page-level option locator.
+  await page.getByRole('option', { name: optionName }).click();
+}
+
+async function fillAndSubmitProduct(
+  page: import('@playwright/test').Page,
+  opts: { name: string; sku: string; description: string; stock: number; cost: string },
+) {
+  await page.goto('/products');
+  await page.getByRole('button', { name: 'Add Product' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Add New Product')).toBeVisible();
+
+  // --- Basic Info ---
+  await dialog.getByLabel('Product Name').fill(opts.name);
+  await dialog.getByLabel('SKU').fill(opts.sku);
+  await dialog.getByLabel('Description', { exact: true }).fill(opts.description);
+  await selectOption(page, dialog, 'Brand', TEST_BRAND.name);
+  await selectOption(page, dialog, 'Category', TEST_CATEGORY.name);
+
+  // --- Inventory ---
+  await dialog.getByRole('tab', { name: 'Inventory' }).click();
+  await selectOption(page, dialog, /unit of measure/i, `${TEST_UNIT.name} (${TEST_UNIT.abbreviation})`);
+  await dialog.getByLabel('Initial Stock').fill(String(opts.stock));
+  await dialog.getByLabel(/^cost/i).fill(opts.cost);
+
+  // --- Submit ---
+  await dialog.getByRole('button', { name: 'Add Product' }).click();
+  await expect(dialog).toBeHidden();
+}
+
+async function setRequireProductConfirmation(request: import('@playwright/test').APIRequestContext, value: boolean) {
+  const res = await request.post('/api/pos-settings', { data: { requireProductConfirmation: value } });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+test.describe('Add Product Approval', () => {
+  test.beforeEach(async () => {
+    await resetPosState();
+    await testQuery("DELETE FROM approval_queue WHERE transaction_type='PRODUCT_CREATE'");
+    await testQuery("DELETE FROM products WHERE sku LIKE 'APRV-E2E-%'");
+    // Each ON-test seeds its own workflow row; clear any leftover from a prior test.
+    await testQuery('DELETE FROM approval_workflows WHERE id=?', [WORKFLOW_ID]);
+  });
+
+  test.afterAll(async ({ request }) => {
+    // MUST reset teardown state — a left-on switch breaks add-product.spec.ts.
+    await testQuery("DELETE FROM approval_workflows WHERE id=?", [WORKFLOW_ID]);
+    await setRequireProductConfirmation(request, false);
+  });
+
+  test('switch OFF: product is created immediately', async ({ page, request }) => {
+    await setRequireProductConfirmation(request, false);
+    await seedSession(page, DEFAULT_ADMIN);
+
+    const sku = `APRV-E2E-OFF-${Date.now()}`;
+    await fillAndSubmitProduct(page, {
+      name: 'Approval Off Widget',
+      sku,
+      description: 'Created while require_product_confirmation is OFF.',
+      stock: 10,
+      cost: '50',
+    });
+
+    const res = await request.get(`/api/products?search=${sku}&limit=50`);
+    expect(res.ok(), await res.text()).toBeTruthy();
+    const body = await res.json();
+    const match = (body.data ?? []).find((p: any) => p.sku === sku);
+    expect(match, 'product created immediately when switch is OFF').toBeTruthy();
+    expect(match.name).toBe('Approval Off Widget');
+
+    // No approval queue row should have been created.
+    const queueRows = await testQuery(
+      "SELECT * FROM approval_queue WHERE transaction_type='PRODUCT_CREATE'"
+    );
+    expect(queueRows.length).toBe(0);
+  });
+
+  test('switch ON + workflow: product is held for approval, not created', async ({ page, request }) => {
+    // Seed a PRODUCT_CREATE workflow step assigned to a non-Admin role (defense
+    // in depth — the seeded session uid 'test-admin-uid' likely doesn't exist in
+    // verdix_test.users anyway, so role resolution yields undefined and no step
+    // is auto-skipped regardless).
+    const nonAdminRole = await testQuery(
+      "SELECT id FROM user_types WHERE name <> 'Admin' ORDER BY id LIMIT 1"
+    );
+    const fallbackRole = nonAdminRole[0]?.id ?? (await testQuery('SELECT id FROM user_types LIMIT 1'))[0]?.id;
+    await testQuery(
+      "INSERT INTO approval_workflows (id, transaction_type, user_type_id, step_order) VALUES (?, 'PRODUCT_CREATE', ?, 1)",
+      [WORKFLOW_ID, fallbackRole]
+    );
+    await setRequireProductConfirmation(request, true);
+    await seedSession(page, DEFAULT_ADMIN);
+
+    const sku = `APRV-E2E-ON-${Date.now()}`;
+    await fillAndSubmitProduct(page, {
+      name: 'Approval On Widget',
+      sku,
+      description: 'Submitted while require_product_confirmation is ON.',
+      stock: 5,
+      cost: '75',
+    });
+
+    // Product must NOT exist yet.
+    const res = await request.get(`/api/products?search=${sku}&limit=50`);
+    expect(res.ok(), await res.text()).toBeTruthy();
+    const body = await res.json();
+    const match = (body.data ?? []).find((p: any) => p.sku === sku);
+    expect(match, 'product must not be created while pending approval').toBeFalsy();
+
+    // Queue row must exist as Pending, carrying this sku in transaction_data.
+    const queueRows = await testQuery(
+      "SELECT * FROM approval_queue WHERE transaction_type='PRODUCT_CREATE' AND status='Pending'"
+    );
+    expect(queueRows.length).toBe(1);
+    const txData = typeof queueRows[0].transaction_data === 'string'
+      ? JSON.parse(queueRows[0].transaction_data)
+      : queueRows[0].transaction_data;
+    expect(txData.sku).toBe(sku);
+  });
+
+  test('approving the queued product creates it', async ({ page, request }) => {
+    const nonAdminRole = await testQuery(
+      "SELECT id FROM user_types WHERE name <> 'Admin' ORDER BY id LIMIT 1"
+    );
+    const fallbackRole = nonAdminRole[0]?.id ?? (await testQuery('SELECT id FROM user_types LIMIT 1'))[0]?.id;
+    await testQuery(
+      "INSERT INTO approval_workflows (id, transaction_type, user_type_id, step_order) VALUES (?, 'PRODUCT_CREATE', ?, 1)",
+      [WORKFLOW_ID, fallbackRole]
+    );
+    await setRequireProductConfirmation(request, true);
+    await seedSession(page, DEFAULT_ADMIN);
+
+    const sku = `APRV-E2E-APPROVE-${Date.now()}`;
+    await fillAndSubmitProduct(page, {
+      name: 'Approval Finalized Widget',
+      sku,
+      description: 'Submitted then approved.',
+      stock: 7,
+      cost: '60',
+    });
+
+    const queueRows = await testQuery(
+      "SELECT * FROM approval_queue WHERE transaction_type='PRODUCT_CREATE' AND status='Pending'"
+    );
+    expect(queueRows.length).toBe(1);
+    const queueId = queueRows[0].id;
+
+    // The approver must satisfy the role check in app/api/approvals/process/route.ts:
+    // username='admin' OR role name in ('Admin','Super Admin') bypasses the
+    // per-step role requirement. test-admin-uid may not exist in verdix_test.users,
+    // so look up a real admin user from the seeded DB.
+    const adminUsers = await testQuery(`
+      SELECT u.uid FROM users u
+      JOIN user_types ut ON (u.user_type = ut.id OR u.user_type = ut.name)
+      WHERE ut.name IN ('Admin','Super Admin') OR u.username='admin'
+      LIMIT 1
+    `);
+    expect(adminUsers.length, 'a real admin user must exist in verdix_test to approve').toBeGreaterThan(0);
+    const approverUid = adminUsers[0].uid;
+
+    const approveRes = await request.post('/api/approvals/process', {
+      data: { queueId, action: 'Approve', userId: approverUid, notes: 'e2e approve' },
+    });
+    expect(approveRes.ok(), await approveRes.text()).toBeTruthy();
+
+    const res = await request.get(`/api/products?search=${sku}&limit=50`);
+    expect(res.ok(), await res.text()).toBeTruthy();
+    const body = await res.json();
+    const match = (body.data ?? []).find((p: any) => p.sku === sku);
+    expect(match, 'product created after approval').toBeTruthy();
+    expect(match.name).toBe('Approval Finalized Widget');
+
+    const finalRows = await testQuery('SELECT status FROM approval_queue WHERE id=?', [queueId]);
+    expect(finalRows[0].status).toBe('Approved');
+  });
+});
