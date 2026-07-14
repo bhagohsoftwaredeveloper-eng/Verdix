@@ -8,7 +8,9 @@ import {
   REASSIGN_TOP_MOVER,
   REASSIGN_TOP_TARGET,
   REASSIGN_TOP_MOVER_CHILD,
-  REASSIGN_AUTODETECT_TARGET,
+  REASSIGN_AUTO_MOVER,
+  REASSIGN_AUTO_MATCH,
+  REASSIGN_AUTO_NOMATCH,
 } from './fixtures/test-data';
 
 /**
@@ -50,6 +52,12 @@ test.describe('Child reassignment', () => {
   test('admin mo-reassign sa child ngadto sa bag-ong parent', async ({ page, request }) => {
     await seedSession(page, DEFAULT_ADMIN);
     await page.goto('/products');
+
+    // The tree table's default page size of 10 rows can push Parent A past page 1
+    // once enough dedicated fixtures exist in the DB — bump rows-per-page so it's
+    // always visible, same pattern used by the other tests in this file.
+    await page.getByLabel('Rows per page:').click();
+    await page.getByRole('option', { name: '50' }).click();
 
     // Precondition: child starts under Parent A.
     expect(await fetchParentId(request, REASSIGN_CHILD.sku)).toBe(REASSIGN_PARENT_A.id);
@@ -130,10 +138,11 @@ test.describe('Reassign factor auto-detect', () => {
     await page.getByLabel('Rows per page:').click();
     await page.getByRole('option', { name: '50' }).click();
 
-    // NOTE: by the time this test runs, the preceding "Top-level reassignment" test
-    // (same DB, sequential worker) has already moved REASSIGN_TOP_MOVER under
-    // REASSIGN_TOP_TARGET — so it now ships nested in the tree table, not top-level.
-    await openViewDialog(page, REASSIGN_TOP_MOVER.name, REASSIGN_TOP_TARGET.name);
+    // REASSIGN_AUTO_MOVER is a DEDICATED fixture that no other test in this file
+    // touches — it stays genuinely top-level regardless of test execution order,
+    // so this test can run standalone (e.g. via --grep) without depending on the
+    // preceding "Top-level reassignment" test having run first.
+    await openViewDialog(page, REASSIGN_AUTO_MOVER.name);
 
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: 'Reassign Parent' }).click();
@@ -143,21 +152,17 @@ test.describe('Reassign factor auto-detect', () => {
 
     const factorInput = reassignDialog.getByLabel(/Conversion factor/);
 
-    // 1) Pick the target that already has a Box factor → input auto-fills "4" + hint shows.
+    // 1) Pick the target that already has a Box factor → input auto-fills "4.00" + hint shows.
     await reassignDialog.getByLabel('New parent').click();
-    await page.getByRole('option', { name: REASSIGN_AUTODETECT_TARGET.name }).click();
+    await page.getByRole('option', { name: REASSIGN_AUTO_MATCH.name }).click();
     await expect(factorInput).toHaveValue('4.00');
     await expect(reassignDialog.getByText(/Auto-detected from/)).toBeVisible();
 
     // 2) Switch to a target with NO matching factor → input clears + hint gone.
-    // NOTE: REASSIGN_TOP_TARGET is NOT used here — the preceding "Top-level reassignment"
-    // test already reassigned REASSIGN_TOP_MOVER (unit Box) under it, which upserts a
-    // Box conversion_factors row on REASSIGN_TOP_TARGET as a side effect (see
-    // app/(app)/products/actions.ts reassignParent). That would make it a false "match".
-    // REASSIGN_PARENT_B only ever receives a Piece factor (from the Child reassignment
-    // test), never Box, so it stays a genuine no-match target for this Box-unit mover.
+    // REASSIGN_AUTO_NOMATCH is dedicated to this test and never reassigned onto by
+    // any other test, so it genuinely never has a conversion_factors row.
     await reassignDialog.getByLabel('New parent').click();
-    await page.getByRole('option', { name: REASSIGN_PARENT_B.name }).click();
+    await page.getByRole('option', { name: REASSIGN_AUTO_NOMATCH.name }).click();
     await expect(factorInput).toHaveValue('');
     await expect(reassignDialog.getByText(/Auto-detected from/)).toHaveCount(0);
   });

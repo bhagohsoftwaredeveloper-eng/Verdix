@@ -222,16 +222,47 @@ export const REASSIGN_TOP_MOVER_CHILD: FullProduct & { parentId: string } = {
 };
 
 /**
- * Target para sa auto-detect test: top-level nga NAAY na conversion_factors row para
- * sa mover's unit ("Box", factor 4). Pag-select ani samtang gi-reassign si
- * REASSIGN_TOP_MOVER (unit "Box"), auto-fill dapat ang factor input sa "4".
+ * Dedicated, FULLY INDEPENDENT family para sa "Reassign factor auto-detect" test.
+ * Wala ni gigamit/gi-mutate sa bisan unsang laing test — mao nga kini nga mover
+ * magpabilin gyud nga top-level, ug ang no-match target magpabilin gyud nga
+ * walay factor, bisan unsa pa ang order sa pag-execute sa spec file.
+ *
+ * REASSIGN_AUTO_MOVER — top-level product nga i-open/reassign (unit "Box").
+ * REASSIGN_AUTO_MATCH — top-level target nga NAAY na conversion_factors row para
+ *   sa mover's unit ("Box", factor 4) → auto-detect fires.
+ * REASSIGN_AUTO_NOMATCH — top-level target nga WALAY factor para sa mover's unit
+ *   → genuine blank case.
  */
-export const REASSIGN_AUTODETECT_TARGET: FullProduct = {
-  id: 'test-reassign-autodetect-target',
-  name: 'Reassign Autodetect Target',
-  sku: 'RSN-AUTO-TGT-001',
-  description: 'Top-level nga naay Box factor para sa auto-detect test.',
-  price: 400,
+export const REASSIGN_AUTO_MOVER: FullProduct = {
+  id: 'test-reassign-auto-mover',
+  name: 'Reassign Auto Mover',
+  sku: 'RSN-AMV-001',
+  description: 'Top-level mover nga dedicado sa auto-detect test.',
+  price: 220,
+  stock: 4,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Box',
+};
+
+export const REASSIGN_AUTO_MATCH: FullProduct = {
+  id: 'test-reassign-auto-match',
+  name: 'Reassign Auto Match Target',
+  sku: 'RSN-AMT-001',
+  description: 'Top-level nga naay Box factor — auto-detect dapat mo-fire.',
+  price: 410,
+  stock: 2,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Case',
+};
+
+export const REASSIGN_AUTO_NOMATCH: FullProduct = {
+  id: 'test-reassign-auto-nomatch',
+  name: 'Reassign Auto No Match Target',
+  sku: 'RSN-ANM-001',
+  description: 'Top-level nga walay Box factor — genuine blank case.',
+  price: 415,
   stock: 2,
   brand: TEST_BRAND.name,
   category: TEST_CATEGORY.name,
