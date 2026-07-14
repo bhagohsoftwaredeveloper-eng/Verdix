@@ -274,7 +274,22 @@ export async function GET(request: NextRequest) {
         
         const cashSalesObj = paymentResults.find((p: any) => p.payment_method?.toUpperCase() === 'CASH');
         const cashSales = parseFloat(cashSalesObj?.amount || 0);
-        const cashInDrawer = startingCash + cashSales; 
+
+        // Cash membership fees over the same date/terminal scope as this Z-reading.
+        // Membership is not a sale (never in pos_transactions), but its cash sits in the
+        // drawer, so it must be counted toward reconciliation.
+        let membershipWhere = "WHERE payment_method = 'cash'";
+        const membershipParams: any[] = [];
+        if (startDate) { membershipWhere += ' AND created_at > ?'; membershipParams.push(startDate); }
+        if (endDate) { membershipWhere += ' AND created_at <= ?'; membershipParams.push(endDate); }
+        if (terminalId && terminalId !== 'all') { membershipWhere += ' AND terminal_id = ?'; membershipParams.push(terminalId); }
+        const membershipCashRows: any[] = await query(
+            `SELECT COALESCE(SUM(amount), 0) AS membership_cash FROM membership_payments ${membershipWhere}`,
+            membershipParams
+        );
+        const membershipCash = parseFloat(membershipCashRows[0]?.membership_cash || 0);
+
+        const cashInDrawer = startingCash + cashSales + membershipCash;
         const runningTotal = previousReading + finalNetSales;
 
         const paymentMethods = paymentResults.map((p: any) => ({
@@ -325,6 +340,7 @@ export async function GET(request: NextRequest) {
             transactionCount: safeInt(salesResult?.transaction_count),
             startingCash: safeParseFloat(startingCash),
             cashSales: safeParseFloat(cashSales),
+            membershipCash: safeParseFloat(membershipCash),
             cashInDrawer: safeParseFloat(cashInDrawer),
             cashierName: 'Admin',
             terminalId: terminalId,
