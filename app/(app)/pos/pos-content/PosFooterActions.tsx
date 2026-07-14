@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Printer, User, Clock, Ban, Undo, Files, BookOpen, Search, Banknote, ArrowRight } from 'lucide-react';
+import { Printer, User, Clock, Ban, Undo, Files, BookOpen, Search, Banknote, ArrowRight, CreditCard } from 'lucide-react';
 
 function CashTransferIcon({ className }: { className?: string }) {
   return (
@@ -16,6 +16,7 @@ type Props = {
   handleOpenEndShift: () => void;
   handleOpenCashTransfer: () => void;
   setIsCustomerSelectOpen: (v: boolean) => void;
+  setIsMembershipOpen: (v: boolean) => void;
   handleOpenLoyalty: () => void;
   setIsRecentSalesOpen: (v: boolean) => void;
   setIsVoidSalesOpen: (v: boolean) => void;
@@ -27,7 +28,7 @@ type Props = {
 };
 
 export function PosFooterActions({
-  handleOpenEndShift, handleOpenCashTransfer, setIsCustomerSelectOpen, handleOpenLoyalty,
+  handleOpenEndShift, handleOpenCashTransfer, setIsCustomerSelectOpen, setIsMembershipOpen, handleOpenLoyalty,
   setIsRecentSalesOpen, setIsVoidSalesOpen, setIsReturnSalesOpen, handleOpenOverallReading,
   setIsZReadingOpen, setIsPriceInquiryOpen, isFrontliner,
 }: Props) {
@@ -36,6 +37,7 @@ export function PosFooterActions({
     { icon: Printer, label: 'Cash count', shortcut: 'Ctrl+1', action: handleOpenEndShift, tint: 'text-emerald-600', cashierOnly: true },
     { icon: CashTransferIcon, label: 'Cash transfer', shortcut: 'Ctrl+2', action: handleOpenCashTransfer, tint: 'text-emerald-600', cashierOnly: true },
     { icon: User, label: 'Customer', shortcut: 'Ctrl+3', action: () => setIsCustomerSelectOpen(true), tint: 'text-sky-600', cashierOnly: false },
+    { icon: CreditCard, label: 'Membership', shortcut: '', action: () => setIsMembershipOpen(true), tint: 'text-amber-600', cashierOnly: false },
     { icon: User, label: 'Loyalty', shortcut: 'Ctrl+4', action: handleOpenLoyalty, tint: 'text-sky-600', cashierOnly: true },
     { icon: Clock, label: 'Recent Sales', shortcut: 'Ctrl+5', action: () => setIsRecentSalesOpen(true), tint: 'text-amber-600', cashierOnly: true },
     { icon: Ban, label: 'Post Void', shortcut: 'Ctrl+6', action: () => setIsVoidSalesOpen(true), tint: 'text-rose-600', cashierOnly: true },
@@ -50,7 +52,7 @@ export function PosFooterActions({
     : allActions;
 
   return (
-    <div className={`grid gap-2 shrink-0 ${isFrontliner ? 'grid-cols-2' : 'grid-cols-10'}`}>
+    <div className={`grid gap-2 shrink-0 ${isFrontliner ? 'grid-cols-2' : 'grid-cols-11'}`}>
       {footerActions.map(({ icon: Icon, label, shortcut, action, tint }) => (
         <Button
           key={label}

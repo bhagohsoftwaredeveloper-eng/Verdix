@@ -40,11 +40,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
-import { User, Loader2, Search, Plus, CreditCard, Printer, Hash, StickyNote, Phone, MapPin, Tag, Wallet, TrendingUp, Landmark, Coins } from 'lucide-react';
+import { User, Loader2, Search, CreditCard, Printer, Hash, StickyNote, Phone, MapPin, Tag, Wallet, TrendingUp, Landmark, Coins } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { format, differenceInDays } from 'date-fns';
-import { AddCustomerDialog } from '../add-customer/AddCustomerDialog';
 import { useCustomerAccount } from './use-customer-account';
 import type { CustomerAccountDialogProps } from './customer-account-types';
 
@@ -65,7 +64,6 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
     overpaymentMode, setOverpaymentMode,
     lastPaymentData,
     showPrintPrompt, setShowPrintPrompt,
-    isAddCustomerOpen, setIsAddCustomerOpen,
     rfidInput, setRfidInput,
     isRfidSearching, rfidError,
     rfidInputRef, yesButtonRef, noButtonRef,
@@ -122,20 +120,15 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
                   {/* Customer Selection */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium mb-1">Customer</p>
-                    <div className="flex items-center gap-2">
-                      <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Select Customer" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="walk-in">Walk-in Customer</SelectItem>
-                          {customers.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => setIsAddCustomerOpen(true)} title="Add New Customer">
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select Customer" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="walk-in">Walk-in Customer</SelectItem>
+                        {customers.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {selectedCustomerId !== 'walk-in' && (
@@ -399,16 +392,6 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
           </SheetFooter>
         </SheetContent>
       </Sheet>
-
-      <AddCustomerDialog
-        isOpen={isAddCustomerOpen}
-        onOpenChange={setIsAddCustomerOpen}
-        onCustomerAdded={(customer) => {
-          fetchCustomers();
-          setSelectedCustomerId(customer.id);
-          setIsAddCustomerOpen(false);
-        }}
-      />
 
       {/* Payment Sub-Dialog */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={(open) => {

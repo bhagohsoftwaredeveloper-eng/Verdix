@@ -9,6 +9,7 @@ import { AdminAuthDialog } from '../admin-auth/AdminAuthDialog';
 import { EndShiftDialog } from '../end-shift/EndShiftDialog';
 import { CashTransferDialog } from '../cash-transfer/CashTransferDialog';
 import { CustomerAccountDialog } from '../customer-account/CustomerAccountDialog';
+import { MembershipPaymentDialog } from '../membership/MembershipPaymentDialog';
 import { LoyaltyRewardsDialog } from '../loyalty-rewards/LoyaltyRewardsDialog';
 import { RecentSalesDialog } from '../recent-sales/RecentSalesDialog';
 import { VoidSalesDialog } from '../void-sales/VoidSalesDialog';
@@ -165,6 +166,15 @@ export function PosDialogs(pos: Props) {
         initialCustomer={pos.selectedCustomer}
         printMode={pos.businessSettings?.printMode || 'native'}
         settings={pos.businessSettings as any}
+      />
+
+      <MembershipPaymentDialog
+        isOpen={pos.isMembershipOpen}
+        onOpenChange={pos.setIsMembershipOpen}
+        initialCustomer={pos.selectedCustomer}
+        shiftId={pos.currentShiftId}
+        terminalId={pos.selectedTerminalId}
+        userId={pos.currentUser?.uid || pos.currentUser?.id || ''}
       />
 
       <LoyaltyRewardsDialog

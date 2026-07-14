@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = parseInt(searchParams.get('offset') || '0');
     const search = searchParams.get('search');
+    const customerId = searchParams.get('customerId');
 
     let sql = `
       SELECT
@@ -34,6 +35,11 @@ export async function GET(request: NextRequest) {
     if (search) {
       sql += ' AND (c.name LIKE ? OR c.contact_number LIKE ? OR cl.rfid_code LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (customerId) {
+      sql += ' AND cl.customer_id = ?';
+      params.push(customerId);
     }
 
     sql += ' ORDER BY cl.created_at DESC LIMIT ? OFFSET ?';
