@@ -136,6 +136,48 @@ export const INVENTORY_PRODUCT: FullProduct = {
   unitOfMeasure: TEST_UNIT.name,
 };
 
+/**
+ * Family para sa child-reassignment test. REASSIGN_PARENT_A is the current mother of
+ * REASSIGN_CHILD (unit "Piece", factor 12 per box). REASSIGN_PARENT_B is an unrelated
+ * top-level product the child gets moved under.
+ */
+export const REASSIGN_PARENT_A: FullProduct = {
+  id: 'test-reassign-parent-a',
+  name: 'Reassign Parent A',
+  sku: 'RSN-PAR-A-001',
+  description: 'Original mother product para sa reassign test.',
+  price: 120,
+  stock: 10,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Box',
+};
+
+export const REASSIGN_PARENT_B: FullProduct = {
+  id: 'test-reassign-parent-b',
+  name: 'Reassign Parent B',
+  sku: 'RSN-PAR-B-001',
+  description: 'New mother product para sa reassign test.',
+  price: 150,
+  stock: 5,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Box',
+};
+
+export const REASSIGN_CHILD: FullProduct & { parentId: string } = {
+  id: 'test-reassign-child',
+  name: 'Reassign Child Piece',
+  sku: 'RSN-CHD-001',
+  description: 'Child unit nga i-reassign.',
+  price: 12,
+  stock: 0,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Piece',
+  parentId: REASSIGN_PARENT_A.id,
+};
+
 /** Supplier + warehouse para sa purchase-order test. */
 export const TEST_SUPPLIER = { id: 'sup-test', name: 'Test Supplier Co.' };
 export const TEST_WAREHOUSE = { id: 'wh-test', name: 'Test Warehouse' };
