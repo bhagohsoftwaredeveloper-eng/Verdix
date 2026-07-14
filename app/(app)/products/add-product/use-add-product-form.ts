@@ -24,6 +24,18 @@ import {
 } from '../actions';
 import { productSchema, type ProductFormValues } from './product-schema';
 
+function getCurrentUid(): string {
+  if (typeof window === 'undefined') return 'system';
+  try {
+    const raw = localStorage.getItem('mock-user-session');
+    if (!raw) return 'system';
+    const session = JSON.parse(raw);
+    return session.uid || session.userId || 'system';
+  } catch {
+    return 'system';
+  }
+}
+
 export interface UseAddProductFormProps {
   onProductAdded?: () => void;
   productOptions?: any;
@@ -345,44 +357,66 @@ export function useAddProductForm({
     setIsSubmitting(true);
 
     try {
-      const result = await addProduct({
-        ...values,
-        ...values,
-        image: `https://picsum.photos/seed/${values.sku}/400/300`,
-      });
+      const uid = getCurrentUid();
 
-      if (result.success) {
-        // Auto-create child product if enabled and this is a parent product
-        if (productType === 'parent' && autoCreateChild && values.conversionFactors && values.conversionFactors.length > 0) {
-          const firstConversion = values.conversionFactors[0];
-          const childPrice = values.price / firstConversion.factor;
-          const childCost = values.cost ? values.cost / firstConversion.factor : undefined;
+      // Build the auto-child intent (if applicable) so a single approval covers parent + child.
+      let childProduct: any = undefined;
+      const willAutoChild =
+        productType === 'parent' &&
+        autoCreateChild &&
+        values.conversionFactors &&
+        values.conversionFactors.length > 0;
 
-          const childData = {
-            name: `${values.name} (${firstConversion.unit})`,
-            brand: values.brand,
-            sku: `${values.sku}-${firstConversion.unit.toLowerCase().replace(/\s+/g, '')}`,
-            barcode: values.barcode ? `${values.barcode}-${firstConversion.unit.toLowerCase()}` : undefined,
-            description: `${values.description} - ${firstConversion.unit}`,
-            additionalDescription: values.additionalDescription,
-            category: values.category,
-            subcategory: values.subcategory,
-            supplier: values.supplier,
-            unitOfMeasure: firstConversion.unit,
-            stock: 0, // Child products start with 0 stock
-            reorderPoint: 0,
-            price: childPrice,
-            cost: childCost,
-            parentId: result.productId,
-            conversionFactor: firstConversion.factor,
-            image: `https://picsum.photos/seed/${values.sku}-${firstConversion.unit}/400/300`,
-          };
+      if (willAutoChild) {
+        const firstConversion = values.conversionFactors![0];
+        const childPrice = values.price / firstConversion.factor;
+        const childCost = values.cost ? values.cost / firstConversion.factor : undefined;
+        childProduct = {
+          name: `${values.name} (${firstConversion.unit})`,
+          brand: values.brand,
+          sku: `${values.sku}-${firstConversion.unit.toLowerCase().replace(/\s+/g, '')}`,
+          barcode: values.barcode ? `${values.barcode}-${firstConversion.unit.toLowerCase()}` : undefined,
+          description: `${values.description} - ${firstConversion.unit}`,
+          additionalDescription: values.additionalDescription,
+          category: values.category,
+          subcategory: values.subcategory,
+          supplier: values.supplier,
+          unitOfMeasure: firstConversion.unit,
+          stock: 0,
+          reorderPoint: 0,
+          price: childPrice,
+          cost: childCost,
+          conversionFactor: firstConversion.factor,
+          image: `https://picsum.photos/seed/${values.sku}-${firstConversion.unit}/400/300`,
+        };
+      }
 
-          const childResult = await addProduct(childData);
+      const result = await addProduct(
+        {
+          ...values,
+          image: `https://picsum.photos/seed/${values.sku}/400/300`,
+          ...(childProduct ? { __childProduct: childProduct } : {}),
+        } as any,
+        uid,
+      );
 
+      if (result.success && (result as any).pendingApproval) {
+        toast({
+          title: 'Submitted for Approval',
+          description: `${values.name} was submitted and is awaiting approval.`,
+        });
+        form.reset();
+        onProductAdded?.();
+        setIsOpen(false);
+      } else if (result.success) {
+        // Immediate insert path — create child directly if approval is off.
+        if (willAutoChild && result.productId) {
+          const childResult = await addProduct(
+            { ...childProduct, parentId: result.productId } as any,
+            uid,
+          );
           if (!childResult.success) {
             console.warn('Failed to auto-create child product:', childResult.message);
-            // Don't fail the entire operation, just warn
           }
         }
 
@@ -394,7 +428,7 @@ export function useAddProductForm({
         });
         toast({
           title: 'Product Added',
-          description: `${values.name} has been successfully added.${productType === 'parent' && autoCreateChild && values.conversionFactors && values.conversionFactors.length > 0 ? ' Child unit auto-created.' : ''}`,
+          description: `${values.name} has been successfully added.${willAutoChild ? ' Child unit auto-created.' : ''}`,
         });
         form.reset();
         onProductAdded?.();
