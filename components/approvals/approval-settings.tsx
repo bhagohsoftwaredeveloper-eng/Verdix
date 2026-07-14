@@ -38,6 +38,7 @@ const TRANSACTION_TYPES = [
   { value: 'STOCK_COUNT', label: 'Stock Count' },
   { value: 'REPACKAGING', label: 'Repackaging' },
   { value: 'SHELF_TRANSFER', label: 'Shelf Transfer' },
+  { value: 'PRODUCT_CREATE', label: 'Add Product' },
 ];
 
 interface ApprovalSettingsProps {

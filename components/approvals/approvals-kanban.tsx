@@ -61,6 +61,7 @@ const TYPE_FILTERS = [
   { val: 'STOCK_COUNT',      lab: 'Counts' },
   { val: 'REPACKAGING',      lab: 'Repack' },
   { val: 'SHELF_TRANSFER',   lab: 'Shelf' },
+  { val: 'PRODUCT_CREATE',   lab: 'Add Product' },
 ];
 
 function typeStyle(type: string, reason?: string) {
@@ -75,6 +76,7 @@ function typeStyle(type: string, reason?: string) {
     case 'STOCK_COUNT':      return 'bg-indigo-100 text-indigo-800 border-indigo-200';
     case 'REPACKAGING':      return 'bg-teal-100 text-teal-800 border-teal-200';
     case 'SHELF_TRANSFER':   return 'bg-orange-100 text-orange-800 border-orange-200';
+    case 'PRODUCT_CREATE':   return 'bg-green-100 text-green-800 border-green-200';
     default:                 return 'bg-secondary/50 text-muted-foreground';
   }
 }
@@ -97,7 +99,8 @@ function cardTitle(item: ApprovalItem): string {
       return 'Bad Order: Batch';
     case 'STOCK_COUNT':      return `Stock Count: ${d.warehouseName || '—'}`;
     case 'REPACKAGING':      return `Repackaging: ${d.sourceProductName || d.productName || '—'}`;
-    case 'SHELF_TRANSFER':   
+    case 'PRODUCT_CREATE':   return `Add Product: ${d.name || d.productName || '—'}`;
+    case 'SHELF_TRANSFER':
       if (d.productName && d.productName !== 'Unknown') return `Shelf Transfer: ${d.productName}`;
       if (d.items && d.items.length > 0) {
         const first = d.items[0].productName || 'Unknown';
