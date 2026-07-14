@@ -14,7 +14,7 @@ Spec: docs/superpowers/specs/2026-07-14-membership-phase2-design.md
 
 ## Tasks
 - [x] Task 1: complete (commits d1b378c..5a545ba, review clean)
-- [ ] Task 2: Report page + reports index link
+- [x] Task 2: complete (commits a4e05f7..179f4e5, review clean)
 - [ ] Task 3: Customer drawer membership panel + activate button
 - [ ] Task 4: Remove footer Membership button (moved into drawer)
 - [ ] Task 5: Z-reading separate Membership Fees line
