@@ -50,7 +50,7 @@ import { MembershipPaymentDialog } from '../membership/MembershipPaymentDialog';
 
 export { WALK_IN_CUSTOMER } from './customer-account-types';
 
-export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, initialCustomer, printMode = 'native', settings, posUserId, posCashierName }: CustomerAccountDialogProps) {
+export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, initialCustomer, printMode = 'native', settings, posUserId, posCashierName, posShiftId, posTerminalId }: CustomerAccountDialogProps) {
   const {
     customers, selectedCustomerId, setSelectedCustomerId,
     customerDetails, isDetailsLoading,
@@ -576,6 +576,8 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
         settings={settings}
         userId={posUserId || ''}
         cashierName={posCashierName}
+        shiftId={posShiftId}
+        terminalId={posTerminalId}
       />
     </>
   );

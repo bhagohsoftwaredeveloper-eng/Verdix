@@ -86,4 +86,20 @@ test.describe('Membership phase 2', () => {
     // cashInDrawer includes membershipCash.
     expect(Number(row.cashInDrawer)).toBeGreaterThanOrEqual(Number(row.cashSales) + Number(row.membershipCash) - 0.001);
   });
+
+  test('z-reading scopes membership cash by terminal', async ({ request }) => {
+    const TERMINAL = 'p2-term-1';
+    await testQuery('INSERT INTO customers (id, name) VALUES (?, ?)', ['p2-e2e-zterm', 'P2 ZTerm']);
+    const pay = await request.post('/api/pos/membership-payment', {
+      data: { customerId: 'p2-e2e-zterm', rfidCode: 'RFID-P2-ZTERM', paymentMethod: 'cash', amountTendered: 500, userId: 'test.cashier', terminalId: TERMINAL },
+    });
+    expect(pay.ok(), await pay.text()).toBeTruthy();
+
+    // The payment was stored against TERMINAL, so a Z-reading scoped to that terminal must include it.
+    const z = await request.get(`/api/sales/z-reading?mode=current&terminalId=${TERMINAL}`);
+    expect(z.ok(), await z.text()).toBeTruthy();
+    const body = await z.json();
+    const row = body.data[0];
+    expect(Number(row.membershipCash)).toBeGreaterThanOrEqual(FEE);
+  });
 });

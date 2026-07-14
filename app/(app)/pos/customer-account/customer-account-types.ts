@@ -9,6 +9,8 @@ export interface CustomerAccountDialogProps {
   settings?: SystemSettings | null;
   posUserId?: string;
   posCashierName?: string;
+  posShiftId?: string | null;
+  posTerminalId?: string | null;
 }
 
 export const WALK_IN_CUSTOMER: Customer = {

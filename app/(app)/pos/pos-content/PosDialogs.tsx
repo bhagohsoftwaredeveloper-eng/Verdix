@@ -167,6 +167,8 @@ export function PosDialogs(pos: Props) {
         settings={pos.businessSettings as any}
         posUserId={pos.currentUser?.uid || pos.currentUser?.id || ''}
         posCashierName={pos.currentUser?.displayName || pos.currentUser?.name}
+        posShiftId={pos.currentShiftId}
+        posTerminalId={pos.selectedTerminalId}
       />
 
       <LoyaltyRewardsDialog
