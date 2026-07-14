@@ -1,195 +1,109 @@
-### Task 1: Make `logApiSync` idempotent for `pending`
+### Task 1: Migration — settings columns, membership_payments table, transaction_type enum
 
 **Files:**
-- Modify: `tests/e2e/helpers/db.ts`
-- Create: `tests/e2e/external-api-logs.spec.ts`
-- Modify: `lib/services/api-sync-logger.ts:27-54`
+- Create: `scripts/migrations/089_create_membership_payments.ts`
 
 **Interfaces:**
-- Produces: `testQuery(sql: string, params?: any[]): Promise<any>` exported from `tests/e2e/helpers/db.ts` — opens a connection to the hardcoded `verdix_test` DB, runs one statement, closes. Tasks 3 uses it too.
-- Produces: `logApiSync` unchanged in signature (`(log: Omit<ApiSyncLog,'id'|'createdAt'|'updatedAt'>) => Promise<void>`), but for `status: 'pending'` it now updates a matching row instead of inserting.
+- Produces: table `membership_payments`; `pos_settings.membership_fee` (DECIMAL(10,2)); `pos_settings.membership_duration_months` (INT); `pos_transactions.transaction_type` ENUM gains `'membership'`.
 
-Background: the generic sync function calls `logApiSync({ status: 'pending', ... })` when all in-request retries fail (`lib/services/external-accounting-api.ts:159-170`). `processSyncQueue()` then selects pending rows and calls that same sync function — which inserts *another* pending row every sweep. Hence 123,448 rows for 14 transactions, all frozen at `retry_count = 3` (the call site passes the constant `config.retryAttempts`).
+- [ ] **Step 1: Write the migration**
 
-- [ ] **Step 1: Export a test-DB query helper**
+Create `scripts/migrations/089_create_membership_payments.ts`:
 
-In `tests/e2e/helpers/db.ts`, `getConn()` already targets the hardcoded `TEST_DB = 'verdix_test'`. Add below it:
+```typescript
+import { registerMigration, Migration } from './runner';
+import { query } from '../../lib/mysql';
 
-```ts
-/** Modagan ug usa ka statement batok sa `verdix_test`. Para sa seed/assert sa specs. */
-export async function testQuery(sql: string, params: any[] = []): Promise<any> {
-  const conn = await getConn();
-  try {
-    const [rows] = await conn.query(sql, params);
-    return rows;
-  } finally {
-    await conn.end();
-  }
-}
-```
+const migration: Migration = {
+  name: '089_create_membership_payments',
+  timestamp: '2026-07-13_10-00-00',
 
-- [ ] **Step 2: Write the failing test**
-
-Create `tests/e2e/external-api-logs.spec.ts`:
-
-```ts
-import { test, expect } from '@playwright/test';
-import { testQuery } from './helpers/db';
-
-/**
- * External API sync-log behavior batok sa verdix_test.
- *
- * NOTE: DILI mag-import ug `lib/` diri — ang test process naka-point sa dev
- * `verdix`, ang test server ra ang naa sa `verdix_test`. Gamiton ang testQuery.
- */
-
-const TXN_ID = 'po_idem_test_1';
-
-async function seedSettings(endpoint: string) {
-  // Ang retry route mo-abort kung dili enabled. Ang unroutable endpoint
-  // mo-guarantee nga mo-fail dayon ang sync -> mo-agi sa 'pending' re-log path.
-  for (const [k, v] of [
-    ['enabled', 'true'],
-    ['api_endpoint', endpoint],
-    ['auth_type', 'none'],
-    ['retry_attempts', '1'],
-    ['retry_delay', '1'],
-    ['timeout', '1000'],
-  ] as const) {
-    await testQuery(
-      `INSERT INTO external_api_settings (setting_key, setting_value) VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
-      [k, v],
+  async up(): Promise<void> {
+    // 1. pos_settings columns (idempotent)
+    const settingsCols = [
+      { name: 'membership_fee', type: 'DECIMAL(10,2) NOT NULL DEFAULT 0.00' },
+      { name: 'membership_duration_months', type: 'INT NOT NULL DEFAULT 12' },
+    ];
+    const existing: any[] = await query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'pos_settings' AND TABLE_SCHEMA = DATABASE()"
     );
-  }
-}
-
-test.describe('External API sync logs', () => {
-  test.beforeEach(async () => {
-    await testQuery('DELETE FROM external_api_logs WHERE transaction_id = ?', [TXN_ID]);
-  });
-
-  test('retry sa usa ka pending log DILI mo-insert ug duplicate row', async ({ request }) => {
-    await seedSettings('http://127.0.0.1:9/');
-
-    const logId = `log_idem_${Date.now()}`;
-    await testQuery(
-      `INSERT INTO external_api_logs
-         (id, transaction_type, transaction_id, endpoint, payload, response, status, error_message, retry_count)
-       VALUES (?, 'PURCHASE_ORDER', ?, 'http://127.0.0.1:9/', '{"total":1}', NULL, 'pending', 'seeded', 0)`,
-      [logId, TXN_ID],
-    );
-
-    // Duha ka retry. Ang matag usa mo-fail (unroutable), busa mo-agi sa pending re-log.
-    await request.post(`/api/external-api/logs/${logId}/retry`);
-    await request.post(`/api/external-api/logs/${logId}/retry`);
-
-    const rows = await testQuery(
-      `SELECT id, retry_count FROM external_api_logs WHERE transaction_id = ? AND status = 'pending'`,
-      [TXN_ID],
-    );
-
-    // Usa ra gihapon ka row — dili tulo.
-    expect(rows.length, `expected 1 pending row, got ${rows.length}`).toBe(1);
-    expect(rows[0].id).toBe(logId);
-    expect(Number(rows[0].retry_count)).toBeGreaterThan(0);
-  });
-});
-```
-
-- [ ] **Step 3: Run the test to verify it fails**
-
-Run: `npx playwright test tests/e2e/external-api-logs.spec.ts`
-Expected: FAIL — `expected 1 pending row, got 3`. The seeded row plus one duplicate inserted per retry.
-
-- [ ] **Step 4: Make `logApiSync` an upsert for pending**
-
-In `lib/services/api-sync-logger.ts`, replace the body of `logApiSync` (lines 27-54) with:
-
-```ts
-export async function logApiSync(log: Omit<ApiSyncLog, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
-  try {
-    // Ang 'pending' kay usa ka QUEUE ENTRY, dili usa ka historical event. Kung
-    // naa nay pending row para niini nga transaction, i-update — ayaw i-insert
-    // ug duplicate. Kung wala kini, ang matag retry sweep sa scheduler mo-clone
-    // sa row, ug ang table mo-tubo nga walay katapusan.
-    if (log.status === 'pending') {
-      const existing = await query(
-        `SELECT id, retry_count FROM external_api_logs
-          WHERE transaction_type = ? AND transaction_id = ? AND status = 'pending'
-          ORDER BY created_at DESC LIMIT 1`,
-        [log.transactionType, log.transactionId],
-      );
-
-      if (existing.length > 0) {
-        await query(
-          `UPDATE external_api_logs
-              SET endpoint = ?,
-                  payload = ?,
-                  error_message = ?,
-                  retry_count = retry_count + 1,
-                  next_retry_at = ?,
-                  last_retry_at = ?
-            WHERE id = ?`,
-          [
-            log.endpoint,
-            log.payload,
-            log.errorMessage || null,
-            log.nextRetryAt || null,
-            log.lastRetryAt || null,
-            existing[0].id,
-          ],
-        );
-        return;
+    const have = new Set(existing.map((c: any) => c.COLUMN_NAME));
+    for (const col of settingsCols) {
+      if (!have.has(col.name)) {
+        await query(`ALTER TABLE pos_settings ADD COLUMN ${col.name} ${col.type}`);
       }
     }
 
-    // Bag-o nga pending, o usa ka success/failed nga historical event.
-    const logId = `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const insertQuery = `
-      INSERT INTO external_api_logs (
-        id, transaction_type, transaction_id, endpoint, payload,
-        response, status, error_message, retry_count, next_retry_at, last_retry_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+    // 2. Extend transaction_type enum
+    await query(
+      "ALTER TABLE pos_transactions MODIFY COLUMN transaction_type ENUM('sale','void','return','refund','membership') DEFAULT 'sale'"
+    );
 
-    await query(insertQuery, [
-      logId,
-      log.transactionType,
-      log.transactionId,
-      log.endpoint,
-      log.payload,
-      log.response,
-      log.status,
-      log.errorMessage || null,
-      log.retryCount || 0,
-      log.nextRetryAt || null,
-      log.lastRetryAt || null,
-    ]);
-  } catch (error) {
-    console.error('Failed to log API sync:', error);
-    console.log('API Sync Log (Fallback):', log);
+    // 3. membership_payments table
+    await query(`
+      CREATE TABLE IF NOT EXISTS membership_payments (
+        id VARCHAR(50) PRIMARY KEY,
+        customer_id VARCHAR(50) NOT NULL,
+        customer_loyalty_id VARCHAR(50) NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        payment_method VARCHAR(20) NOT NULL,
+        previous_expiry DATE NULL,
+        new_expiry DATE NOT NULL,
+        is_new_card TINYINT(1) NOT NULL DEFAULT 0,
+        shift_id VARCHAR(50) NULL,
+        terminal_id VARCHAR(50) NULL,
+        user_id VARCHAR(50) NOT NULL,
+        pos_transaction_id VARCHAR(50) NULL,
+        receipt_number VARCHAR(50) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_customer_id (customer_id),
+        INDEX idx_shift_id (shift_id),
+        INDEX idx_created_at (created_at)
+      )
+    `);
+    console.log('✅ membership_payments table + settings + enum created');
+  },
+
+  async down(): Promise<void> {
+    await query('DROP TABLE IF EXISTS membership_payments');
+    await query(
+      "ALTER TABLE pos_transactions MODIFY COLUMN transaction_type ENUM('sale','void','return','refund') DEFAULT 'sale'"
+    );
+    await query('ALTER TABLE pos_settings DROP COLUMN IF EXISTS membership_fee');
+    await query('ALTER TABLE pos_settings DROP COLUMN IF EXISTS membership_duration_months');
+    console.log('✅ membership_payments migration rolled back');
   }
-}
+};
+
+registerMigration(migration);
 ```
 
-Note `retry_count = retry_count + 1` — the caller passes the constant `config.retryAttempts`, which is why every existing row reads `3`. The accumulating count is the useful one.
+- [ ] **Step 2: Register the migration in the index**
 
-- [ ] **Step 5: Run the test to verify it passes**
+Add the import line to `scripts/migrations/index.ts` in numeric order (match the existing style — the file is a list of `import './0NN_...';` lines). Add:
 
-Run: `npx playwright test tests/e2e/external-api-logs.spec.ts`
-Expected: PASS (1 passed).
+```typescript
+import './089_create_membership_payments';
+```
 
-- [ ] **Step 6: Verify typecheck**
+- [ ] **Step 3: Run the migration**
 
-Run: `npm run typecheck`
-Expected: no error lines referencing `api-sync-logger.ts` or `tests/e2e/helpers/db.ts`. (Pre-existing errors in `products/add-product`, `products/edit-product`, `.next/types`, `scratch/` are expected — ignore them.)
+Run: `npm run migrate`
+Expected: output includes `✅ membership_payments table + settings + enum created` and no errors.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 4: Verify schema**
+
+Run: `node -e "require('ts-node/register'); const {query}=require('./lib/mysql'); query('SHOW COLUMNS FROM membership_payments').then(r=>{console.log(r.map(c=>c.Field).join(','));process.exit(0)})"`
+
+If that invocation is awkward in this environment, instead verify via MySQL client:
+Run: `mysql -u %DB_USER% -p%DB_PASSWORD% %DB_NAME% -e "SHOW COLUMNS FROM membership_payments; SHOW COLUMNS FROM pos_settings LIKE 'membership%'; SHOW COLUMNS FROM pos_transactions LIKE 'transaction_type';"`
+Expected: `membership_payments` has all columns; `pos_settings` shows `membership_fee` + `membership_duration_months`; `transaction_type` enum includes `membership`.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add lib/services/api-sync-logger.ts tests/e2e/helpers/db.ts tests/e2e/external-api-logs.spec.ts
-git commit -m "fix: logApiSync updates the pending row instead of inserting a duplicate"
+git add scripts/migrations/089_create_membership_payments.ts scripts/migrations/index.ts
+git commit -m "feat: migration for membership payments (settings, table, enum)"
 ```
 
 ---
