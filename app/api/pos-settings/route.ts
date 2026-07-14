@@ -50,7 +50,9 @@ export async function GET(request: NextRequest) {
       { name: 'suspend_auth_password', type: 'VARCHAR(255) NULL' },
       { name: 'enable_suspended_auth', type: 'BOOLEAN DEFAULT FALSE' },
       { name: 'suspended_auth_username', type: 'VARCHAR(255) NULL' },
-      { name: 'suspended_auth_password', type: 'VARCHAR(255) NULL' }
+      { name: 'suspended_auth_password', type: 'VARCHAR(255) NULL' },
+      { name: 'membership_fee', type: 'DECIMAL(10,2) NOT NULL DEFAULT 0.00' },
+      { name: 'membership_duration_months', type: 'INT NOT NULL DEFAULT 12' }
     ];
 
     const currentColumnsResult = await query(
@@ -153,7 +155,9 @@ export async function GET(request: NextRequest) {
         enable_cash_transfer_auth AS enableCashTransferAuth,
         cash_transfer_auth_username AS cashTransferAuthUsername,
         cash_transfer_auth_password AS cashTransferAuthPassword,
-        pos_mode AS posMode
+        pos_mode AS posMode,
+        membership_fee AS membershipFee,
+        membership_duration_months AS membershipDurationMonths
       FROM pos_settings
       LIMIT 1
     `;
@@ -384,7 +388,9 @@ export async function POST(request: NextRequest) {
         enableCashTransferAuth: 'enable_cash_transfer_auth',
         cashTransferAuthUsername: 'cash_transfer_auth_username',
         cashTransferAuthPassword: 'cash_transfer_auth_password',
-        posMode: 'pos_mode'
+        posMode: 'pos_mode',
+        membershipFee: 'membership_fee',
+        membershipDurationMonths: 'membership_duration_months'
       };
 
       const updates: string[] = [];
