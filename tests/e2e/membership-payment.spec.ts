@@ -49,7 +49,7 @@ test.describe('Membership payment', () => {
     await testQuery("DELETE FROM customers WHERE id LIKE 'mbr-e2e-%'");
   });
 
-  test('customer dialog has no Add Customer button but has a Membership action', async ({ page }) => {
+  test('customer dialog has no Add Customer button and no footer Membership action', async ({ page }) => {
     // Login + start shift (POS renders its own login form and shift gate).
     await page.goto('/pos');
     await expect(page.getByRole('heading', { name: /cashier login/i })).toBeVisible();
@@ -61,8 +61,9 @@ test.describe('Membership payment', () => {
     await page.getByRole('button', { name: /start shift/i }).click();
     await expect(page.getByPlaceholder(/scan barcode or enter product sku/i)).toBeVisible();
 
-    // The Membership footer action exists.
-    await expect(page.getByRole('button', { name: /membership/i })).toBeVisible();
+    // Phase 2 moved membership into the Customer drawer, so the standalone
+    // footer Membership button no longer exists.
+    await expect(page.getByRole('button', { name: /^membership$/i })).toHaveCount(0);
 
     // Open the Customer dialog (footer action label is "Customer" + a Ctrl+3 hint).
     await page.getByRole('button', { name: /customer/i }).first().click();
