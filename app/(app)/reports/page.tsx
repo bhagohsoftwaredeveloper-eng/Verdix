@@ -235,6 +235,18 @@ export default function ReportsPage() {
               </CardHeader>
             </Card>
           </Link>
+
+          <Link href="/reports/membership">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full border-amber-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-amber-600" />
+                  Membership Report
+                </CardTitle>
+                <CardDescription>Membership activations and renewals with cashier, amount, and validity.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
       </div>
 
       {/* Purchases Reports Section */}
