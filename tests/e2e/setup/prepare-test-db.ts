@@ -37,6 +37,7 @@ import {
   REASSIGN_TOP_MOVER,
   REASSIGN_TOP_TARGET,
   REASSIGN_TOP_MOVER_CHILD,
+  REASSIGN_AUTODETECT_TARGET,
   TEST_SUPPLIER,
   TEST_WAREHOUSE,
   PO_PRODUCT,
@@ -216,6 +217,29 @@ async function seedFixtures(): Promise<void> {
      VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE factor = VALUES(factor)`,
     ['rsn-topmover-cf-piece', REASSIGN_TOP_MOVER.id, REASSIGN_TOP_MOVER_CHILD.unitOfMeasure, 6],
+  );
+
+  // --- target for auto-detect test: top-level product that already has a "Box" factor ---
+  await conn.query(
+    `INSERT INTO products (id, name, price, stock, sku, description, brand, category, unit_of_measure, availability)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
+    [
+      REASSIGN_AUTODETECT_TARGET.id,
+      REASSIGN_AUTODETECT_TARGET.name,
+      REASSIGN_AUTODETECT_TARGET.price,
+      REASSIGN_AUTODETECT_TARGET.stock,
+      REASSIGN_AUTODETECT_TARGET.sku,
+      REASSIGN_AUTODETECT_TARGET.description,
+      REASSIGN_AUTODETECT_TARGET.brand,
+      REASSIGN_AUTODETECT_TARGET.category,
+      REASSIGN_AUTODETECT_TARGET.unitOfMeasure,
+    ],
+  );
+  await conn.query(
+    `INSERT INTO conversion_factors (id, product_id, unit, factor)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE factor = VALUES(factor)`,
+    ['rsn-auto-cf-box', REASSIGN_AUTODETECT_TARGET.id, REASSIGN_TOP_MOVER.unitOfMeasure, 4],
   );
 
   // --- supplier + warehouse (para sa purchase-order test) ---

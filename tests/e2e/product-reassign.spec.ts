@@ -8,6 +8,7 @@ import {
   REASSIGN_TOP_MOVER,
   REASSIGN_TOP_TARGET,
   REASSIGN_TOP_MOVER_CHILD,
+  REASSIGN_AUTODETECT_TARGET,
 } from './fixtures/test-data';
 
 /**
@@ -117,5 +118,47 @@ test.describe('Top-level reassignment', () => {
 
     // ...and its own child still nests under the mover (subtree moved intact).
     expect(await fetchParentId(request, REASSIGN_TOP_MOVER_CHILD.sku)).toBe(REASSIGN_TOP_MOVER.id);
+  });
+});
+
+test.describe('Reassign factor auto-detect', () => {
+  test('auto-fills the factor from a parent that already knows the unit', async ({ page }) => {
+    await seedSession(page, DEFAULT_ADMIN);
+    await page.goto('/products');
+
+    // Load all products into the page so both targets appear in the picker.
+    await page.getByLabel('Rows per page:').click();
+    await page.getByRole('option', { name: '50' }).click();
+
+    // NOTE: by the time this test runs, the preceding "Top-level reassignment" test
+    // (same DB, sequential worker) has already moved REASSIGN_TOP_MOVER under
+    // REASSIGN_TOP_TARGET — so it now ships nested in the tree table, not top-level.
+    await openViewDialog(page, REASSIGN_TOP_MOVER.name, REASSIGN_TOP_TARGET.name);
+
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Reassign Parent' }).click();
+
+    const reassignDialog = page.getByRole('dialog', { name: 'Reassign Parent' });
+    await expect(reassignDialog).toBeVisible();
+
+    const factorInput = reassignDialog.getByLabel(/Conversion factor/);
+
+    // 1) Pick the target that already has a Box factor → input auto-fills "4" + hint shows.
+    await reassignDialog.getByLabel('New parent').click();
+    await page.getByRole('option', { name: REASSIGN_AUTODETECT_TARGET.name }).click();
+    await expect(factorInput).toHaveValue('4.00');
+    await expect(reassignDialog.getByText(/Auto-detected from/)).toBeVisible();
+
+    // 2) Switch to a target with NO matching factor → input clears + hint gone.
+    // NOTE: REASSIGN_TOP_TARGET is NOT used here — the preceding "Top-level reassignment"
+    // test already reassigned REASSIGN_TOP_MOVER (unit Box) under it, which upserts a
+    // Box conversion_factors row on REASSIGN_TOP_TARGET as a side effect (see
+    // app/(app)/products/actions.ts reassignParent). That would make it a false "match".
+    // REASSIGN_PARENT_B only ever receives a Piece factor (from the Child reassignment
+    // test), never Box, so it stays a genuine no-match target for this Box-unit mover.
+    await reassignDialog.getByLabel('New parent').click();
+    await page.getByRole('option', { name: REASSIGN_PARENT_B.name }).click();
+    await expect(factorInput).toHaveValue('');
+    await expect(reassignDialog.getByText(/Auto-detected from/)).toHaveCount(0);
   });
 });

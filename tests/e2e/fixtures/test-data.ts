@@ -221,6 +221,23 @@ export const REASSIGN_TOP_MOVER_CHILD: FullProduct & { parentId: string } = {
   parentId: REASSIGN_TOP_MOVER.id,
 };
 
+/**
+ * Target para sa auto-detect test: top-level nga NAAY na conversion_factors row para
+ * sa mover's unit ("Box", factor 4). Pag-select ani samtang gi-reassign si
+ * REASSIGN_TOP_MOVER (unit "Box"), auto-fill dapat ang factor input sa "4".
+ */
+export const REASSIGN_AUTODETECT_TARGET: FullProduct = {
+  id: 'test-reassign-autodetect-target',
+  name: 'Reassign Autodetect Target',
+  sku: 'RSN-AUTO-TGT-001',
+  description: 'Top-level nga naay Box factor para sa auto-detect test.',
+  price: 400,
+  stock: 2,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Case',
+};
+
 /** Supplier + warehouse para sa purchase-order test. */
 export const TEST_SUPPLIER = { id: 'sup-test', name: 'Test Supplier Co.' };
 export const TEST_WAREHOUSE = { id: 'wh-test', name: 'Test Warehouse' };
