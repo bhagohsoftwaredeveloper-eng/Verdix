@@ -45,6 +45,7 @@ export type ProductFormData = {
   vatStatus?: string;
   availability?: string;
   earnsPoints?: boolean;
+  __childProduct?: ProductFormData;
 };
 
 export type ProductFilters = {
@@ -399,8 +400,45 @@ export async function getLowStockAlerts() {
   }
 }
 
-export async function addProduct(formData: ProductFormData) {
+export async function addProduct(
+  formData: ProductFormData,
+  userId: string = 'system',
+  isInternalFinalization: boolean = false,
+) {
   try {
+    // --- Check if approval is required ---
+    if (!isInternalFinalization) {
+      const isApprovalRequired = await checkApprovalRequired('PRODUCT_CREATE');
+      if (isApprovalRequired) {
+        const items = [{
+          productId: 'NEW',
+          productName: formData.name,
+          sku: formData.sku,
+          barcode: formData.barcode || '',
+          price: formData.price,
+          cost: formData.cost || 0,
+          quantity: formData.stock || 0,
+          unit: formData.unitOfMeasure,
+        }];
+        // Strip the non-serializable File; keep the base64 `image` string.
+        const { imageFile, ...serializable } = formData;
+        const { queueId, pendingApproval } = await submitToApprovalQueue(
+          'PRODUCT_CREATE',
+          { ...serializable, items },
+          userId,
+        );
+        if (pendingApproval) {
+          return {
+            success: true,
+            pendingApproval: true,
+            queueId,
+            message: 'Product creation submitted for approval.',
+          };
+        }
+        // pendingApproval === false (all steps auto-skipped) → fall through to immediate insert.
+      }
+    }
+
     if (formData.conversionFactors && formData.conversionFactors.length > 0) {
       const units = formData.conversionFactors.map(cf => cf.unit.toLowerCase());
       const uniqueUnits = new Set(units);
@@ -516,6 +554,18 @@ export async function addProduct(formData: ProductFormData) {
         }
       }
     });
+
+    // On finalization of an approved queue item, create the auto-child too (single approval covers both).
+    if (isInternalFinalization && formData.__childProduct) {
+      const childResult = await addProduct(
+        { ...formData.__childProduct, parentId: productId },
+        userId,
+        true,
+      );
+      if (!childResult.success) {
+        console.warn('Failed to auto-create child product on finalization:', childResult.message);
+      }
+    }
 
     return { success: true, message: `${formData.name} has been added to the inventory.`, productId };
   } catch (error: any) {
