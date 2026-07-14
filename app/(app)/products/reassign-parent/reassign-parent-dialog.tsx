@@ -104,7 +104,9 @@ export function ReassignParentDialog({
                 <SelectValue placeholder="Select a new parent product" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={DETACH_VALUE}>Detach (no parent)</SelectItem>
+                {product.parentId && (
+                  <SelectItem value={DETACH_VALUE}>Detach (no parent)</SelectItem>
+                )}
                 {legalTargets.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}

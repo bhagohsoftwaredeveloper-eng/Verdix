@@ -307,7 +307,7 @@ export function ViewProductDialog({
                             </Tooltip>
                           </TooltipProvider>
                         )}
-                        {product.parentId && products && (
+                        {products && (
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
