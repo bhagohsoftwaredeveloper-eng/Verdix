@@ -13,7 +13,7 @@ Spec: docs/superpowers/specs/2026-07-14-membership-phase2-design.md
 - POS activates/renews only; customer registration stays in backoffice.
 
 ## Tasks
-- [ ] Task 1: Membership report API (GET /api/reports/membership)
+- [x] Task 1: complete (commits d1b378c..5a545ba, review clean)
 - [ ] Task 2: Report page + reports index link
 - [ ] Task 3: Customer drawer membership panel + activate button
 - [ ] Task 4: Remove footer Membership button (moved into drawer)
@@ -21,4 +21,5 @@ Spec: docs/superpowers/specs/2026-07-14-membership-phase2-design.md
 - [ ] Task 6: E2E test
 
 ## Minor findings (for final review triage)
-(none yet)
+- Task 1: report summary computed in JS over all rows (no SQL aggregate / date LIMIT).
+  Plan-mandated (brief's reference code). Scaling note only; membership volume is low.
