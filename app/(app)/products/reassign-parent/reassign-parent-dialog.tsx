@@ -43,6 +43,7 @@ export function ReassignParentDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [targetId, setTargetId] = useState<string>('');
   const [factor, setFactor] = useState<string>('');
+  const [autoDetectedFrom, setAutoDetectedFrom] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Legal targets = every product except the child itself and its descendants.
@@ -57,6 +58,26 @@ export function ReassignParentDialog({
   const isDetach = targetId === DETACH_VALUE;
   const canSave = targetId !== '' && (isDetach || (Number(factor) > 0));
 
+  const handleTargetChange = (value: string) => {
+    setTargetId(value);
+    if (value === DETACH_VALUE) {
+      setFactor('');
+      setAutoDetectedFrom(null);
+      return;
+    }
+    const parent = products.find((p) => p.id === value);
+    const match = parent?.conversionFactors?.find(
+      (cf) => cf.unit === product.unitOfMeasure,
+    );
+    if (match) {
+      setFactor(String(match.factor));
+      setAutoDetectedFrom(parent?.name ?? null);
+    } else {
+      setFactor('');
+      setAutoDetectedFrom(null);
+    }
+  };
+
   const handleSave = async () => {
     if (!canSave) return;
     setIsSaving(true);
@@ -68,6 +89,7 @@ export function ReassignParentDialog({
         setIsOpen(false);
         setTargetId('');
         setFactor('');
+        setAutoDetectedFrom(null);
         onProductUpdated?.();
       } else {
         toast({ variant: 'destructive', title: 'Reassignment failed', description: result.message });
@@ -99,7 +121,7 @@ export function ReassignParentDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="reassign-target">New parent</Label>
-            <Select value={targetId} onValueChange={setTargetId}>
+            <Select value={targetId} onValueChange={handleTargetChange}>
               <SelectTrigger id="reassign-target">
                 <SelectValue placeholder="Select a new parent product" />
               </SelectTrigger>
@@ -133,6 +155,11 @@ export function ReassignParentDialog({
               <p className="text-xs text-muted-foreground">
                 How many {product.unitOfMeasure} equal one unit of the new parent.
               </p>
+              {autoDetectedFrom && (
+                <p className="text-xs text-muted-foreground">
+                  Auto-detected from {autoDetectedFrom}. You can override it.
+                </p>
+              )}
             </div>
           )}
         </div>
