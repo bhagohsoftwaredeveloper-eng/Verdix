@@ -18,7 +18,7 @@ Spec: docs/superpowers/specs/2026-07-14-membership-phase2-design.md
 - [x] Task 3: complete (commits 3f25139..391c761, review clean)
 - [x] Task 4: complete (commits be26678..73ccd73, review clean)
 - [x] Task 5: complete (commits ff24f79..2cf880e, review clean)
-- [ ] Task 6: E2E test
+- [x] Task 6: complete (commits 2870959..9744b5a, review clean — 3/3 E2E passing)
 
 ## Minor findings (for final review triage)
 - Task 1: report summary computed in JS over all rows (no SQL aggregate / date LIMIT).
