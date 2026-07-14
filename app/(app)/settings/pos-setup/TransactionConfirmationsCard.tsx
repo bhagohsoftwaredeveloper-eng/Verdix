@@ -17,6 +17,7 @@ const CONFIRMATIONS: { key: keyof PosSettings; label: string; desc: string }[] =
   { key: 'requireStockCountApproval',         label: 'Stock Count Approval',            desc: 'Require multi-level approval before applying stock count variances' },
   { key: 'requireRepackagingConfirmation',    label: 'Repackaging Approval',            desc: 'Require multi-level approval before executing stock repackaging conversions' },
   { key: 'requireShelfTransferApproval',      label: 'Shelf Transfer Approval',         desc: 'Require multi-level approval before moving stock between shelves' },
+  { key: 'requireProductConfirmation',        label: 'Add Product Approval',            desc: 'Require multi-level approval before a new product is created' },
 ];
 
 interface Props { settings: PosSettings; set: SetFn; }
