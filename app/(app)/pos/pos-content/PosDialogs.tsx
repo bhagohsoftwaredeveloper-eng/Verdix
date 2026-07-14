@@ -175,6 +175,9 @@ export function PosDialogs(pos: Props) {
         shiftId={pos.currentShiftId}
         terminalId={pos.selectedTerminalId}
         userId={pos.currentUser?.uid || pos.currentUser?.id || ''}
+        printMode={pos.businessSettings?.printMode || 'native'}
+        settings={pos.businessSettings as any}
+        cashierName={pos.currentUser?.displayName || pos.currentUser?.name}
       />
 
       <LoyaltyRewardsDialog

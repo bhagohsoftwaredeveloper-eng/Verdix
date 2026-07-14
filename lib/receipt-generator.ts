@@ -435,6 +435,88 @@ export class ReceiptGenerator {
         return enc.encode();
     }
 
+    public generateMembershipReceipt(data: {
+        customerName: string;
+        rfidCode: string | null;
+        amount: number;
+        paymentMethod: string;
+        amountTendered?: number;
+        change?: number;
+        newExpiry: string;
+        previousExpiry?: string | null;
+        isNewCard: boolean;
+        receiptNumber: string;
+        cashierName?: string;
+        transactionDate?: Date;
+    }, settings?: SystemSettings | null): Uint8Array {
+        const { COLS } = this.getLayout(settings);
+        const W = COLS;
+        this.encoder = new ReceiptPrinterEncoder({
+            language: 'esc-pos',
+            codepageMapping: 'epson',
+            width: W,
+        });
+        const enc = this.encoder.initialize().codepage('cp437');
+
+        const padRow = (left: string, right: string) => {
+            const spaces = W - left.length - right.length;
+            if (spaces <= 0) return `${left} ${right}`.substring(0, W);
+            return `${left}${' '.repeat(spaces)}${right}`;
+        };
+
+        const currentDate = data.transactionDate ? new Date(data.transactionDate) : new Date();
+        const dateStr = format(currentDate, 'PP p');
+        const bizName = settings?.businessName?.trim() || 'VENDIX';
+        const address = settings?.address?.trim() || 'General Merchandise';
+
+        // HEADER (store block, reused from the sale receipt — but NO MIN/SN/SI)
+        enc.raw([0x1b, 0x61, 0x31]); // Native Center
+        enc.line(bizName);
+        enc.line(address);
+        if (settings?.contactNumber) enc.line(settings.contactNumber);
+        enc.line(dateStr);
+        enc.raw([0x1b, 0x61, 0x30]); // Native Left
+        enc.newline();
+
+        // TITLE — explicitly not a BIR document
+        enc.raw([0x1b, 0x61, 0x31]);
+        enc.line('MEMBERSHIP PAYMENT');
+        enc.line('Acknowledgment Receipt');
+        enc.line('(Not a BIR Sales Invoice)');
+        enc.raw([0x1b, 0x61, 0x30]);
+        enc.line('-'.repeat(W));
+
+        // DETAILS
+        enc.line(padRow('Receipt No:', data.receiptNumber.substring(0, Math.max(8, W - 12))));
+        enc.line(padRow('Cashier:', (data.cashierName || 'Admin').substring(0, Math.max(4, W - 9))));
+        enc.line(`Customer: ${data.customerName.substring(0, W - 10)}`);
+        enc.line(padRow('RFID:', (data.rfidCode || '-').substring(0, Math.max(4, W - 6))));
+        enc.line(padRow('Type:', data.isNewCard ? 'Activation' : 'Renewal'));
+        enc.line('-'.repeat(W));
+
+        // AMOUNT
+        enc.bold(true).line(padRow('Amount:', `P${this.fmt(data.amount)}`)).bold(false);
+        enc.line(padRow('Method:', data.paymentMethod.toUpperCase()));
+        if (data.paymentMethod?.toLowerCase() === 'cash' && data.amountTendered != null) {
+            enc.line(padRow('Tendered:', `P${this.fmt(data.amountTendered)}`));
+            enc.line(padRow('Change:', `P${this.fmt(data.change ?? Math.max(0, data.amountTendered - data.amount))}`));
+        }
+        enc.line('-'.repeat(W));
+
+        // VALIDITY
+        enc.bold(true).line(padRow('Valid Until:', data.newExpiry)).bold(false);
+
+        // FOOTER
+        enc.newline();
+        enc.align('center');
+        enc.line('Thank you for your membership!');
+        enc.line('This is a system generated receipt.');
+        enc.newline().newline().newline();
+        enc.cut();
+
+        return enc.encode();
+    }
+
     public generateZReadingReceipt(data: any, settings?: any): Uint8Array {
         const { COLS } = this.getLayout(settings);
         const W = COLS;

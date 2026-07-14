@@ -22,8 +22,9 @@ import { Label } from '@/components/ui/label';
 import { CreditCard, Loader2, Coins, Wallet } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { usePrinter } from '@/lib/use-printer';
 import { useMembershipPayment } from './use-membership-payment';
-import type { MembershipPaymentDialogProps } from './membership-types';
+import type { MembershipPaymentDialogProps, MembershipResult } from './membership-types';
 
 function addMonths(base: Date, months: number): Date {
   const d = new Date(base);
@@ -33,8 +34,10 @@ function addMonths(base: Date, months: number): Date {
 
 export function MembershipPaymentDialog({
   isOpen, onOpenChange, initialCustomer, shiftId, terminalId, userId,
+  printMode = 'native', settings, cashierName,
 }: MembershipPaymentDialogProps) {
   const { toast } = useToast();
+  const { isConnected, connect, print } = usePrinter(printMode, settings?.nativePrinterName);
   const {
     customers,
     selectedCustomerId, setSelectedCustomerId,
@@ -61,6 +64,37 @@ export function MembershipPaymentDialog({
     (isActivation && !rfidCode.trim()) ||
     (paymentMethod === 'cash' && tendered < fee);
 
+  const printReceipt = async (result: MembershipResult) => {
+    if (printMode === 'browser') return; // Native/ESC-POS is the POS deployment target.
+    try {
+      if (!isConnected) {
+        const connected = await connect();
+        if (!connected) {
+          toast({ title: 'Printer Not Connected', description: 'Membership recorded, but the receipt could not be printed.', variant: 'destructive' });
+          return;
+        }
+      }
+      const { ReceiptGenerator } = await import('@/lib/receipt-generator');
+      const generator = new ReceiptGenerator();
+      const bytes = generator.generateMembershipReceipt({
+        customerName: result.customerName,
+        rfidCode: result.rfidCode,
+        amount: result.amount,
+        paymentMethod,
+        amountTendered: paymentMethod === 'cash' ? tendered : undefined,
+        change: paymentMethod === 'cash' ? change : undefined,
+        newExpiry: format(new Date(result.newExpiry), 'MMM dd, yyyy'),
+        previousExpiry: result.previousExpiry,
+        isNewCard: result.isNewCard,
+        receiptNumber: result.receiptNumber,
+        cashierName,
+      }, settings);
+      await print(bytes);
+    } catch {
+      toast({ title: 'Print Failed', description: 'Membership recorded, but the receipt could not be printed.', variant: 'destructive' });
+    }
+  };
+
   const handleConfirm = async () => {
     const result = await submit();
     if (result) {
@@ -68,6 +102,7 @@ export function MembershipPaymentDialog({
         title: result.isNewCard ? 'Membership activated' : 'Membership renewed',
         description: `${result.customerName} — valid until ${format(new Date(result.newExpiry), 'MMM dd, yyyy')}.`,
       });
+      await printReceipt(result);
       onOpenChange(false);
     }
   };

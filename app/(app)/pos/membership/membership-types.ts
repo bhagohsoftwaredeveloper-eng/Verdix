@@ -1,4 +1,4 @@
-import type { Customer } from '@/lib/types';
+import type { Customer, SystemSettings } from '@/lib/types';
 
 export interface MembershipPaymentDialogProps {
   isOpen: boolean;
@@ -7,6 +7,9 @@ export interface MembershipPaymentDialogProps {
   shiftId?: string | null;
   terminalId?: string | null;
   userId: string;
+  printMode?: 'browser' | 'escpos' | 'usb' | 'native';
+  settings?: SystemSettings | null;
+  cashierName?: string;
 }
 
 export interface MembershipResult {
