@@ -556,6 +556,7 @@ export async function addProduct(
     });
 
     // On finalization of an approved queue item, create the auto-child too (single approval covers both).
+    let childWarning = '';
     if (isInternalFinalization && formData.__childProduct) {
       const childResult = await addProduct(
         { ...formData.__childProduct, parentId: productId },
@@ -564,10 +565,11 @@ export async function addProduct(
       );
       if (!childResult.success) {
         console.warn('Failed to auto-create child product on finalization:', childResult.message);
+        childWarning = ` (WARNING: child unit was not created: ${childResult.message})`;
       }
     }
 
-    return { success: true, message: `${formData.name} has been added to the inventory.`, productId };
+    return { success: true, message: `${formData.name} has been added to the inventory.${childWarning}`, productId };
   } catch (error: any) {
     console.error('Error saving product:', error);
     if (error.code === 'ER_DUP_ENTRY' && error.message.includes('unique_product_unit')) {
