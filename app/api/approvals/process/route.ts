@@ -182,6 +182,10 @@ export async function POST(request: NextRequest) {
             true // isInternalFinalization
           );
           result = { success: stResult.success, error: (stResult as any).message || '' };
+        } else if (item.transaction_type === 'PRODUCT_CREATE') {
+          const { addProduct } = await import('@/app/(app)/products/actions');
+          const apResult = await addProduct(txData, item.created_by, true);
+          result = { success: apResult.success, error: (apResult as any).message || '' };
         }
 
         if (!result.success) {
