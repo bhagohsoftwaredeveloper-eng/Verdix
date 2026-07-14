@@ -26,6 +26,9 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [membershipCard, setMembershipCard] = useState<{ rfid_code: string | null; expiry_date: string | null; isExpired: boolean } | null>(null);
+  const [isMembershipCardLoading, setIsMembershipCardLoading] = useState(false);
+  const [isMembershipDialogOpen, setIsMembershipDialogOpen] = useState(false);
 
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -38,7 +41,6 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
   const [overpaymentMode, setOverpaymentMode] = useState<'change' | 'credit'>('change');
   const [lastPaymentData, setLastPaymentData] = useState<any>(null);
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
-  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [rfidInput, setRfidInput] = useState('');
   const [isRfidSearching, setIsRfidSearching] = useState(false);
   const [rfidError, setRfidError] = useState('');
@@ -72,6 +74,25 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
       console.error('Failed to fetch customers:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchMembershipCard = async () => {
+    if (!selectedCustomerId || selectedCustomerId === 'walk-in') { setMembershipCard(null); return; }
+    setIsMembershipCardLoading(true);
+    try {
+      const res = await fetch(getApiUrl(`/customer-loyalty?customerId=${encodeURIComponent(selectedCustomerId)}&limit=1`));
+      const result = await res.json();
+      if (result.success && result.data.length > 0) {
+        const c = result.data[0];
+        setMembershipCard({ rfid_code: c.rfid_code, expiry_date: c.expiry_date, isExpired: !!c.isExpired });
+      } else {
+        setMembershipCard(null);
+      }
+    } catch {
+      setMembershipCard(null);
+    } finally {
+      setIsMembershipCardLoading(false);
     }
   };
 
@@ -123,8 +144,10 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
         setCustomerDetails(null);
         setTransactions([]);
         setPayments([]);
+        setMembershipCard(null);
       } else {
         fetchDetails();
+        fetchMembershipCard();
       }
     }
   }, [isOpen, selectedCustomerId]);
@@ -351,7 +374,6 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
     overpaymentMode, setOverpaymentMode,
     lastPaymentData,
     showPrintPrompt, setShowPrintPrompt,
-    isAddCustomerOpen, setIsAddCustomerOpen,
     rfidInput, setRfidInput,
     isRfidSearching, rfidError,
     rfidInputRef, yesButtonRef, noButtonRef,
@@ -365,6 +387,11 @@ export function useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, ini
     formatCurrency,
     getInitials,
     allItems, pendingCharges, overdueCharges,
+    membershipCard,
+    isMembershipCardLoading,
+    isMembershipDialogOpen,
+    setIsMembershipDialogOpen,
+    fetchMembershipCard,
     format, differenceInDays, formatQuantity,
   };
 }

@@ -7,6 +7,8 @@ export interface CustomerAccountDialogProps {
   initialCustomer?: Customer | null;
   printMode?: 'browser' | 'escpos' | 'usb' | 'native';
   settings?: SystemSettings | null;
+  posUserId?: string;
+  posCashierName?: string;
 }
 
 export const WALK_IN_CUSTOMER: Customer = {

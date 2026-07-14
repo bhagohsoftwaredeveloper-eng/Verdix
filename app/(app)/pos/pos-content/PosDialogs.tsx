@@ -166,6 +166,8 @@ export function PosDialogs(pos: Props) {
         initialCustomer={pos.selectedCustomer}
         printMode={pos.businessSettings?.printMode || 'native'}
         settings={pos.businessSettings as any}
+        posUserId={pos.currentUser?.uid || pos.currentUser?.id || ''}
+        posCashierName={pos.currentUser?.displayName || pos.currentUser?.name}
       />
 
       <MembershipPaymentDialog

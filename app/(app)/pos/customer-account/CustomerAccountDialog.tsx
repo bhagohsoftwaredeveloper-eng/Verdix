@@ -46,10 +46,11 @@ import { Label } from '@/components/ui/label';
 import { format, differenceInDays } from 'date-fns';
 import { useCustomerAccount } from './use-customer-account';
 import type { CustomerAccountDialogProps } from './customer-account-types';
+import { MembershipPaymentDialog } from '../membership/MembershipPaymentDialog';
 
 export { WALK_IN_CUSTOMER } from './customer-account-types';
 
-export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, initialCustomer, printMode = 'native', settings }: CustomerAccountDialogProps) {
+export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, initialCustomer, printMode = 'native', settings, posUserId, posCashierName }: CustomerAccountDialogProps) {
   const {
     customers, selectedCustomerId, setSelectedCustomerId,
     customerDetails, isDetailsLoading,
@@ -77,6 +78,7 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
     formatCurrency,
     getInitials,
     allItems, pendingCharges, overdueCharges,
+    membershipCard, isMembershipCardLoading, isMembershipDialogOpen, setIsMembershipDialogOpen, fetchMembershipCard,
   } = useCustomerAccount({ isOpen, onOpenChange, onSelectCustomer, initialCustomer, printMode, settings });
 
   return (
@@ -190,6 +192,34 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
                         </CardContent>
                       </Card>
                     </div>
+                    <Card className="border bg-muted/40 shrink-0 min-w-[200px]">
+                      <CardContent className="p-3 space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <CreditCard className="h-3.5 w-3.5 text-amber-600" />
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Membership</p>
+                        </div>
+                        {isMembershipCardLoading ? (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />Checking…</p>
+                        ) : membershipCard ? (
+                          <>
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${membershipCard.isExpired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                              {membershipCard.isExpired ? 'Expired' : 'Active'}
+                            </span>
+                            <p className="text-xs">RFID: <span className="font-mono">{membershipCard.rfid_code || '—'}</span></p>
+                            <p className="text-xs text-muted-foreground">{membershipCard.expiry_date ? `Valid until ${format(new Date(membershipCard.expiry_date), 'MMM dd, yyyy')}` : 'No expiry'}</p>
+                          </>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-muted text-muted-foreground">No Card</span>
+                        )}
+                        <Button
+                          size="sm"
+                          className="w-full h-8 bg-amber-600 hover:bg-amber-700"
+                          onClick={() => setIsMembershipDialogOpen(true)}
+                        >
+                          {membershipCard ? (membershipCard.isExpired ? 'Renew Membership' : 'Renew Membership') : 'Activate Membership'}
+                        </Button>
+                      </CardContent>
+                    </Card>
                   </div>
                 )}
 
@@ -534,6 +564,19 @@ export function CustomerAccountDialog({ isOpen, onOpenChange, onSelectCustomer, 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MembershipPaymentDialog
+        isOpen={isMembershipDialogOpen}
+        onOpenChange={(open) => {
+          setIsMembershipDialogOpen(open);
+          if (!open) fetchMembershipCard();
+        }}
+        initialCustomer={customerDetails ? { id: customerDetails.id, name: customerDetails.name } as any : null}
+        printMode={printMode}
+        settings={settings}
+        userId={posUserId || ''}
+        cashierName={posCashierName}
+      />
     </>
   );
 }
