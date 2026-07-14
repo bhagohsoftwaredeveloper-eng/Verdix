@@ -20,6 +20,15 @@ Spec: docs/superpowers/specs/2026-07-14-membership-phase2-design.md
 - [x] Task 5: complete (commits ff24f79..2cf880e, review clean)
 - [x] Task 6: complete (commits 2870959..9744b5a, review clean — 3/3 E2E passing)
 
+## Final whole-branch review (opus)
+- 1 Important finding FIXED (commit d371a1a): drawer MembershipPaymentDialog dropped
+  shiftId/terminalId → payments stored terminal_id=NULL → per-terminal Z-reading missed
+  them (false cash-short). Threaded posShiftId/posTerminalId through the drawer; added
+  E2E terminal-scope guard. Re-review: resolved, 4/4 E2E passing.
+- All other cross-task seams verified clean (single dialog path, userId threaded,
+  field shapes consistent, SQL parameterized, no BIR/sales exposure, no total drift).
+
 ## Minor findings (for final review triage)
 - Task 1: report summary computed in JS over all rows (no SQL aggregate / date LIMIT).
   Plan-mandated (brief's reference code). Scaling note only; membership volume is low.
+  → Accepted; no action needed.
