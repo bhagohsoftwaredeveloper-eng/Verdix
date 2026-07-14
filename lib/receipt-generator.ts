@@ -659,6 +659,9 @@ export class ReceiptGenerator {
         (data.paymentMethods || []).forEach((method: any) => {
             enc.line(row(`${method.name.toUpperCase()}:`, fmt(method.amount || 0)));
         });
+        if ((data.membershipCash || 0) > 0) {
+          enc.line(row('Membership Fees (cash):', fmt(data.membershipCash || 0)));
+        }
         enc.line(row('Opening Fund:',    fmt(data.startingCash || 0)));
         enc.line(row('Less Withdrawal:', '0.00'));
         const totalPayments = (data.paymentMethods || [])

@@ -19,6 +19,7 @@ export type ZReadingData = {
   startingCash: number;
   cashSales: number;
   cashInDrawer: number;
+  membershipCash?: number;
   cashierName?: string;
   terminalId?: string;
   terminalMin?: string;
@@ -395,7 +396,13 @@ export const ZReadingPreview = React.forwardRef<HTMLDivElement, ZReadingPreviewP
               <span>{formatCurrency(method.amount)}</span>
             </div>
          ))}
-         
+         {(data.membershipCash ?? 0) > 0 && (
+           <div style={styles.row}>
+             <span>Membership Fees (cash):</span>
+             <span>{formatCurrency(data.membershipCash || 0)}</span>
+           </div>
+         )}
+
          <div style={styles.row}>
             <span>Opening Fund:</span>
             <span>{formatCurrency(data.startingCash)}</span>
