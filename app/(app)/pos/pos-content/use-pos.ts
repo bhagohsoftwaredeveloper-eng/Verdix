@@ -68,7 +68,6 @@ export function usePOS() {
   const [cashSales, setCashSales] = useState(0);
   const [isPosLoggedIn, setIsPosLoggedIn] = useState(false);
   const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false);
-  const [isMembershipOpen, setIsMembershipOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(WALK_IN_CUSTOMER);
   const [isLoyaltyOpen, setIsLoyaltyOpen] = useState(false);
   const [isRecentSalesOpen, setIsRecentSalesOpen] = useState(false);
@@ -146,7 +145,7 @@ export function usePOS() {
   useEffect(() => {
     const isAnyDialogOpen =
       isTenderDialogOpen || isDiscountDialogOpen || isHeldTransOpen || isLineVoidAuthOpen ||
-      isEndShiftOpen || isCashTransferOpen || isCustomerSelectOpen || isMembershipOpen || isLoyaltyOpen ||
+      isEndShiftOpen || isCashTransferOpen || isCustomerSelectOpen || isLoyaltyOpen ||
       isRecentSalesOpen || isVoidSalesOpen || isReturnSalesOpen || isPriceInquiryOpen ||
       isZReadingOpen || isShutdownConfirmOpen || isInsufficientStockOpen || isProductSearchOpen ||
       showEndShiftReport || isEndingShift;
@@ -157,7 +156,7 @@ export function usePOS() {
     }
   }, [
     isTenderDialogOpen, isDiscountDialogOpen, isHeldTransOpen, isLineVoidAuthOpen,
-    isEndShiftOpen, isCashTransferOpen, isCustomerSelectOpen, isMembershipOpen, isLoyaltyOpen,
+    isEndShiftOpen, isCashTransferOpen, isCustomerSelectOpen, isLoyaltyOpen,
     isRecentSalesOpen, isVoidSalesOpen, isReturnSalesOpen, isPriceInquiryOpen,
     isZReadingOpen, isShutdownConfirmOpen, isInsufficientStockOpen, isProductSearchOpen,
     showEndShiftReport, isPosLoggedIn, shiftActive,
@@ -1159,7 +1158,6 @@ export function usePOS() {
     isDiscountDialogOpen, setIsDiscountDialogOpen,
     // customer
     selectedCustomer, isCustomerSelectOpen, setIsCustomerSelectOpen,
-    isMembershipOpen, setIsMembershipOpen,
     isLoyaltyOpen, setIsLoyaltyOpen,
     customerPoints, customerPointsValue,
     // readings

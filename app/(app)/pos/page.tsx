@@ -118,7 +118,6 @@ function POSContent() {
               handleOpenEndShift={pos.handleOpenEndShift}
               handleOpenCashTransfer={pos.handleOpenCashTransfer}
               setIsCustomerSelectOpen={pos.setIsCustomerSelectOpen}
-              setIsMembershipOpen={pos.setIsMembershipOpen}
               handleOpenLoyalty={pos.handleOpenLoyalty}
               setIsRecentSalesOpen={pos.setIsRecentSalesOpen}
               setIsVoidSalesOpen={pos.setIsVoidSalesOpen}
