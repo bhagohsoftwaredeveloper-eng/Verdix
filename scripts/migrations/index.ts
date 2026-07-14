@@ -94,6 +94,7 @@ import './093_backfill_stock_movement_applied';
 import './094_create_sync_conflicts_table';
 import './095_dedupe_external_api_logs';
 import './096_create_membership_payments';
+import './097_add_product_approval_setting';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';
