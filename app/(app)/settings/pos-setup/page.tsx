@@ -13,6 +13,7 @@ import { BirComplianceCard } from './BirComplianceCard';
 import { SecuritySettingsCard } from './SecuritySettingsCard';
 import { TerminalCard } from './TerminalCard';
 import { CustomerDisplayCard } from './CustomerDisplayCard';
+import { MembershipCard } from './MembershipCard';
 import { DataManagementGrid } from './DataManagementGrid';
 
 export default function PosSetupPage() {
@@ -72,7 +73,10 @@ export default function PosSetupPage() {
                 <GeneralSettingsCard settings={settings} set={set} />
                 <TerminalCard currentTerminalId={settings.currentTerminalId} currentTerminalName={settings.currentTerminalName} set={set} />
               </div>
-              <CustomerDisplayCard settings={settings} set={set} />
+              <div className="space-y-4">
+                <CustomerDisplayCard settings={settings} set={set} />
+                <MembershipCard settings={settings} set={set} />
+              </div>
             </div>
           </TabsContent>
 

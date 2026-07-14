@@ -68,6 +68,8 @@ export interface PosSettings {
   customerDisplayShowLogo?: boolean;
   salesOrderTerms?: string | null;
   posMode?: 'default' | 'pharmacy';
+  membershipFee?: number;
+  membershipDurationMonths?: number;
 }
 
 export const DEFAULT_POS_SETTINGS: PosSettings = {
@@ -140,4 +142,6 @@ export const DEFAULT_POS_SETTINGS: PosSettings = {
   customerDisplayShowLogo: true,
   salesOrderTerms: '',
   posMode: 'default',
+  membershipFee: 0,
+  membershipDurationMonths: 12,
 };
