@@ -66,6 +66,7 @@ export function usePOS() {
   const [shiftActive, setShiftActive] = useState(false);
   const [startingCash, setStartingCash] = useState(0);
   const [cashSales, setCashSales] = useState(0);
+  const [membershipCash, setMembershipCash] = useState(0);
   const [isPosLoggedIn, setIsPosLoggedIn] = useState(false);
   const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(WALK_IN_CUSTOMER);
@@ -803,6 +804,7 @@ export function usePOS() {
       if (result.success) {
         setStartingCash(cash);
         setCashSales(0);
+        setMembershipCash(0);
         setShiftActive(true);
         setCurrentShiftId(result.data.shiftId);
         localStorage.setItem('pos_current_shift_id', result.data.shiftId);
@@ -825,6 +827,7 @@ export function usePOS() {
       if (result.success && result.data) {
         setStartingCash(result.data.startingCash);
         setCashSales(result.data.cashSales);
+        setMembershipCash(result.data.membershipCash ?? 0);
         setCashDeposits(result.data.cashDeposits);
         setCashPickups(result.data.cashPickups);
       }
@@ -1134,7 +1137,7 @@ export function usePOS() {
     isCashCountAuthOpen, setIsCashCountAuthOpen,
     cashCountAuthCredentials,
     isEndShiftOpen, setIsEndShiftOpen,
-    startingCash, cashSales, cashDeposits, cashPickups,
+    startingCash, cashSales, membershipCash, cashDeposits, cashPickups,
     isCashTransferOpen, setIsCashTransferOpen,
     isCashTransferPreAuthOpen, setIsCashTransferPreAuthOpen,
     handleOpenCashTransfer,
