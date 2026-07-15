@@ -30,6 +30,15 @@ export function useRecordBadOrder({ onSuccess }: UseRecordBadOrderProps) {
   const [shelfLocations, setShelfLocations] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
 
+  // Supplier-change guard: holds the pending change while the user confirms
+  // clearing items that the newly-selected supplier does not carry.
+  const [supplierChangeConfirm, setSupplierChangeConfirm] = useState<{
+    supplierId: string | null;
+    supplierName: string | null;
+    mismatchedNames: string[];
+    mismatchedIndexes: number[];
+  } | null>(null);
+
   // ---- form ----------------------------------------------------------------
 
   const form = useForm<BadOrderFormValues>({
@@ -121,6 +130,80 @@ export function useRecordBadOrder({ onSuccess }: UseRecordBadOrderProps) {
     }
   }
 
+  // ---- supplier change -----------------------------------------------------
+
+  // Returns the set of product IDs that the given supplier carries (primary
+  // supplier or via supplier_product_mapping). Empty set on error.
+  async function fetchSupplierProductIds(supplierId: string): Promise<Set<string>> {
+    try {
+      const params = new URLSearchParams({ supplierId, limit: '10000' });
+      const res = await fetch(getApiUrl(`/products?${params.toString()}`), { cache: 'no-store' });
+      const result = await res.json();
+      if (!result.success) return new Set();
+      return new Set((result.data || []).map((p: any) => String(p.id)));
+    } catch (error) {
+      console.error('Failed to fetch supplier products:', error);
+      return new Set();
+    }
+  }
+
+  // Applies a supplier selection to the form (id + name lookup).
+  function applySupplier(supplierId: string | null) {
+    form.setValue('supplierId', supplierId);
+    const supplier = suppliers.find((s) => s.id === supplierId);
+    form.setValue('supplierName', supplier?.name || null);
+  }
+
+  async function handleSupplierChange(value: string) {
+    const newSupplierId = value === 'none' ? null : value;
+    const currentItems = form.getValues('items') || [];
+
+    // No supplier, or nothing added yet — apply immediately.
+    if (!newSupplierId || currentItems.length === 0) {
+      applySupplier(newSupplierId);
+      return;
+    }
+
+    const allowedIds = await fetchSupplierProductIds(newSupplierId);
+    const mismatchedIndexes: number[] = [];
+    const mismatchedNames: string[] = [];
+    currentItems.forEach((item: any, index: number) => {
+      if (!allowedIds.has(String(item.productId))) {
+        mismatchedIndexes.push(index);
+        mismatchedNames.push(item.productName);
+      }
+    });
+
+    if (mismatchedIndexes.length === 0) {
+      // Every added item is carried by the new supplier — apply cleanly.
+      applySupplier(newSupplierId);
+      return;
+    }
+
+    const supplier = suppliers.find((s) => s.id === newSupplierId);
+    setSupplierChangeConfirm({
+      supplierId: newSupplierId,
+      supplierName: supplier?.name || null,
+      mismatchedNames,
+      mismatchedIndexes,
+    });
+  }
+
+  function confirmSupplierChange() {
+    if (!supplierChangeConfirm) return;
+    // Remove from highest index down so earlier indexes stay valid.
+    [...supplierChangeConfirm.mismatchedIndexes]
+      .sort((a, b) => b - a)
+      .forEach((i) => remove(i));
+    applySupplier(supplierChangeConfirm.supplierId);
+    setSupplierChangeConfirm(null);
+  }
+
+  function cancelSupplierChange() {
+    // Leave the supplier and items untouched.
+    setSupplierChangeConfirm(null);
+  }
+
   // ---- submit --------------------------------------------------------------
 
   async function onSubmit(values: BadOrderFormValues) {
@@ -199,6 +282,7 @@ export function useRecordBadOrder({ onSuccess }: UseRecordBadOrderProps) {
     open, handleOpenChange,
     isSubmitting,
     isConfirmOpen, setIsConfirmOpen,
+    supplierChangeConfirm,
 
     // form
     form,
@@ -212,6 +296,9 @@ export function useRecordBadOrder({ onSuccess }: UseRecordBadOrderProps) {
 
     // handlers
     handleAddProduct,
+    handleSupplierChange,
+    confirmSupplierChange,
+    cancelSupplierChange,
     handleFinalSubmit,
     onSubmit,
   };

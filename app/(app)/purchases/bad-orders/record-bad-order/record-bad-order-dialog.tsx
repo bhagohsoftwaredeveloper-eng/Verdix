@@ -57,6 +57,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
     open, handleOpenChange,
     isSubmitting,
     isConfirmOpen, setIsConfirmOpen,
+    supplierChangeConfirm,
     form,
     fields, remove,
     suppliers,
@@ -64,6 +65,9 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
     shelfLocations,
     total,
     handleAddProduct,
+    handleSupplierChange,
+    confirmSupplierChange,
+    cancelSupplierChange,
     handleFinalSubmit,
     onSubmit,
   } = controller;
@@ -119,11 +123,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                           <FormLabel className="text-xs font-semibold text-muted-foreground">Supplier (Optional)</FormLabel>
                         </div>
                         <Select
-                          onValueChange={(val) => {
-                            field.onChange(val);
-                            const supplier = suppliers.find((s) => s.id === val);
-                            form.setValue('supplierName', supplier?.name || null);
-                          }}
+                          onValueChange={handleSupplierChange}
                           value={field.value || ''}
                         >
                           <FormControl>
@@ -209,7 +209,10 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
               {/* ITEMS TABLE */}
               <div className="flex-1 flex flex-col overflow-hidden bg-muted/5 p-4 relative">
                 <div className="max-w-2xl mb-4 z-10">
-                  <ProductSelector onSelectProduct={handleAddProduct} />
+                  <ProductSelector
+                    onSelectProduct={handleAddProduct}
+                    supplierId={form.watch('supplierId')}
+                  />
                 </div>
 
                 <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col relative">
@@ -454,6 +457,38 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Confirm & Record
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!supplierChangeConfirm}
+        onOpenChange={(o) => { if (!o) cancelSupplierChange(); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change supplier?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {supplierChangeConfirm?.mismatchedNames.length} item(s) are not carried by{' '}
+              <span className="font-medium">{supplierChangeConfirm?.supplierName}</span> and will be
+              removed from this bad order:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-40 overflow-y-auto rounded-md border bg-muted/30 p-3 text-sm">
+            <ul className="list-disc pl-4 space-y-1">
+              {supplierChangeConfirm?.mismatchedNames.map((name, i) => (
+                <li key={i}>{name}</li>
+              ))}
+            </ul>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelSupplierChange}>Keep current supplier</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmSupplierChange}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove items &amp; change
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

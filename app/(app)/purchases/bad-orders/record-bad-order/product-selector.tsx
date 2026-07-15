@@ -98,8 +98,17 @@ export function DraggableSearchDialogContent({
 // ProductSelector
 // ---------------------------------------------------------------------------
 
-export function ProductSelector({ onSelectProduct }: { onSelectProduct: (product: Product) => void }) {
-  const { products, loading, error } = useProducts();
+export function ProductSelector({
+  onSelectProduct,
+  supplierId,
+}: {
+  onSelectProduct: (product: Product) => void;
+  supplierId?: string | null;
+}) {
+  // When a supplier is selected, only that supplier's products are searchable.
+  // Otherwise, all products are shown.
+  const filterSupplierId = supplierId && supplierId !== 'none' ? supplierId : undefined;
+  const { products, loading, error } = useProducts(undefined, undefined, filterSupplierId);
   const [inputValue, setInputValue] = useState('');
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [commandSearch, setCommandSearch] = useState('');
