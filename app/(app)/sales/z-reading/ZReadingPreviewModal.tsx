@@ -41,12 +41,12 @@ export function ZReadingPreviewModal({ isOpen, onClose, selectedReading, printer
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-600">Format:</span>
             <Select value={printerFormat} onValueChange={(value) => setPrinterFormat(value as PrinterFormat)}>
-              <SelectTrigger className="w-[90px] h-8 text-xs bg-white">
+              <SelectTrigger className="w-[90px] h-8 text-xs bg-white text-gray-900">
                 <SelectValue placeholder="Format" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="58mm">58mm</SelectItem>
-                <SelectItem value="80mm">80mm</SelectItem>
+              <SelectContent className="bg-white text-gray-900">
+                <SelectItem value="58mm" className="text-gray-900 focus:bg-gray-100 focus:text-gray-900">58mm</SelectItem>
+                <SelectItem value="80mm" className="text-gray-900 focus:bg-gray-100 focus:text-gray-900">80mm</SelectItem>
               </SelectContent>
             </Select>
           </div>
