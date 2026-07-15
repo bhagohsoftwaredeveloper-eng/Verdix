@@ -18,6 +18,9 @@ export type XReadingData = {
   startingCash: number;
   cashSales: number;
   cashInDrawer: number;
+  membershipCash?: number;
+  membershipActivationCount?: number;
+  membershipRenewalCount?: number;
   cashierName: string;
   cashierId: string;
   terminalId: string;
@@ -235,6 +238,19 @@ export function XReadingPreview({ data, printerFormat = '58mm', businessSettings
             </div>
          ))}
 
+         {(data.membershipCash ?? 0) > 0 && (
+           <div style={styles.row}>
+             <span>
+               Membership Fees (cash):
+               {((data.membershipActivationCount ?? 0) + (data.membershipRenewalCount ?? 0)) > 0 && (
+                 <span style={{ fontSize: '0.85em', opacity: 0.75 }}>
+                   {' '}({data.membershipActivationCount ?? 0} activation, {data.membershipRenewalCount ?? 0} renewal)
+                 </span>
+               )}
+             </span>
+             <span>{formatCurrency(data.membershipCash || 0)}</span>
+           </div>
+         )}
          <div style={styles.row}>
            <span>Opening Fund:</span>
            <span>{formatCurrency(data.startingCash)}</span>
