@@ -184,21 +184,25 @@ export async function processPurchaseOrderReceipt(orderId: string, receiptData: 
       const landedCost = toSafeNumber(calculatedItem.landedCostPerUnit);
       const sellingPrice = toSafeNumber(receivedItem.sellingPrice || itemRows.find((i: any) => i.productId === receivedItem.productId)?.sellingPrice);
 
-      // "Highest cost wins" rule:
-      // Fetch the product's current cost from the DB. If the new landed cost is lower
-      // than the previously recorded cost (e.g. supplier gave a cheaper price this time),
-      // keep the higher cost so the product cost never drops unexpectedly.
+      // "Highest wins" rule (applies to both cost AND retail price):
+      // Fetch the product's current cost and price from the DB. If the new landed cost
+      // (or new selling price) is lower than what's already recorded — e.g. the supplier
+      // gave a cheaper price this time — keep the higher value so the product's cost and
+      // retail never drop unexpectedly on receipt. A blank/zero PO selling price cannot
+      // lower retail either, since max(existingPrice, 0) preserves the existing price.
       const [existingProductRows]: any = await connection.query(
-        'SELECT cost FROM products WHERE id = ?',
+        'SELECT cost, price FROM products WHERE id = ?',
         [receivedItem.productId]
       );
       const existingCost = toSafeNumber(existingProductRows?.[0]?.cost ?? 0);
       const finalCost = Math.max(existingCost, landedCost);
+      const existingPrice = toSafeNumber(existingProductRows?.[0]?.price ?? 0);
+      const finalPrice = Math.max(existingPrice, sellingPrice);
 
       // Update cost and price for the specific product received
       await connection.query(
         'UPDATE products SET cost = ?, price = ?, expiration_date = ?, updated_at = NOW() WHERE id = ?',
-        [finalCost, sellingPrice, receivedItem.expirationDate ? new Date(receivedItem.expirationDate).toISOString().slice(0, 10) : null, receivedItem.productId]
+        [finalCost, finalPrice, receivedItem.expirationDate ? new Date(receivedItem.expirationDate).toISOString().slice(0, 10) : null, receivedItem.productId]
       );
 
       // --- BATCH COSTING: Record this delivery as a new inventory batch ---
@@ -229,13 +233,14 @@ export async function processPurchaseOrderReceipt(orderId: string, receiptData: 
         connection
       );
 
-      // Update default price level
-      if (defaultLevelId && sellingPrice > 0) {
+      // Update default price level — use finalPrice so it stays consistent with the
+      // master products.price under the "highest wins" rule.
+      if (defaultLevelId && finalPrice > 0) {
         await connection.query(`
-          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity) 
-          VALUES (?, ?, ?, 0) 
+          INSERT INTO product_price_levels (product_id, price_level_id, price, min_quantity)
+          VALUES (?, ?, ?, 0)
           ON DUPLICATE KEY UPDATE price = VALUES(price)
-        `, [receivedItem.productId, defaultLevelId, sellingPrice]);
+        `, [receivedItem.productId, defaultLevelId, finalPrice]);
       }
     }
 
