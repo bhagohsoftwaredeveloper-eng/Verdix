@@ -54,11 +54,12 @@ export function PrintLayout({
             <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
               Retail Amount
             </th>
-            {isCompleted && (
-              <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
-                Variance
-              </th>
-            )}
+            <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
+              Variance
+            </th>
+            <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
+              Variance Amount
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -91,15 +92,18 @@ export function PrintLayout({
                 <td className="py-3 px-2 border-b border-gray-200 text-right">
                   {formatCurrency(retailAmount)}
                 </td>
-                {isCompleted && (
-                  <td className="py-3 px-2 border-b border-gray-200 text-right">
-                    {item.counted_quantity === null
-                      ? '-'
-                      : variance >= 0
-                      ? `+${variance}`
-                      : variance}
-                  </td>
-                )}
+                <td className="py-3 px-2 border-b border-gray-200 text-right">
+                  {item.counted_quantity === null
+                    ? '-'
+                    : variance >= 0
+                    ? `+${variance}`
+                    : variance}
+                </td>
+                <td className="py-3 px-2 border-b border-gray-200 text-right">
+                  {item.counted_quantity === null
+                    ? '-'
+                    : formatCurrency(variance * toSafeNumber(item.product_cost))}
+                </td>
               </tr>
             );
           })}

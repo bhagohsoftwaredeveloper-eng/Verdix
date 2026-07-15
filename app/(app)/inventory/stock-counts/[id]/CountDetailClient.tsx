@@ -210,8 +210,8 @@ export function CountDetailClient({ countId }: { countId: string }) {
                 <TableHead className="text-right w-48">Actual Count</TableHead>
                 <TableHead className="text-right">Cost Amount</TableHead>
                 <TableHead className="text-right">Retail Amount</TableHead>
-                {isCompleted && <TableHead className="text-right">Variance</TableHead>}
-                {isCompleted && <TableHead className="text-right">Variance Amount</TableHead>}
+                <TableHead className="text-right">Variance</TableHead>
+                <TableHead className="text-right">Variance Amount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -254,45 +254,41 @@ export function CountDetailClient({ countId }: { countId: string }) {
                     </TableCell>
                     <TableCell className="text-right">{formatCurrency(costAmount)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(retailAmount)}</TableCell>
-                    {isCompleted && (
-                      <TableCell
-                        className={`text-right font-medium ${
-                          variance < 0
-                            ? 'text-red-500'
-                            : variance > 0
-                            ? 'text-green-500'
-                            : ''
-                        }`}
-                      >
-                        {item.counted_quantity === null
-                          ? '-'
+                    <TableCell
+                      className={`text-right font-medium ${
+                        variance < 0
+                          ? 'text-red-500'
                           : variance > 0
-                          ? `+${variance}`
-                          : variance}
-                      </TableCell>
-                    )}
-                    {isCompleted && (
-                      <TableCell
-                        className={`text-right font-medium ${
-                          variance < 0
-                            ? 'text-red-500'
-                            : variance > 0
-                            ? 'text-green-500'
-                            : ''
-                        }`}
-                      >
-                        {item.counted_quantity === null
-                          ? '-'
-                          : formatCurrency(variance * toSafeNumber(item.product_cost))}
-                      </TableCell>
-                    )}
+                          ? 'text-green-500'
+                          : ''
+                      }`}
+                    >
+                      {item.counted_quantity === null
+                        ? '-'
+                        : variance > 0
+                        ? `+${variance}`
+                        : variance}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right font-medium ${
+                        variance < 0
+                          ? 'text-red-500'
+                          : variance > 0
+                          ? 'text-green-500'
+                          : ''
+                      }`}
+                    >
+                      {item.counted_quantity === null
+                        ? '-'
+                        : formatCurrency(variance * toSafeNumber(item.product_cost))}
+                    </TableCell>
                   </TableRow>
                 );
               })}
               {filteredItems.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isCompleted ? 8 : 6}
+                    colSpan={8}
                     className="text-center py-8 text-muted-foreground"
                   >
                     No products found matching &quot;{search}&quot;

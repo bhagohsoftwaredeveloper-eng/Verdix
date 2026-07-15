@@ -165,8 +165,8 @@ export function MobileItemCard({
             </div>
           </div>
 
-          {/* Money row — actual on-hand value (always) + variance value (completed only) */}
-          <div className={cn('grid gap-2 text-center', isCompleted ? 'grid-cols-3' : 'grid-cols-2')}>
+          {/* Money row — actual on-hand value + variance value (always shown) */}
+          <div className="grid gap-2 text-center grid-cols-3">
             <div className="bg-muted/50 rounded-xl py-2 px-1">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
                 Cost Amount
@@ -179,34 +179,32 @@ export function MobileItemCard({
               </p>
               <p className="text-sm font-semibold">{formatCurrency(retailAmount)}</p>
             </div>
-            {isCompleted && (
-              <div
+            <div
+              className={cn(
+                'rounded-xl py-2 px-1',
+                !isCounted || (variance ?? 0) === 0
+                  ? 'bg-muted/50'
+                  : (variance ?? 0) < 0
+                  ? 'bg-red-50 dark:bg-red-900/20'
+                  : 'bg-emerald-50 dark:bg-emerald-900/20'
+              )}
+            >
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+                Variance Amount
+              </p>
+              <p
                 className={cn(
-                  'rounded-xl py-2 px-1',
+                  'text-sm font-semibold',
                   !isCounted || (variance ?? 0) === 0
-                    ? 'bg-muted/50'
+                    ? 'text-muted-foreground'
                     : (variance ?? 0) < 0
-                    ? 'bg-red-50 dark:bg-red-900/20'
-                    : 'bg-emerald-50 dark:bg-emerald-900/20'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-emerald-600 dark:text-emerald-400'
                 )}
               >
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
-                  Variance Amount
-                </p>
-                <p
-                  className={cn(
-                    'text-sm font-semibold',
-                    !isCounted || (variance ?? 0) === 0
-                      ? 'text-muted-foreground'
-                      : (variance ?? 0) < 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-emerald-600 dark:text-emerald-400'
-                  )}
-                >
-                  {!isCounted ? '—' : formatCurrency((variance ?? 0) * toSafeNumber(item.product_cost))}
-                </p>
-              </div>
-            )}
+                {!isCounted ? '—' : formatCurrency((variance ?? 0) * toSafeNumber(item.product_cost))}
+              </p>
+            </div>
           </div>
 
           {/* Input (only when in progress) */}
