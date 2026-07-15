@@ -114,9 +114,25 @@ export async function GET(request: NextRequest) {
             WHERE shift_id = ? AND transaction_type = 'sale' AND is_training = 0
             GROUP BY payment_method
         `, [shift.id]);
-        
-        // Calculate Cash In Drawer (System)
-        const cashInDrawer = parseFloat(shift.starting_cash) + parseFloat(shift.cash_sales);
+
+        // Cash membership fees for this shift. Membership is not a sale (never in
+        // pos_transactions), but its cash sits in the drawer, so it must be counted
+        // toward reconciliation — same as the Z-reading. Cash only; card never
+        // enters the drawer.
+        const membershipRows = await query(`
+            SELECT
+                COALESCE(SUM(amount), 0)          AS membership_cash,
+                COALESCE(SUM(is_new_card = 1), 0) AS activation_count,
+                COALESCE(SUM(is_new_card = 0), 0) AS renewal_count
+            FROM membership_payments
+            WHERE shift_id = ? AND payment_method = 'cash'
+        `, [shift.id]) as any[];
+        const membershipCash = parseFloat(membershipRows[0]?.membership_cash || 0);
+        const membershipActivationCount = parseInt(membershipRows[0]?.activation_count || 0, 10) || 0;
+        const membershipRenewalCount = parseInt(membershipRows[0]?.renewal_count || 0, 10) || 0;
+
+        // Calculate Cash In Drawer (System) — includes cash membership fees.
+        const cashInDrawer = parseFloat(shift.starting_cash) + parseFloat(shift.cash_sales) + membershipCash;
         const overShort = parseFloat(shift.actual_cash) - cashInDrawer;
 
         const pMethods = payments as any[];
@@ -137,6 +153,9 @@ export async function GET(request: NextRequest) {
         startingCash: parseFloat(shift.starting_cash) || 0,
         cashSales: parseFloat(shift.cash_sales) || 0,
         cashInDrawer: cashInDrawer,
+        membershipCash: membershipCash,
+        membershipActivationCount: membershipActivationCount,
+        membershipRenewalCount: membershipRenewalCount,
         cashierName: shift.cashier_name || shift.username || 'Unknown',
         cashierId: shift.cashier_id,
         terminalId: shift.terminal_id || 'Counter 1',
