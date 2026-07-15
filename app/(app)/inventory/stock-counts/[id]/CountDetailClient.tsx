@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -38,6 +38,8 @@ export function CountDetailClient({ countId }: { countId: string }) {
     uncountedItems,
     countedCount,
     progressPct,
+    totalVariance,
+    totalVarianceAmount,
   } = useCountDetail({ countId });
 
   // ── Loading / not found ───────────────────────────────────────────────────
@@ -138,7 +140,7 @@ export function CountDetailClient({ countId }: { countId: string }) {
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <div className="flex gap-4 text-xs text-muted-foreground">
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-red-400 inline-block" />
               Variances: {itemsWithVariances.length}
@@ -146,6 +148,34 @@ export function CountDetailClient({ countId }: { countId: string }) {
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-muted-foreground inline-block" />
               Uncounted: {uncountedItems.length}
+            </span>
+            <span className="flex items-center gap-1">
+              Total Variance:{' '}
+              <span
+                className={`font-semibold ${
+                  totalVariance < 0
+                    ? 'text-red-500'
+                    : totalVariance > 0
+                    ? 'text-green-500'
+                    : 'text-foreground'
+                }`}
+              >
+                {totalVariance > 0 ? `+${totalVariance}` : totalVariance}
+              </span>
+            </span>
+            <span className="flex items-center gap-1">
+              Total Amount Variance:{' '}
+              <span
+                className={`font-semibold ${
+                  totalVarianceAmount < 0
+                    ? 'text-red-500'
+                    : totalVarianceAmount > 0
+                    ? 'text-green-500'
+                    : 'text-foreground'
+                }`}
+              >
+                {formatCurrency(totalVarianceAmount)}
+              </span>
             </span>
           </div>
         </div>
@@ -296,6 +326,37 @@ export function CountDetailClient({ countId }: { countId: string }) {
                 </TableRow>
               )}
             </TableBody>
+            {filteredItems.length > 0 && (
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={6} className="text-right font-semibold">
+                    Totals
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-bold ${
+                      totalVariance < 0
+                        ? 'text-red-500'
+                        : totalVariance > 0
+                        ? 'text-green-500'
+                        : ''
+                    }`}
+                  >
+                    {totalVariance > 0 ? `+${totalVariance}` : totalVariance}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-bold ${
+                      totalVarianceAmount < 0
+                        ? 'text-red-500'
+                        : totalVarianceAmount > 0
+                        ? 'text-green-500'
+                        : ''
+                    }`}
+                  >
+                    {formatCurrency(totalVarianceAmount)}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            )}
           </Table>
         </div>
 
@@ -314,7 +375,13 @@ export function CountDetailClient({ countId }: { countId: string }) {
       </div>
 
       {/* ── Dedicated Print Layout ───────────────────────────────────────── */}
-      <PrintLayout count={count} filteredItems={filteredItems} isCompleted={isCompleted} />
+      <PrintLayout
+        count={count}
+        filteredItems={filteredItems}
+        isCompleted={isCompleted}
+        totalVariance={totalVariance}
+        totalVarianceAmount={totalVarianceAmount}
+      />
     </>
   );
 }

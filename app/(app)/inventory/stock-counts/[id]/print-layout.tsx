@@ -4,10 +4,14 @@ export function PrintLayout({
   count,
   filteredItems,
   isCompleted,
+  totalVariance,
+  totalVarianceAmount,
 }: {
   count: any;
   filteredItems: any[];
   isCompleted: boolean;
+  totalVariance: number;
+  totalVarianceAmount: number;
 }) {
   return (
     <div className="hidden print:block printable-area p-8 bg-white text-black font-sans">
@@ -108,6 +112,21 @@ export function PrintLayout({
             );
           })}
         </tbody>
+        {filteredItems.length > 0 && (
+          <tfoot>
+            <tr className="border-t-2 border-black font-bold">
+              <td className="py-3 px-2 text-right" colSpan={6}>
+                Totals
+              </td>
+              <td className="py-3 px-2 text-right">
+                {totalVariance > 0 ? `+${totalVariance}` : totalVariance}
+              </td>
+              <td className="py-3 px-2 text-right">
+                {formatCurrency(totalVarianceAmount)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
 
       <div className="mt-12 pt-8 border-t border-gray-300 flex justify-between text-sm text-gray-500">
