@@ -64,6 +64,77 @@ test.describe('Purchase order', () => {
     }).toPass({ timeout: 10_000 });
   });
 
+  test('Receive PO: "highest wins" rule sa cost ug retail price', async ({ request }) => {
+    // Dedicated product para dili ma-coupled sa laing test nga mo-mutate sa PO_PRODUCT.
+    const productId = `hw-prod-${Date.now()}`;
+    const sku = `HW-${Date.now()}`;
+    const startCost = 50;
+    const startPrice = 100;
+
+    const createRes = await request.post('/api/products', {
+      data: {
+        id: productId,
+        name: `Highest-Wins Item ${Date.now()}`,
+        sku,
+        price: startPrice,
+        cost: startCost,
+        stock: 0,
+        supplierId: TEST_SUPPLIER.id,
+      },
+    });
+    expect(createRes.ok(), 'product created').toBeTruthy();
+
+    // Helper: auto-receive a PO (purchaseType 'Receive' → processPurchaseOrderReceipt fires)
+    // ug ibalik ang na-persist nga product cost/price.
+    const receiveAndRead = async (cost: number, sellingPrice: number) => {
+      const res = await request.post('/api/purchase-orders', {
+        data: {
+          supplierId: TEST_SUPPLIER.id,
+          supplierName: TEST_SUPPLIER.name,
+          date: new Date().toISOString(),
+          paymentMethod: TEST_PAYMENT_METHOD.name,
+          purchaseType: 'Receive',
+          status: 'Received',
+          reference: `PO-HW-${Date.now()}`,
+          receiveToWarehouse: TEST_WAREHOUSE.id,
+          receiveToWarehouseName: TEST_WAREHOUSE.name,
+          shipping: 0,
+          orderedBy: DEFAULT_ADMIN.displayName,
+          items: [
+            {
+              productId,
+              productName: 'Highest-Wins Item',
+              quantity: 1,
+              cost,
+              sellingPrice,
+              discount: 0,
+              discountType: 'amount',
+              vatSubject: false,
+            },
+          ],
+        },
+      });
+      expect(res.ok(), 'PO received').toBeTruthy();
+      expect((await res.json()).success).toBeTruthy();
+
+      const listRes = await request.get(`/api/products?search=${sku}&limit=5`);
+      const listBody = await listRes.json();
+      const prod = (listBody.data ?? []).find((p: any) => p.id === productId);
+      expect(prod, 'product makita sa list').toBeTruthy();
+      return { cost: Number(prod.cost), price: Number(prod.price) };
+    };
+
+    // 1. Higher cost + higher price → mo-saka ang duha.
+    const afterHigher = await receiveAndRead(70, 130);
+    expect(afterHigher.cost).toBe(70);
+    expect(afterHigher.price).toBe(130);
+
+    // 2. Lower cost + lower price → dili mo-ubos (highest wins). Magpabilin sa 70 / 130.
+    const afterLower = await receiveAndRead(40, 90);
+    expect(afterLower.cost).toBe(70);
+    expect(afterLower.price).toBe(130);
+  });
+
   test('UI smoke: Add Purchase Order dialog mo-abli ug ma-fill ang header', async ({ page }) => {
     await seedSession(page, DEFAULT_ADMIN);
     await page.goto('/purchases');
