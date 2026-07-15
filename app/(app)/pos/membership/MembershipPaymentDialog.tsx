@@ -99,7 +99,9 @@ export function MembershipPaymentDialog({
     const result = await submit();
     if (result) {
       toast({
-        title: result.isNewCard ? 'Membership activated' : 'Membership renewed',
+        title: result.isNewCard
+          ? `Membership ACTIVATED — ₱${result.amount.toFixed(2)} (${paymentMethod})`
+          : `Membership RENEWED — ₱${result.amount.toFixed(2)} (${paymentMethod})`,
         description: `${result.customerName} — valid until ${format(new Date(result.newExpiry), 'MMM dd, yyyy')}.`,
       });
       await printReceipt(result);

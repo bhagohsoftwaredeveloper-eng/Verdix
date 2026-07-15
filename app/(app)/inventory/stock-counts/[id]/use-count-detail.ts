@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { logActivity } from '@/lib/client-activity-logger';
 import { useToast } from '@/hooks/use-toast';
+import { toSafeNumber } from '@/lib/utils';
 
 /**
  * Controller for the stock count detail screen: loads the count + its items,
@@ -159,6 +160,20 @@ export function useCountDetail({ countId }: { countId: string }) {
   const countedCount = items.length - uncountedItems.length;
   const progressPct = items.length ? Math.round((countedCount / items.length) * 100) : 0;
 
+  // Grand totals across counted items only (uncounted lines have no variance yet).
+  // totalVariance = net qty over/short; totalVarianceAmount = net peso (variance × cost).
+  const { totalVariance, totalVarianceAmount } = useMemo(() => {
+    let qty = 0;
+    let amount = 0;
+    for (const item of items) {
+      if (item.counted_quantity === null) continue;
+      const v = item.counted_quantity - item.snapshot_quantity;
+      qty += v;
+      amount += v * toSafeNumber(item.product_cost);
+    }
+    return { totalVariance: qty, totalVarianceAmount: amount };
+  }, [items]);
+
   return {
     count,
     items,
@@ -180,5 +195,7 @@ export function useCountDetail({ countId }: { countId: string }) {
     uncountedItems,
     countedCount,
     progressPct,
+    totalVariance,
+    totalVarianceAmount,
   };
 }

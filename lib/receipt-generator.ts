@@ -478,9 +478,10 @@ export class ReceiptGenerator {
         enc.raw([0x1b, 0x61, 0x30]); // Native Left
         enc.newline();
 
-        // TITLE — explicitly not a BIR document
+        // TITLE — explicitly not a BIR document. The type (activation vs renewal)
+        // is promoted here in bold so the cashier and customer see it at a glance.
         enc.raw([0x1b, 0x61, 0x31]);
-        enc.line('MEMBERSHIP PAYMENT');
+        enc.bold(true).line(data.isNewCard ? 'MEMBERSHIP ACTIVATION' : 'MEMBERSHIP RENEWAL').bold(false);
         enc.line('Acknowledgment Receipt');
         enc.line('(Not a BIR Sales Invoice)');
         enc.raw([0x1b, 0x61, 0x30]);
@@ -491,7 +492,6 @@ export class ReceiptGenerator {
         enc.line(padRow('Cashier:', (data.cashierName || 'Admin').substring(0, Math.max(4, W - 9))));
         enc.line(`Customer: ${data.customerName.substring(0, W - 10)}`);
         enc.line(padRow('RFID:', (data.rfidCode || '-').substring(0, Math.max(4, W - 6))));
-        enc.line(padRow('Type:', data.isNewCard ? 'Activation' : 'Renewal'));
         enc.line('-'.repeat(W));
 
         // AMOUNT

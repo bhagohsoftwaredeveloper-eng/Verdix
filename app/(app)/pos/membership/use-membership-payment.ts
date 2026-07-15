@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Customer } from '@/lib/types';
 import { getApiUrl } from '@/lib/api-config';
 import { useToast } from '@/hooks/use-toast';
@@ -38,6 +38,12 @@ export function useMembershipPayment({ isOpen, initialCustomer, userId, shiftId,
   const [amountTendered, setAmountTendered] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Read the latest customer object without making it an effect dependency —
+  // parent call sites pass a fresh { id, name } literal each render, and depending
+  // on the object identity would re-run the reset effect and wipe the inputs mid-typing.
+  const initialCustomerRef = useRef(initialCustomer);
+  initialCustomerRef.current = initialCustomer;
+
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch(getApiUrl('/pos-settings'));
@@ -72,8 +78,8 @@ export function useMembershipPayment({ isOpen, initialCustomer, userId, shiftId,
     setPointSetting('');
     setPaymentMethod('cash');
     setAmountTendered('');
-    setSelectedCustomerId(initialCustomer?.id ?? '');
-  }, [isOpen, initialCustomer, fetchSettings, fetchCustomers]);
+    setSelectedCustomerId(initialCustomerRef.current?.id ?? '');
+  }, [isOpen, fetchSettings, fetchCustomers]);
 
   // When the selected customer changes, look up their loyalty card.
   useEffect(() => {

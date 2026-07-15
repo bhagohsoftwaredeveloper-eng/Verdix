@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -38,6 +38,8 @@ export function CountDetailClient({ countId }: { countId: string }) {
     uncountedItems,
     countedCount,
     progressPct,
+    totalVariance,
+    totalVarianceAmount,
   } = useCountDetail({ countId });
 
   // ── Loading / not found ───────────────────────────────────────────────────
@@ -138,7 +140,7 @@ export function CountDetailClient({ countId }: { countId: string }) {
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <div className="flex gap-4 text-xs text-muted-foreground">
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-red-400 inline-block" />
               Variances: {itemsWithVariances.length}
@@ -146,6 +148,34 @@ export function CountDetailClient({ countId }: { countId: string }) {
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-muted-foreground inline-block" />
               Uncounted: {uncountedItems.length}
+            </span>
+            <span className="flex items-center gap-1">
+              Total Variance:{' '}
+              <span
+                className={`font-semibold ${
+                  totalVariance < 0
+                    ? 'text-red-500'
+                    : totalVariance > 0
+                    ? 'text-green-500'
+                    : 'text-foreground'
+                }`}
+              >
+                {totalVariance > 0 ? `+${totalVariance}` : totalVariance}
+              </span>
+            </span>
+            <span className="flex items-center gap-1">
+              Total Amount Variance:{' '}
+              <span
+                className={`font-semibold ${
+                  totalVarianceAmount < 0
+                    ? 'text-red-500'
+                    : totalVarianceAmount > 0
+                    ? 'text-green-500'
+                    : 'text-foreground'
+                }`}
+              >
+                {formatCurrency(totalVarianceAmount)}
+              </span>
             </span>
           </div>
         </div>
@@ -208,8 +238,10 @@ export function CountDetailClient({ countId }: { countId: string }) {
                 <TableHead>SKU/Barcode</TableHead>
                 <TableHead className="text-right">Expected (Snapshot)</TableHead>
                 <TableHead className="text-right w-48">Actual Count</TableHead>
-                {isCompleted && <TableHead className="text-right">Variance</TableHead>}
-                {isCompleted && <TableHead className="text-right">Amount</TableHead>}
+                <TableHead className="text-right">Cost Amount</TableHead>
+                <TableHead className="text-right">Retail Amount</TableHead>
+                <TableHead className="text-right">Variance</TableHead>
+                <TableHead className="text-right">Variance Amount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -218,6 +250,12 @@ export function CountDetailClient({ countId }: { countId: string }) {
                   item.counted_quantity !== null
                     ? item.counted_quantity - item.snapshot_quantity
                     : 0;
+                // Actual value of what's physically on-hand. Per design, always show the
+                // amount even when the count is 0 (null count is treated as 0), so these
+                // never blank out.
+                const actualQty = toSafeNumber(item.counted_quantity);
+                const costAmount = actualQty * toSafeNumber(item.product_cost);
+                const retailAmount = actualQty * toSafeNumber(item.product_retail);
                 return (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">{item.product_name}</TableCell>
@@ -244,45 +282,43 @@ export function CountDetailClient({ countId }: { countId: string }) {
                         />
                       )}
                     </TableCell>
-                    {isCompleted && (
-                      <TableCell
-                        className={`text-right font-medium ${
-                          variance < 0
-                            ? 'text-red-500'
-                            : variance > 0
-                            ? 'text-green-500'
-                            : ''
-                        }`}
-                      >
-                        {item.counted_quantity === null
-                          ? '-'
+                    <TableCell className="text-right">{formatCurrency(costAmount)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(retailAmount)}</TableCell>
+                    <TableCell
+                      className={`text-right font-medium ${
+                        variance < 0
+                          ? 'text-red-500'
                           : variance > 0
-                          ? `+${variance}`
-                          : variance}
-                      </TableCell>
-                    )}
-                    {isCompleted && (
-                      <TableCell
-                        className={`text-right font-medium ${
-                          variance < 0
-                            ? 'text-red-500'
-                            : variance > 0
-                            ? 'text-green-500'
-                            : ''
-                        }`}
-                      >
-                        {item.counted_quantity === null
-                          ? '-'
-                          : formatCurrency(variance * toSafeNumber(item.product_cost))}
-                      </TableCell>
-                    )}
+                          ? 'text-green-500'
+                          : ''
+                      }`}
+                    >
+                      {item.counted_quantity === null
+                        ? '-'
+                        : variance > 0
+                        ? `+${variance}`
+                        : variance}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right font-medium ${
+                        variance < 0
+                          ? 'text-red-500'
+                          : variance > 0
+                          ? 'text-green-500'
+                          : ''
+                      }`}
+                    >
+                      {item.counted_quantity === null
+                        ? '-'
+                        : formatCurrency(variance * toSafeNumber(item.product_cost))}
+                    </TableCell>
                   </TableRow>
                 );
               })}
               {filteredItems.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isCompleted ? 6 : 4}
+                    colSpan={8}
                     className="text-center py-8 text-muted-foreground"
                   >
                     No products found matching &quot;{search}&quot;
@@ -290,6 +326,37 @@ export function CountDetailClient({ countId }: { countId: string }) {
                 </TableRow>
               )}
             </TableBody>
+            {filteredItems.length > 0 && (
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={6} className="text-right font-semibold">
+                    Totals
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-bold ${
+                      totalVariance < 0
+                        ? 'text-red-500'
+                        : totalVariance > 0
+                        ? 'text-green-500'
+                        : ''
+                    }`}
+                  >
+                    {totalVariance > 0 ? `+${totalVariance}` : totalVariance}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-bold ${
+                      totalVarianceAmount < 0
+                        ? 'text-red-500'
+                        : totalVarianceAmount > 0
+                        ? 'text-green-500'
+                        : ''
+                    }`}
+                  >
+                    {formatCurrency(totalVarianceAmount)}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            )}
           </Table>
         </div>
 
@@ -308,7 +375,13 @@ export function CountDetailClient({ countId }: { countId: string }) {
       </div>
 
       {/* ── Dedicated Print Layout ───────────────────────────────────────── */}
-      <PrintLayout count={count} filteredItems={filteredItems} isCompleted={isCompleted} />
+      <PrintLayout
+        count={count}
+        filteredItems={filteredItems}
+        isCompleted={isCompleted}
+        totalVariance={totalVariance}
+        totalVarianceAmount={totalVarianceAmount}
+      />
     </>
   );
 }

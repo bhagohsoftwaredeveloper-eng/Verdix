@@ -1,11 +1,17 @@
+import { formatCurrency, toSafeNumber } from '@/lib/utils';
+
 export function PrintLayout({
   count,
   filteredItems,
   isCompleted,
+  totalVariance,
+  totalVarianceAmount,
 }: {
   count: any;
   filteredItems: any[];
   isCompleted: boolean;
+  totalVariance: number;
+  totalVarianceAmount: number;
 }) {
   return (
     <div className="hidden print:block printable-area p-8 bg-white text-black font-sans">
@@ -46,11 +52,18 @@ export function PrintLayout({
             <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
               Actual Count
             </th>
-            {isCompleted && (
-              <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
-                Variance
-              </th>
-            )}
+            <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
+              Cost Amount
+            </th>
+            <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
+              Retail Amount
+            </th>
+            <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
+              Variance
+            </th>
+            <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
+              Variance Amount
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -59,6 +72,9 @@ export function PrintLayout({
               item.counted_quantity !== null
                 ? item.counted_quantity - item.snapshot_quantity
                 : 0;
+            const actualQty = toSafeNumber(item.counted_quantity);
+            const costAmount = actualQty * toSafeNumber(item.product_cost);
+            const retailAmount = actualQty * toSafeNumber(item.product_retail);
             return (
               <tr
                 key={`print-${item.id}`}
@@ -74,19 +90,43 @@ export function PrintLayout({
                 <td className="py-3 px-2 border-b border-gray-200 text-right font-semibold">
                   {item.counted_quantity !== null ? item.counted_quantity : '______'}
                 </td>
-                {isCompleted && (
-                  <td className="py-3 px-2 border-b border-gray-200 text-right">
-                    {item.counted_quantity === null
-                      ? '-'
-                      : variance >= 0
-                      ? `+${variance}`
-                      : variance}
-                  </td>
-                )}
+                <td className="py-3 px-2 border-b border-gray-200 text-right">
+                  {formatCurrency(costAmount)}
+                </td>
+                <td className="py-3 px-2 border-b border-gray-200 text-right">
+                  {formatCurrency(retailAmount)}
+                </td>
+                <td className="py-3 px-2 border-b border-gray-200 text-right">
+                  {item.counted_quantity === null
+                    ? '-'
+                    : variance >= 0
+                    ? `+${variance}`
+                    : variance}
+                </td>
+                <td className="py-3 px-2 border-b border-gray-200 text-right">
+                  {item.counted_quantity === null
+                    ? '-'
+                    : formatCurrency(variance * toSafeNumber(item.product_cost))}
+                </td>
               </tr>
             );
           })}
         </tbody>
+        {filteredItems.length > 0 && (
+          <tfoot>
+            <tr className="border-t-2 border-black font-bold">
+              <td className="py-3 px-2 text-right" colSpan={6}>
+                Totals
+              </td>
+              <td className="py-3 px-2 text-right">
+                {totalVariance > 0 ? `+${totalVariance}` : totalVariance}
+              </td>
+              <td className="py-3 px-2 text-right">
+                {formatCurrency(totalVarianceAmount)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
 
       <div className="mt-12 pt-8 border-t border-gray-300 flex justify-between text-sm text-gray-500">

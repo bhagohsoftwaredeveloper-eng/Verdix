@@ -27,6 +27,11 @@ export function MobileItemCard({
   const isCounted = item.counted_quantity !== null;
   const hasVariance = variance !== null && variance !== 0;
 
+  // Actual on-hand value — always shown, even when count is 0/uncounted (treated as 0).
+  const actualQty = toSafeNumber(item.counted_quantity);
+  const costAmount = actualQty * toSafeNumber(item.product_cost);
+  const retailAmount = actualQty * toSafeNumber(item.product_retail);
+
   return (
     <div
       className={cn(
@@ -110,7 +115,7 @@ export function MobileItemCard({
       {expanded && (
         <div className="px-3 pb-3 border-t border-border/60 pt-3 space-y-3">
           {/* Stats row */}
-          <div className={cn('grid gap-2 text-center', isCompleted ? 'grid-cols-4' : 'grid-cols-3')}>
+          <div className="grid gap-2 text-center grid-cols-3">
             <div className="bg-muted/50 rounded-xl py-2 px-1">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
                 Snapshot
@@ -158,36 +163,48 @@ export function MobileItemCard({
                 </p>
               )}
             </div>
-            {isCompleted && (
-              <div
+          </div>
+
+          {/* Money row — actual on-hand value + variance value (always shown) */}
+          <div className="grid gap-2 text-center grid-cols-3">
+            <div className="bg-muted/50 rounded-xl py-2 px-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+                Cost Amount
+              </p>
+              <p className="text-sm font-semibold">{formatCurrency(costAmount)}</p>
+            </div>
+            <div className="bg-muted/50 rounded-xl py-2 px-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+                Retail Amount
+              </p>
+              <p className="text-sm font-semibold">{formatCurrency(retailAmount)}</p>
+            </div>
+            <div
+              className={cn(
+                'rounded-xl py-2 px-1',
+                !isCounted || (variance ?? 0) === 0
+                  ? 'bg-muted/50'
+                  : (variance ?? 0) < 0
+                  ? 'bg-red-50 dark:bg-red-900/20'
+                  : 'bg-emerald-50 dark:bg-emerald-900/20'
+              )}
+            >
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+                Variance Amount
+              </p>
+              <p
                 className={cn(
-                  'rounded-xl py-2 px-1',
-                  !isCounted
-                    ? 'bg-muted/50'
-                    : (variance ?? 0) === 0
-                    ? 'bg-muted/50'
+                  'text-sm font-semibold',
+                  !isCounted || (variance ?? 0) === 0
+                    ? 'text-muted-foreground'
                     : (variance ?? 0) < 0
-                    ? 'bg-red-50 dark:bg-red-900/20'
-                    : 'bg-emerald-50 dark:bg-emerald-900/20'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-emerald-600 dark:text-emerald-400'
                 )}
               >
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Amount</p>
-                <p
-                  className={cn(
-                    'text-sm font-semibold',
-                    !isCounted
-                      ? 'text-muted-foreground'
-                      : (variance ?? 0) === 0
-                      ? 'text-muted-foreground'
-                      : (variance ?? 0) < 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-emerald-600 dark:text-emerald-400'
-                  )}
-                >
-                  {!isCounted ? '—' : formatCurrency((variance ?? 0) * toSafeNumber(item.product_cost))}
-                </p>
-              </div>
-            )}
+                {!isCounted ? '—' : formatCurrency((variance ?? 0) * toSafeNumber(item.product_cost))}
+              </p>
+            </div>
           </div>
 
           {/* Input (only when in progress) */}
