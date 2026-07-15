@@ -594,6 +594,9 @@ export interface XReadingData {
   startingCash: number;
   cashSales: number;
   cashInDrawer: number;
+  membershipCash?: number;
+  membershipActivationCount?: number;
+  membershipRenewalCount?: number;
   cashierName: string;
   cashierId: string;
   terminalId: string;

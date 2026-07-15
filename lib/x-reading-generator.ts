@@ -25,6 +25,9 @@ export class XReadingGenerator {
             shiftEnd,
             startingCash,
             cashInDrawer,
+            membershipCash,
+            membershipActivationCount,
+            membershipRenewalCount,
             cashPickup,
             overShort,
             minSaleId,
@@ -189,6 +192,10 @@ export class XReadingGenerator {
                 [
                     ['Cash In Drawer:', formatCurrency(cashInDrawer)],
                     ...paymentMethods.filter(p => p.name !== 'CASH').map(pm => [pm.name.toUpperCase(), formatCurrency(pm.amount)]),
+                    ...((membershipCash || 0) > 0 ? [
+                        ['Membership (cash):', formatCurrency(membershipCash || 0)],
+                        [`  ${membershipActivationCount || 0}a / ${membershipRenewalCount || 0}r`, '']
+                    ] : []),
                     ['Opening Fund:', formatCurrency(startingCash)],
                     ['Less Withdrawal:', formatCurrency(cashPickup || 0)],
                     ['Payments Received:', formatCurrency(paymentMethods.reduce((acc, m) => acc + m.amount, 0))]
