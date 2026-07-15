@@ -18,9 +18,9 @@ import type { EndShiftDialogProps } from './end-shift-types';
 
 const fmt = (n: number) => new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(n);
 
-export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash, cashSales, cashIn = 0, cashOut = 0 }: EndShiftDialogProps) {
+export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash, cashSales, membershipCash = 0, cashIn = 0, cashOut = 0 }: EndShiftDialogProps) {
   const { counts, countedCash, expectedCash, variance, handleCountChange, handleEndShift } =
-    useEndShift({ isOpen, onShiftEnd, startingCash, cashSales, cashIn, cashOut });
+    useEndShift({ isOpen, onShiftEnd, startingCash, cashSales, membershipCash, cashIn, cashOut });
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
@@ -107,6 +107,12 @@ export function EndShiftDialog({ isOpen, onOpenChange, onShiftEnd, startingCash,
                   <span className="text-slate-500 dark:text-slate-400 text-sm">Cash Sales</span>
                   <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">+₱{fmt(cashSales)}</span>
                 </div>
+                {membershipCash > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 dark:text-slate-400 text-sm">Membership Fees (cash)</span>
+                    <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">+₱{fmt(membershipCash)}</span>
+                  </div>
+                )}
                 {(cashIn > 0 || cashOut > 0) && (
                   <>
                     <div className="flex justify-between items-center">

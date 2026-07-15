@@ -8,11 +8,12 @@ type Options = {
   onShiftEnd: (data: { actualCash: number; cashDifference: number; notes: string; cashDenominations: any[] }) => void;
   startingCash: number;
   cashSales: number;
+  membershipCash: number;
   cashIn: number;
   cashOut: number;
 };
 
-export function useEndShift({ isOpen, onShiftEnd, startingCash, cashSales, cashIn, cashOut }: Options) {
+export function useEndShift({ isOpen, onShiftEnd, startingCash, cashSales, membershipCash, cashIn, cashOut }: Options) {
   const [counts, setCounts] = useState<Record<number, number>>({});
 
   const countedCash = useMemo(
@@ -21,8 +22,8 @@ export function useEndShift({ isOpen, onShiftEnd, startingCash, cashSales, cashI
   );
 
   const expectedCash = useMemo(
-    () => startingCash + cashSales + cashIn - cashOut,
-    [startingCash, cashSales, cashIn, cashOut]
+    () => startingCash + cashSales + membershipCash + cashIn - cashOut,
+    [startingCash, cashSales, membershipCash, cashIn, cashOut]
   );
 
   const variance = useMemo(() => countedCash - expectedCash, [countedCash, expectedCash]);
