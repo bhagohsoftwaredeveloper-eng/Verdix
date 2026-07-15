@@ -39,19 +39,19 @@ export function ZReadingPreviewModal({ isOpen, onClose, selectedReading, printer
 
         <div className="px-4 py-3 border-t bg-gray-50 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Format:</span>
+            <span className="text-xs text-gray-600">Format:</span>
             <Select value={printerFormat} onValueChange={(value) => setPrinterFormat(value as PrinterFormat)}>
-              <SelectTrigger className="w-[90px] h-8 text-xs bg-white">
+              <SelectTrigger className="w-[90px] h-8 text-xs bg-white text-gray-900">
                 <SelectValue placeholder="Format" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="58mm">58mm</SelectItem>
-                <SelectItem value="80mm">80mm</SelectItem>
+              <SelectContent className="bg-white text-gray-900">
+                <SelectItem value="58mm" className="text-gray-900 focus:bg-gray-100 focus:text-gray-900">58mm</SelectItem>
+                <SelectItem value="80mm" className="text-gray-900 focus:bg-gray-100 focus:text-gray-900">80mm</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} className="bg-white">Close</Button>
+            <Button variant="outline" onClick={onClose} className="bg-white text-gray-900 hover:bg-gray-100 hover:text-gray-900">Close</Button>
             <Button onClick={onPrint} disabled={!selectedReading} className="bg-[#008CCB] hover:bg-[#007cb3] text-white">
               POS Print
             </Button>

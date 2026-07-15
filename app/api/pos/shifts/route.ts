@@ -47,14 +47,26 @@ export async function GET(request: NextRequest) {
       const totalDeposits = parseFloat(transfersResult[0].total_deposits || 0);
       const totalPickups = parseFloat(transfersResult[0].total_pickups || 0);
 
+      // Cash membership fees for this shift. Membership is not a sale (never in
+      // pos_transactions), but its cash sits in the drawer, so it must count
+      // toward the expected cash — same as the X/Z-reading. Cash only.
+      const membershipResult = await query(
+        `SELECT COALESCE(SUM(amount), 0) AS membership_cash
+         FROM membership_payments
+         WHERE shift_id = ? AND payment_method = 'cash'`,
+        [shiftId]
+      );
+      const membershipCash = parseFloat(membershipResult[0].membership_cash || 0);
+
       return NextResponse.json({
         success: true,
         data: {
           startingCash,
           cashSales: totalCashSales,
+          membershipCash,
           cashDeposits: totalDeposits,
           cashPickups: totalPickups,
-          expectedCash: startingCash + totalCashSales + totalDeposits - totalPickups,
+          expectedCash: startingCash + totalCashSales + membershipCash + totalDeposits - totalPickups,
           userId: shiftResult[0].user_id,
           status: shiftResult[0].status
         }
