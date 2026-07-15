@@ -284,10 +284,16 @@ export async function GET(request: NextRequest) {
         if (endDate) { membershipWhere += ' AND created_at <= ?'; membershipParams.push(endDate); }
         if (terminalId && terminalId !== 'all') { membershipWhere += ' AND terminal_id = ?'; membershipParams.push(terminalId); }
         const membershipCashRows: any[] = await query(
-            `SELECT COALESCE(SUM(amount), 0) AS membership_cash FROM membership_payments ${membershipWhere}`,
+            `SELECT
+                COALESCE(SUM(amount), 0) AS membership_cash,
+                COALESCE(SUM(is_new_card = 1), 0) AS activation_count,
+                COALESCE(SUM(is_new_card = 0), 0) AS renewal_count
+             FROM membership_payments ${membershipWhere}`,
             membershipParams
         );
         const membershipCash = parseFloat(membershipCashRows[0]?.membership_cash || 0);
+        const membershipActivationCount = safeInt(membershipCashRows[0]?.activation_count);
+        const membershipRenewalCount = safeInt(membershipCashRows[0]?.renewal_count);
 
         const cashInDrawer = startingCash + cashSales + membershipCash;
         const runningTotal = previousReading + finalNetSales;
@@ -341,6 +347,8 @@ export async function GET(request: NextRequest) {
             startingCash: safeParseFloat(startingCash),
             cashSales: safeParseFloat(cashSales),
             membershipCash: safeParseFloat(membershipCash),
+            membershipActivationCount: membershipActivationCount,
+            membershipRenewalCount: membershipRenewalCount,
             cashInDrawer: safeParseFloat(cashInDrawer),
             cashierName: 'Admin',
             terminalId: terminalId,
