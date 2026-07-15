@@ -208,8 +208,10 @@ export function CountDetailClient({ countId }: { countId: string }) {
                 <TableHead>SKU/Barcode</TableHead>
                 <TableHead className="text-right">Expected (Snapshot)</TableHead>
                 <TableHead className="text-right w-48">Actual Count</TableHead>
+                <TableHead className="text-right">Cost Amount</TableHead>
+                <TableHead className="text-right">Retail Amount</TableHead>
                 {isCompleted && <TableHead className="text-right">Variance</TableHead>}
-                {isCompleted && <TableHead className="text-right">Amount</TableHead>}
+                {isCompleted && <TableHead className="text-right">Variance Amount</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -218,6 +220,12 @@ export function CountDetailClient({ countId }: { countId: string }) {
                   item.counted_quantity !== null
                     ? item.counted_quantity - item.snapshot_quantity
                     : 0;
+                // Actual value of what's physically on-hand. Per design, always show the
+                // amount even when the count is 0 (null count is treated as 0), so these
+                // never blank out.
+                const actualQty = toSafeNumber(item.counted_quantity);
+                const costAmount = actualQty * toSafeNumber(item.product_cost);
+                const retailAmount = actualQty * toSafeNumber(item.product_retail);
                 return (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">{item.product_name}</TableCell>
@@ -244,6 +252,8 @@ export function CountDetailClient({ countId }: { countId: string }) {
                         />
                       )}
                     </TableCell>
+                    <TableCell className="text-right">{formatCurrency(costAmount)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(retailAmount)}</TableCell>
                     {isCompleted && (
                       <TableCell
                         className={`text-right font-medium ${
@@ -282,7 +292,7 @@ export function CountDetailClient({ countId }: { countId: string }) {
               {filteredItems.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isCompleted ? 6 : 4}
+                    colSpan={isCompleted ? 8 : 6}
                     className="text-center py-8 text-muted-foreground"
                   >
                     No products found matching &quot;{search}&quot;

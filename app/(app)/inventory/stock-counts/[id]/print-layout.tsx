@@ -1,3 +1,5 @@
+import { formatCurrency, toSafeNumber } from '@/lib/utils';
+
 export function PrintLayout({
   count,
   filteredItems,
@@ -46,6 +48,12 @@ export function PrintLayout({
             <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
               Actual Count
             </th>
+            <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
+              Cost Amount
+            </th>
+            <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
+              Retail Amount
+            </th>
             {isCompleted && (
               <th className="py-3 px-2 font-bold uppercase tracking-wider text-right">
                 Variance
@@ -59,6 +67,9 @@ export function PrintLayout({
               item.counted_quantity !== null
                 ? item.counted_quantity - item.snapshot_quantity
                 : 0;
+            const actualQty = toSafeNumber(item.counted_quantity);
+            const costAmount = actualQty * toSafeNumber(item.product_cost);
+            const retailAmount = actualQty * toSafeNumber(item.product_retail);
             return (
               <tr
                 key={`print-${item.id}`}
@@ -73,6 +84,12 @@ export function PrintLayout({
                 </td>
                 <td className="py-3 px-2 border-b border-gray-200 text-right font-semibold">
                   {item.counted_quantity !== null ? item.counted_quantity : '______'}
+                </td>
+                <td className="py-3 px-2 border-b border-gray-200 text-right">
+                  {formatCurrency(costAmount)}
+                </td>
+                <td className="py-3 px-2 border-b border-gray-200 text-right">
+                  {formatCurrency(retailAmount)}
                 </td>
                 {isCompleted && (
                   <td className="py-3 px-2 border-b border-gray-200 text-right">
