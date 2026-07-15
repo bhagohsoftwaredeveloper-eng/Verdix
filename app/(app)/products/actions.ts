@@ -6,6 +6,7 @@ import { checkApprovalRequired, submitToApprovalQueue } from '@/lib/approvals';
 import { PriceLevel, Category, Brand, Supplier, Warehouse, Department, UnitOfMeasure, ShelfLocation, Account, TaxRate } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 import { findUltimateRoot, deductFamilyStock, addFamilyStock } from '@/lib/family-sync';
+import { getIllegalReassignTargets, type TreeProduct } from '@/lib/product-tree';
 
 
 export type ProductFormData = {
@@ -716,6 +717,92 @@ export async function updateProduct(id: string, formData: ProductFormData) {
       return { success: false, message: 'A conversion factor with this unit already exists for this product.' };
     }
     return { success: false, message: 'There was an error updating the product.' };
+  }
+}
+
+export async function reassignParent(
+  childId: string,
+  newParentId: string | null,
+  conversionFactor: number,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    // Validate factor up front when attaching to a parent.
+    if (newParentId !== null) {
+      if (childId === newParentId) {
+        return { success: false, message: 'A product cannot be its own parent.' };
+      }
+      if (!Number.isFinite(conversionFactor) || conversionFactor <= 0) {
+        return { success: false, message: 'Conversion factor must be a number greater than 0.' };
+      }
+    }
+
+    return await withTransaction(async (connection) => {
+      // Load the child.
+      const [childRows]: any = await connection.query(
+        'SELECT id, name, unit_of_measure, parent_id FROM products WHERE id = ?',
+        [childId],
+      );
+      const child = childRows?.[0];
+      if (!child) {
+        return { success: false, message: 'Product not found.' };
+      }
+
+      if (newParentId !== null) {
+        // Cycle guard: the new parent must not be the child or one of its descendants.
+        // Build the full id/parent map from the DB and reuse the pure helper.
+        const [allRows]: any = await connection.query(
+          'SELECT id, parent_id FROM products',
+        );
+        const treeProducts: TreeProduct[] = (allRows as any[]).map((r) => ({
+          id: r.id,
+          parentId: r.parent_id,
+        }));
+        const illegal = getIllegalReassignTargets(childId, treeProducts);
+        if (illegal.has(newParentId)) {
+          return { success: false, message: 'Cannot reassign: that would create a parent loop.' };
+        }
+
+        // Confirm the target parent exists.
+        const [parentRows]: any = await connection.query(
+          'SELECT id, name FROM products WHERE id = ?',
+          [newParentId],
+        );
+        const newParent = parentRows?.[0];
+        if (!newParent) {
+          return { success: false, message: 'Target parent product not found.' };
+        }
+
+        // Update parentage.
+        await connection.query(
+          'UPDATE products SET parent_id = ? WHERE id = ?',
+          [newParentId, childId],
+        );
+
+        // Upsert the conversion factor on the NEW parent, keyed by the child's unit.
+        // unique_product_unit (product_id, unit) makes this idempotent.
+        const cfId = `${newParentId}-cf-${child.unit_of_measure}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        await connection.query(
+          `INSERT INTO conversion_factors (id, product_id, unit, factor)
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE factor = VALUES(factor)`,
+          [cfId, newParentId, child.unit_of_measure, conversionFactor],
+        );
+
+        console.log(`[reassignParent] ${childId} moved under ${newParentId} (factor ${conversionFactor}, unit ${child.unit_of_measure})`);
+        return { success: true, message: `${child.name} moved under ${newParent.name}.` };
+      }
+
+      // Detach: clear parent_id, leave conversion_factors untouched.
+      await connection.query(
+        'UPDATE products SET parent_id = NULL WHERE id = ?',
+        [childId],
+      );
+      console.log(`[reassignParent] ${childId} detached to top-level`);
+      return { success: true, message: `${child.name} is now a top-level product.` };
+    });
+  } catch (error: any) {
+    console.error('Error in reassignParent:', error);
+    return { success: false, message: 'There was an error reassigning the product.' };
   }
 }
 

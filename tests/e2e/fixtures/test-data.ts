@@ -136,6 +136,139 @@ export const INVENTORY_PRODUCT: FullProduct = {
   unitOfMeasure: TEST_UNIT.name,
 };
 
+/**
+ * Family para sa child-reassignment test. REASSIGN_PARENT_A is the current mother of
+ * REASSIGN_CHILD (unit "Piece", factor 12 per box). REASSIGN_PARENT_B is an unrelated
+ * top-level product the child gets moved under.
+ */
+export const REASSIGN_PARENT_A: FullProduct = {
+  id: 'test-reassign-parent-a',
+  name: 'Reassign Parent A',
+  sku: 'RSN-PAR-A-001',
+  description: 'Original mother product para sa reassign test.',
+  price: 120,
+  stock: 10,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Box',
+};
+
+export const REASSIGN_PARENT_B: FullProduct = {
+  id: 'test-reassign-parent-b',
+  name: 'Reassign Parent B',
+  sku: 'RSN-PAR-B-001',
+  description: 'New mother product para sa reassign test.',
+  price: 150,
+  stock: 5,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Box',
+};
+
+export const REASSIGN_CHILD: FullProduct & { parentId: string } = {
+  id: 'test-reassign-child',
+  name: 'Reassign Child Piece',
+  sku: 'RSN-CHD-001',
+  description: 'Child unit nga i-reassign.',
+  price: 12,
+  stock: 0,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Piece',
+  parentId: REASSIGN_PARENT_A.id,
+};
+
+/**
+ * Dedicated family para sa TOP-LEVEL reassignment test. REASSIGN_TOP_MOVER is a
+ * top-level (parent_id NULL) mother nga naay usa ka anak (REASSIGN_TOP_MOVER_CHILD,
+ * unit "Piece", factor 6). REASSIGN_TOP_TARGET is an unrelated top-level product nga
+ * padulngan sa mover. Bulag ni sa REASSIGN_PARENT_* family aron walay cross-test coupling.
+ */
+export const REASSIGN_TOP_MOVER: FullProduct = {
+  id: 'test-reassign-top-mover',
+  name: 'Reassign Top Mover',
+  sku: 'RSN-TOP-MVR-001',
+  description: 'Top-level mother nga i-move under a new parent.',
+  price: 200,
+  stock: 8,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Box',
+};
+
+export const REASSIGN_TOP_TARGET: FullProduct = {
+  id: 'test-reassign-top-target',
+  name: 'Reassign Top Target',
+  sku: 'RSN-TOP-TGT-001',
+  description: 'Bag-ong parent para sa top-level mover.',
+  price: 500,
+  stock: 3,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Case',
+};
+
+export const REASSIGN_TOP_MOVER_CHILD: FullProduct & { parentId: string } = {
+  id: 'test-reassign-top-mover-child',
+  name: 'Reassign Top Mover Child',
+  sku: 'RSN-TOP-CHD-001',
+  description: 'Anak sa mover — kinahanglan magpabilin nested human sa move.',
+  price: 34,
+  stock: 0,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Piece',
+  parentId: REASSIGN_TOP_MOVER.id,
+};
+
+/**
+ * Dedicated, FULLY INDEPENDENT family para sa "Reassign factor auto-detect" test.
+ * Wala ni gigamit/gi-mutate sa bisan unsang laing test — mao nga kini nga mover
+ * magpabilin gyud nga top-level, ug ang no-match target magpabilin gyud nga
+ * walay factor, bisan unsa pa ang order sa pag-execute sa spec file.
+ *
+ * REASSIGN_AUTO_MOVER — top-level product nga i-open/reassign (unit "Box").
+ * REASSIGN_AUTO_MATCH — top-level target nga NAAY na conversion_factors row para
+ *   sa mover's unit ("Box", factor 4) → auto-detect fires.
+ * REASSIGN_AUTO_NOMATCH — top-level target nga WALAY factor para sa mover's unit
+ *   → genuine blank case.
+ */
+export const REASSIGN_AUTO_MOVER: FullProduct = {
+  id: 'test-reassign-auto-mover',
+  name: 'Reassign Auto Mover',
+  sku: 'RSN-AMV-001',
+  description: 'Top-level mover nga dedicado sa auto-detect test.',
+  price: 220,
+  stock: 4,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Box',
+};
+
+export const REASSIGN_AUTO_MATCH: FullProduct = {
+  id: 'test-reassign-auto-match',
+  name: 'Reassign Auto Match Target',
+  sku: 'RSN-AMT-001',
+  description: 'Top-level nga naay Box factor — auto-detect dapat mo-fire.',
+  price: 410,
+  stock: 2,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Case',
+};
+
+export const REASSIGN_AUTO_NOMATCH: FullProduct = {
+  id: 'test-reassign-auto-nomatch',
+  name: 'Reassign Auto No Match Target',
+  sku: 'RSN-ANM-001',
+  description: 'Top-level nga walay Box factor — genuine blank case.',
+  price: 415,
+  stock: 2,
+  brand: TEST_BRAND.name,
+  category: TEST_CATEGORY.name,
+  unitOfMeasure: 'Case',
+};
+
 /** Supplier + warehouse para sa purchase-order test. */
 export const TEST_SUPPLIER = { id: 'sup-test', name: 'Test Supplier Co.' };
 export const TEST_WAREHOUSE = { id: 'wh-test', name: 'Test Warehouse' };

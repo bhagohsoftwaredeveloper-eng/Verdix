@@ -7,7 +7,7 @@ export default function BulkAdjustmentPage() {
   return (
     <div className="flex flex-col -m-4 sm:-m-6 h-[calc(100svh-4rem)]">
       {/* Page Header */}
-      <div className="shrink-0 bg-white border-b px-4 md:px-6 py-3 md:py-4">
+      <div className="shrink-0 bg-card border-b border-border px-4 md:px-6 py-3 md:py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <Layers className="h-5 w-5 text-primary" />
@@ -38,7 +38,7 @@ function BulkAdjustmentSkeleton() {
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
         </div>
       </div>
-      <div className="w-full md:w-[340px] border-l p-6 space-y-4">
+      <div className="w-full md:w-[340px] border-l border-border p-6 space-y-4">
         <Skeleton className="h-10 w-full rounded-xl" />
         <Skeleton className="h-10 w-full rounded-xl" />
         <Skeleton className="h-20 w-full rounded-xl" />

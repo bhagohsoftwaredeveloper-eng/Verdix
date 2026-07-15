@@ -21,6 +21,7 @@ import { cn, formatQuantity } from '@/lib/utils';
 import { EditProductDialog } from '../edit-product/edit-product-dialog';
 import { QuickAddChildDialog } from '../quick-add-child/quick-add-child-dialog';
 import { BreakPackDialog } from '../break-pack/break-pack-dialog';
+import { ReassignParentDialog } from '../reassign-parent/reassign-parent-dialog';
 import { DetailItem } from './detail-item';
 import { SectionHeader } from './section-header';
 
@@ -302,6 +303,22 @@ export function ViewProductDialog({
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p>Break this pack into smaller units</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        {products && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <ReassignParentDialog
+                                  product={product}
+                                  products={products}
+                                  onProductUpdated={onProductUpdated}
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Move this product under a different parent</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

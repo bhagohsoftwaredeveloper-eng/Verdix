@@ -1,34 +1,30 @@
-# Membership Phase 2 — SDD Progress
+# Auto-Detect Conversion Factor on Reassign — SDD Progress
 
-Base commit: 02bccff (plan commit)
+Base commit: (plan commit) — builds on reassign-top-level (merged up to cbb73eb)
 Branch: main (user works on main directly)
-Plan: docs/superpowers/plans/2026-07-14-membership-phase2.md
-Spec: docs/superpowers/specs/2026-07-14-membership-phase2-design.md
+Plan: docs/superpowers/plans/2026-07-14-reassign-autodetect-factor.md
+Spec: docs/superpowers/specs/2026-07-14-reassign-autodetect-factor-design.md
 
-## Environment (still true)
-- `npm run lint` is BROKEN repo-wide (Next 16 removed `next lint`). Skip lint.
-- `npm run typecheck` has PRE-EXISTING failures. Gate = NO NEW errors in touched files.
-- Dev server on :3000 against live `verdix`. E2E on :3100 against verdix_test (schema clone; membership tables exist).
-- Membership stays OUT of pos_transactions (sale_id is NOT NULL FK to sales_transactions).
-- POS activates/renews only; customer registration stays in backoffice.
+## Environment (project-wide truths)
+- CLIENT + TEST ONLY. NO change to actions.ts / product-tree.ts / family-sync.ts / migrations.
+- Auto-fill never blocks; canSave unchanged.
+- Match = exact string: target.conversionFactors[].unit === product.unitOfMeasure.
+- `npm run lint` BROKEN repo-wide. Skip it.
+- typecheck has PRE-EXISTING failures; gate = no NEW errors in touched files.
+- E2E on :3100 vs verdix_test; re-seed `npm run test:e2e:db`; runner self-starts server.
+- Mover unit = 'Box' → auto-detect target's seeded cf unit must be 'Box'.
 
 ## Tasks
-- [x] Task 1: complete (commits d1b378c..5a545ba, review clean)
-- [x] Task 2: complete (commits a4e05f7..179f4e5, review clean)
-- [x] Task 3: complete (commits 3f25139..391c761, review clean)
-- [x] Task 4: complete (commits be26678..73ccd73, review clean)
-- [x] Task 5: complete (commits ff24f79..2cf880e, review clean)
-- [x] Task 6: complete (commits 2870959..9744b5a, review clean — 3/3 E2E passing)
-
-## Final whole-branch review (opus)
-- 1 Important finding FIXED (commit d371a1a): drawer MembershipPaymentDialog dropped
-  shiftId/terminalId → payments stored terminal_id=NULL → per-terminal Z-reading missed
-  them (false cash-short). Threaded posShiftId/posTerminalId through the drawer; added
-  E2E terminal-scope guard. Re-review: resolved, 4/4 E2E passing.
-- All other cross-task seams verified clean (single dialog path, userId threaded,
-  field shapes consistent, SQL parameterized, no BIR/sales exposure, no total drift).
+- [x] Task 1: complete (commits 25df3dd..e2b781f, review clean; spec ✅ quality Approved; typecheck verified clean by controller)
+- [x] Task 2: complete (commits e2b781f..23e9fba incl. fix; review clean after 1 fix loop; spec ✅ quality Approved; 3/3 full-file + 1/1 isolated auto-detect run)
+  - Important finding FIXED (commit 23e9fba): auto-detect test was order-dependent on prior tests (real reassignParent factor upsert made REASSIGN_TOP_TARGET falsely "match"; mover was nested by prior test). Fixed with dedicated independent fixtures REASSIGN_AUTO_MOVER/MATCH/NOMATCH that no other test mutates; removed REASSIGN_AUTODETECT_TARGET. Order-independence proven by isolated -g run.
 
 ## Minor findings (for final review triage)
-- Task 1: report summary computed in JS over all rows (no SQL aggregate / date LIMIT).
-  Plan-mandated (brief's reference code). Scaling note only; membership volume is low.
-  → Accepted; no action needed.
+- Value assertion is "4.00" not "4" (mysql2 DECIMAL serialization of conversion_factors.factor). Correct/expected; documented in task-2-report.md. Non-issue.
+- prepare-test-db.ts seed-count console log undercounts products (pre-existing, cosmetic, out of scope).
+- Hint "Auto-detected from {parent}" persists even if user manually edits the prefilled value (onChange only setFactor, not setAutoDetectedFrom(null)). Spec-consistent (hint = provenance, copy says "You can override it"). UX decision, not a defect.
+
+## Final whole-branch review (sonnet) — Ready to merge: YES
+- 0 Critical, 0 Important. Client+test only (verified none of actions/product-tree/family-sync/migrations touched). canSave byte-identical (never blocks). Fresh-parent lookup, exact unit match, clears on match/no-match/Detach (no stale value/hint). Hint gated to attach branch + autoDetectedFrom truthy. Value flows through unchanged Number(factor) save path. E2E order-independent (dedicated fixtures), asserts match→4.00+hint and no-match→blank+no-hint. Green trustworthy (3/3 full + 1/1 isolated).
+
+FEATURE COMPLETE.

@@ -46,8 +46,8 @@ export function ConfigFields({
     <div className={cn("space-y-5", compact && "space-y-4")}>
       {/* Adjustment Type */}
       <div className="space-y-2">
-        <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Adjustment Mode</Label>
-        <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl">
+        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Adjustment Mode</Label>
+        <div className="grid grid-cols-3 gap-1.5 p-1 bg-muted rounded-xl">
           {(['add', 'remove', 'transfer'] as const).map(type => {
             const cfg = typeConfig[type];
             const Icon = cfg.icon;
@@ -58,7 +58,7 @@ export function ConfigFields({
                 onClick={() => onChangeType(type)}
                 className={cn(
                   "flex flex-col items-center gap-1 py-2.5 px-1 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all",
-                  isActive ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"
+                  isActive ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <Icon className={cn("h-4 w-4", isActive && (type === 'add' ? 'text-emerald-600' : type === 'remove' ? 'text-red-600' : 'text-blue-600'))} />
@@ -67,16 +67,16 @@ export function ConfigFields({
             );
           })}
         </div>
-        <p className="text-[11px] text-slate-400">Applies to all items in the batch</p>
+        <p className="text-[11px] text-muted-foreground">Applies to all items in the batch</p>
       </div>
 
       {/* Warehouse */}
       <div className="space-y-2">
-        <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">
+        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
           {adjustmentType === 'transfer' ? 'Source Warehouse' : 'Warehouse'}
         </Label>
         <Select value={warehouseId} onValueChange={setWarehouseId}>
-          <SelectTrigger className="h-10 border-slate-200 bg-white">
+          <SelectTrigger className="h-10">
             <SelectValue placeholder="All warehouses" />
           </SelectTrigger>
           <SelectContent>
@@ -89,9 +89,9 @@ export function ConfigFields({
       {/* Transfer Destination */}
       {adjustmentType === 'transfer' && (
         <div className="space-y-2">
-          <Label className="text-xs font-bold uppercase tracking-widest text-blue-600">Destination Warehouse</Label>
+          <Label className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">Destination Warehouse</Label>
           <Select value={targetWarehouseId} onValueChange={setTargetWarehouseId}>
-            <SelectTrigger className="h-10 border-blue-200 bg-blue-50/50 ring-1 ring-blue-100">
+            <SelectTrigger className="h-10 border-blue-200 bg-blue-50/50 ring-1 ring-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:ring-blue-500/20">
               <SelectValue placeholder="Select destination" />
             </SelectTrigger>
             <SelectContent>
@@ -105,12 +105,12 @@ export function ConfigFields({
 
       {/* Reference No */}
       <div className="space-y-2">
-        <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Reference No.</Label>
+        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Reference No.</Label>
         <div className="relative">
-          <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="e.g. ADJ-10023"
-            className="pl-9 h-10 border-slate-200 bg-white"
+            className="pl-9 h-10"
             value={referenceNo}
             onChange={e => setReferenceNo(e.target.value)}
           />
@@ -120,9 +120,9 @@ export function ConfigFields({
       {/* Supplier */}
       {suppliers.length > 0 && (
         <div className="space-y-2">
-          <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Supplier (optional)</Label>
+          <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Supplier (optional)</Label>
           <Select value={supplierId} onValueChange={setSupplierId}>
-            <SelectTrigger className="h-10 border-slate-200 bg-white">
+            <SelectTrigger className="h-10">
               <SelectValue placeholder="None / External" />
             </SelectTrigger>
             <SelectContent>
@@ -135,10 +135,10 @@ export function ConfigFields({
 
       {/* Memo */}
       <div className="space-y-2">
-        <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Memo / Reason</Label>
+        <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Memo / Reason</Label>
         <Textarea
           placeholder="Reason for this batch adjustment..."
-          className="min-h-[90px] border-slate-200 bg-white resize-none text-sm"
+          className="min-h-[90px] resize-none text-sm"
           value={note}
           onChange={e => setNote(e.target.value)}
         />
