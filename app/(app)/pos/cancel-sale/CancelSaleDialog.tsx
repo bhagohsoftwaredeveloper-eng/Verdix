@@ -25,7 +25,7 @@ export function CancelSaleDialog({ isOpen, onOpenChange, onCancelSelected, onCan
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-3 py-2">
-          <div className={`border rounded-lg p-4 transition-all ${selectedItem ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
+          <div className={`border rounded-lg p-4 transition-all ${selectedItem ? 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700' : 'bg-slate-50 dark:bg-slate-800/30 border-slate-100 dark:border-slate-700/50 opacity-60'}`}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-100 rounded-md">

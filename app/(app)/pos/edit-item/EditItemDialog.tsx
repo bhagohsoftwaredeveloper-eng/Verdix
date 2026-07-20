@@ -22,7 +22,7 @@ export function EditItemDialog({ isOpen, onOpenChange, item, onUpdate, mode = 'f
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent side="right" className={`p-0 overflow-hidden border-none shadow-2xl ${mode === 'price-only' ? 'sm:max-w-[400px]' : 'sm:max-w-md'}`}>
-        <div className="bg-white p-6 space-y-6">
+        <div className="bg-white dark:bg-slate-900 p-6 space-y-6">
           <SheetHeader className="space-y-3">
             <div className="flex justify-center">
               <div className={`${mode === 'price-only' ? 'bg-purple-50' : 'bg-blue-50'} p-3 rounded-2xl`}>
@@ -31,7 +31,7 @@ export function EditItemDialog({ isOpen, onOpenChange, item, onUpdate, mode = 'f
                   : <Pencil className="w-8 h-8 text-blue-600" />}
               </div>
             </div>
-            <SheetTitle className="text-2xl font-extrabold text-center text-slate-800">
+            <SheetTitle className="text-2xl font-extrabold text-center text-slate-800 dark:text-slate-100">
               {mode === 'price-only' ? 'Edit Unit Price' : 'Edit Item Details'}
             </SheetTitle>
             <p className="text-sm text-slate-500 text-center px-4">
@@ -53,7 +53,7 @@ export function EditItemDialog({ isOpen, onOpenChange, item, onUpdate, mode = 'f
                     value={price}
                     onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
-                    className="font-black focus-visible:ring-purple-500 text-[32px] h-20 pl-10 pr-4 text-right leading-none bg-slate-50 border-slate-200 rounded-2xl focus:bg-white transition-colors"
+                    className="font-black focus-visible:ring-purple-500 text-[32px] h-20 pl-10 pr-4 text-right leading-none bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-2xl focus:bg-white dark:focus:bg-slate-800 transition-colors"
                     autoFocus
                   />
                 </div>

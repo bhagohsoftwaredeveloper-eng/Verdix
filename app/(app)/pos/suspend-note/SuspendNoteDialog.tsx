@@ -29,14 +29,14 @@ export function SuspendNoteDialog({
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="sm:max-w-[400px] p-0 overflow-hidden border-none shadow-2xl">
-        <div className="bg-white p-6 space-y-6">
+        <div className="bg-white dark:bg-slate-900 p-6 space-y-6">
           <SheetHeader className="space-y-3">
             <div className="flex justify-center">
               <div className="bg-orange-50 p-3 rounded-2xl">
                 <Tag className="w-8 h-8 text-orange-600" />
               </div>
             </div>
-            <SheetTitle className="text-2xl font-extrabold text-center text-slate-800">
+            <SheetTitle className="text-2xl font-extrabold text-center text-slate-800 dark:text-slate-100">
               Suspend Transaction
             </SheetTitle>
             <SheetDescription className="sr-only">Add a note to identify this suspended transaction later</SheetDescription>
@@ -58,7 +58,7 @@ export function SuspendNoteDialog({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleConfirm();
                 }}
-                className="h-12 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-orange-500 rounded-xl px-4"
+                className="h-12 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus-visible:ring-orange-500 rounded-xl px-4"
               />
             </div>
           </div>

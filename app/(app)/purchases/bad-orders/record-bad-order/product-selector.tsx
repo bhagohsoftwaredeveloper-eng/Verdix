@@ -156,7 +156,7 @@ export function ProductSelector({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleScanOrPunch()}
-          className="pr-10 bg-white"
+          className="pr-10 bg-background"
         />
         <Search
           className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
