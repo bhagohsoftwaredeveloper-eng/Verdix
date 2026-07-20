@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
-import { getFiscalYearRange, getCurrentFiscalYear, formatFiscalYear } from '@/lib/fiscal-utils';
+import { getFiscalYearRange, getCurrentFiscalYear, formatFiscalYear, toLocalYmd } from '@/lib/fiscal-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
     const fiscalYear = Number.isFinite(requestedFy) ? requestedFy : currentFiscalYear;
 
     const { startDate, endDate } = getFiscalYearRange(fiscalYear, startMonth);
-    const startStr = startDate.toISOString().split('T')[0];
-    const endStr = endDate.toISOString().split('T')[0];
+    const startStr = toLocalYmd(startDate);
+    const endStr = toLocalYmd(endDate);
 
     // Available fiscal years from earliest paid sale through current FY.
     const [firstSaleRow] = await query(

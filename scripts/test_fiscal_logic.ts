@@ -1,4 +1,4 @@
-import { getFiscalYear, getFiscalPeriod, getFiscalYearRange, formatFiscalYear, getCurrentFiscalYear } from '../lib/fiscal-utils';
+import { getFiscalYear, getFiscalPeriod, getFiscalYearRange, formatFiscalYear, getCurrentFiscalYear, toLocalYmd } from '../lib/fiscal-utils';
 
 function testFiscalLogic() {
   console.log('--- Testing Fiscal Year Logic ---\n');
@@ -51,7 +51,15 @@ function testFiscalLogic() {
   });
   console.log(`  getCurrentFiscalYear Passed: ${cfyPassed}/${cfyCases.length}`);
 
-  console.log(`\nResult: ${passed === testCases.length && cfyPassed === cfyCases.length ? 'SUCCESS 🚀' : 'FAILED ❌'}`);
+  console.log(`\n--- toLocalYmd Range Tests ---`);
+  const { startDate: aprStart, endDate: aprEnd } = getFiscalYearRange(2024, 4);
+  const aprStartStr = toLocalYmd(aprStart);
+  const aprEndStr = toLocalYmd(aprEnd);
+  const rangeOk = aprStartStr === '2024-04-01' && aprEndStr === '2025-03-31';
+  console.log(`  FY2024 (Apr start) local range: ${aprStartStr} .. ${aprEndStr} (Expected 2024-04-01 .. 2025-03-31) ${rangeOk ? '✅' : '❌'}`);
+  if (!rangeOk) { console.log('  toLocalYmd RANGE TEST FAILED'); }
+
+  console.log(`\nResult: ${passed === testCases.length && cfyPassed === cfyCases.length && rangeOk ? 'SUCCESS 🚀' : 'FAILED ❌'}`);
 }
 
 testFiscalLogic();
