@@ -26,6 +26,17 @@ export function getFiscalYear(date: Date, startMonth: number): number {
 }
 
 /**
+ * Gets the fiscal year that the given date currently falls in.
+ *
+ * @param startMonth The month the fiscal year starts (1-12)
+ * @param now The reference date (defaults to today)
+ * @returns The current fiscal year number
+ */
+export function getCurrentFiscalYear(startMonth: number, now: Date = new Date()): number {
+  return getFiscalYear(now, startMonth);
+}
+
+/**
  * Gets the fiscal period (1-12) for a given date and start month.
  * 
  * @param date The date to check

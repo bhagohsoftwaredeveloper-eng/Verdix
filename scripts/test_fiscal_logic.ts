@@ -1,4 +1,4 @@
-import { getFiscalYear, getFiscalPeriod, getFiscalYearRange, formatFiscalYear } from '../lib/fiscal-utils';
+import { getFiscalYear, getFiscalPeriod, getFiscalYearRange, formatFiscalYear, getCurrentFiscalYear } from '../lib/fiscal-utils';
 
 function testFiscalLogic() {
   console.log('--- Testing Fiscal Year Logic ---\n');
@@ -33,7 +33,25 @@ function testFiscalLogic() {
   console.log(`  Start: ${range.startDate.toISOString()}`);
   console.log(`  End: ${range.endDate.toISOString()}`);
 
-  console.log(`\nTests Passed: ${passed}/${testCases.length}`);
+  console.log(`Tests Passed: ${passed}/${testCases.length}`);
+
+  console.log(`\n--- getCurrentFiscalYear Tests ---`);
+  const cfyCases = [
+    { now: new Date('2024-03-15'), startMonth: 4, expected: 2023 },
+    { now: new Date('2024-04-01'), startMonth: 4, expected: 2024 },
+    { now: new Date('2024-06-15'), startMonth: 1, expected: 2024 },
+    { now: new Date('2025-01-01'), startMonth: 4, expected: 2024 },
+  ];
+  let cfyPassed = 0;
+  cfyCases.forEach((tc, i) => {
+    const got = getCurrentFiscalYear(tc.startMonth, tc.now);
+    const ok = got === tc.expected;
+    console.log(`  CFY ${i + 1}: ${tc.now.toISOString().split('T')[0]} (Start ${tc.startMonth}) => ${got} (Expected ${tc.expected}) ${ok ? '✅' : '❌'}`);
+    if (ok) cfyPassed++;
+  });
+  console.log(`  getCurrentFiscalYear Passed: ${cfyPassed}/${cfyCases.length}`);
+
+  console.log(`\nResult: ${passed === testCases.length && cfyPassed === cfyCases.length ? 'SUCCESS 🚀' : 'FAILED ❌'}`);
   if (passed === testCases.length) {
     console.log('Result: SUCCESS 🚀');
   } else {
