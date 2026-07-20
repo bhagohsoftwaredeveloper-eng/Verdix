@@ -31,14 +31,14 @@ export function PriceEditDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="p-0 overflow-hidden border-none shadow-2xl sm:max-w-[400px]">
-        <div className="bg-white p-6 space-y-6">
+        <div className="bg-white dark:bg-slate-900 p-6 space-y-6">
           <DialogHeader className="space-y-3">
             <div className="flex justify-center">
               <div className="bg-purple-50 p-3 rounded-2xl">
                 <Tag className="w-8 h-8 text-purple-600" />
               </div>
             </div>
-            <DialogTitle className="text-2xl font-extrabold text-center text-slate-800">
+            <DialogTitle className="text-2xl font-extrabold text-center text-slate-800 dark:text-slate-100">
               Edit Unit Price
             </DialogTitle>
             <DialogDescription className="sr-only">Enter a temporary price override for the selected item</DialogDescription>
@@ -63,7 +63,7 @@ export function PriceEditDialog({
                       save();
                     }
                   }}
-                  className="font-black focus-visible:ring-purple-500 !text-[60px] h-20 px-4 text-center leading-none bg-slate-50 border-slate-200 rounded-2xl focus:bg-white transition-colors"
+                  className="font-black focus-visible:ring-purple-500 !text-[60px] h-20 px-4 text-center leading-none bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-2xl focus:bg-white dark:focus:bg-slate-800 transition-colors"
                   autoFocus
                 />
               </div>

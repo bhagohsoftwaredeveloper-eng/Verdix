@@ -3,6 +3,19 @@
  */
 
 /**
+ * Formats a Date as a local YYYY-MM-DD string (no UTC conversion).
+ * Use this instead of .toISOString().split('T')[0] when the date represents
+ * a local calendar day — toISOString() shifts by the UTC offset and can move
+ * the day (e.g. local Apr 1 00:00 in UTC+8 becomes "2024-03-31").
+ */
+export function toLocalYmd(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Gets the fiscal year for a given date and start month.
  * 
  * @param date The date to check
@@ -23,6 +36,17 @@ export function getFiscalYear(date: Date, startMonth: number): number {
   }
 
   return year;
+}
+
+/**
+ * Gets the fiscal year that the given date currently falls in.
+ *
+ * @param startMonth The month the fiscal year starts (1-12)
+ * @param now The reference date (defaults to today)
+ * @returns The current fiscal year number
+ */
+export function getCurrentFiscalYear(startMonth: number, now: Date = new Date()): number {
+  return getFiscalYear(now, startMonth);
 }
 
 /**

@@ -17,6 +17,9 @@ export async function POST(request: NextRequest) {
     let added = 0, updated = 0, skipped = 0;
     const errors: Array<{ row: number; reason: string }> = [];
 
+    // New products are assigned to the default STORE warehouse automatically.
+    const defaultWarehouseId = await getDefaultWarehouseId();
+
     for (let i = 0; i < rows.length; i++) {
       const p = rows[i];
       if (!p.name || String(p.name).trim() === '') {
@@ -54,12 +57,12 @@ export async function POST(request: NextRequest) {
           const price = num(p.selling_price);
           await query(
             `INSERT INTO products (id, name, sku, barcode, description, category, brand, subcategory,
-               unit_of_measure, cost, price, stock, reorder_point, image_url, conversion_factor, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+               unit_of_measure, cost, price, stock, reorder_point, image_url, conversion_factor, warehouse_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
             [
               id, p.name, sku, barcode, p.description ?? '', p.category ?? 'General', p.brand ?? null, p.subcategory ?? null,
               p.unit ?? 'pcs', cost, price, stock, num(p.reorder_point), p.image_url ?? null,
-              p.conversion_factor != null ? num(p.conversion_factor) : 1,
+              p.conversion_factor != null ? num(p.conversion_factor) : 1, defaultWarehouseId,
             ],
           );
 
@@ -103,4 +106,22 @@ export async function POST(request: NextRequest) {
 function num(v: any): number {
   const n = parseFloat(String(v ?? '').replace(/[₱$,\s]/g, ''));
   return Number.isNaN(n) ? 0 : n;
+}
+
+// Resolve the default STORE warehouse: the one flagged is_main, else the seeded
+// 'wh_main', else the oldest active warehouse. Returns null if none exist so the
+// import still succeeds (products just stay unassigned).
+async function getDefaultWarehouseId(): Promise<string | null> {
+  try {
+    const [wh] = await query(
+      `SELECT id FROM warehouses
+       WHERE is_active = 1
+       ORDER BY is_main DESC, (id = 'wh_main') DESC, created_at ASC
+       LIMIT 1`,
+    ) as any[];
+    return wh?.id ?? null;
+  } catch (err) {
+    console.warn('[Import] Could not resolve default warehouse:', err);
+    return null;
+  }
 }

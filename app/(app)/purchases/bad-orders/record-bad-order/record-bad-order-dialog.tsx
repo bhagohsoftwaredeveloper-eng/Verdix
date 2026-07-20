@@ -105,7 +105,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                           <FormLabel className="text-xs font-semibold text-muted-foreground">Reported By</FormLabel>
                         </div>
                         <FormControl>
-                          <Input className="h-8 bg-white text-xs" placeholder="Jane Doe" {...field} />
+                          <Input className="h-8 bg-background text-xs" placeholder="Jane Doe" {...field} />
                         </FormControl>
                         <FormMessage className="text-xs" />
                       </FormItem>
@@ -127,7 +127,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                           value={field.value || ''}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-8 bg-white text-xs">
+                            <SelectTrigger className="h-8 bg-background text-xs">
                               <SelectValue placeholder="Select supplier" />
                             </SelectTrigger>
                           </FormControl>
@@ -157,7 +157,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                         </div>
                         <Select onValueChange={field.onChange} value={field.value || ''}>
                           <FormControl>
-                            <SelectTrigger className="h-8 bg-white text-xs">
+                            <SelectTrigger className="h-8 bg-background text-xs">
                               <SelectValue placeholder="Select warehouse" />
                             </SelectTrigger>
                           </FormControl>
@@ -183,7 +183,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                         </div>
                         <Select onValueChange={field.onChange} value={field.value || ''}>
                           <FormControl>
-                            <SelectTrigger className="h-8 bg-white text-xs">
+                            <SelectTrigger className="h-8 bg-background text-xs">
                               <SelectValue placeholder="Select shelf" />
                             </SelectTrigger>
                           </FormControl>
@@ -199,7 +199,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                 </div>
 
                 <div className="col-span-4 flex items-center justify-end pr-4 text-muted-foreground text-sm">
-                  <div className="bg-amber-100 text-amber-800 px-3 py-1.5 rounded-md flex items-center gap-2 border border-amber-200">
+                  <div className="bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 px-3 py-1.5 rounded-md flex items-center gap-2 border border-amber-200 dark:border-amber-900/50">
                     <AlertTriangle className="h-4 w-4" />
                     Items recorded here will be deducted from active inventory.
                   </div>
@@ -218,7 +218,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                 <div className="flex-1 rounded-lg border bg-background shadow-sm overflow-hidden flex flex-col relative">
                   <div className="overflow-y-auto flex-1 h-full relative">
                     <table className="w-full caption-bottom text-sm text-left border-collapse">
-                      <TableHeader className="sticky top-0 bg-white z-50 shadow-sm">
+                      <TableHeader className="sticky top-0 bg-background z-50 shadow-sm">
                         <TableRow className="hover:bg-transparent border-b">
                           <TableHead className="w-[20%] pl-4 h-10">Product</TableHead>
                           <TableHead className="w-[8%] text-center h-10">Stock</TableHead>
@@ -245,7 +245,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                           </TableRow>
                         ) : (
                           fields.map((field, index) => (
-                            <TableRow key={field.id} className="group bg-white hover:bg-muted/5">
+                            <TableRow key={field.id} className="group bg-background hover:bg-muted/5">
                               <TableCell className="font-medium pl-4 py-2 border-r">
                                 <div className="text-sm font-semibold line-clamp-2" title={field.productName}>
                                   {field.productName}
@@ -269,7 +269,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                                     <FormItem className="space-y-0">
                                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                                         <FormControl>
-                                          <SelectTrigger className="h-8 text-xs bg-white border-transparent hover:border-input focus:border-input">
+                                          <SelectTrigger className="h-8 text-xs bg-background border-transparent hover:border-input focus:border-input">
                                             <SelectValue placeholder="Reason" />
                                           </SelectTrigger>
                                         </FormControl>
@@ -297,7 +297,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                                         <FormControl>
                                           <Input
                                             type="number"
-                                            className="h-8 w-full text-center bg-white border-transparent hover:border-input focus:border-input text-xs"
+                                            className="h-8 w-full text-center bg-background border-transparent hover:border-input focus:border-input text-xs"
                                             {...field}
                                             onFocus={(e) => e.target.select()}
                                           />
@@ -317,7 +317,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                                     <FormItem className="space-y-0">
                                       <FormControl>
                                         <CurrencyInput
-                                          className="h-8 w-full max-w-[100px] text-right ml-auto border-transparent hover:border-input focus:border-input bg-white p-1 font-mono text-xs"
+                                          className="h-8 w-full max-w-[100px] text-right ml-auto border-transparent hover:border-input focus:border-input bg-background p-1 font-mono text-xs"
                                           placeholder="0.00"
                                           {...field}
                                         />
@@ -335,7 +335,7 @@ export function RecordBadOrderDialog({ onSuccess }: UseRecordBadOrderProps) {
                                     <FormItem className="space-y-0">
                                       <FormControl>
                                         <Input
-                                          className="h-8 w-full border-transparent hover:border-input focus:border-input bg-white p-1 text-xs"
+                                          className="h-8 w-full border-transparent hover:border-input focus:border-input bg-background p-1 text-xs"
                                           placeholder="Notes..."
                                           {...field}
                                         />

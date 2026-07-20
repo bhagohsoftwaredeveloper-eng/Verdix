@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
-import { getFiscalYearRange } from '@/lib/fiscal-utils';
+import { getFiscalYearRange, getCurrentFiscalYear, toLocalYmd } from '@/lib/fiscal-utils';
 
 export async function GET(request: NextRequest) {
     try {
@@ -65,27 +65,41 @@ export async function GET(request: NextRequest) {
         // Fetch settings for fiscal year
         const settingsResult = await query("SELECT fiscal_year_start_month FROM pos_settings LIMIT 1") as any[];
         const startMonth = settingsResult[0]?.fiscal_year_start_month || 1;
-        
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        
-        // Determine current fiscal year
-        const fiscalYear = (now.getMonth() + 1) >= startMonth ? currentYear : currentYear - 1;
-        const { startDate: fiscalStartDate } = getFiscalYearRange(fiscalYear, startMonth);
-        const fiscalStartDateStr = fiscalStartDate.toISOString().split('T')[0];
+
+        const currentFiscalYear = getCurrentFiscalYear(startMonth);
+
+        // Optional ?fiscalYear= override; fall back to current fiscal year.
+        const requestedFy = parseInt(searchParams.get('fiscalYear') || '', 10);
+        const fiscalYear = Number.isFinite(requestedFy) ? requestedFy : currentFiscalYear;
+
+        const { startDate: fiscalStartDate, endDate: fiscalEndDate } = getFiscalYearRange(fiscalYear, startMonth);
+        const fiscalStartDateStr = toLocalYmd(fiscalStartDate);
+        const fiscalEndDateStr = toLocalYmd(fiscalEndDate);
+
+        // Available fiscal years: from the earliest paid sale through the current FY.
+        const [firstSaleRow] = await query(
+            "SELECT MIN(invoice_date) AS first_date FROM sales_transactions WHERE status = 'Paid'"
+        ) as any[];
+        const availableFiscalYears: number[] = [];
+        if (firstSaleRow?.first_date) {
+            const firstFy = getCurrentFiscalYear(startMonth, new Date(firstSaleRow.first_date));
+            for (let y = firstFy; y <= currentFiscalYear; y++) availableFiscalYears.push(y);
+        } else {
+            availableFiscalYears.push(currentFiscalYear);
+        }
 
         const summaryQuery = `
-            SELECT 
+            SELECT
                 (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid') as total_revenue_all_time,
                 (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ?) as total_revenue_month,
                 (SELECT COUNT(*) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ?) as total_sales_month,
                 (SELECT COALESCE(SUM(si.quantity), 0) FROM sale_items si JOIN sales_transactions st ON si.sale_id = st.id WHERE st.status = 'Paid' AND st.invoice_date >= ?) as products_sold_month,
-                (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ?) as total_revenue_fiscal_ytd,
+                (SELECT COALESCE(SUM(total), 0) FROM sales_transactions WHERE status = 'Paid' AND invoice_date >= ? AND invoice_date <= ?) as total_revenue_fiscal_ytd,
                 (SELECT COUNT(*) FROM products WHERE stock > 0 AND (stock < reorder_point OR stock < (SELECT COALESCE(low_stock_threshold, 0) FROM pos_settings LIMIT 1))) as low_stock_items,
                 (SELECT COUNT(*) FROM products) as total_items
         `;
-        
-        const [summaryData] = await query(summaryQuery, [currentMonthStartStr, currentMonthStartStr, currentMonthStartStr, fiscalStartDateStr]) as any[];
+
+        const [summaryData] = await query(summaryQuery, [currentMonthStartStr, currentMonthStartStr, currentMonthStartStr, fiscalStartDateStr, fiscalEndDateStr]) as any[];
 
 
          // Transform Sales By Day for Chart (Recharts expects specific format)
@@ -118,6 +132,7 @@ export async function GET(request: NextRequest) {
                 totalRevenueFiscalYTD: parseFloat(summaryData.total_revenue_fiscal_ytd),
                 fiscalYear: fiscalYear,
                 fiscalStartMonth: startMonth,
+                availableFiscalYears: availableFiscalYears,
                 totalSalesMonth: parseInt(summaryData.total_sales_month),
                 productsSoldMonth: parseInt(summaryData.products_sold_month),
                 lowStockItems: parseInt(summaryData.low_stock_items),

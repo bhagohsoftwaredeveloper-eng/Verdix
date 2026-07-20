@@ -64,6 +64,7 @@ export function useManagePriceLevels({ onLevelAdded }: UseManagePriceLevelsProps
     const result = await updatePriceLevel(id, name, description, isDefault, percentageAdjustment, 0, calculationBase);
     if (result.success) {
       await refreshLevels();
+      onLevelAdded?.();
       return true;
     }
     toast({ variant: 'destructive', title: 'Error', description: result.message });
@@ -75,6 +76,7 @@ export function useManagePriceLevels({ onLevelAdded }: UseManagePriceLevelsProps
     if (result.success) {
       toast({ title: 'Price Level Deleted', description: result.message });
       await refreshLevels();
+      onLevelAdded?.();
     } else {
       toast({ variant: 'destructive', title: 'Error', description: result.message });
     }
