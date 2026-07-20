@@ -516,10 +516,10 @@ function ProductsContent() {
                 trigger={<span className="sr-only">Open Categories</span>}
             />
 
-             <ManagePriceLevelsDialog 
+             <ManagePriceLevelsDialog
                 open={isPriceLevelsOpen}
                 onOpenChange={setIsPriceLevelsOpen}
-                onLevelAdded={() => loadProducts(currentPage, pageSize)}
+                onLevelAdded={() => { loadProductOptions(); loadProducts(currentPage, pageSize); }}
                 trigger={<span className="sr-only">Open Price Levels</span>}
             />
              <ManageSuppliersDialog 
