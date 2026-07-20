@@ -52,11 +52,6 @@ function testFiscalLogic() {
   console.log(`  getCurrentFiscalYear Passed: ${cfyPassed}/${cfyCases.length}`);
 
   console.log(`\nResult: ${passed === testCases.length && cfyPassed === cfyCases.length ? 'SUCCESS 🚀' : 'FAILED ❌'}`);
-  if (passed === testCases.length) {
-    console.log('Result: SUCCESS 🚀');
-  } else {
-    console.log('Result: FAILED ❌');
-  }
 }
 
 testFiscalLogic();
