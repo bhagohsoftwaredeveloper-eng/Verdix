@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import Link from 'next/link';
-import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart, Layers, CreditCard, ShieldCheck, Landmark } from 'lucide-react';
+import { Package, ArrowLeftRight, AlertTriangle, TrendingUp, ClipboardList, Receipt, Package2, Percent, Undo, Users, BarChart, LineChart, PhilippinePeso, ShoppingCart, Layers, CreditCard, ShieldCheck, Landmark, Calendar } from 'lucide-react';
 
 export default function ReportsPage() {
   return (
@@ -244,6 +244,18 @@ export default function ReportsPage() {
                   Membership Report
                 </CardTitle>
                 <CardDescription>Membership activations and renewals with cashier, amount, and validity.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/reports/fiscal-year">
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full border-blue-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-blue-600" />
+                  Fiscal Year Report
+                </CardTitle>
+                <CardDescription>Revenue, transactions, and profit for a chosen fiscal year with monthly breakdown.</CardDescription>
               </CardHeader>
             </Card>
           </Link>
