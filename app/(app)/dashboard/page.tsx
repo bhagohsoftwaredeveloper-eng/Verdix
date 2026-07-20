@@ -25,7 +25,9 @@ import {
 import { CartesianGrid, XAxis, Area, AreaChart } from 'recharts';
 import { Package, ShoppingCart, AlertCircle, Boxes, TrendingUp, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getApiUrl } from '@/lib/api-config';
+import { formatFiscalYear } from '@/lib/fiscal-utils';
 import type { ChartConfig } from '@/components/ui/chart';
 import { SupplierScheduleCard } from './supplier-schedule-card';
 import { HourlySalesChart } from './hourly-sales-chart';
@@ -53,12 +55,14 @@ export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>('current');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(getApiUrl('/reports/stats'));
+      const fyParam = selectedFiscalYear !== 'current' ? `?fiscalYear=${selectedFiscalYear}` : '';
+      const res = await fetch(getApiUrl(`/reports/stats${fyParam}`));
       if (!res.ok) {
         // Prefer the server-provided message (e.g. "Database unavailable")
         // over a generic status string.
@@ -82,7 +86,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedFiscalYear]);
 
   useEffect(() => {
     fetchData();
@@ -150,17 +154,31 @@ export default function DashboardPage() {
         {summary?.fiscalStartMonth !== 1 && (
           <Card className="glass-card group hover:shadow-md transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Fiscal YTD</CardTitle>
-              <div className="p-2 bg-muted rounded-full text-muted-foreground">
-                  <TrendingUp className="w-4 h-4" />
-              </div>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {selectedFiscalYear === 'current' ? 'Fiscal YTD' : 'Fiscal Year'}
+              </CardTitle>
+              <Select value={selectedFiscalYear} onValueChange={setSelectedFiscalYear}>
+                <SelectTrigger className="h-7 w-[130px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Current (YTD)</SelectItem>
+                  {(summary?.availableFiscalYears || []).map((fy: number) => (
+                    <SelectItem key={fy} value={fy.toString()}>
+                      {formatFiscalYear(fy, summary?.fiscalStartMonth)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 ₱{(summary?.totalRevenueFiscalYTD || 0).toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Since {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][summary?.fiscalStartMonth - 1]} 1, {summary?.fiscalYear}
+                {selectedFiscalYear === 'current'
+                  ? `Since ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][summary?.fiscalStartMonth - 1]} 1, ${summary?.fiscalYear}`
+                  : formatFiscalYear(summary?.fiscalYear, summary?.fiscalStartMonth)}
               </p>
             </CardContent>
           </Card>
