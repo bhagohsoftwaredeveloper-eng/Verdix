@@ -72,3 +72,6 @@ license.dat
 
 # Bundled MySQL — large binary files, not for git (kept locally for installer build)
 /mysql-bundle/
+
+# BIR e-journal runtime output (written by saveEJournalFiles; dev fallback root)
+/EJournals/
