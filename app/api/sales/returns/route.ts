@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Sale ID and items are required' }, { status: 400 });
     }
 
-    return await withTransaction(async (connection) => {
+    const result = await withTransaction(async (connection) => {
       // Find a valid user ID if none provided (last resort to avoid FK error)
       let finalUserId = userId;
       if (!finalUserId) {
@@ -126,13 +126,19 @@ export async function POST(request: NextRequest) {
         [posTransId]
       );
       const d = meta?.[0]?.d ? String(meta[0].d) : null;
-      if (d) saveEJournalFiles(d, meta[0].t ?? 'all').catch((e) => console.error('e-journal auto-save failed:', e));
+      const t = meta?.[0]?.t ?? 'all';
 
-      return NextResponse.json({
-        success: true,
-        data: { posTransId },
-        message: 'Return processed successfully'
-      });
+      return { posTransId, d, t };
+    });
+
+    if (result.d) {
+      saveEJournalFiles(result.d, result.t).catch((e) => console.error('e-journal auto-save failed:', e));
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { posTransId: result.posTransId },
+      message: 'Return processed successfully'
     });
 
   } catch (error: any) {

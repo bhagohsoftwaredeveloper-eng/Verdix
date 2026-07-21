@@ -30,17 +30,22 @@ export async function POST(request: NextRequest) {
 
         await ensureVoidReasonColumn();
 
-        return await withTransaction(async (connection: any) => {
+        let notFound = false;
+        let alreadyVoided = false;
+
+        const result = await withTransaction(async (connection: any) => {
             // 1. Fetch sales transaction to check status
             const [sale]: any = await connection.query('SELECT id, status FROM sales_transactions WHERE id = ?', [saleId]);
             console.log('void-transaction: Found sale:', sale);
 
             if (!sale || sale.length === 0) {
-                return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+                notFound = true;
+                return null;
             }
 
             if (String(sale[0].status || '').toLowerCase() === 'voided') {
-                return NextResponse.json({ success: false, error: 'Transaction is already voided' }, { status: 400 });
+                alreadyVoided = true;
+                return null;
             }
 
             // 2. Fetch items to reverse stock
@@ -77,12 +82,25 @@ export async function POST(request: NextRequest) {
                WHERE st.id = ? LIMIT 1`, [saleId]
             );
             const d = meta?.[0]?.d ? String(meta[0].d) : null;
-            if (d) saveEJournalFiles(d, meta[0].t ?? 'all').catch((e) => console.error('e-journal auto-save failed:', e));
+            const t = meta?.[0]?.t ?? 'all';
 
-            return NextResponse.json({
-                success: true,
-                message: 'POS sale voided and stock restored successfully'
-            });
+            return { d, t };
+        });
+
+        if (notFound) {
+            return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
+        }
+        if (alreadyVoided) {
+            return NextResponse.json({ success: false, error: 'Transaction is already voided' }, { status: 400 });
+        }
+
+        if (result?.d) {
+            saveEJournalFiles(result.d, result.t).catch((e) => console.error('e-journal auto-save failed:', e));
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: 'POS sale voided and stock restored successfully'
         });
     } catch (error: any) {
         console.error('Error voiding POS sale:', error);

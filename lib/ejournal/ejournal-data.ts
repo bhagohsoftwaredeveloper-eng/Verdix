@@ -39,7 +39,7 @@ export async function fetchEJournalData(date: string, terminalId?: string): Prom
      JOIN sale_items si ON si.sale_id = st.id
      LEFT JOIN users u ON pt.user_id = u.uid
      LEFT JOIN customers c ON st.customer_id = c.id
-     WHERE DATE(st.created_at) = ? AND st.is_training = 0 AND st.status = 'Paid'${tFilterPt}
+     WHERE DATE(st.created_at) = ? AND st.is_training = 0 AND st.status = 'Paid' AND si.quantity > 0${tFilterPt}
      ORDER BY st.created_at ASC, si.id ASC`,
     useTerminal ? [date, terminalId] : [date]
   )) as any[];
@@ -57,7 +57,7 @@ export async function fetchEJournalData(date: string, terminalId?: string): Prom
      JOIN sale_items si ON si.sale_id = st.id
      LEFT JOIN users u ON pt.user_id = u.uid
      LEFT JOIN customers c ON st.customer_id = c.id
-     WHERE DATE(st.created_at) = ? AND st.is_training = 0 AND st.status = 'Voided'${tFilterPt}
+     WHERE DATE(st.created_at) = ? AND st.is_training = 0 AND st.status = 'Voided' AND si.quantity > 0${tFilterPt}
      ORDER BY st.created_at ASC, si.id ASC`,
     useTerminal ? [date, terminalId] : [date]
   )) as any[];
