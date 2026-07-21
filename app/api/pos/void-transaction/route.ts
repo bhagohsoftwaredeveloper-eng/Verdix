@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTransaction, query } from '@/lib/mysql';
 import { addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
+import { saveEJournalFiles } from '@/lib/ejournal/ejournal-writer';
 
 // The void_reason column can't disappear once ensured — only pay the
 // INFORMATION_SCHEMA round trip until the first success this process.
@@ -69,6 +70,14 @@ export async function POST(request: NextRequest) {
                 [voidReason?.trim() || null, saleId]
             );
             console.log('void-transaction: Transaction marked as voided');
+
+            const [meta]: any = await connection.query(
+              `SELECT DATE(st.created_at) AS d, pt.terminal_id AS t
+               FROM sales_transactions st JOIN pos_transactions pt ON pt.sale_id = st.id
+               WHERE st.id = ? LIMIT 1`, [saleId]
+            );
+            const d = meta?.[0]?.d ? String(meta[0].d) : null;
+            if (d) saveEJournalFiles(d, meta[0].t ?? 'all').catch((e) => console.error('e-journal auto-save failed:', e));
 
             return NextResponse.json({
                 success: true,

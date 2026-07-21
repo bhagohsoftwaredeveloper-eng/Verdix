@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, getNextXReadingNumber } from '@/lib/mysql';
+import { saveEJournalFiles } from '@/lib/ejournal/ejournal-writer';
 
 export async function GET(request: NextRequest) {
   try {
@@ -295,6 +296,9 @@ export async function POST(request: NextRequest) {
       voidAmount ?? 0,
       refundAmount ?? 0,
     ]);
+
+    const ejDate = formatDate(reportDate || new Date())!.slice(0, 10);
+    saveEJournalFiles(ejDate, terminalId || 'all').catch((e) => console.error('e-journal auto-save failed:', e));
 
     return NextResponse.json({
       success: true,

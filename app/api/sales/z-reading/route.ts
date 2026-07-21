@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, getNextZReadingNumber } from '@/lib/mysql';
 import { format } from 'date-fns';
+import { saveEJournalFiles } from '@/lib/ejournal/ejournal-writer';
 
 const safeParseFloat = (val: any): number => {
     if (val === null || val === undefined) return 0;
@@ -495,6 +496,7 @@ export async function POST(request: NextRequest) {
         await ensureZReadingsSchema();
 
         const body = await request.json();
+        const ejTerminal = body.terminalId && body.terminalId !== 'all' ? body.terminalId : 'all';
         let { terminalId, cashierName } = body;
         terminalId = terminalId && terminalId !== 'all' ? terminalId : 'terminal_default_01';
         cashierName = cashierName || 'Admin';
@@ -680,6 +682,9 @@ export async function POST(request: NextRequest) {
             zCounter: (termResult?.z_counter || 0), resetCounter: termResult?.reset_counter || 0
         };
 
+
+        const ejDate = format(new Date(endDate), 'yyyy-MM-dd');   // `format` from date-fns is already imported here
+        saveEJournalFiles(ejDate, ejTerminal).catch((e) => console.error('e-journal auto-save failed:', e));
 
         return NextResponse.json({ success: true, data: [generatedReading] });
     } catch (error: any) {

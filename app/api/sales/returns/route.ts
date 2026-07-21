@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/mysql';
 import { addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
+import { saveEJournalFiles } from '@/lib/ejournal/ejournal-writer';
 
 export async function POST(request: NextRequest) {
   try {
@@ -119,6 +120,13 @@ export async function POST(request: NextRequest) {
       // 3. Update original sale status if needed (Optional: could mark as 'Returned' or keep it as 'Paid' but has return links)
       // For now, let's keep it simple and just record the return transaction.
       // The returns page looks for transaction_type = 'return'.
+
+      const [meta]: any = await connection.query(
+        `SELECT DATE(transaction_time) AS d, terminal_id AS t FROM pos_transactions WHERE id = ? LIMIT 1`,
+        [posTransId]
+      );
+      const d = meta?.[0]?.d ? String(meta[0].d) : null;
+      if (d) saveEJournalFiles(d, meta[0].t ?? 'all').catch((e) => console.error('e-journal auto-save failed:', e));
 
       return NextResponse.json({
         success: true,
