@@ -14,10 +14,24 @@ type SetFn = <K extends keyof PosSettings>(key: K, value: PosSettings[K]) => voi
 interface Props { settings: PosSettings; set: SetFn; }
 
 export function BirComplianceCard({ settings, set }: Props) {
-  const downloadEJournal = () => {
+  const downloadEJournal = async () => {
     const date = (document.getElementById('ejournal-date') as HTMLInputElement)?.value;
     if (!date) return;
-    window.open(getApiUrl(`/sales/ejournal?date=${date}&terminalId=all`), '_blank');
+    try {
+      const res = await fetch(getApiUrl('/sales/ejournal/save'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, terminalId: 'all' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`E-Journal saved (${data.files.length} files) to:\n${data.dir}`);
+      } else {
+        alert(`Failed to save e-journal: ${data.error || 'unknown error'}`);
+      }
+    } catch (e: any) {
+      alert(`Failed to save e-journal: ${e.message}`);
+    }
   };
 
   return (
@@ -49,7 +63,7 @@ export function BirComplianceCard({ settings, set }: Props) {
           <div className="flex gap-2">
             <Input type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-[150px] bg-white dark:bg-blue-500/10 dark:border-blue-500/30" id="ejournal-date" />
             <Button variant="outline" size="sm" className="border-blue-200 text-blue-700 hover:bg-blue-100 dark:border-blue-500/30 dark:text-blue-300 dark:hover:bg-blue-500/20" onClick={downloadEJournal}>
-              Download .txt
+              Save E-Journal
             </Button>
           </div>
         </div>
