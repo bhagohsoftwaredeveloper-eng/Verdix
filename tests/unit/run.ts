@@ -16,3 +16,4 @@ import './si-number.test';
 import './drawer-kick.test';
 import './receipt-si-number.test';
 import './product-tree.test';
+import './ejournal-text-format.test';
