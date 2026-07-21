@@ -18,3 +18,4 @@ import './receipt-si-number.test';
 import './product-tree.test';
 import './ejournal-text-format.test';
 import './ejournal-text-receipt.test';
+import './ejournal-data.test';
