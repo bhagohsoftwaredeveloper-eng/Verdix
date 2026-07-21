@@ -91,6 +91,7 @@ export function SaleDetailView({ sale, onReprint }: SaleDetailViewProps) {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="text-xs font-semibold uppercase tracking-wide">Product</TableHead>
                 <TableHead className="text-center text-xs font-semibold uppercase tracking-wide">Qty</TableHead>
+                <TableHead className="text-center text-xs font-semibold uppercase tracking-wide">Returned</TableHead>
                 <TableHead className="text-right text-xs font-semibold uppercase tracking-wide">Unit Price</TableHead>
                 <TableHead className="text-right text-xs font-semibold uppercase tracking-wide">Disc</TableHead>
                 <TableHead className="text-right text-xs font-semibold uppercase tracking-wide">Total</TableHead>
@@ -98,7 +99,9 @@ export function SaleDetailView({ sale, onReprint }: SaleDetailViewProps) {
             </TableHeader>
             <TableBody>
               {items.length > 0 ? items.map((it: any, idx: number) => {
-                const lineGross = it.price * it.quantity;
+                const returnedQty = it.returnedQuantity ?? 0;
+                const remainingQty = it.quantity; // net remaining after returns
+                const lineGross = it.price * remainingQty;
                 const lineTotal = lineGross - (it.discount || 0);
                 return (
                   <TableRow key={idx} className="border-b-border/50">
@@ -114,7 +117,16 @@ export function SaleDetailView({ sale, onReprint }: SaleDetailViewProps) {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center font-mono text-sm">{it.quantity}</TableCell>
+                    <TableCell className="text-center font-mono text-sm">
+                      {remainingQty > 0
+                        ? remainingQty
+                        : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-center font-mono text-sm">
+                      {returnedQty > 0
+                        ? <span className="font-semibold text-amber-600 dark:text-amber-400">{returnedQty}</span>
+                        : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell className="text-right font-mono text-sm">₱{formatCurrency(it.price)}</TableCell>
                     <TableCell className="text-right font-mono text-sm text-rose-600">
                       {it.discount ? `−₱${formatCurrency(it.discount)}` : '—'}
@@ -124,7 +136,7 @@ export function SaleDetailView({ sale, onReprint }: SaleDetailViewProps) {
                 );
               }) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     No product lines on this transaction.
                   </TableCell>
                 </TableRow>

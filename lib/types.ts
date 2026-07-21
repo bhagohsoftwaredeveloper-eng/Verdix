@@ -112,6 +112,10 @@ export interface Supplier {
 export interface SaleItem {
   product: Product;
   quantity: number;
+  /** Total originally sold (before any returns). */
+  originalQuantity?: number;
+  /** Quantity already returned on this sale. */
+  returnedQuantity?: number;
   price: number;
   discount?: number;
 }

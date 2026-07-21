@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { SheetFooter } from '@/components/ui/sheet';
 import type { Sale, SaleItem } from '@/lib/types';
 import { formatQuantity } from '@/lib/utils';
+import { formatSINumber } from '@/lib/si-number';
 import { peso } from './return-sales-utils';
 
 interface SelectItemsViewProps {
@@ -110,7 +111,8 @@ export function SelectItemsView({ sale, onReturnItems, onBack }: SelectItemsView
     } else {
       const all = new Set<string>();
       const q: Record<string, number> = {};
-      sale.items.forEach(it => { all.add(it.product.id); q[it.product.id] = it.quantity; });
+      // Skip fully-returned lines (no quantity left to return).
+      sale.items.forEach(it => { if (it.quantity > 0) { all.add(it.product.id); q[it.product.id] = it.quantity; } });
       setSelectedItems(all);
       setReturnQuantities(q);
     }
@@ -140,7 +142,7 @@ export function SelectItemsView({ sale, onReturnItems, onBack }: SelectItemsView
         </Button>
         <div className="min-w-0">
           <h2 className="text-base font-semibold">Select Items to Return</h2>
-          <p className="truncate text-xs text-muted-foreground">SO Number: <span className="font-mono">{sale.orderNumber || sale.id}</span></p>
+          <p className="truncate text-xs text-muted-foreground">SI No.: <span className="font-mono">{sale.siNumber ? formatSINumber(sale.siNumber) : (sale.orderNumber || sale.id)}</span></p>
         </div>
       </div>
 
@@ -155,24 +157,35 @@ export function SelectItemsView({ sale, onReturnItems, onBack }: SelectItemsView
       <div className="mt-3 flex-1 overflow-hidden rounded-xl border">
         <ScrollArea className="h-full">
           {sale.items.map((item, index) => {
+            const soldQty = item.originalQuantity ?? item.quantity;
+            const alreadyReturned = item.returnedQuantity ?? 0;
+            const remaining = item.quantity; // net still returnable
+            const fullyReturned = remaining <= 0;
             const checked = selectedItems.has(item.product.id);
-            const rQty = returnQuantities[item.product.id] || item.quantity;
+            const rQty = returnQuantities[item.product.id] || remaining;
             const isHighlighted = highlightedIndex === index;
             return (
               <div
                 key={index}
                 className={`flex items-center gap-3 border-b border-border/50 px-3 py-3 transition-colors ${
-                  isHighlighted ? 'bg-amber-100/70 dark:bg-amber-950/40 ring-2 ring-amber-500' : checked ? 'bg-amber-50/60 dark:bg-amber-950/20' : 'hover:bg-muted/40'
+                  fullyReturned ? 'opacity-60' : isHighlighted ? 'bg-amber-100/70 dark:bg-amber-950/40 ring-2 ring-amber-500' : checked ? 'bg-amber-50/60 dark:bg-amber-950/20' : 'hover:bg-muted/40'
                 }`}
               >
-                <Checkbox checked={checked} onCheckedChange={() => handleItemToggle(item)} />
-                <div className="min-w-0 flex-1 cursor-pointer" onClick={() => handleItemToggle(item)}>
+                <Checkbox checked={checked} disabled={fullyReturned} onCheckedChange={() => handleItemToggle(item)} />
+                <div className={`min-w-0 flex-1 ${fullyReturned ? '' : 'cursor-pointer'}`} onClick={() => { if (!fullyReturned) handleItemToggle(item); }}>
                   <p className="truncate text-sm font-medium">{item.product.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    Sold: {formatQuantity(item.quantity)} {item.product.unitOfMeasure || ''} · {peso(item.price)} ea
+                    Sold: {formatQuantity(soldQty)} {item.product.unitOfMeasure || ''} · {peso(item.price)} ea
                   </p>
+                  {alreadyReturned > 0 && (
+                    <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                      Returned: {formatQuantity(alreadyReturned)}{fullyReturned ? ' (fully returned)' : ` · ${formatQuantity(remaining)} left`}
+                    </p>
+                  )}
                 </div>
-                {checked ? (
+                {fullyReturned ? (
+                  <span className="shrink-0 text-xs font-medium text-amber-600 dark:text-amber-400">Fully returned</span>
+                ) : checked ? (
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Button variant="outline" size="icon" className="h-7 w-7" disabled={rQty <= 1} onClick={() => step(item, -1)}>
                       <Minus className="h-3 w-3" />
@@ -180,12 +193,12 @@ export function SelectItemsView({ sale, onReturnItems, onBack }: SelectItemsView
                     <Input
                       type="number"
                       min="1"
-                      max={item.quantity}
+                      max={remaining}
                       className="h-7 w-12 px-1 text-center font-mono"
                       value={returnQuantities[item.product.id] || ''}
                       onChange={(e) => handleQuantityChange(item, e.target.value)}
                     />
-                    <Button variant="outline" size="icon" className="h-7 w-7" disabled={rQty >= item.quantity} onClick={() => step(item, 1)}>
+                    <Button variant="outline" size="icon" className="h-7 w-7" disabled={rQty >= remaining} onClick={() => step(item, 1)}>
                       <Plus className="h-3 w-3" />
                     </Button>
                   </div>

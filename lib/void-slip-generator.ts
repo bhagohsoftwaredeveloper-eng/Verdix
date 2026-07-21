@@ -1,6 +1,7 @@
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import { format } from 'date-fns';
 import { SystemSettings } from './types';
+import { formatSINumber } from './si-number';
 
 export class VoidSlipGenerator {
     private encoder: any;
@@ -58,8 +59,8 @@ export class VoidSlipGenerator {
         enc.newline();
 
         // ─── TRANSACTION INFO ───────────────────────────────────────────
-        const orderNo = String(sale.orderNumber || sale.id || '000000').padStart(6, '0');
-        enc.bold(true).line(`SI NO.: ${orderNo}`).bold(false);
+        const siNo = formatSINumber(sale.siNumber || sale.orderNumber);
+        enc.bold(true).line(`SI NO.: ${siNo}`).bold(false);
         enc.line(`Date: ${format(new Date(sale.date || new Date()), 'MM/dd/yy h:mm a')}`);
         enc.line(`Cust: ${sale.customer?.name || 'Walk-in'}`);
         enc.line(`Cashier: ${sale.cashierName || 'Admin'}`);

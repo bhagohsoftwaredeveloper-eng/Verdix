@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/mysql';
+import { formatSINumber } from '@/lib/si-number';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
       SELECT 
         pt.id as pos_transaction_id,
         pt.order_number,
+        COALESCE(pt.si_number, st.si_number) as si_number,
         st.id as sale_id,
         DATE(st.created_at) as trans_date,
         COALESCE(c.name, 'Walk-in Customer') as customer_name,
@@ -63,8 +65,9 @@ export async function GET(request: NextRequest) {
       const vatableSales = salesAmount - vatAmount;
 
       return {
-        refNo: `SO No.${row.order_number || row.sale_id?.split('-').pop() || 'N/A'}`,
-        siNo: row.sale_id ? `SI No.${row.sale_id.split('-').pop() || 'N/A'}` : '',
+        // Primary identifier is the real SI number of the voided sale.
+        refNo: `SI No. ${row.si_number ? formatSINumber(row.si_number) : (row.order_number ?? 'N/A')}`,
+        siNo: '',
         transDate: row.trans_date,
         customer: row.customer_name,
         cashier: row.cashier_name || 'admin',

@@ -31,9 +31,9 @@ export function OverallReadingShiftsTable({ shifts, isLoading, selectedShift, se
       ),
       cell: ({ row }) => (
         <div className="flex flex-col gap-0.5">
-          <span className="font-medium text-slate-700 text-sm">{row.getValue('cashier_name') || 'Unknown'}</span>
-          <span className="text-xs text-slate-500">{row.original.terminal_id}</span>
-          <span className="text-[10px] text-slate-400">{format(new Date(row.original.end_time), 'PPp')}</span>
+          <span className="font-medium text-foreground text-sm">{row.getValue('cashier_name') || 'Unknown'}</span>
+          <span className="text-xs text-muted-foreground">{row.original.terminal_id}</span>
+          <span className="text-[10px] text-muted-foreground/70">{format(new Date(row.original.end_time), 'PPp')}</span>
         </div>
       ),
     },
@@ -66,14 +66,14 @@ export function OverallReadingShiftsTable({ shifts, isLoading, selectedShift, se
   });
 
   return (
-    <Card className="shadow-sm border-slate-100 h-full">
-      <CardHeader className="border-b border-slate-50">
-        <CardTitle className="text-lg font-semibold text-slate-800">Completed Shifts</CardTitle>
-        <p className="text-xs text-slate-500 mt-0.5">Select a shift to view reading</p>
+    <Card className="shadow-sm border-border h-full">
+      <CardHeader className="border-b border-border">
+        <CardTitle className="text-lg font-semibold text-foreground">Completed Shifts</CardTitle>
+        <p className="text-xs text-muted-foreground mt-0.5">Select a shift to view reading</p>
       </CardHeader>
       <CardContent className="p-0 max-h-[600px] overflow-auto">
         <Table>
-          <TableHeader className="bg-slate-50/50">
+          <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map(hg => (
               <TableRow key={hg.id}>
                 {hg.headers.map(header => (
@@ -87,15 +87,15 @@ export function OverallReadingShiftsTable({ shifts, isLoading, selectedShift, se
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={2} className="text-center py-8 text-slate-400 text-sm">Loading shifts...</TableCell>
+                <TableCell colSpan={2} className="text-center py-8 text-muted-foreground text-sm">Loading shifts...</TableCell>
               </TableRow>
             ) : table.getRowModel().rows.length > 0 ? (
               table.getRowModel().rows.map(row => (
                 <TableRow
                   key={row.id}
                   className={cn(
-                    'cursor-pointer hover:bg-slate-50 transition-colors',
-                    selectedShift?.id === row.original.id && 'bg-blue-50/50 hover:bg-blue-50/50'
+                    'cursor-pointer hover:bg-muted/50 transition-colors',
+                    selectedShift?.id === row.original.id && 'bg-primary/10 hover:bg-primary/10'
                   )}
                   onClick={() => setSelectedShift(row.original)}
                 >
@@ -108,7 +108,7 @@ export function OverallReadingShiftsTable({ shifts, isLoading, selectedShift, se
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={2} className="text-center py-8 text-slate-400 text-sm">No shifts found.</TableCell>
+                <TableCell colSpan={2} className="text-center py-8 text-muted-foreground text-sm">No shifts found.</TableCell>
               </TableRow>
             )}
           </TableBody>

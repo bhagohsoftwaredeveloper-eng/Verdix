@@ -1,30 +1,44 @@
-# Auto-Detect Conversion Factor on Reassign — SDD Progress
+# Fiscal Year Selector + Fiscal Year Report — SDD Progress
 
-Base commit: (plan commit) — builds on reassign-top-level (merged up to cbb73eb)
-Branch: main (user works on main directly)
-Plan: docs/superpowers/plans/2026-07-14-reassign-autodetect-factor.md
-Spec: docs/superpowers/specs/2026-07-14-reassign-autodetect-factor-design.md
+Base commit: 4cf9347
+Branch: feat/stock-count-cost-retail-amounts
+Plan: docs/superpowers/plans/2026-07-20-fiscal-year-reports.md
+Spec: docs/superpowers/specs/2026-07-20-fiscal-year-reports-design.md
 
 ## Environment (project-wide truths)
-- CLIENT + TEST ONLY. NO change to actions.ts / product-tree.ts / family-sync.ts / migrations.
-- Auto-fill never blocks; canSave unchanged.
-- Match = exact string: target.conversionFactors[].unit === product.unitOfMeasure.
 - `npm run lint` BROKEN repo-wide. Skip it.
-- typecheck has PRE-EXISTING failures; gate = no NEW errors in touched files.
-- E2E on :3100 vs verdix_test; re-seed `npm run test:e2e:db`; runner self-starts server.
-- Mover unit = 'Box' → auto-detect target's seeded cf unit must be 'Box'.
+- typecheck has PRE-EXISTING failures (products/*/tabs/*, scratch/*); gate = no NEW errors in touched files.
+- MySQL only, raw SQL via lib/mysql.ts query(). No ORM.
+- Fiscal source of truth: pos_settings.fiscal_year_start_month (1-12), default 1.
+- Reuse verbatim: getFiscalYearRange(fy, startMonth) -> {startDate, endDate}; formatFiscalYear(fy, startMonth).
+- Paid sales only: status='Paid' on sales_transactions.
+- sales_transactions has `total` + `invoice_date`, NO tax column. sale_items has `cost_at_sale` (nullable, NOT `cost`); item cost = COALESCE(si.cost_at_sale, p.cost, 0) via join to products. Profit = revenue - cost (gross).
+- test_fiscal_logic.ts is a tsx console runner, NOT a test framework. Run: npx tsx scripts/test_fiscal_logic.ts.
+- Jan-start businesses: dashboard fiscal selector stays hidden (inside existing fiscalStartMonth !== 1 block).
 
 ## Tasks
-- [x] Task 1: complete (commits 25df3dd..e2b781f, review clean; spec ✅ quality Approved; typecheck verified clean by controller)
-- [x] Task 2: complete (commits e2b781f..23e9fba incl. fix; review clean after 1 fix loop; spec ✅ quality Approved; 3/3 full-file + 1/1 isolated auto-detect run)
-  - Important finding FIXED (commit 23e9fba): auto-detect test was order-dependent on prior tests (real reassignParent factor upsert made REASSIGN_TOP_TARGET falsely "match"; mover was nested by prior test). Fixed with dedicated independent fixtures REASSIGN_AUTO_MOVER/MATCH/NOMATCH that no other test mutates; removed REASSIGN_AUTODETECT_TARGET. Order-independence proven by isolated -g run.
+- [x] Task 1: complete (commits 4cf9347..f926baf, review clean after fix; spec ✅, one Critical [duplicate Result line] found + fixed, verified 7/7 + 4/4 SUCCESS)
+- [x] Task 2: complete (commit 6a9fa10, review clean; spec ✅ quality Approved; SQL param alignment traced OK, endpoint verified live)
+- [x] Task 3: complete (commit 236b72f, review clean; spec ✅ quality Approved, no findings; typecheck clean; MANUAL UI click-through PENDING — do after Task 6)
+- [x] Task 4: complete (commit 15dcb97, review clean; spec ✅ quality Approved; controller re-verified ym format match [SQL %Y-%m == JS padStart] and month-profit-from-month-values; endpoint live label FY 2026, 12 months on empty test DB)
+- [x] Task 5: complete (commit 6da9b69, review clean; spec ✅ quality Approved; interfaces verified vs Task 4 route line-by-line; typecheck clean; MANUAL UI click-through PENDING — do after Task 6)
+- [x] Task 6: complete (commit bae4c53, controller-verified diff [Calendar import + card matches siblings, links /reports/fiscal-year] + typecheck clean; MANUAL UI click-through PENDING)
+
+## Manual UI verification (done via Playwright, logged-in admin, Jan-start test DB)
+- /reports/fiscal-year: page renders — FY Select, 4 summary cards (₱0.00 empty DB), Monthly Breakdown table with ALL 12 rows Jan..Dec 2026 in order. PROVES period->calendar-month mapping + ym Map lookup works (every row populated, correct order for Jan start). No console errors.
+- /reports index: "Fiscal Year Report" card present in Sales Reports section, links /reports/fiscal-year. (Task 6 ✓)
+- /dashboard: with Jan fiscal start, NO Fiscal YTD/Year card or selector shown — confirms Task 3 hide-for-Jan constraint. No console errors.
+- RESIDUAL GAP: the VISIBLE dashboard selector dropdown (non-Jan start) was NOT click-tested — test DB is Jan-start and I did not mutate store fiscal config. Selector render logic + ?fiscalYear= wiring verified by code review + live endpoint test; low risk. Also: multi-year switching not exercised (test DB has only availableFiscalYears=[2026]).
+
+## Final whole-branch review (opus) — Ready to merge: after fix, YES
+- Found 1 CRITICAL (cross-cutting, missed by all per-task reviews + empty-DB smoke test): timezone off-by-one. getFiscalYearRange returns LOCAL-midnight Dates; callers serialized via .toISOString().split('T')[0] = UTC. In UTC+8, Apr 1 -> "2024-03-31". Every fiscal window shifted 1 day early -> boundary-day sales double-counted across adjacent FYs; report summary != sum of monthly rows (boundary sales in summary but dropped from month buckets since DATE_FORMAT doesn't tz-shift). Affects Jan-start too via directly-reachable report page.
+- FIX (commit 7c096a6): added toLocalYmd() helper to fiscal-utils.ts; replaced the 3 fiscal-range conversions (2 in stats route, 1 in fiscal-year route) with it. Left currentMonthStart/now conversions untouched. Regression test added: FY2024 Apr range now 2024-04-01..2025-03-31 ✅ (was 2024-03-31..2025-03-30). test_fiscal_logic 7/7 + 4/4 + range ✅; typecheck clean on 3 files.
+- Important: none. All API<->consumer contracts, field names, SQL parameterization, number parsing verified consistent.
 
 ## Minor findings (for final review triage)
-- Value assertion is "4.00" not "4" (mysql2 DECIMAL serialization of conversion_factors.factor). Correct/expected; documented in task-2-report.md. Non-issue.
-- prepare-test-db.ts seed-count console log undercounts products (pre-existing, cosmetic, out of scope).
-- Hint "Auto-detected from {parent}" persists even if user manually edits the prefilled value (onChange only setFactor, not setAutoDetectedFrom(null)). Spec-consistent (hint = provenance, copy says "You can override it"). UX decision, not a defect.
+- Task 1: incidental whitespace change in test_fiscal_logic.ts (dropped leading \n) — cosmetic.
+- Task 2: fiscalYear param has no upper/lower bound validation (0/negative/huge parse OK) — within spec (only missing/non-numeric must fall back). Note only.
+- Task 5: no AbortController/race-guard on fetchReport — rapid year switching could let a stale response overwrite a newer one. Same as existing sales/summary page (not a regression). Note only.
+- Dashboard selector lists availableFiscalYears (incl current FY) AND a separate "Current (YTD)" item — current FY selectable two ways. No user-visible harm (explicit current-FY == YTD while endDate is future). Note only.
 
-## Final whole-branch review (sonnet) — Ready to merge: YES
-- 0 Critical, 0 Important. Client+test only (verified none of actions/product-tree/family-sync/migrations touched). canSave byte-identical (never blocks). Fresh-parent lookup, exact unit match, clears on match/no-match/Detach (no stale value/hint). Hint gated to attach branch + autoDetectedFrom truthy. Value flows through unchanged Number(factor) save path. E2E order-independent (dedicated fixtures), asserts match→4.00+hint and no-match→blank+no-hint. Green trustworthy (3/3 full + 1/1 isolated).
-
-FEATURE COMPLETE.
+FEATURE COMPLETE (commits 4cf9347..7c096a6: 6 tasks + 1 fix-during-task + 1 final-review fix). Ready to merge.

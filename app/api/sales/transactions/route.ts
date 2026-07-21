@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         c.contact_number as customer_contact,
         st.status as sale_status,
         orig_pt.order_number as original_order_number,
+        orig_pt.si_number as original_si_number,
         orig_pt.transaction_time as original_transaction_time,
         orig_u.display_name as original_cashier_name,
         pd.gateway_reference as payment_reference
@@ -230,6 +231,9 @@ export async function GET(request: NextRequest) {
         terminal: row.terminal_name || 'N/A',
         items: items, // Attach items
         // Original sale information (for returns)
+        // Prefer the original sale's real SI number; fall back to sales_transactions
+        // SI, then legacy order_number, so the credit report matches the receipt.
+        originalSINumber: row.original_si_number || row.sales_trans_si_number || row.original_order_number || null,
         originalOrderNumber: row.original_order_number || null,
         originalTransactionTime: row.original_transaction_time || null,
         originalCashierName: row.original_cashier_name || null

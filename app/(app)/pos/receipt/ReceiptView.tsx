@@ -219,11 +219,11 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(({ saleD
                 </div>
             ) : null}
             <div className="text-center mt-6">
-                <div>Shop smart, save more! Thank you for visiting Vendix.</div>
+                <div>Shop smart, save more! Thank you for visiting {settings?.businessName?.trim() || 'VENDIX'}.</div>
                 {saleDetails.isTrainingMode && (
                     <div className="mt-4 border-2 border-black p-2 bg-gray-100 text-center font-bold text-[10px] leading-tight flex flex-col gap-1">
-                        <div>THIS IS NOT A CASH SALE/OFFICIAL RECEIPT.</div>
-                        <div>PLEASE REQUEST FROM SELLER YOUR CASH SALE/OFFICIAL RECEIPT</div>
+                        <div>THIS IS NOT A SALES INVOICE RECEIPT.</div>
+                        <div>PLEASE REQUEST FROM SELLER YOUR SALES INVOICE/OFFICIAL RECEIPT</div>
                     </div>
                 )}
             </div>

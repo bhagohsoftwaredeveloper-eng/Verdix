@@ -1,15 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction } from '@/lib/mysql';
+import { withTransaction, query } from '@/lib/mysql';
 import { addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
+
+// The void_reason column can't disappear once ensured — only pay the
+// INFORMATION_SCHEMA round trip until the first success this process.
+let voidReasonColumnEnsured = false;
+
+async function ensureVoidReasonColumn() {
+    if (voidReasonColumnEnsured) return;
+    const cols = await query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sales_transactions' AND TABLE_SCHEMA = DATABASE()"
+    ) as any[];
+    if (!cols.some((c: any) => c.COLUMN_NAME === 'void_reason')) {
+        await query("ALTER TABLE sales_transactions ADD COLUMN void_reason VARCHAR(255) DEFAULT NULL");
+        console.log('✅ Added void_reason column to sales_transactions');
+    }
+    voidReasonColumnEnsured = true;
+}
 
 export async function POST(request: NextRequest) {
     try {
-        const { saleId } = await request.json();
+        const { saleId, voidReason } = await request.json();
         console.log('void-transaction: Received saleId:', saleId);
 
         if (!saleId) {
             return NextResponse.json({ success: false, error: 'Sale ID is required' }, { status: 400 });
         }
+
+        await ensureVoidReasonColumn();
 
         return await withTransaction(async (connection: any) => {
             // 1. Fetch sales transaction to check status
@@ -20,7 +38,7 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: false, error: 'Transaction not found' }, { status: 404 });
             }
 
-            if (sale[0].status === 'voided') {
+            if (String(sale[0].status || '').toLowerCase() === 'voided') {
                 return NextResponse.json({ success: false, error: 'Transaction is already voided' }, { status: 400 });
             }
 
@@ -46,7 +64,10 @@ export async function POST(request: NextRequest) {
             }
 
             // 3. Update sales_transactions status to 'voided'
-            await connection.query('UPDATE sales_transactions SET status = "Voided", updated_at = NOW() WHERE id = ?', [saleId]);
+            await connection.query(
+                'UPDATE sales_transactions SET status = "Voided", void_reason = ?, updated_at = NOW() WHERE id = ?',
+                [voidReason?.trim() || null, saleId]
+            );
             console.log('void-transaction: Transaction marked as voided');
 
             return NextResponse.json({

@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatSINumber } from '@/lib/si-number';
 import type { Sale } from '@/lib/types';
 import { peso } from './return-sales-utils';
 
@@ -22,7 +23,7 @@ export function TransactionPickRow({ sale, onPick, isHighlighted = false }: Tran
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate font-mono text-sm font-semibold">{sale.orderNumber ? sale.orderNumber : sale.id?.substring(0, 7)}</span>
+          <span className="truncate font-mono text-sm font-semibold">{sale.siNumber ? formatSINumber(sale.siNumber) : (sale.orderNumber ? sale.orderNumber : sale.id?.substring(0, 7))}</span>
           <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{sale.paymentMethod || '-'}</span>
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">

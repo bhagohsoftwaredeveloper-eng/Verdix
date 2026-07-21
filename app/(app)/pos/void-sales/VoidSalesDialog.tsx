@@ -24,6 +24,7 @@ import { Ban, ArrowLeft, AlertTriangle, Clock, User, Calendar, CreditCard, Shopp
 import type { Sale } from '@/lib/types';
 import { format } from 'date-fns';
 import { formatQuantity } from '@/lib/utils';
+import { formatSINumber } from '@/lib/si-number';
 import { AdminAuthDialog } from '../admin-auth/AdminAuthDialog';
 import { useVoidSales } from './use-void-sales';
 import type { VoidSalesDialogProps } from './void-sales-types';
@@ -34,17 +35,21 @@ const peso = (n: number) => `₱${(n || 0).toLocaleString('en-US', { minimumFrac
 
 
 
-function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError }: { sale: Sale, onVoidTransaction: () => void, onBack: () => void, isVoiding: boolean, voidError?: string }) {
+function ConfirmVoidView({ sale, voidReason, onVoidReasonChange, onVoidTransaction, onBack, isVoiding, voidError }: { sale: Sale, voidReason: string, onVoidReasonChange: (v: string) => void, onVoidTransaction: () => void, onBack: () => void, isVoiding: boolean, voidError?: string }) {
     const itemCount = sale.items.reduce((a, i) => a + i.quantity, 0);
+    const canVoid = voidReason.trim().length > 0;
 
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
         if (isVoiding) return;
+        // Don't hijack typing in the reason field.
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'TEXTAREA' || tag === 'INPUT') return;
 
         switch (e.key) {
           case 'Enter':
             e.preventDefault();
-            onVoidTransaction();
+            if (canVoid) onVoidTransaction();
             break;
           case 'Backspace':
           case 'Escape':
@@ -56,7 +61,7 @@ function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError
 
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isVoiding, onVoidTransaction, onBack]);
+    }, [isVoiding, canVoid, onVoidTransaction, onBack]);
 
     return (
         <div className="flex h-full flex-col">
@@ -84,8 +89,8 @@ function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError
             <div className="mt-4 rounded-xl border bg-gradient-to-br from-rose-500/5 to-transparent p-4 shrink-0">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">SO Number</p>
-                        <p className="truncate font-mono text-lg font-bold leading-tight">{sale.orderNumber || sale.id}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">SI No.</p>
+                        <p className="truncate font-mono text-lg font-bold leading-tight">{sale.siNumber ? formatSINumber(sale.siNumber) : (sale.orderNumber || sale.id)}</p>
                     </div>
                     <div className="text-right shrink-0">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total</p>
@@ -145,6 +150,22 @@ function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError
                 </ScrollArea>
             </div>
 
+            {/* Void reason (required for BIR audit trail) */}
+            <div className="mt-4 shrink-0">
+                <label htmlFor="void-reason" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Reason for Void <span className="text-rose-600">*</span>
+                </label>
+                <textarea
+                    id="void-reason"
+                    value={voidReason}
+                    onChange={(e) => onVoidReasonChange(e.target.value)}
+                    disabled={isVoiding}
+                    rows={2}
+                    placeholder="e.g. Wrong item, customer cancelled, pricing error…"
+                    className="mt-1.5 w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-500/40"
+                />
+            </div>
+
             {voidError && (
                 <p className="mt-3 flex items-center gap-1.5 text-sm text-destructive shrink-0">
                     <AlertTriangle className="h-4 w-4" /> {voidError}
@@ -155,7 +176,7 @@ function ConfirmVoidView({ sale, onVoidTransaction, onBack, isVoiding, voidError
                 <Button variant="outline" onClick={onBack} disabled={isVoiding}>
                     Cancel
                 </Button>
-                <Button variant="destructive" onClick={onVoidTransaction} disabled={isVoiding}>
+                <Button variant="destructive" onClick={onVoidTransaction} disabled={isVoiding || !canVoid}>
                     {isVoiding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Ban className="mr-2 h-4 w-4" />}
                     {isVoiding ? 'Voiding...' : 'Void Transaction'}
                 </Button>
@@ -175,7 +196,7 @@ function TransactionPickRow({ sale, onPick, accent = 'primary', isHighlighted = 
         >
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                    <span className="truncate font-mono text-sm font-semibold">{sale.orderNumber ? sale.orderNumber : sale.id?.substring(0, 7)}</span>
+                    <span className="truncate font-mono text-sm font-semibold">{sale.siNumber ? formatSINumber(sale.siNumber) : (sale.orderNumber ? sale.orderNumber : sale.id?.substring(0, 7))}</span>
                     <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{sale.paymentMethod || '-'}</span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -209,6 +230,8 @@ export function VoidSalesDialog(props: VoidSalesDialogProps) {
     isRecentLoading,
     isVoiding,
     voidError,
+    voidReason,
+    setVoidReason,
     handlePickSale,
     handleAuthSuccess,
     handleAuthClose,
@@ -261,6 +284,8 @@ export function VoidSalesDialog(props: VoidSalesDialogProps) {
             {step === 'select_items' && selectedSale ? (
                  <ConfirmVoidView
                     sale={selectedSale}
+                    voidReason={voidReason}
+                    onVoidReasonChange={setVoidReason}
                     onVoidTransaction={handleVoidTransaction}
                     onBack={handleBackToSearch}
                     isVoiding={isVoiding}
@@ -275,7 +300,7 @@ export function VoidSalesDialog(props: VoidSalesDialogProps) {
                             </div>
                             <div>
                                 <SheetTitle>Void Transaction</SheetTitle>
-                                <SheetDescription>Search by SO number or pick a recent transaction</SheetDescription>
+                                <SheetDescription>Search by SI number or pick a recent transaction</SheetDescription>
                             </div>
                         </div>
                     </SheetHeader>

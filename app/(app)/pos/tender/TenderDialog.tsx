@@ -512,7 +512,7 @@ export function TenderDialog(props: TenderDialogProps) {
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                                 e.preventDefault();
-                                                handleConfirmPayment();
+                                                if (!isProcessing) handleConfirmPayment();
                                             }
                                         }}
                                     />

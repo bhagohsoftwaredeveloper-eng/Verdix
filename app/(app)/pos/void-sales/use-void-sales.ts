@@ -26,11 +26,12 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
   const [isRecentLoading, setIsRecentLoading] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
   const [voidError, setVoidError] = useState('');
+  const [voidReason, setVoidReason] = useState('');
   const authSucceededRef = useRef(false);
   const printMode = (posSettings?.printMode && posSettings.printMode !== 'none'
     ? posSettings.printMode
     : 'browser') as 'browser' | 'escpos' | 'usb' | 'native' | 'epson';
-  const { print } = usePrinter(printMode, posSettings?.nativePrinterName);
+  const { print, connect, isConnected } = usePrinter(printMode, posSettings?.nativePrinterName);
 
   useEffect(() => {
     if (isOpen) {
@@ -41,12 +42,24 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
       setDateTo('');
       setSearchError('');
       setSelectedSale(null);
+      setVoidReason('');
 
       fetch(getApiUrl(`/pos-settings?_t=${Date.now()}`), { cache: 'no-store' })
         .then(res => res.json())
         .then(result => {
           if (result.success) {
-            const settings = result.data;
+            // Apply the same localStorage overrides the main POS uses — the
+            // real printer mode/name are stored per-terminal in localStorage,
+            // not in the server's pos_settings (which defaults to 'browser').
+            const localPrintMode = localStorage.getItem('pos_printer_mode');
+            const localPrinterName = localStorage.getItem('pos_printer_name');
+            const localPaperSize = localStorage.getItem('pos_paper_size');
+            const settings = {
+              ...result.data,
+              ...(localPrintMode ? { printMode: localPrintMode } : {}),
+              ...(localPrinterName ? { nativePrinterName: localPrinterName } : {}),
+              ...(localPaperSize ? { paperSize: localPaperSize } : {}),
+            };
             setPosSettings(settings);
             if (settings.enableVoidReturnAuth) {
               setStep('auth');
@@ -100,17 +113,25 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
   }, []);
 
   const handlePrintVoid = useCallback(async (saleData: any) => {
-    try {
-      if (!posSettings || posSettings.printMode === 'none') return;
+    if (!posSettings || posSettings.printMode === 'none') return;
 
+    // Force a connect for hardware modes before printing. The local isConnected
+    // flag can be stale — the native spooler connection lives in the Electron
+    // main process — so unconditionally (re)connecting is what makes the void
+    // slip actually spool. connect() is idempotent.
+    if (printMode !== 'browser') {
+      const connected = await connect();
+      if (!connected) return;
+    }
+
+    try {
       const generator = new VoidSlipGenerator();
       const buffer = generator.generateVoidSlip(saleData, posSettings as any);
-
       await print(buffer);
     } catch (error) {
       console.error('Error printing void slip:', error);
     }
-  }, [posSettings, print]);
+  }, [posSettings, printMode, connect, print]);
 
   const handleVoidTransaction = useCallback(async () => {
     if (!selectedSale) return;
@@ -119,15 +140,16 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
     setVoidError('');
 
     try {
+      const trimmedReason = voidReason.trim();
       const response = await fetch(getApiUrl('/pos/void-transaction'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saleId: selectedSale.id }),
+        body: JSON.stringify({ saleId: selectedSale.id, voidReason: trimmedReason }),
       });
       const result = await response.json();
 
       if (result.success) {
-        await handlePrintVoid(selectedSale);
+        await handlePrintVoid({ ...selectedSale, voidReason: trimmedReason });
 
         setTimeout(() => {
           onOpenChange(false);
@@ -141,11 +163,12 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
     } finally {
       setIsVoiding(false);
     }
-  }, [selectedSale, handlePrintVoid, onOpenChange]);
+  }, [selectedSale, voidReason, handlePrintVoid, onOpenChange]);
 
   const handleBackToSearch = useCallback(() => {
     setStep('input_so');
     setSelectedSale(null);
+    setVoidReason('');
     setSearchText('');
     setDateFrom('');
     setDateTo('');
@@ -169,6 +192,8 @@ export function useVoidSales({ isOpen, onOpenChange }: Options) {
     isRecentLoading,
     isVoiding,
     voidError,
+    voidReason,
+    setVoidReason,
     handlePickSale,
     handleAuthSuccess,
     handleAuthClose,

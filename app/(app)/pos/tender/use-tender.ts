@@ -56,6 +56,11 @@ export function useTender({
   const [referenceInput, setReferenceInput] = useState('');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  // Synchronous re-entry guard. isProcessing (state) updates a render later, so a
+  // fast double-trigger (button click + Enter, or overlapping keydown handlers)
+  // can fire two checkout POSTs — each consuming an SI number — before the
+  // disabled state applies. This ref blocks the second call immediately.
+  const isSubmittingRef = useRef(false);
   const [view, setView] = useState<ViewType>('tender');
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
   const [pointsToRedeemInput, setPointsToRedeemInput] = useState<string>('');
@@ -213,6 +218,11 @@ export function useTender({
       return;
     }
 
+    // Block a concurrent second submission before React re-renders the disabled
+    // state. Without this, a double-trigger fires two checkouts → two SI numbers.
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     setIsProcessing(true);
 
     try {
@@ -357,6 +367,7 @@ export function useTender({
       }
     } finally {
       setIsProcessing(false);
+      isSubmittingRef.current = false;
     }
   }, [pointsToRedeemValue, customer, pointsRate, referenceInput, isReferenceRequired, amountTenderedNum, isChargePayment, payments, selectedMethod, balanceRemaining, totalDue, items, change, pointsToRedeemCount, terminalMin, terminalSerialNumber, terminalName, isTrainingMode, settings, currentUser, shiftId, terminalId, toast, onCheckoutComplete]);
 

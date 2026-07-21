@@ -338,13 +338,13 @@ export class ReceiptGenerator {
         // Matches: text-center mt-6
         enc.newline();
         enc.align('center');
-        enc.line('Shop smart, save more! Thank you for visiting VENDIX.');
+        enc.line(`Shop smart, save more! Thank you for visiting ${bizName}.`);
         if (sale.isTrainingMode) {
             enc.newline();
-            enc.line('THIS IS NOT A CASH SALE/');
-            enc.line('OFFICIAL RECEIPT.');
+            enc.line('THIS IS NOT A SALES INVOICE');
+            enc.line('RECEIPT.');
             enc.line('PLEASE REQUEST FROM SELLER');
-            enc.line('YOUR CASH SALE/');
+            enc.line('YOUR SALES INVOICE/');
             enc.line('OFFICIAL RECEIPT');
         }
 

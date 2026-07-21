@@ -95,7 +95,7 @@ export function useReturnsData() {
       );
       yPos += 10;
 
-      const headers = ['Orig SI No.', 'Return SI No.', 'Trans Date', 'Sold By', 'Return Date', 'Returned By', 'Override By', 'Sales Amt', 'Cost', 'Profit', 'Vatable', 'VAT', 'Note'];
+      const headers = ['MC No.', 'Orig SI No.', 'Trans Date', 'Sold By', 'Return Date', 'Returned By', 'Override By', 'Sales Amt', 'Cost', 'Profit', 'Vatable', 'VAT', 'Note'];
       const colWidths = [20, 20, 22, 18, 22, 18, 18, 18, 16, 16, 18, 14, 30];
 
       const drawHeader = () => {
@@ -131,8 +131,8 @@ export function useReturnsData() {
 
         let xPos = margin;
         const rowData = [
-          record.origSiNo,
           record.currSiNo,
+          record.origSiNo,
           record.transDate ? format(new Date(record.transDate), 'MMM dd, yyyy') : '-',
           record.soldByCashier,
           record.returnedDate ? format(new Date(record.returnedDate), 'MMM dd, yyyy hh:mma') : '-',

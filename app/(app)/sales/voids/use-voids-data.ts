@@ -110,7 +110,7 @@ export function useVoidsData() {
 
         let xPos = margin;
         const rowData = [
-          `${record.refNo}\n${record.siNo}`,
+          record.refNo,
           record.transDate ? format(new Date(record.transDate), 'MMM dd, yyyy') : '-',
           record.customer,
           record.cashier,

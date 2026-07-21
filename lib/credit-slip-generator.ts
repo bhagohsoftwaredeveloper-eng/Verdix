@@ -1,11 +1,14 @@
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import { format } from 'date-fns';
 import { SystemSettings } from './types';
+import { formatSINumber } from './si-number';
 
 const DEFAULT_COLS = 32;
 
 export interface CreditSlipData {
     creditSlipId: string;
+    /** SI number of the ORIGINAL sale being returned — what the customer's receipt shows. */
+    originalSiNumber?: string | number | null;
     originalSoNumber: string;
     customerName: string;
     date: string;
@@ -54,13 +57,14 @@ export class CreditSlipGenerator {
             width: COLS,
         });
 
-        const { 
+        const {
             creditSlipId,
-            originalSoNumber, 
-            customerName, 
-            date, 
-            cashierName, 
-            items, 
+            originalSiNumber,
+            originalSoNumber,
+            customerName,
+            date,
+            cashierName,
+            items,
             totalAmount
         } = data;
         
@@ -87,9 +91,9 @@ export class CreditSlipGenerator {
 
         // ─── SLIP HEADER ───────────────────────────────────────────
         enc.raw([0x1b, 0x61, 0x31]).line('MERCHANDISE CREDIT SLIP').raw([0x1b, 0x61, 0x30]);
-        const formattedId = String(creditSlipId || '000000').padStart(6, '0');
-        enc.line(`SI NO.: ${formattedId}`);
-        enc.line(`Ref SO#: ${originalSoNumber}`);
+        // SI NO. must match the original receipt's SI number, not the internal credit-slip ID.
+        enc.line(`SI NO.: ${formatSINumber(originalSiNumber || originalSoNumber)}`);
+        enc.line(`Credit Slip#: ${creditSlipId}`);
         enc.line(`Cust: ${customerName}`);
         enc.line(`Cashier: ${cashierName}`);
         if (data.expiryDate) {

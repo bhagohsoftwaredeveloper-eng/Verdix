@@ -58,10 +58,7 @@ export function useVoidsTable(records: VoidRecord[]) {
           </button>
         ),
         cell: ({ row }) => (
-          <div>
-            <div className="font-medium text-primary leading-tight">{row.original.refNo}</div>
-            <div className="text-[10px] text-muted-foreground">{row.original.siNo}</div>
-          </div>
+          <div className="font-medium text-primary leading-tight">{row.original.refNo}</div>
         ),
       },
       {

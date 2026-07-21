@@ -160,8 +160,8 @@ export default function ReturnedSalesPage() {
         { label: 'VAT Amount', value: formatCurrency(totals.vatAmount) },
       ],
       columns: [
+        { header: 'MC No.', width: 20, cell: (r) => r.currSiNo },
         { header: 'Orig SI No.', width: 20, cell: (r) => r.origSiNo },
-        { header: 'Return SI No.', width: 20, cell: (r) => r.currSiNo },
         { header: 'Trans Date', width: 22, cell: (r) => r.transDate ? format(new Date(r.transDate), 'MM/dd/yy hh:mma') : '-' },
         { header: 'Sold By', width: 18, cell: (r) => r.soldByCashier || '-' },
         { header: 'Return Date', width: 22, cell: (r) => r.returnedDate ? format(new Date(r.returnedDate), 'MM/dd/yy hh:mma') : '-' },
@@ -403,8 +403,8 @@ export default function ReturnedSalesPage() {
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-base text-primary">{record.origSiNo}</CardTitle>
-                          <CardDescription className="text-xs">{record.currSiNo}</CardDescription>
+                          <CardTitle className="text-base text-primary">{record.currSiNo}</CardTitle>
+                          <CardDescription className="text-xs">Orig SI: {record.origSiNo}</CardDescription>
                         </div>
                         <Badge variant="outline" className="border-green-600 text-green-600">Returned</Badge>
                       </div>
@@ -489,8 +489,8 @@ export default function ReturnedSalesPage() {
           >
             <TableHeader className="bg-muted">
               <TableRow className="bg-muted hover:bg-muted">
-                <TableHead className="py-2 px-3">Orig SI No.</TableHead>
-                <TableHead className="py-2 px-2">Return SI No.</TableHead>
+                <TableHead className="py-2 px-3">MC No.</TableHead>
+                <TableHead className="py-2 px-2">Orig SI No.</TableHead>
                 <TableHead className="py-2 px-2">Trans Date</TableHead>
                 <TableHead className="py-2 px-2">Sold By</TableHead>
                 <TableHead className="py-2 px-2">Return Date</TableHead>
@@ -515,8 +515,8 @@ export default function ReturnedSalesPage() {
                     )}
                     onClick={() => setSelectedRow(index)}
                   >
-                    <TableCell className="py-2 px-3 font-medium text-primary">{record.origSiNo}</TableCell>
-                    <TableCell className="py-2 px-2">{record.currSiNo}</TableCell>
+                    <TableCell className="py-2 px-3 font-medium text-primary">{record.currSiNo}</TableCell>
+                    <TableCell className="py-2 px-2">{record.origSiNo}</TableCell>
                     <TableCell className="py-2 px-2">
                       {record.transDate ? format(new Date(record.transDate), 'MM/dd/yy hh:mma') : '-'}
                     </TableCell>

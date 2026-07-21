@@ -214,6 +214,7 @@ export function useReturnSales({
       const generator = new CreditSlipGenerator();
       const slipData: CreditSlipData = {
         creditSlipId,
+        originalSiNumber: selectedSale.siNumber,
         originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
         customerName: selectedSale.customer?.name || 'Walk-in Customer',
         date: now.toISOString(),

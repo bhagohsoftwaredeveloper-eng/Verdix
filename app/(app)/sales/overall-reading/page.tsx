@@ -18,16 +18,16 @@ export default function OverallReadingPage() {
   const p = useOverallReadingPage();
 
   return (
-    <div className="space-y-6 p-6 bg-slate-50/50 min-h-full rounded-xl">
+    <div className="space-y-6 p-6 bg-muted/30 min-h-full rounded-xl">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-xl shadow-sm border border-border">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Overall Reading</h1>
-          <p className="text-sm text-slate-500 mt-1">View overall reading per completed shift</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Overall Reading</h1>
+          <p className="text-sm text-muted-foreground mt-1">View overall reading per completed shift</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+          <div className="flex items-center gap-2 bg-muted/50 p-1.5 rounded-lg border border-border">
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="ghost" className={cn('w-[240px] justify-start text-left font-normal hover:bg-transparent', !p.dateRange && 'text-muted-foreground')}>
@@ -86,12 +86,12 @@ export default function OverallReadingPage() {
               />
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-[400px] bg-white rounded-xl shadow-sm border border-slate-100 text-slate-400">
-              <div className="bg-slate-50 p-4 rounded-full mb-4">
-                <FileText size={40} className="text-slate-300" />
+            <div className="flex flex-col items-center justify-center h-[400px] bg-card rounded-xl shadow-sm border border-border text-muted-foreground">
+              <div className="bg-muted p-4 rounded-full mb-4">
+                <FileText size={40} className="text-muted-foreground/60" />
               </div>
-              <p className="text-lg font-medium text-slate-600">No Shift Selected</p>
-              <p className="text-sm text-slate-400 mt-1">Select a shift from the list to view its overall reading.</p>
+              <p className="text-lg font-medium text-foreground">No Shift Selected</p>
+              <p className="text-sm text-muted-foreground mt-1">Select a shift from the list to view its overall reading.</p>
             </div>
           )}
         </div>

@@ -15,11 +15,11 @@ interface Props {
 
 export function OverallReadingActions({ printerFormat, setPrinterFormat, setModalMode, setIsPreviewOpen, handleExportPDF }: Props) {
   return (
-    <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+    <div className="flex justify-between items-center bg-card p-4 rounded-xl shadow-sm border border-border">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-slate-500">Print Format:</span>
+        <span className="text-xs font-medium text-muted-foreground">Print Format:</span>
         <Select value={printerFormat} onValueChange={(value) => setPrinterFormat(value as PrinterFormat)}>
-          <SelectTrigger className="w-[100px] h-8 text-xs bg-slate-50 border-none">
+          <SelectTrigger className="w-[100px] h-8 text-xs bg-muted border-none">
             <SelectValue placeholder="Format" />
           </SelectTrigger>
           <SelectContent>
@@ -30,12 +30,12 @@ export function OverallReadingActions({ printerFormat, setPrinterFormat, setModa
         </Select>
       </div>
       <div className="flex gap-3">
-        <Button variant="outline" size="sm" onClick={() => { setModalMode('view'); setIsPreviewOpen(true); }} className="gap-2 border-slate-200 hover:bg-slate-50">
-          <Eye className="h-4 w-4 text-slate-600" />
+        <Button variant="outline" size="sm" onClick={() => { setModalMode('view'); setIsPreviewOpen(true); }} className="gap-2">
+          <Eye className="h-4 w-4 text-muted-foreground" />
           View Receipt
         </Button>
-        <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-2 border-slate-200 hover:bg-slate-50">
-          <FileText className="h-4 w-4 text-slate-600" />
+        <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
           Export PDF
         </Button>
         <Button size="sm" onClick={() => { setModalMode('print'); setIsPreviewOpen(true); }} className="gap-2 bg-primary hover:bg-primary/90 text-white">

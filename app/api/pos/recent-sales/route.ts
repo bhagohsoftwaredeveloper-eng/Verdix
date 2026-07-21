@@ -99,11 +99,19 @@ export async function GET(request: NextRequest) {
     // 2. Fetch items for each sale
     const salesWithItems = await Promise.all(
       sales.map(async (sale: any) => {
+        // Returns are stored as negative-quantity sale_items on the same sale.
+        // Split the sums so a fully-returned product stays visible (marked with its
+        // returned qty) instead of vanishing when original + return net to zero:
+        //   original_quantity  = sum of the positive (sold) rows
+        //   returned_quantity  = abs sum of the negative (returned) rows
+        //   quantity           = remaining returnable (original - returned)
         const itemsQuery = `
           SELECT
             MIN(si.id) as id,
             si.product_id,
             si.product_name,
+            SUM(GREATEST(si.quantity, 0)) as original_quantity,
+            ABS(SUM(LEAST(si.quantity, 0))) as returned_quantity,
             SUM(si.quantity) as quantity,
             COALESCE(MIN(pti.unit_price), si.price) as original_price,
             p.sku,
@@ -116,7 +124,7 @@ export async function GET(request: NextRequest) {
           LEFT JOIN pos_transaction_items pti ON si.id = pti.sale_item_id
           WHERE si.sale_id = ?
           GROUP BY si.product_id, si.product_name, si.price, p.sku, p.barcode, p.unit_of_measure, p.vat_status
-          HAVING SUM(si.quantity) > 0
+          HAVING SUM(GREATEST(si.quantity, 0)) > 0
         `;
         const items = await query(itemsQuery, [sale.id]);
 
@@ -178,7 +186,11 @@ export async function GET(request: NextRequest) {
                 return 'VAT';
               })()
             },
+            // quantity = remaining returnable (net). originalQuantity/returnedQuantity
+            // let the UI keep fully-returned lines visible and show what was returned.
             quantity: parseFloat(item.quantity),
+            originalQuantity: parseFloat(item.original_quantity ?? item.quantity),
+            returnedQuantity: parseFloat(item.returned_quantity ?? 0),
             price: parseFloat(item.original_price || item.price),
             discount: parseFloat(item.discount_amount || 0)
           })),

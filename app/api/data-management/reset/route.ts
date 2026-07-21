@@ -50,6 +50,12 @@ export async function POST(request: NextRequest) {
           await connection.query("DELETE FROM approval_queue WHERE transaction_type IN ('SALES_ORDER', 'SALES_INVOICE', 'BAD_ORDER')");
           await connection.query("DELETE FROM approval_history WHERE approval_queue_id NOT IN (SELECT id FROM approval_queue)");
 
+          // With all sales gone, restart invoice/receipt numbering so the next
+          // sale is SI 000001 (si_number '000000' — getNextSINumber increments
+          // then reads). Terminal OR and X/Z counters reset too.
+          await connection.query("UPDATE transaction_references SET si_number = '000000' WHERE id = 1");
+          await connection.query('UPDATE pos_terminals SET or_next_reference = "000001", x_counter = 0, z_counter = 0');
+
         } finally {
           await connection.query('SET FOREIGN_KEY_CHECKS = 1');
         }
@@ -60,13 +66,15 @@ export async function POST(request: NextRequest) {
     } else if (action === 'reset_references') {
       await withTransaction(async (connection) => {
          await connection.query('TRUNCATE TABLE transaction_references');
-         
+
+         // si_number starts at '000000' — getNextSINumber increments-then-reads,
+         // so the first invoice after a reset is 000001.
          await connection.query(`
             INSERT INTO transaction_references (
               sales_order, purchase_order, sales_delivery, payment_to_supplier,
               sales_invoice, customer_payment, delivery_receipt, stock_adjustment, sales_hold,
-              receipt_number
-            ) VALUES ('1000', '1000', '1000', '1000', '1000', '1000', '1000', '1000', '1000', '00000001')
+              receipt_number, si_number
+            ) VALUES ('1000', '1000', '1000', '1000', '1000', '1000', '1000', '1000', '1000', '00000001', '000000')
          `);
 
          // Also reset terminal counters if possible
@@ -275,14 +283,14 @@ export async function POST(request: NextRequest) {
             console.warn("Could not identify Admin roles, using username fallback to preserve 'admin' account.");
           }
 
-          // Reset references
+          // Reset references — si_number '000000' so the first invoice is 000001.
           await connection.query('TRUNCATE TABLE transaction_references');
           await connection.query(`
             INSERT INTO transaction_references (
               sales_order, purchase_order, sales_delivery, payment_to_supplier,
               sales_invoice, customer_payment, delivery_receipt, stock_adjustment, sales_hold,
-              receipt_number
-            ) VALUES ('1000', '1000', '1000', '1000', '1000', '1000', '1000', '1000', '1000', '00000001')
+              receipt_number, si_number
+            ) VALUES ('1000', '1000', '1000', '1000', '1000', '1000', '1000', '1000', '1000', '00000001', '000000')
           `);
 
         } finally {
