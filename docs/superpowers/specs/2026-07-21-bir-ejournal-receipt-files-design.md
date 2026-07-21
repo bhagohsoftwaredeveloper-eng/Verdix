@@ -15,13 +15,19 @@ resemble the originally issued documents.
 
 1. Produce **5 separate `.txt` files per document type**, each a **text copy of the
    receipts/slips** (receipt-style layout, not a report table).
-2. **Auto-save** the files whenever a **Z-Reading** (end-of-day) is generated.
+2. **Auto-save** the files whenever any of these events occur: **Void**, **Merchandise
+   Credit/Return**, **X-Reading**, or **Z-Reading**. Every trigger regenerates **all 5
+   files** for that date/terminal from current DB state (one shared code path, always
+   consistent). Plain sales checkouts do **not** trigger a save on their own — the files
+   are refreshed at the next void/return/X/Z event and always reflect current data.
 3. Keep the **manual download** working, using the **same** generator/format.
 4. Files retained on disk, organized per date and per terminal (BIR 10-year retention).
 
 ## Non-Goals
 
-- No scheduled/cron auto-save (Z-reading is the trigger).
+- No scheduled/cron auto-save (the save is event-driven: void / return / X / Z).
+- No per-sale save trigger (would write on every checkout; refresh happens at the next
+  void/return/X/Z event instead).
 - No changes to the existing ESC/POS printing path (thermal receipts unchanged).
 - No new Electron preload bridge — the Next.js server process writes files directly.
 
@@ -127,12 +133,24 @@ Uses Node `fs/promises` and `path`. Server-only module (never imported by client
 
 ## Triggers
 
-### Auto-save on Z-Reading
+### Auto-save on business events
 
-`app/api/sales/z-reading/route.ts` — after a Z is finalized and persisted, call
-`saveEJournalFiles(reportDate, terminalId)`. Wrapped in try/catch: a file-write failure
-is logged but does **not** fail the Z-reading (BIR Z must still succeed; the file save is
-best-effort and re-runnable via the manual trigger).
+Every trigger regenerates all 5 files for the affected date/terminal from current DB
+state. Each call is wrapped in try/catch: a file-write failure is **logged but never
+fails the underlying operation** (the void/return/reading must still succeed; the file
+save is best-effort and re-runnable via any later trigger or the manual save).
+
+Hook points, all calling the same `saveEJournalFiles(date, terminalId)`:
+
+- **Void** — `app/api/pos/void-transaction/route.ts`, after the sale is marked Voided.
+- **Merchandise Credit / Return** — `app/api/sales/returns/route.ts`, after the return
+  is recorded.
+- **X-Reading** — `app/api/sales/x-reading/route.ts`, after the X is generated.
+- **Z-Reading** — `app/api/sales/z-reading/route.ts`, after the Z is finalized.
+
+`date`/`terminalId` come from the triggering record (e.g. the sale's date + terminal, or
+the reading's report_date + terminal). Because every run rebuilds all 5 files from the
+DB, triggers are idempotent and order-independent — the files always match current state.
 
 ### Manual save/download
 
