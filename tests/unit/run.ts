@@ -19,3 +19,4 @@ import './product-tree.test';
 import './ejournal-text-format.test';
 import './ejournal-text-receipt.test';
 import './ejournal-data.test';
+import './ejournal-writer.test';
