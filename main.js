@@ -401,7 +401,12 @@ app.whenReady().then(async () => {
       // object, so closing the app no longer kills the Next.js server.
       serverProcess = spawn(nodeBin, ['server.js'], {
         cwd: appRoot,
-        env: { ...process.env, ...envConfig },
+        env: {
+          ...process.env,
+          ...envConfig,
+          // Where the Next.js server writes BIR e-journal .txt files (per date/terminal).
+          VERDIX_EJOURNAL_DIR: path.join(app.getPath('userData'), 'EJournals'),
+        },
         detached: true,
         windowsHide: true,
         stdio: ['ignore', outFd, errFd],
