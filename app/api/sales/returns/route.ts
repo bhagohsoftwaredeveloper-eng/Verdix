@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, withTransaction } from '@/lib/mysql';
+import { query, withTransaction, getNextMCNumber } from '@/lib/mysql';
 import { addFamilyStock, findUltimateRoot } from '@/lib/family-sync';
 import { saveEJournalFiles } from '@/lib/ejournal/ejournal-writer';
 
@@ -28,20 +28,26 @@ export async function POST(request: NextRequest) {
       }
 
       const posTransId = `RTN-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+      // Allocate the Merchandise Credit number on THIS connection so it rolls
+      // back with the transaction — a gap here would not match the paper slips.
+      const mcNumber = await getNextMCNumber(connection);
+
       // 1. Insert into pos_transactions
       const insertPosTransSql = `
         INSERT INTO pos_transactions (
-          id, sale_id, user_id, terminal_id, transaction_type,
-          subtotal, tax_amount, discount_amount, total_amount, payment_method, 
+          id, sale_id, user_id, terminal_id, transaction_type, mc_number,
+          subtotal, tax_amount, discount_amount, total_amount, payment_method,
           payment_status, notes, transaction_time, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'return', ?, 0, 0, ?, 'Return', 'completed', ?, NOW(), NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, 'return', ?, ?, 0, 0, ?, 'Return', 'completed', ?, NOW(), NOW(), NOW())
       `;
-      
+
       await connection.query(insertPosTransSql, [
         posTransId,
         saleId,
         finalUserId,
         terminalId || null,
+        mcNumber,
         -totalAmount, // Negative since it's a return/outflow of money from business
         -totalAmount,
         reason || 'Merchandise Credit'
@@ -128,7 +134,7 @@ export async function POST(request: NextRequest) {
       const d = meta?.[0]?.d ? String(meta[0].d) : null;
       const t = meta?.[0]?.t ?? 'all';
 
-      return { posTransId, d, t };
+      return { posTransId, mcNumber, d, t };
     });
 
     if (result.d) {
@@ -137,7 +143,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { posTransId: result.posTransId },
+      data: { posTransId: result.posTransId, mcNumber: result.mcNumber },
       message: 'Return processed successfully'
     });
 

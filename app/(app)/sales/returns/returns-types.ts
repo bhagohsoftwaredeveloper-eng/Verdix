@@ -1,4 +1,7 @@
 export interface ReturnRecord {
+  /** Merchandise Credit number (e.g. "MC-000001"). Empty for returns issued
+   *  before MC numbering existed — those were never assigned one. */
+  mcNo: string;
   origSiNo: string;
   currSiNo: string;
   transDate: string;

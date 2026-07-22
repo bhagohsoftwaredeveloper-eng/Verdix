@@ -36,6 +36,8 @@ import { getApiUrl } from '@/lib/api-config';
 import { exportReportPdf } from '@/lib/report-print';
 
 interface ReturnRecord {
+  /** Merchandise Credit number. Empty on returns predating MC numbering. */
+  mcNo: string;
   origSiNo: string;
   currSiNo: string;
   transDate: string;
@@ -68,6 +70,7 @@ export default function ReturnedSalesPage() {
     if (!searchTerm.trim()) return true;
     const search = searchTerm.toLowerCase();
     return (
+      String(record.mcNo || '').toLowerCase().includes(search) ||
       String(record.origSiNo || '').toLowerCase().includes(search) ||
       String(record.currSiNo || '').toLowerCase().includes(search) ||
       String(record.soldByCashier || '').toLowerCase().includes(search) ||
@@ -119,6 +122,7 @@ export default function ReturnedSalesPage() {
             const origSiNo = tx.originalSINumber ? String(tx.originalSINumber).padStart(6, '0') : (tx.originalOrderNumber ? String(tx.originalOrderNumber).padStart(6, '0') : 'N/A');
             const currSiNo = tx.siNumber ? String(tx.siNumber).padStart(6, '0') : (tx.orderNumber ? String(tx.orderNumber).padStart(6, '0') : 'N/A');
             return {
+              mcNo: tx.mcNumber || '',
               origSiNo,
               currSiNo,
               transDate: tx.originalTransactionTime || '',
@@ -160,7 +164,7 @@ export default function ReturnedSalesPage() {
         { label: 'VAT Amount', value: formatCurrency(totals.vatAmount) },
       ],
       columns: [
-        { header: 'MC No.', width: 20, cell: (r) => r.currSiNo },
+        { header: 'MC No.', width: 24, cell: (r) => r.mcNo || '—' },
         { header: 'Orig SI No.', width: 20, cell: (r) => r.origSiNo },
         { header: 'Trans Date', width: 22, cell: (r) => r.transDate ? format(new Date(r.transDate), 'MM/dd/yy hh:mma') : '-' },
         { header: 'Sold By', width: 18, cell: (r) => r.soldByCashier || '-' },
@@ -403,7 +407,7 @@ export default function ReturnedSalesPage() {
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle className="text-base text-primary">{record.currSiNo}</CardTitle>
+                          <CardTitle className="text-base text-primary">{record.mcNo || '—'}</CardTitle>
                           <CardDescription className="text-xs">Orig SI: {record.origSiNo}</CardDescription>
                         </div>
                         <Badge variant="outline" className="border-green-600 text-green-600">Returned</Badge>
@@ -515,7 +519,9 @@ export default function ReturnedSalesPage() {
                     )}
                     onClick={() => setSelectedRow(index)}
                   >
-                    <TableCell className="py-2 px-3 font-medium text-primary">{record.currSiNo}</TableCell>
+                    <TableCell className="py-2 px-3 font-medium text-primary">
+                      {record.mcNo || <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell className="py-2 px-2">{record.origSiNo}</TableCell>
                     <TableCell className="py-2 px-2">
                       {record.transDate ? format(new Date(record.transDate), 'MM/dd/yy hh:mma') : '-'}

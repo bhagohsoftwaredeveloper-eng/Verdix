@@ -257,6 +257,33 @@ export async function getNextSINumber(connection?: mysql.PoolConnection): Promis
 }
 
 /**
+ * Atomically gets and increments the next MC Number (Merchandise Credit).
+ *
+ * Must be called with the SAME connection as the return's INSERT so the number
+ * is rolled back with the transaction if the return fails — otherwise the
+ * sequence gaps.
+ *
+ * @returns The next MC number, formatted (e.g. "MC-000001")
+ */
+export async function getNextMCNumber(connection?: mysql.PoolConnection): Promise<string> {
+  return await onConnection(connection, async (connection) => {
+    // 1. Atomically increment the numeric counter.
+    await connection.query(
+      `UPDATE transaction_references SET mc_number = LPAD(IF(mc_number IS NULL OR mc_number = '', 0, CAST(mc_number AS UNSIGNED)) + 1, 6, '0') WHERE id = 1`
+    );
+
+    // 2. Read it back.
+    const [rows]: any = await connection.query(
+      `SELECT mc_number as next_val FROM transaction_references WHERE id = 1`
+    );
+    if (!rows || rows.length === 0) {
+      throw new Error('Failed to fetch next MC number');
+    }
+    return `MC-${String(rows[0].next_val)}`;
+  });
+}
+
+/**
  * Close the connection pool
  */
 export async function closePool() {

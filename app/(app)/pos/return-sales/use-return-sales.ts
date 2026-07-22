@@ -39,6 +39,9 @@ export function useReturnSales({
   const [returnedItems, setReturnedItems] = useState<SaleItem[]>([]);
   const [posSettings, setPosSettings] = useState<any>(null);
   const [returnedTotal, setReturnedTotal] = useState(0);
+  // MC number issued by the server for this return. The slip must print the
+  // stored number, never a locally-generated one, so paper matches the report.
+  const [mcNumber, setMcNumber] = useState('');
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isRecentLoading, setIsRecentLoading] = useState(false);
   const { isPrinting, isConnected, connect, print } = usePrinter(printMode);
@@ -73,6 +76,7 @@ export function useReturnSales({
       setSelectedSale(null);
       setReturnedTotal(0);
       setReturnedItems([]);
+      setMcNumber('');
 
       fetch(getApiUrl(`/pos-settings?_t=${Date.now()}`), { cache: 'no-store' })
         .then(res => res.json())
@@ -163,6 +167,7 @@ export function useReturnSales({
         if (result.success) {
           setReturnedTotal(totalAmount);
           setReturnedItems(items);
+          setMcNumber(result.data?.mcNumber || '');
           setStep('success');
         } else {
           const message = result.error || 'Failed to process return';
@@ -198,7 +203,11 @@ export function useReturnSales({
     const now = new Date();
     const expiryDate = new Date(now);
     expiryDate.setDate(expiryDate.getDate() + 30);
-    const creditSlipId = `MC-${selectedSale.orderNumber || selectedSale.id.slice(-6)}-${format(now, 'yyMMddHHmm')}`.toUpperCase();
+    // Use the server-issued MC number so a reprint always shows the SAME number
+    // as the report. Falls back to the legacy timestamp format only if the
+    // return predates MC numbering or the server did not return one.
+    const creditSlipId = mcNumber
+      || `MC-${selectedSale.orderNumber || selectedSale.id.slice(-6)}-${format(now, 'yyMMddHHmm')}`.toUpperCase();
 
     if (printMode === 'browser') {
       handleBrowserPrint();
@@ -249,7 +258,7 @@ export function useReturnSales({
       console.error("Print error", err);
       toast({ title: "Print Failed", description: "Could not send data to printer.", variant: "destructive" });
     }
-  }, [selectedSale, returnedItems, returnedTotal, printMode, isConnected, connect, print, posSettings, currentUser, handleBrowserPrint, toast]);
+  }, [selectedSale, returnedItems, returnedTotal, mcNumber, printMode, isConnected, connect, print, posSettings, currentUser, handleBrowserPrint, toast]);
 
   return {
     step,
@@ -265,6 +274,7 @@ export function useReturnSales({
     selectedSale,
     returnedItems,
     returnedTotal,
+    mcNumber,
     recentSales,
     isRecentLoading,
     posSettings,

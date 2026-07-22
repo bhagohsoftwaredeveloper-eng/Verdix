@@ -26,14 +26,17 @@ export function useReturnsTable(records: ReturnRecord[]) {
   const columns = useMemo<ColumnDef<ReturnRecord>[]>(
     () => [
       {
-        accessorKey: 'currSiNo',
+        accessorKey: 'mcNo',
         header: ({ column }) => (
           <button className="flex items-center gap-1" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
             MC No.
             {column.getIsSorted() === 'asc' ? <ArrowUp className="h-3 w-3" /> : column.getIsSorted() === 'desc' ? <ArrowDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 opacity-50" />}
           </button>
         ),
-        cell: ({ row }) => <span className="font-medium text-primary">{row.original.currSiNo}</span>,
+        cell: ({ row }) =>
+          row.original.mcNo
+            ? <span className="font-medium text-primary">{row.original.mcNo}</span>
+            : <span className="text-muted-foreground">—</span>,
       },
       { accessorKey: 'origSiNo', header: 'Orig SI No.' },
       {

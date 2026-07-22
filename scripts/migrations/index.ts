@@ -96,6 +96,7 @@ import './095_dedupe_external_api_logs';
 import './096_create_membership_payments';
 import './097_add_product_approval_setting';
 import './098_fix_si_number_initial_value';
+import './099_add_mc_number';
 
 // Import runner functions
 import { migrateUp, migrateDown } from './runner';

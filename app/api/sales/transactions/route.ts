@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         pt.sale_id,
         pt.order_number,
         pt.si_number,
+        pt.mc_number,
         pt.transaction_type,
         pt.subtotal,
         pt.discount_amount,
@@ -202,6 +203,9 @@ export async function GET(request: NextRequest) {
         reference: row.reference,
         transactionSource: row.transaction_source || 'POS',
         siNumber: siNumber, // Primary field: SI Number (consolidated)
+        // Merchandise Credit number — only set on returns issued after MC
+        // numbering was added. NULL on historical returns (see migration 099).
+        mcNumber: row.mc_number || null,
         orderNumber: row.order_number, // Legacy field (kept for 90 days)
         receiptNo: row.receipt_number, // Legacy field (kept for 90 days)
         posTransactionId: row.pos_transaction_id,

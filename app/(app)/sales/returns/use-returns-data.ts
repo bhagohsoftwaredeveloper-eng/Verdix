@@ -34,6 +34,7 @@ export function useReturnsData() {
             const origSiNo = tx.originalSINumber ? String(tx.originalSINumber).padStart(6, '0') : (tx.originalOrderNumber ? String(tx.originalOrderNumber).padStart(6, '0') : 'N/A');
             const currSiNo = tx.siNumber ? String(tx.siNumber).padStart(6, '0') : (tx.orderNumber ? String(tx.orderNumber).padStart(6, '0') : 'N/A');
             return {
+              mcNo: tx.mcNumber || '',
               origSiNo,
               currSiNo,
               transDate: tx.originalTransactionTime || '',
@@ -96,7 +97,7 @@ export function useReturnsData() {
       yPos += 10;
 
       const headers = ['MC No.', 'Orig SI No.', 'Trans Date', 'Sold By', 'Return Date', 'Returned By', 'Override By', 'Sales Amt', 'Cost', 'Profit', 'Vatable', 'VAT', 'Note'];
-      const colWidths = [20, 20, 22, 18, 22, 18, 18, 18, 16, 16, 18, 14, 30];
+      const colWidths = [24, 20, 22, 18, 22, 18, 18, 18, 16, 16, 18, 14, 30];
 
       const drawHeader = () => {
         doc.setFillColor(34, 197, 94);
@@ -131,7 +132,7 @@ export function useReturnsData() {
 
         let xPos = margin;
         const rowData = [
-          record.currSiNo,
+          record.mcNo || '—',
           record.origSiNo,
           record.transDate ? format(new Date(record.transDate), 'MMM dd, yyyy') : '-',
           record.soldByCashier,

@@ -39,6 +39,7 @@ export function ReturnSalesDialog({
     selectedSale,
     returnedItems,
     returnedTotal,
+    mcNumber,
     recentSales,
     isRecentLoading,
     posSettings,
@@ -185,7 +186,9 @@ export function ReturnSalesDialog({
           <CreditSlipView
             ref={creditSlipRef}
             creditDetails={{
-              creditSlipId: `MC-${selectedSale.orderNumber || selectedSale.id.slice(-6)}-${format(new Date(), 'yyMMddHHmm')}`.toUpperCase(),
+              // Server-issued MC number; legacy timestamp format only as fallback.
+              creditSlipId: mcNumber
+                || `MC-${selectedSale.orderNumber || selectedSale.id.slice(-6)}-${format(new Date(), 'yyMMddHHmm')}`.toUpperCase(),
               originalSoNumber: String(selectedSale.orderNumber || selectedSale.id),
               customerName: selectedSale.customer?.name || 'Walk-in Customer',
               date: new Date().toISOString(),
