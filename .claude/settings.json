@@ -22,7 +22,16 @@
       "Bash(bash __TRACKED_VAR__/scripts/task-brief docs/superpowers/plans/2026-07-14-add-product-approval.md 2)",
       "Bash(npm run *)",
       "Bash(tail -20 /tmp_typecheck_out.txt)",
-      "Bash(grep -c \"error TS\" /tmp_typecheck_out.txt)"
+      "Bash(grep -c \"error TS\" /tmp_typecheck_out.txt)",
+      "Bash(bash __TRACKED_VAR__/scripts/task-brief docs/superpowers/plans/2026-07-21-bir-ejournal-receipt-files.md 5)",
+      "Bash(timeout 20 npm run test:unit)",
+      "Bash(echo \"RC=$?\")",
+      "Bash(node scratch/chk-mc.js)",
+      "Bash(node scratch/chk-mc-alloc.js)",
+      "Bash(awk '/<TableRow className=\"bg-muted/,/<\\\\/TableRow>/' \"app/\\(app\\)/reports/sales/returns/page.tsx\")",
+      "Bash(awk '/onClick=\\\\{\\\\\\(\\\\\\) => setSelectedRow\\\\\\(index\\\\\\)\\\\}/,/<\\\\/TableRow>/' \"app/\\(app\\)/reports/sales/returns/page.tsx\")",
+      "Bash(awk '/const rowData = \\\\[/,/\\\\];/' \"app/\\(app\\)/sales/returns/use-returns-data.ts\")",
+      "Bash(awk '/columns: \\\\[/,/\\\\],/' \"app/\\(app\\)/reports/sales/returns/page.tsx\")"
     ]
   }
 }
